@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voodoo-framework"
-version = "1.0.4"
+version = "1.0.6"
 description = "Voodoo Framework"
 requires-python = ">=3.12"
 dependencies = [
@@ -34,9 +34,15 @@ dev = [
     "pre-commit"
 ]
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["voodoo*", "app*"]
+
+[tool.setuptools.package-data]
+voodoo = ["*.js", "*.html", "*.css"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
