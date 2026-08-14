@@ -165,12 +165,14 @@ def dev(
 
     console.print(Panel.fit(f"Starting Voodoo Server on port [bold yellow]{port}[/bold yellow]", border_style="yellow"))
     
-    # We use a subprocess to run uvicorn
+    # We use a subprocess to run uvicorn through the current python executable
+    # to ensure we don't accidentally pick up a global system uvicorn that lacks the voodoo package
     import subprocess
+    import sys
     
     try:
         # We let uvicorn take over the terminal output
-        subprocess.run(["uvicorn", app_str, "--reload", "--port", str(port)])
+        subprocess.run([sys.executable, "-m", "uvicorn", app_str, "--reload", "--port", str(port)])
     except KeyboardInterrupt:
         console.print("\n[bold red]Server stopped.[/bold red]")
 
