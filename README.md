@@ -16,31 +16,60 @@ Voodoo is an ultra-minimalist, high-performance web framework designed for the A
 
 ## 🚀 Getting Started
 
-### Prerequisites
+Voodoo is designed to be installed globally on your machine so you can scaffold new projects anywhere in seconds. We provide multiple effortless installation methods.
 
-- Python 3.12+
-- `pip`
+### 🍎 Method 1: Homebrew (macOS / Linux) - *Recommended*
 
-### Installation
-
-Clone the repository and install the framework in editable mode with development dependencies:
+The cleanest and most native way to install Voodoo globally:
 
 ```bash
-git clone https://github.com/your-org/voodoo-framework.git
-cd voodoo-framework
-pip install -e .[dev]
+brew install helderperez-dev/voodoo/voodoo
 ```
 
-### Running the App
+### ⚡ Method 2: uv (Cross-Platform)
 
-Start the development server using the CLI:
+If you use [uv](https://github.com/astral-sh/uv), Astral's blazingly fast Python tool installer:
 
 ```bash
+uv tool install voodoo-framework
+```
+
+### 🪄 Method 3: The Magic Install Script
+
+For a quick, zero-dependency installation that isolates the environment automatically:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/helderperez-dev/voodoo-framework/main/install.sh | bash
+```
+
+### 🐍 Method 4: pipx / pip
+
+```bash
+pipx install voodoo-framework
+```
+
+---
+
+## 🏗 Scaffolding a New Project
+
+Once Voodoo is installed globally, generating a new application is as simple as:
+
+```bash
+# Create a standard minimal project
+voodoo new my_app
+
+# Create a project using the SaaS template
+voodoo new my_saas_app --variant saas
+```
+
+Navigate into the newly created directory and start the server:
+
+```bash
+cd my_app
 voodoo dev
 ```
 
-The application will start on `http://localhost:8000`. 
-Check out the built-in Smart Documentation at `http://localhost:8000/docs` to see all available components and APIs.
+The application will start on `http://localhost:8000` with hot-reloading enabled.
 
 ## 📖 Smart Documentation
 
