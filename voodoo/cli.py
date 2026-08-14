@@ -169,10 +169,17 @@ def dev(
     # to ensure we don't accidentally pick up a global system uvicorn that lacks the voodoo package
     import subprocess
     import sys
+    import os
+    
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(sys.path)
     
     try:
         # We let uvicorn take over the terminal output
-        subprocess.run([sys.executable, "-m", "uvicorn", app_str, "--reload", "--port", str(port)])
+        subprocess.run(
+            [sys.executable, "-m", "uvicorn", app_str, "--reload", "--port", str(port)],
+            env=env
+        )
     except KeyboardInterrupt:
         console.print("\n[bold red]Server stopped.[/bold red]")
 
