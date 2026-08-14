@@ -13,7 +13,7 @@ mkdir -p "$BIN_DIR"
 echo "📦 Setting up isolated environment in $INSTALL_DIR/venv..."
 if command -v uv &> /dev/null; then
     echo "⚡ Using uv for blazing fast installation..."
-    uv venv "$INSTALL_DIR/venv"
+    uv venv --clear "$INSTALL_DIR/venv"
     "$INSTALL_DIR/venv/bin/pip" install voodoo-framework
 else
     if command -v python3 &> /dev/null; then
