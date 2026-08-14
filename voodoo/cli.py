@@ -146,6 +146,7 @@ if __name__ == "__main__":
         reload=True, 
         ws_max_size=16777216, 
         ws_max_queue=32,
+        http="h11",
         h11_max_incomplete_event_size=5242880
     )
 """)
@@ -214,7 +215,7 @@ def dev(
     try:
         # We let uvicorn take over the terminal output
         subprocess.run(
-            [python_exe, "-m", "uvicorn", app_str, "--reload", "--port", str(port), "--h11-max-incomplete-event-size", "5242880"],
+            [python_exe, "-m", "uvicorn", app_str, "--reload", "--port", str(port), "--http", "h11", "--h11-max-incomplete-event-size", "5242880"],
             env=env
         )
     except KeyboardInterrupt:
