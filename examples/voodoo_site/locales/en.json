@@ -1,0 +1,47 @@
+{
+    "sidebar": {
+        "dashboard": "Dashboard",
+        "leads": "Leads",
+        "agent": "Agent",
+        "storage": "Storage"
+    },
+    "home": {
+        "title": "Welcome to Voodoo",
+        "description": "This is the new Voodoo Dashboard. Explore the sidebar to see Leads Management, Agent Interactions, and Storage."
+    },
+    "status": {
+        "title": "System Status",
+        "operational": "Operational",
+        "degraded": "Degraded",
+        "down": "Down",
+        "database": "Database",
+        "queue": "Queue",
+        "storage": "Storage",
+        "agent": "Agent"
+    },
+    "leads": {
+        "title": "Leads Management",
+        "generate": "Generate & Process Lead",
+        "headers": {
+            "id": "ID",
+            "name": "Name",
+            "email": "Email",
+            "status": "Status"
+        }
+    },
+    "agent": {
+        "title": "Voodoo Agent",
+        "placeholder": "Ask the agent..."
+    },
+    "storage": {
+        "title": "Voodoo Storage",
+        "select": "Click to select a file",
+        "no_file": "No file chosen",
+        "upload_btn": "Upload to Voodoo Storage",
+        "err_no_file": "Please select a file first.",
+        "uploading": "Uploading...",
+        "success": "Success!",
+        "error": "Error: ",
+        "failed": "Upload failed: "
+    }
+}

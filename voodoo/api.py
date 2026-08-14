@@ -1,0 +1,143 @@
+import inspect
+from typing import Any, Callable, Dict, List, Type, Optional, Union, get_type_hints
+from starlette.requests import Request
+from starlette.responses import JSONResponse, HTMLResponse, Response
+from starlette.routing import Route
+from pydantic import BaseModel, create_model
+
+class API:
+    def __init__(self):
+        self.routes: List[Route] = []
+        self.paths: Dict[str, Dict[str, Any]] = {}
+        
+        # Add docs routes
+        self.routes.append(Route("/openapi.json", self._openapi_schema, methods=["GET"]))
+        self.routes.append(Route("/docs", self._swagger_ui, methods=["GET"]))
+        self.routes.append(Route("/redoc", self._redoc_ui, methods=["GET"]))
+
+    def _openapi_schema(self, request: Request):
+        schema = {
+            "openapi": "3.0.2",
+            "info": {"title": "Voodoo API", "version": "1.0.0"},
+            "paths": self.paths,
+            "components": {"schemas": {}}
+        }
+        return JSONResponse(schema)
+
+    def _swagger_ui(self, request: Request):
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <title>Swagger UI</title>
+        <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.0.0/swagger-ui.css" />
+        </head>
+        <body>
+        <div id="swagger-ui"></div>
+        <script src="https://unpkg.com/swagger-ui-dist@5.0.0/swagger-ui-bundle.js"></script>
+        <script>
+        window.onload = () => {
+            window.ui = SwaggerUIBundle({
+                url: '/openapi.json',
+                dom_id: '#swagger-ui',
+            });
+        };
+        </script>
+        </body>
+        </html>
+        """
+        return HTMLResponse(html)
+
+    def _redoc_ui(self, request: Request):
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <title>ReDoc</title>
+        </head>
+        <body>
+        <redoc spec-url='/openapi.json'></redoc>
+        <script src="https://unpkg.com/redoc@2.0.0-rc.53/bundles/redoc.standalone.js"></script>
+        </body>
+        </html>
+        """
+        return HTMLResponse(html)
+
+    def _add_route(self, path: str, method: str, func: Callable):
+        # Register in OpenAPI paths
+        if path not in self.paths:
+            self.paths[path] = {}
+            
+        self.paths[path][method.lower()] = {
+            "summary": func.__name__.replace("_", " ").title(),
+            "responses": {
+                "200": {"description": "Successful Response"}
+            }
+        }
+
+        async def endpoint(request: Request):
+            sig = inspect.signature(func)
+            kwargs = {}
+            
+            for name, param in sig.parameters.items():
+                if param.annotation is Request:
+                    kwargs[name] = request
+                elif inspect.isclass(param.annotation) and issubclass(param.annotation, BaseModel):
+                    # Parse JSON body using Pydantic
+                    body = await request.json()
+                    kwargs[name] = param.annotation(**body)
+                else:
+                    # Path or Query param
+                    if name in request.path_params:
+                        val = request.path_params[name]
+                        kwargs[name] = param.annotation(val) if param.annotation != inspect._empty else val
+                    elif name in request.query_params:
+                        val = request.query_params[name]
+                        kwargs[name] = param.annotation(val) if param.annotation != inspect._empty else val
+
+            if inspect.iscoroutinefunction(func):
+                res = await func(**kwargs)
+            else:
+                res = func(**kwargs)
+                
+            # Serialize response
+            if isinstance(res, Response):
+                return res
+            elif isinstance(res, BaseModel):
+                return JSONResponse(res.model_dump())
+            elif isinstance(res, list) and len(res) > 0 and isinstance(res[0], BaseModel):
+                return JSONResponse([r.model_dump() for r in res])
+            elif hasattr(res, "__dict__"): # simple object serialization fallback
+                return JSONResponse(res.__dict__)
+            
+            return JSONResponse(res)
+
+        # Convert FastAPI/Starlette style path params {id} to Starlette path syntax
+        # Actually, Starlette uses {id} or {id:int}, so it's compatible.
+        self.routes.append(Route(path, endpoint, methods=[method]))
+
+    def get(self, path: str):
+        def decorator(func: Callable):
+            self._add_route(path, "GET", func)
+            return func
+        return decorator
+
+    def post(self, path: str):
+        def decorator(func: Callable):
+            self._add_route(path, "POST", func)
+            return func
+        return decorator
+
+    def put(self, path: str):
+        def decorator(func: Callable):
+            self._add_route(path, "PUT", func)
+            return func
+        return decorator
+
+    def delete(self, path: str):
+        def decorator(func: Callable):
+            self._add_route(path, "DELETE", func)
+            return func
+        return decorator
+
+api = API()
