@@ -19,53 +19,127 @@ app = typer.Typer(
 console = Console()
 
 @app.command()
-def new(project_name: str):
+def new(
+    project_name: str,
+    template: str = typer.Option("helderperez-dev/voodoo-templates", "--template", "-t", help="GitHub repository URL or 'user/repo' to use as a template"),
+    variant: str = typer.Option("default", "--variant", "-v", help="Specific template variant inside the repository"),
+):
     """
-    Scaffold a new Voodoo project.
+    Scaffold a new Voodoo project or clone a community template.
     """
     console.print(Panel.fit(f"Creating new Voodoo project: [bold cyan]{project_name}[/bold cyan]", border_style="cyan"))
     
+    project_dir = Path(project_name)
+    if project_dir.exists():
+        console.print(f"[bold red]Error:[/bold red] Directory '{project_name}' already exists.")
+        raise typer.Exit(1)
+        
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         transient=True,
     ) as progress:
-        task = progress.add_task(description="Scaffolding project structure...", total=None)
-        
-        # Simulate quick but visible animation
-        time.sleep(0.5)
-        
-        project_dir = Path(project_name)
-        if project_dir.exists():
-            console.print(f"[bold red]Error:[/bold red] Directory '{project_name}' already exists.")
-            raise typer.Exit(1)
+        if template:
+            task = progress.add_task(description=f"Cloning [cyan]{variant}[/cyan] template from [cyan]{template}[/cyan]...", total=None)
             
-        os.makedirs(project_dir)
-        os.makedirs(project_dir / "app")
-        os.makedirs(project_dir / ".data")
-        
-        progress.update(task, description="Writing base configuration...")
-        time.sleep(0.5)
-        
-        (project_dir / ".env").write_text("VOODOO_DB_PATH=.data/voodoo.db\n")
-        (project_dir / "pyproject.toml").write_text(f"""[project]
+            # Resolve URL
+            if template.startswith("http://") or template.startswith("https://") or template.startswith("git@") or template.startswith("/") or template.startswith("file://"):
+                repo_url = template
+            elif len(template.split("/")) == 2:
+                repo_url = f"https://github.com/{template}.git"
+            else:
+                console.print("\n[bold red]Error:[/bold red] Template must be a valid Git URL, local path, or 'user/repo'.")
+                raise typer.Exit(1)
+                
+            import subprocess
+            import shutil
+            import tempfile
+            
+            fallback_to_offline = False
+            
+            try:
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    subprocess.run(
+                        ["git", "clone", "--depth", "1", repo_url, tmp_dir],
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    
+                    variant_path = Path(tmp_dir) / variant
+                    
+                    if not variant_path.exists() or not variant_path.is_dir():
+                        # If variant doesn't exist, check if the repo root itself is the template
+                        if variant == "default" and not (Path(tmp_dir) / "default").exists():
+                            variant_path = Path(tmp_dir)
+                        else:
+                            console.print(f"\n[bold red]Error:[/bold red] Variant '{variant}' not found in template repository.")
+                            raise typer.Exit(1)
+                            
+                    # Copy the template files over to the project directory
+                    shutil.copytree(variant_path, project_dir, dirs_exist_ok=True)
+                    
+            except subprocess.CalledProcessError as e:
+                console.print(f"\n[bold yellow]Warning:[/bold yellow] Failed to clone template from {repo_url}")
+                console.print("[yellow]Falling back to offline default scaffolding...[/yellow]")
+                fallback_to_offline = True
+            
+            if not fallback_to_offline:
+                # Remove the .git folder so the user starts with a clean slate
+                if (project_dir / ".git").exists():
+                    shutil.rmtree(project_dir / ".git", ignore_errors=True)
+                
+                if not (project_dir / ".data").exists():
+                    os.makedirs(project_dir / ".data", exist_ok=True)
+                    
+        if not template or fallback_to_offline:
+            task = progress.add_task(description="Scaffolding offline project structure...", total=None)
+            
+            # Simulate quick but visible animation
+            time.sleep(0.5)
+            
+            os.makedirs(project_dir)
+            os.makedirs(project_dir / "app")
+            os.makedirs(project_dir / ".data")
+            
+            progress.update(task, description="Writing base configuration...")
+            time.sleep(0.5)
+            
+            (project_dir / ".env").write_text("VOODOO_DB_PATH=.data/voodoo.db\n")
+            (project_dir / "pyproject.toml").write_text(f"""[project]
 name = "{project_name}"
 version = "0.1.0"
 dependencies = [
     "voodoo-framework"
 ]
 """)
-        
-        progress.update(task, description="Generating entry point...")
-        time.sleep(0.5)
-        
-        (project_dir / "app" / "main.py").write_text("""from voodoo import VoodooApp
+            
+            progress.update(task, description="Generating entry point...")
+            time.sleep(0.5)
+            
+            (project_dir / "app" / "page.py").write_text("""from voodoo.components import Div, Heading, Text
 
-app = VoodooApp()
+def page(request):
+    \"\"\"
+    A minimal single-page application.
+    Voodoo's router will automatically map app/page.py to the root "/" route.
+    \"\"\"
+    return Div(
+        Heading("Hello, Voodoo! 🪄", level=1, className="text-5xl font-bold text-center mt-32 tracking-tight"),
+        Div(Text("Welcome to your new Voodoo app."), className="text-center text-[var(--color-text-muted)] mt-6 text-lg"),
+        className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)]"
+    )
+""")
 
-@app.get("/")
-async def index():
-    return {"message": "Welcome to Voodoo!"}
+            (project_dir / "main.py").write_text("""import uvicorn
+from voodoo.core import create_app
+from voodoo.config import config
+
+# Voodoo automatically looks for the "app" folder in the current working directory
+app = create_app()
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host=config.host, port=config.port, reload=True, ws_max_size=16777216, ws_max_queue=32)
 """)
     
     console.print("[bold green]✓ Project scaffolded successfully![/bold green]")
