@@ -141,6 +141,26 @@ app = create_app()
 if __name__ == "__main__":
     uvicorn.run("main:app", host=config.host, port=config.port, reload=True, ws_max_size=16777216, ws_max_queue=32)
 """)
+
+        # Set up local virtual environment and install dependencies
+        if (project_dir / "pyproject.toml").exists():
+            task = progress.add_task(description="Setting up local virtual environment (.venv)...", total=None)
+            import shutil
+            has_uv = shutil.which("uv") is not None
+            try:
+                if has_uv:
+                    subprocess.run(["uv", "venv"], cwd=project_dir, check=True, capture_output=True)
+                    progress.update(task, description="Installing dependencies with uv...")
+                    subprocess.run(["uv", "pip", "install", "-e", "."], cwd=project_dir, check=True, capture_output=True)
+                else:
+                    subprocess.run([sys.executable, "-m", "venv", ".venv"], cwd=project_dir, check=True, capture_output=True)
+                    progress.update(task, description="Installing dependencies with pip...")
+                    pip_exe = ".venv/bin/pip" if os.name != "nt" else ".venv\\Scripts\\pip.exe"
+                    subprocess.run([str(project_dir / pip_exe), "install", "-e", "."], cwd=project_dir, check=True, capture_output=True)
+            except subprocess.CalledProcessError as e:
+                console.print(f"\n[bold yellow]Warning:[/bold yellow] Failed to set up local environment or install dependencies.")
+                if e.stderr:
+                    console.print(f"[dim]{e.stderr.decode()}[/dim]")
     
     console.print("[bold green]✓ Project scaffolded successfully![/bold green]")
     console.print(f"\nNext steps:\n  [cyan]cd {project_name}[/cyan]\n  [cyan]voodoo dev[/cyan]\n")
@@ -171,13 +191,22 @@ def dev(
     import sys
     import os
     
+    local_venv_python = Path(".venv/bin/python") if os.name != "nt" else Path(".venv/Scripts/python.exe")
+    
+    if local_venv_python.exists():
+        python_exe = str(local_venv_python.absolute())
+        console.print("[dim]Using local virtual environment.[/dim]")
+    else:
+        python_exe = sys.executable
+        console.print("[dim]Using global environment.[/dim]")
+    
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join(sys.path)
     
     try:
         # We let uvicorn take over the terminal output
         subprocess.run(
-            [sys.executable, "-m", "uvicorn", app_str, "--reload", "--port", str(port)],
+            [python_exe, "-m", "uvicorn", app_str, "--reload", "--port", str(port)],
             env=env
         )
     except KeyboardInterrupt:
