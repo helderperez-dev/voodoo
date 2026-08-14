@@ -39,7 +39,7 @@ uv tool install voodoo-framework
 For a quick, zero-dependency installation that isolates the environment automatically:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/helderperez-dev/voodoo-framework/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/helderperez-dev/voodoo/main/install.sh | bash
 ```
 
 ### 🐍 Method 4: pipx / pip
