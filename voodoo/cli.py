@@ -1034,7 +1034,7 @@ def version():
 
     import voodoo
 
-    ver = getattr(voodoo, "__version__", "1.0.20")
+    ver = getattr(voodoo, "__version__", "1.0.21")
     console.print(f"[bold magenta]🔮 Voodoo Framework[/bold magenta] v{ver}")
     console.print(
         f"  • Python: [cyan]{platform.python_version()}[/cyan] ({platform.python_implementation()})"
