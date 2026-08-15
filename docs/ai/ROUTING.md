@@ -8,6 +8,21 @@ Voodoo uses file-based routing from the `app/` directory.
 - `app/about/page.py` -> `/about`
 - `app/dashboard/settings/page.py` -> `/dashboard/settings`
 
+## SEO Metadata in Routes
+
+By default, routes return a Voodoo component. To inject SEO metadata (title, meta tags, OpenGraph), routes can return a tuple of `(SEO, Component)`:
+
+```python
+from voodoo.components import Div, Heading
+from voodoo.seo import SEO
+
+async def page(request):
+    seo = SEO(title="My Page", description="Welcome to Voodoo.")
+    ui = Div(Heading("Hello World", level=1))
+    
+    return seo, ui
+```
+
 ## Dynamic Segments
 
 Use bracket folders for path parameters.

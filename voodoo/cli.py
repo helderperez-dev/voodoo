@@ -36,9 +36,14 @@ def _fetch_text(url: str, timeout: int = 3) -> str | None:
     try:
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            return response.read().decode("utf-8")
+            data = response.read()
+            if isinstance(data, bytes):
+                return data.decode("utf-8")
+            if isinstance(data, str):
+                return data
     except Exception:
-        return None
+        pass
+    return None
 
 
 def _build_workspace_rules() -> str:
@@ -57,6 +62,8 @@ def _build_workspace_rules() -> str:
         6. `.voodoo/ai/STATE.md`
         7. `.voodoo/ai/DATABASE.md`
         8. `.voodoo/ai/SKILLS.md`
+        9. `.voodoo/ai/MESH.md`
+        10. `.voodoo/ai/SEO.md`
 
         Core rules:
         - Use `voodoo.components` instead of raw HTML templates.
@@ -100,6 +107,8 @@ def _fallback_ai_assets() -> dict[str, str]:
             5. `STATE.md`
             6. `DATABASE.md`
             7. `SKILLS.md`
+            8. `MESH.md`
+            9. `SEO.md`
 
             Recommended behavior:
             - Treat Voodoo as a Python-first UI framework.
@@ -141,6 +150,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             - `app/page.py` maps to `/`
             - Nested `page.py` files map to nested routes
             - Dynamic segments use bracket folders such as `app/users/[id]/page.py`
+            - Return `(SEO, Component)` or `(Component, SEO)` tuples to inject head metadata
 
             Internal links must use Voodoo navigation:
 
@@ -158,13 +168,8 @@ def _fallback_ai_assets() -> dict[str, str]:
             Import UI primitives from `voodoo.components`.
 
             Common components:
-            - `Div`
-            - `Text`
-            - `Heading`
-            - `Button`
-            - `A`
-            - `Input`
-            - `Form`
+            - `Div`, `Text`, `Heading`, `Button`, `A`, `Input`, `Form`
+            - Semantic HTML: `Nav`, `Header`, `Footer`, `Main`, `Section`, `Article`, `Aside`, `Figure`, `FigCaption`, `Time`, `Address`, `Img`, `Paragraph`
 
             Use `className` for styling and favor small reusable Python functions for custom components.
             """
@@ -229,6 +234,29 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Check `http="h11"`
             """
         ).strip() + "\n",
+        ".voodoo/ai/MESH.md": dedent(
+            """
+            # Voodoo Mesh
+
+            The Voodoo Mesh (`voodoo.mesh`) enables real-time WebSocket events and automatic MCP tool registration.
+
+            - Use `@mesh.expose()` to expose functions to RPC and MCP tools.
+            - Use `@mesh.on(event)` to listen for local and remote broadcast events.
+            - Use `await mesh.broadcast(event, payload)` to push data to all connected clients.
+            """
+        ).strip() + "\n",
+        ".voodoo/ai/SEO.md": dedent(
+            """
+            # Voodoo SEO & GEO
+
+            Voodoo supports native SEO metadata and Generative Engine Optimization (GEO).
+
+            - Return `(SEO(...), Component)` from route handlers.
+            - Configure defaults in `voodoo.yaml`.
+            - Dynamic `sitemap.xml` and `robots.txt` are served automatically.
+            - Supports JSON-LD structured data and OpenGraph / Twitter cards.
+            """
+        ).strip() + "\n",
         ".trae/skills/voodoo-builder/SKILL.md": dedent(
             """
             ---
@@ -249,6 +277,8 @@ def _fallback_ai_assets() -> dict[str, str]:
             6. `.voodoo/ai/STATE.md`
             7. `.voodoo/ai/DATABASE.md`
             8. `.voodoo/ai/SKILLS.md`
+            9. `.voodoo/ai/MESH.md`
+            10. `.voodoo/ai/SEO.md`
 
             Follow these Voodoo rules:
             - Build UI with `voodoo.components`
@@ -262,8 +292,68 @@ def _fallback_ai_assets() -> dict[str, str]:
     }
 
 
-def _sync_ai_assets(project_dir: Path, progress: Progress) -> None:
-    task = progress.add_task(description="Setting up Voodoo AI assets...", total=None)
+def _detect_ide() -> str | None:
+    """
+    Attempt to auto-detect the active AI IDE/Editor from environment variables,
+    workspace config directories, or running parent processes.
+    """
+    env_keys = " ".join(os.environ.keys()).lower()
+    term_program = os.getenv("TERM_PROGRAM", "").lower()
+
+    # 1. Environment variables (highest priority for current session)
+    if any(k in env_keys for k in ["trae_pid", "trae_resources_path", "__trae_app_dir__"]) or "trae" in term_program:
+        return "trae"
+
+    if any(k in env_keys for k in ["cursor_trace", "cursor_port", "cursor_session_id"]) or "cursor" in term_program:
+        return "cursor"
+
+    if any(k in env_keys for k in ["windsurf_port", "windsurf_initial_cwd"]) or "windsurf" in term_program:
+        return "windsurf"
+
+    if any(k in env_keys for k in ["vscode_pid", "vscode_injection"]) or "vscode" in term_program:
+        return "vscode"
+
+    # 2. Check directory markers in current workspace
+    curr = Path.cwd()
+    for directory in [curr, *curr.parents[:3]]:
+        if (directory / ".trae").exists():
+            return "trae"
+        if (directory / ".cursor").exists():
+            return "cursor"
+        if (directory / ".windsurfrules").exists():
+            return "windsurf"
+        if (directory / ".vscode").exists():
+            return "vscode"
+
+    # 3. Process inspection for specific IDEs
+    try:
+        curr_pid = os.getppid()
+        for _ in range(4):
+            if curr_pid <= 1:
+                break
+            res = subprocess.run(["ps", "-p", str(curr_pid), "-o", "comm="], capture_output=True, text=True, timeout=1)
+            comm = res.stdout.strip().lower()
+            if "trae" in comm:
+                return "trae"
+            if "cursor" in comm:
+                return "cursor"
+            if "windsurf" in comm:
+                return "windsurf"
+            if "code" in comm or "vscode" in comm:
+                return "vscode"
+            ppid_res = subprocess.run(["ps", "-p", str(curr_pid), "-o", "ppid="], capture_output=True, text=True, timeout=1)
+            ppid_str = ppid_res.stdout.strip()
+            if not ppid_str.isdigit():
+                break
+            curr_pid = int(ppid_str)
+    except Exception:
+        pass
+
+    return None
+
+
+def _sync_ai_assets(project_dir: Path, progress: Progress, ide: str = "none") -> None:
+    task = progress.add_task(description=f"Setting up AI assets ({ide})...", total=None)
     time.sleep(0.2)
 
     fallback_assets = _fallback_ai_assets()
@@ -276,21 +366,32 @@ def _sync_ai_assets(project_dir: Path, progress: Progress) -> None:
         ".voodoo/ai/STATE.md": f"{AI_DOCS_BASE_URL}/STATE.md",
         ".voodoo/ai/DATABASE.md": f"{AI_DOCS_BASE_URL}/DATABASE.md",
         ".voodoo/ai/SKILLS.md": f"{AI_DOCS_BASE_URL}/SKILLS.md",
-        ".trae/skills/voodoo-builder/SKILL.md": AI_TRAE_SKILL_URL,
+        ".voodoo/ai/MESH.md": f"{AI_DOCS_BASE_URL}/MESH.md",
+        ".voodoo/ai/SEO.md": f"{AI_DOCS_BASE_URL}/SEO.md",
+        ".voodoo/ai/AUTH.md": f"{AI_DOCS_BASE_URL}/AUTH.md",
+        ".voodoo/ai/SECURITY.md": f"{AI_DOCS_BASE_URL}/SECURITY.md",
     }
+
+    if ide in ("trae", "all"):
+        remote_assets[".trae/skills/voodoo-builder/SKILL.md"] = AI_TRAE_SKILL_URL
 
     for relative_path, url in remote_assets.items():
         target = project_dir / relative_path
         if target.exists():
             continue
-        content = _fetch_text(url, timeout=3) or fallback_assets[relative_path]
-        _write_text_file(target, content)
+        content = _fetch_text(url, timeout=3) or fallback_assets.get(relative_path, "")
+        if content:
+            _write_text_file(target, content)
 
-    ide_rules = {
-        ".trae/rules": _build_workspace_rules(),
-        ".windsurfrules": _build_workspace_rules(),
-        ".cursor/rules/voodoo.mdc": _build_cursor_rules(),
-    }
+    ide_rules: dict[str, str] = {}
+    if ide in ("trae", "all"):
+        ide_rules[".trae/rules"] = _build_workspace_rules()
+    if ide in ("windsurf", "all"):
+        ide_rules[".windsurfrules"] = _build_workspace_rules()
+    if ide in ("cursor", "all"):
+        ide_rules[".cursor/rules/voodoo.mdc"] = _build_cursor_rules()
+    if ide in ("vscode", "all"):
+        ide_rules[".github/copilot-instructions.md"] = _build_workspace_rules()
 
     for relative_path, content in ide_rules.items():
         target = project_dir / relative_path
@@ -303,6 +404,7 @@ def new(
     project_name: str,
     template: str = typer.Option("helderperez-dev/voodoo-templates", "--template", "-t", help="GitHub repository URL or 'user/repo' to use as a template"),
     variant: str = typer.Option("default", "--variant", "-v", help="Specific template variant inside the repository"),
+    ide: str | None = typer.Option(None, "--ide", "-i", help="Target AI IDE rules (trae, cursor, windsurf, vscode, all, none)"),
 ):
     """
     Scaffold a new Voodoo project or clone a community template.
@@ -314,6 +416,40 @@ def new(
         console.print(f"[bold red]Error:[/bold red] Directory '{project_name}' already exists.")
         raise typer.Exit(1)
         
+    valid_ides = ["trae", "cursor", "windsurf", "vscode", "all", "none"]
+    selected_ide = ide.lower() if ide else None
+
+    if selected_ide and selected_ide not in valid_ides:
+        console.print(f"[bold red]Error:[/bold red] Invalid IDE '{selected_ide}'. Choose from: {', '.join(valid_ides)}")
+        raise typer.Exit(1)
+
+    if not selected_ide:
+        detected = _detect_ide()
+        if sys.stdin.isatty():
+            detected_hint = f" [dim](detected: [bold cyan]{detected}[/bold cyan])[/dim]" if detected else ""
+            console.print(f"\n[bold]Select AI IDE configuration to generate{detected_hint}:[/bold]")
+            console.print("  [cyan]1[/cyan] - Trae (.trae/rules, skills)")
+            console.print("  [cyan]2[/cyan] - Cursor (.cursor/rules/voodoo.mdc)")
+            console.print("  [cyan]3[/cyan] - Windsurf (.windsurfrules)")
+            console.print("  [cyan]4[/cyan] - VS Code / Copilot (.github/copilot-instructions.md)")
+            console.print("  [cyan]5[/cyan] - All IDE configurations")
+            console.print("  [cyan]6[/cyan] - None (core .voodoo/ai docs only)")
+
+            mapping = {
+                "1": "trae", "trae": "trae",
+                "2": "cursor", "cursor": "cursor",
+                "3": "windsurf", "windsurf": "windsurf",
+                "4": "vscode", "vscode": "vscode",
+                "5": "all", "all": "all",
+                "6": "none", "none": "none",
+            }
+            default_key = {"trae": "1", "cursor": "2", "windsurf": "3", "vscode": "4", "all": "5", "none": "6"}.get(detected or "", "6")
+            user_choice = typer.prompt("Select option", default=default_key, show_default=True)
+            selected_ide = mapping.get(user_choice.strip().lower(), detected or "none")
+            console.print("")
+        else:
+            selected_ide = detected or "none"
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -383,7 +519,7 @@ def new(
             
             (project_dir / ".env").write_text("VOODOO_DB_PATH=.data/voodoo.db\n")
             (project_dir / "pyproject.toml").write_text(f"""[project]
-name = "{project_name}"
+name = "{project_dir.name}"
 version = "0.1.0"
 dependencies = [
     "voodoo-framework"
@@ -432,7 +568,7 @@ if __name__ == "__main__":
     )
 """)
 
-        _sync_ai_assets(project_dir, progress)
+        _sync_ai_assets(project_dir, progress, ide=selected_ide)
 
         # Set up local virtual environment and install dependencies
         if (project_dir / "pyproject.toml").exists():
@@ -554,7 +690,8 @@ def generate(
                     temperature=0.2
                 )
                 
-                code = response.choices[0].message.content.strip()
+                raw_content = response.choices[0].message.content
+                code = (raw_content or "").strip()
                 # Clean up if the model accidentally included markdown blocks
                 if code.startswith("```python"):
                     code = code[9:]
@@ -581,6 +718,188 @@ def generate(
     
     # Show preview
     console.print(Panel(code, title=f"Preview: {filename}", border_style="green"))
+
+
+# =========================================================================
+# Auth CLI Subcommands
+# =========================================================================
+
+auth_app = typer.Typer(
+    help="🔒 Authentication & Security tools (users, API keys, password hashing, secrets)",
+    no_args_is_help=True
+)
+app.add_typer(auth_app, name="auth")
+
+
+@auth_app.command("secret-key")
+def cli_secret_key(
+    length: int = typer.Option(32, "--length", "-l", help="Length of the secret key in bytes")
+):
+    """
+    Generate a cryptographically secure secret key for VOODOO_SECRET_KEY.
+    """
+    from voodoo.auth import generate_secret_key
+    key = generate_secret_key(length)
+    console.print(Panel(
+        f"[bold green]{key}[/bold green]\n\n[dim]Add this to your .env file:[/dim]\n[cyan]VOODOO_SECRET_KEY={key}[/cyan]",
+        title="🔑 Generated Secret Key",
+        border_style="green"
+    ))
+
+
+@auth_app.command("hash-password")
+def cli_hash_password(
+    password: str = typer.Argument(..., help="Plaintext password to hash")
+):
+    """
+    Generate a PBKDF2-HMAC-SHA256 hash for a given password.
+    """
+    from voodoo.auth import hash_password
+    hashed = hash_password(password)
+    console.print(Panel(
+        f"[bold cyan]{hashed}[/bold cyan]",
+        title="🔒 Password Hash (PBKDF2-SHA256)",
+        border_style="cyan"
+    ))
+
+
+@auth_app.command("generate-key")
+def cli_generate_key(
+    prefix: str = typer.Option("vd_live", "--prefix", "-p", help="API key prefix (e.g. vd_live, vd_test)")
+):
+    """
+    Generate a new API key and its SHA-256 hash.
+    """
+    from voodoo.auth import generate_api_key
+    raw_key, key_hash = generate_api_key(prefix)
+    console.print(Panel(
+        f"[bold green]API Key (keep secret):[/bold green]\n[cyan]{raw_key}[/cyan]\n\n"
+        f"[bold yellow]SHA-256 Hash (stored in DB):[/bold yellow]\n[dim]{key_hash}[/dim]",
+        title="🔑 Generated API Key",
+        border_style="green"
+    ))
+
+
+@auth_app.command("create-user")
+def cli_create_user(
+    email: str = typer.Option(..., "--email", "-e", prompt=True, help="User email address"),
+    password: str = typer.Option(..., "--password", "-p", prompt=True, hide_input=True, help="User password"),
+    username: str = typer.Option(None, "--username", "-u", help="Username (defaults to email prefix)"),
+    role: str = typer.Option("user", "--role", "-r", help="User role (e.g. user, admin, editor)"),
+):
+    """
+    Create a new user directly in the database.
+    """
+    from voodoo.auth import User
+    from voodoo.security import validate_password_strength
+
+    is_valid, err = validate_password_strength(password)
+    if not is_valid:
+        console.print(f"[bold red]Error:[/bold red] {err}")
+        raise typer.Exit(1)
+
+    async def _create():
+        user, raw_key = await User.create_user(
+            email=email,
+            password=password,
+            username=username,
+            role=role
+        )
+        return user, raw_key
+
+    user, raw_key = asyncio.run(_create())
+    console.print(Panel(
+        f"[bold green]User created successfully![/bold green]\n\n"
+        f"• [bold]ID:[/bold] {user.id}\n"
+        f"• [bold]Email:[/bold] {user.email}\n"
+        f"• [bold]Username:[/bold] {user.username}\n"
+        f"• [bold]Role:[/bold] {user.role}\n"
+        f"• [bold]API Key:[/bold] [cyan]{raw_key}[/cyan]\n",
+        title="👤 New User",
+        border_style="green"
+    ))
+
+
+@app.command()
+def version():
+    """
+    Show Voodoo Framework version and environment info.
+    """
+    import platform
+    import voodoo
+
+    ver = getattr(voodoo, "__version__", "1.0.20")
+    console.print(
+        f"[bold magenta]🔮 Voodoo Framework[/bold magenta] v{ver}"
+    )
+    console.print(f"  • Python: [cyan]{platform.python_version()}[/cyan] ({platform.python_implementation()})")
+    console.print(f"  • Platform: [dim]{platform.platform()}[/dim]")
+
+
+@app.command()
+def doctor():
+    """
+    Run environment and configuration diagnostics.
+    """
+    import platform
+
+    console.print(Panel.fit("🔍 Voodoo Doctor - Diagnostics", border_style="cyan"))
+
+    checks = []
+    py_ver = sys.version_info
+    if py_ver >= (3, 10):
+        checks.append(("✓", "green", f"Python version {platform.python_version()} (>= 3.10 required)"))
+    else:
+        checks.append(("✗", "red", f"Python version {platform.python_version()} (< 3.10 unsupported)"))
+
+    db_path = Path(".data/voodoo.db")
+    if db_path.exists():
+        checks.append(("✓", "green", f"Local Database found at {db_path}"))
+    else:
+        checks.append(("ℹ", "yellow", "Local Database (.data/voodoo.db) not initialized yet"))
+
+    ai_dir = Path(".voodoo/ai")
+    if ai_dir.exists() and (ai_dir / "README.md").exists():
+        checks.append(("✓", "green", "AI Kit context available (.voodoo/ai)"))
+    else:
+        checks.append(("ℹ", "yellow", "AI Kit context not present (run 'voodoo new' to scaffold)"))
+
+    for symbol, color, msg in checks:
+        console.print(f" [{color}]{symbol}[/{color}] {msg}")
+
+
+@app.command()
+def routes(app_str: str = typer.Argument("main:app", help="App instance to inspect (e.g. main:app)")):
+    """
+    List all registered HTTP, WebSocket, and API routes in the application.
+    """
+    import importlib
+    from rich.table import Table
+
+    module_name, app_name = app_str.split(":") if ":" in app_str else ("main", "app")
+    sys.path.insert(0, os.getcwd())
+    try:
+        mod = importlib.import_module(module_name)
+        application = getattr(mod, app_name)
+    except Exception as e:
+        console.print(f"[bold red]Error loading application '{app_str}':[/bold red] {e}")
+        raise typer.Exit(1)
+
+    table = Table(title=f"🔮 Voodoo Routes ({app_str})", border_style="cyan")
+    table.add_column("Type", style="magenta", no_wrap=True)
+    table.add_column("Path", style="cyan")
+    table.add_column("Methods", style="green")
+    table.add_column("Name / Handler", style="dim")
+
+    for route in getattr(application, "routes", []):
+        r_type = type(route).__name__
+        r_path = getattr(route, "path", getattr(route, "path_format", str(route)))
+        r_methods = ", ".join(sorted(getattr(route, "methods", []))) if hasattr(route, "methods") and route.methods else "WS/ALL"
+        r_name = getattr(route, "name", "") or getattr(getattr(route, "endpoint", None), "__name__", "")
+        table.add_row(r_type, r_path, r_methods, r_name)
+
+    console.print(table)
+
 
 if __name__ == "__main__":
     app()

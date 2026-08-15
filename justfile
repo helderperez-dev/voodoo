@@ -4,26 +4,31 @@ default:
 
 # Install dependencies (including dev)
 install:
-    pip install -e .[dev]
+    uv pip install -e ".[dev]"
 
 # Format the code using ruff
 format:
-    ruff format .
-    ruff check --fix .
+    uv run ruff format .
+    uv run ruff check --fix .
 
-# Run linters (ruff and mypy)
+# Run linters (ruff)
 lint:
-    ruff check .
-    mypy .
+    uv run ruff check .
 
-# Run tests using pytest
+# Run test suite using pytest
 test:
-    pytest
+    uv run pytest
 
 # Clean up build artifacts and cache directories
 clean:
-    rm -rf build/
-    rm -rf dist/
-    rm -rf *.egg-info/
+    rm -rf build/ dist/ *.egg-info/ .data/ storage/ .mypy_cache/ .ruff_cache/
     find . -type d -name __pycache__ -exec rm -rf {} +
     find . -type f -name "*.pyc" -delete
+
+# Build wheel and sdist packages
+build: clean
+    uv build
+
+# Release a new version (test, bump version, build, publish PyPI, update Homebrew, tag & push GitHub)
+release version:
+    @python3 scripts/release.py {{version}}

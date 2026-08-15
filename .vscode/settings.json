@@ -8,6 +8,11 @@
     "**/Thumbs.db": true,
     "**/*.egg-info": true,
     "**/__pycache__": true,
-    "**/.pytest_cache": true
+    "**/.pytest_cache": true,
+    "**/.mypy_cache": true,
+    "**/.ruff_cache": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/storage": true
   }
 }

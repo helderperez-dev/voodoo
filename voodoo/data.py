@@ -1,6 +1,6 @@
 import asyncio
 import aiosqlite
-from typing import Any, Callable, Dict, List, Type, get_type_hints
+from typing import Any, Callable, Dict, List, Type, Optional, Union, get_type_hints
 
 _db_connection = None
 _triggers: Dict[str, Dict[str, List[Callable]]] = {}
@@ -28,9 +28,15 @@ async def get_db():
         await init_db()
     return _db_connection
 
+def _get_table_name(cls_or_obj: Any) -> str:
+    cls = cls_or_obj if isinstance(cls_or_obj, type) else cls_or_obj.__class__
+    if hasattr(cls, "__tablename__") and getattr(cls, "__tablename__"):
+        return str(getattr(cls, "__tablename__"))
+    return cls.__name__.lower()
+
 def on_insert(model_cls: Type):
     def decorator(func: Callable):
-        table = model_cls.__name__.lower()
+        table = _get_table_name(model_cls)
         if table not in _triggers:
             _triggers[table] = {"insert": [], "update": []}
         _triggers[table]["insert"].append(func)
@@ -39,7 +45,7 @@ def on_insert(model_cls: Type):
 
 def on_update(model_cls: Type):
     def decorator(func: Callable):
-        table = model_cls.__name__.lower()
+        table = _get_table_name(model_cls)
         if table not in _triggers:
             _triggers[table] = {"insert": [], "update": []}
         _triggers[table]["update"].append(func)
@@ -48,7 +54,7 @@ def on_update(model_cls: Type):
 
 def rls_policy(model_cls: Type):
     def decorator(func: Callable):
-        table = model_cls.__name__.lower()
+        table = _get_table_name(model_cls)
         _rls_policies[table] = func
         return func
     return decorator
@@ -63,14 +69,17 @@ class ModelMeta(type):
 
 class BaseModel(metaclass=ModelMeta):
     id: int
+    __tablename__: Optional[str] = None
     
     @classmethod
     async def _create_table(cls):
         db = await get_db()
-        table_name = cls.__name__.lower()
+        table_name = _get_table_name(cls)
         hints = get_type_hints(cls)
         columns = []
         for col_name, col_type in hints.items():
+            if col_name.startswith("__"):
+                continue
             if col_name == "id":
                 columns.append("id INTEGER PRIMARY KEY AUTOINCREMENT")
             elif col_type == int:
@@ -91,9 +100,18 @@ class BaseModel(metaclass=ModelMeta):
         from voodoo.telemetry import telemetry_store
         telemetry_store.record_db_query()
         db = await get_db()
-        table_name = cls.__name__.lower()
+        table_name = _get_table_name(cls)
         query = f"SELECT * FROM {table_name}"
         params = []
+        
+        if user_context is None:
+            try:
+                from voodoo.auth import current_user
+                u = current_user.get()
+                if u and u.is_authenticated:
+                    user_context = u.to_dict()
+            except Exception:
+                pass
         
         if table_name in _rls_policies and user_context:
             policy = _rls_policies[table_name]
@@ -119,7 +137,7 @@ class BaseModel(metaclass=ModelMeta):
         from voodoo.telemetry import telemetry_store
         telemetry_store.record_db_query()
         db = await get_db()
-        table_name = self.__class__.__name__.lower()
+        table_name = _get_table_name(self)
         
         hints = get_type_hints(self.__class__)
         cols = []
@@ -127,6 +145,8 @@ class BaseModel(metaclass=ModelMeta):
         placeholders = []
         
         for col_name in hints.keys():
+            if col_name.startswith("__"):
+                continue
             if col_name == "id" and not hasattr(self, "id"):
                 continue
             if hasattr(self, col_name):
@@ -153,13 +173,15 @@ class BaseModel(metaclass=ModelMeta):
         from voodoo.telemetry import telemetry_store
         telemetry_store.record_db_query()
         db = await get_db()
-        table_name = self.__class__.__name__.lower()
+        table_name = _get_table_name(self)
         
         hints = get_type_hints(self.__class__)
         cols = []
         vals = []
         
         for col_name in hints.keys():
+            if col_name.startswith("__"):
+                continue
             if col_name != "id" and hasattr(self, col_name):
                 cols.append(f"{col_name} = ?")
                 vals.append(getattr(self, col_name))

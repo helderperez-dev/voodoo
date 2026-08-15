@@ -15,19 +15,20 @@ if command -v uv &> /dev/null; then
     echo "⚡ Using uv for blazing fast installation..."
     rm -rf "$INSTALL_DIR/venv"
     uv venv "$INSTALL_DIR/venv"
-    uv pip install --python "$INSTALL_DIR/venv" --refresh voodoo-framework
+    uv pip install --python "$INSTALL_DIR/venv" --refresh --upgrade voodoo-framework
 else
     if command -v python3 &> /dev/null; then
         rm -rf "$INSTALL_DIR/venv"
         python3 -m venv "$INSTALL_DIR/venv"
     elif command -v python &> /dev/null; then
+        rm -rf "$INSTALL_DIR/venv"
         python -m venv "$INSTALL_DIR/venv"
     else
         echo "❌ Error: Python 3 is required but not found."
         exit 1
     fi
     "$INSTALL_DIR/venv/bin/pip" install --upgrade pip
-    "$INSTALL_DIR/venv/bin/pip" install voodoo-framework
+    "$INSTALL_DIR/venv/bin/pip" install --upgrade voodoo-framework
 fi
 
 echo "🔗 Linking executable to $BIN_DIR/voodoo..."

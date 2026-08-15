@@ -4,25 +4,24 @@ __pycache__/
 *.pyo
 *.pyd
 
-*.egg-info/
-
-# Pytest caches
+# Type checker & linter caches
+.mypy_cache/
+.ruff_cache/
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Virtual environments
+# Virtual environments & local env
 venv/
 env/
 .venv/
 .env
 
-# Local databases
+# Local databases & storage
 .data/
-
-# User-uploaded storage files
-storage/public/*
+storage/
 
 # Build artifacts
 dist/
 build/
+*.egg-info/

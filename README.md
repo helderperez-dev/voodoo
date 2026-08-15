@@ -7,12 +7,15 @@ Voodoo is an ultra-minimalist, high-performance web framework designed for the A
 ## ✨ Features
 
 - **Component-Driven UI**: Build modern, reactive UIs using pure Python components (`Div`, `Card`, `Button`, `Text`) with TailwindCSS integration out of the box. No writing raw HTML/JS required.
-- **Real-Time WebSockets**: Live updates pushed seamlessly to the client with minimal configuration.
+- **Native Authentication & Security**: Complete identity system with PBKDF2 password hashing, HS256 JWT tokens, API keys, session cookies, RBAC route guards (`@login_required`, `@requires_role`), CSRF protection, rate limiting, and security headers.
+- **Native SEO Engine**: Built-in support for dynamic `sitemap.xml`, `robots.txt`, OpenGraph tags, Twitter Cards, and JSON-LD structured data.
+- **Semantic HTML**: Fully accessible HTML5 hierarchy (`Article`, `Nav`, `Section`, `Header`, `Main`) enforcing best-practices out of the box.
+- **Voodoo Mesh**: Real-time events network (`voodoo.mesh`) bridging WebSocket broadcasting, local event handling, and automatic MCP tooling for AI IDEs.
 - **Data Persistence**: Built-in async SQLite (`aiosqlite`) ORM using Pydantic models with Row-Level Security (RLS) policies.
 - **Background Workers**: Native task queues for heavy processing, ideal for AI/LLM workloads.
-- **AI Native**: Built-in support for LLM Agents and the Model Context Protocol (MCP).
+- **AI Native**: Built-in support for LLM Agents, Model Context Protocol (MCP), and multi-IDE configuration sync (Trae, Cursor, Windsurf, Copilot).
 - **Observability**: Integrated Telemetry and APM tracing module tracking latencies, metrics, and AI token usage.
-- **Zero Config**: `pyproject.toml` based, zero-configuration setup, hot-reloading, and out-of-the-box smart documentation.
+- **Modern CLI**: Developer toolkit featuring `voodoo new`, `voodoo dev`, `voodoo routes`, `voodoo doctor`, `voodoo auth`, `voodoo generate`, and `voodoo version`.
 
 ## 🚀 Getting Started
 

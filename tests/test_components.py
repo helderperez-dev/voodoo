@@ -51,3 +51,48 @@ def test_table():
     assert html.startswith('<table id="tbl-1" class="my-table">')
     assert '<th class="px-6 py-4 text-left text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Name</th>' in html
     assert '<td class="px-6 py-4 whitespace-nowrap text-sm text-[var(--color-text)]">Alice</td>' in html
+
+
+def test_auth_components():
+    from voodoo.components import LoginForm, RegisterForm, UserBadge, AuthGuard
+    from voodoo.auth import AuthUser
+    
+    # LoginForm
+    login_form = LoginForm(action="/login", csrf_token="csrf_123")
+    rendered_login = login_form.render()
+    assert 'action="/login"' in rendered_login
+    assert 'name="csrf_token" value="csrf_123"' in rendered_login
+    assert 'name="username"' in rendered_login
+    assert 'name="password"' in rendered_login
+    
+    # RegisterForm
+    reg_form = RegisterForm(action="/register", title="Join Us")
+    rendered_reg = reg_form.render()
+    assert 'action="/register"' in rendered_reg
+    assert 'Join Us' in rendered_reg
+    assert 'name="email"' in rendered_reg
+    
+    # UserBadge - unauthenticated
+    badge_anon = UserBadge(user=None)
+    assert 'Sign In' in badge_anon.render()
+    
+    # UserBadge - authenticated
+    user = AuthUser(id=1, email="admin@voodoo.dev", username="admin", role="admin", is_authenticated=True)
+    badge_auth = UserBadge(user=user)
+    rendered_badge = badge_auth.render()
+    assert 'admin' in rendered_badge
+    assert 'AD' in rendered_badge
+    
+    # AuthGuard - unauthenticated
+    guard_anon = AuthGuard("Secret Vault", user=None, fallback="Please Login")
+    assert guard_anon.render() == "Please Login"
+    
+    # AuthGuard - authenticated with matching role
+    guard_ok = AuthGuard("Secret Vault", user=user, required_roles=["admin"])
+    assert "Secret Vault" in guard_ok.render()
+    
+    # AuthGuard - role mismatch
+    user_viewer = AuthUser(id=2, email="viewer@voodoo.dev", role="viewer", is_authenticated=True)
+    guard_fail = AuthGuard("Secret Vault", user=user_viewer, required_roles=["admin"])
+    assert "Access restricted" in guard_fail.render()
+

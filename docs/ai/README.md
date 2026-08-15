@@ -11,6 +11,10 @@ Any AI IDE working on a Voodoo app should read these files in order:
 5. `STATE.md`
 6. `DATABASE.md`
 7. `SKILLS.md`
+8. `MESH.md`
+9. `SEO.md`
+10. `AUTH.md`
+11. `SECURITY.md`
 
 The goal is simple:
 
