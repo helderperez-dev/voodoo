@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voodoo-framework"
-version = "1.0.13"
+version = "1.0.14"
 description = "Voodoo Framework"
 requires-python = ">=3.12"
 dependencies = [

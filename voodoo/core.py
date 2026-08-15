@@ -134,7 +134,11 @@ def render_page(component) -> str:
 
 def create_app(app_dir: str = "app") -> Starlette:
     from voodoo.config import config
-    base_storage_dir = os.path.join(os.getcwd(), config.storage_dir)
+    try:
+        cwd = os.getcwd()
+    except FileNotFoundError:
+        cwd = "."
+    base_storage_dir = os.path.join(cwd, config.storage_dir)
     public_storage_dir = os.path.join(base_storage_dir, "public")
     os.makedirs(public_storage_dir, exist_ok=True)
     

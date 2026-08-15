@@ -17,7 +17,6 @@ class StorageManager:
         self.endpoint = os.getenv("VOODOO_S3_ENDPOINT")
         
         self.use_s3 = all([self.s3_bucket, self.key, self.secret, self.endpoint])
-        self.base_dir = os.path.join(os.getcwd(), os.getenv("VOODOO_STORAGE_DIR", "storage"))
         
         if self.use_s3 and boto3:
             self.s3_client = boto3.client(
@@ -29,6 +28,13 @@ class StorageManager:
             )
         else:
             self.s3_client = None
+
+    @property
+    def base_dir(self) -> str:
+        try:
+            return os.path.join(os.getcwd(), os.getenv("VOODOO_STORAGE_DIR", "storage"))
+        except FileNotFoundError:
+            return os.path.join(".", os.getenv("VOODOO_STORAGE_DIR", "storage"))
 
     def _get_local_path(self, bucket: str, path: str) -> str:
         """Helper to resolve the local file path for a specific bucket."""
