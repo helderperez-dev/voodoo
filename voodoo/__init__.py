@@ -73,3 +73,5 @@ __all__ = [
     "i18n_instance",
     "mesh"
 ]
+
+__version__ = "1.0.19"
