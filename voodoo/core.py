@@ -142,9 +142,12 @@ def create_app(app_dir: str = "app") -> Starlette:
     public_storage_dir = os.path.join(base_storage_dir, "public")
     os.makedirs(public_storage_dir, exist_ok=True)
     
+    from voodoo.mesh import mesh
+    
     routes = [
         WebSocketRoute("/_voodoo_ws", websocket_endpoint),
-        Mount("/storage/public", app=StaticFiles(directory=public_storage_dir), name="storage_public")
+        WebSocketRoute("/voodoo/mesh/ws", mesh._handle_websocket),
+        Mount("/storage/public", app=StaticFiles(directory=public_storage_dir), name="storage_public"),
     ]
     
     # Simple file-based router (folder-based)

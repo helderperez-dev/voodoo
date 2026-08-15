@@ -10,6 +10,7 @@ from .agent import Agent
 from .api import api
 from .storage import storage
 from .mcp import mcp, MCPClient
+from .mesh import mesh
 from .status import ServiceStatus
 from .telemetry import trace, TelemetryMiddleware, telemetry_store
 from .config import config
@@ -69,5 +70,6 @@ __all__ = [
     "default_theme",
     "_",
     "I18n",
-    "i18n_instance"
+    "i18n_instance",
+    "mesh"
 ]
