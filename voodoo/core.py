@@ -6,7 +6,7 @@ from typing import Dict, Any, Callable
 from starlette.applications import Starlette
 from starlette.routing import Route, WebSocketRoute, Mount
 from starlette.responses import HTMLResponse, Response
-from starlette.websockets import WebSocket
+from starlette.websockets import WebSocket, WebSocketDisconnect
 from starlette.staticfiles import StaticFiles
 import inspect
 
@@ -58,8 +58,15 @@ async def websocket_endpoint(websocket: WebSocket):
                         await handler(msg["id"], msg["value"])
                     else:
                         handler(msg["id"], msg["value"])
+    except WebSocketDisconnect as e:
+        # 1000 = Normal Closure, 1001 = Going Away (e.g. page reload)
+        if getattr(e, "code", None) not in (1000, 1001):
+            print(f"WS Disconnected with code: {getattr(e, 'code', 'unknown')}")
     except Exception as e:
-        print(f"WS Disconnected/Error: {e}")
+        err_str = str(e)
+        if "1000" not in err_str and "1001" not in err_str:
+            print(f"WS Error: {err_str}")
+    finally:
         ws_manager.disconnect(websocket)
 
 def render_page(component) -> str:
@@ -204,8 +211,9 @@ def create_app(app_dir: str = "app") -> Starlette:
             api_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(api_module)
             
-            from voodoo.api import api as voodoo_api
-            routes.extend(voodoo_api.routes)
+    # Always include internal API routes (like /status) even if no user api.py exists
+    from voodoo.api import api as voodoo_api
+    routes.extend(voodoo_api.routes)
 
     from voodoo.queue import start_workers, stop_workers
     from voodoo.data import init_db

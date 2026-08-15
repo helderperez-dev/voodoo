@@ -131,9 +131,13 @@ def page(request):
     )
 """)
 
-            (project_dir / "main.py").write_text("""import uvicorn
+            (project_dir / "main.py").write_text("""import os
+import uvicorn
 from voodoo.core import create_app
 from voodoo.config import config
+
+# Fix for large cookies in WebSockets
+os.environ["WEBSOCKETS_MAX_LINE_LENGTH"] = "8388608"
 
 # Voodoo automatically looks for the "app" folder in the current working directory
 app = create_app()
@@ -212,6 +216,8 @@ def dev(
     
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join(sys.path)
+    env["WEBSOCKETS_MAX_LINE_LENGTH"] = "8388608" # 8 MB to match uvicorn's h11 setting
+    env["WEBSOCKETS_MAX_NUM_HEADERS"] = "256"
     
     try:
         # We let uvicorn take over the terminal output
