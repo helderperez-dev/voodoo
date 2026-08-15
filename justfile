@@ -29,6 +29,7 @@ clean:
 build: clean
     uv build
 
-# Release a new version (test, bump version, build, publish PyPI, update Homebrew, tag & push GitHub)
+# Release a new version (fully automated in GitHub Actions: test, bump, PyPI, Homebrew, GitHub Release)
 release version:
-    @python3 scripts/release.py {{version}}
+    @gh workflow run release.yml --ref main -f version={{version}}
+    @echo "Release {{version}} triggered — watch it: gh run watch --workflow=release.yml"

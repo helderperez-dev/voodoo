@@ -1,9 +1,6 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       version:
@@ -13,6 +10,10 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -32,15 +33,16 @@ jobs:
 
       - name: Determine version
         id: get_version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-            VERSION="${VERSION#v}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/v}"
+          VERSION="${INPUT_VERSION#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: '$VERSION' (expected semver, e.g. 1.0.21)" >&2
+            exit 1
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "TAG=v$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "TAG=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Release version: $VERSION"
 
       - name: Install uv
@@ -59,10 +61,9 @@ jobs:
         run: uv run pytest
 
       - name: Bump version in source files
-        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
           sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" voodoo/__init__.py
           sed -i "s/ver = getattr(voodoo, \"__version__\", \".*\")/ver = getattr(voodoo, \"__version__\", \"$VERSION\")/" voodoo/cli.py
@@ -70,16 +71,15 @@ jobs:
           echo "Bumped to $VERSION"
           grep '^version' pyproject.toml
 
-      - name: Commit and push tag
-        if: github.event_name == 'workflow_dispatch'
+      - name: Commit, tag and push
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+          TAG: ${{ steps.get_version.outputs.TAG }}
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          TAG="${{ steps.get_version.outputs.TAG }}"
-
           git add pyproject.toml voodoo/__init__.py voodoo/cli.py
           git commit -m "chore(release): bump version to $TAG" || echo "Nothing to commit"
           git push origin main
-          git tag "$TAG"
+          git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
 
       - name: Build distribution packages
@@ -92,8 +92,7 @@ jobs:
         run: |
           TAR_FILE=$(ls dist/*.tar.gz | head -n 1)
           SHA256=$(sha256sum "$TAR_FILE" | awk '{print $1}')
-          echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
-          echo "TAR_FILE=$TAR_FILE" >> $GITHUB_OUTPUT
+          echo "SHA256=$SHA256" >> "$GITHUB_OUTPUT"
           echo "SHA256: $SHA256"
 
       - name: Publish to PyPI
@@ -106,10 +105,9 @@ jobs:
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+          SHA256: ${{ steps.sha.outputs.SHA256 }}
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          SHA256="${{ steps.sha.outputs.SHA256 }}"
-
           FORMULA_CONTENT=$(cat <<EOF
           class Voodoo < Formula
             include Language::Python::Virtualenv
@@ -136,20 +134,21 @@ jobs:
           B64_CONTENT=$(echo "$FORMULA_CONTENT" | base64 | tr -d '\n')
           FILE_SHA=$(gh api repos/helderperez-dev/homebrew-voodoo/contents/Formula/voodoo.rb --jq .sha || echo "")
 
+          ARGS=(--method PUT repos/helderperez-dev/homebrew-voodoo/contents/Formula/voodoo.rb
+                -f message="chore(release): update voodoo to ${VERSION}"
+                -f content="$B64_CONTENT")
           if [ -n "$FILE_SHA" ]; then
-            gh api --method PUT repos/helderperez-dev/homebrew-voodoo/contents/Formula/voodoo.rb \
-              -f message="chore(release): update voodoo to ${VERSION}" \
-              -f content="$B64_CONTENT" \
-              -f sha="$FILE_SHA"
-            echo "✓ Homebrew formula updated"
+            ARGS+=(-f sha="$FILE_SHA")
           fi
+
+          gh api "${ARGS[@]}"
+          echo "✓ Homebrew formula updated"
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.get_version.outputs.TAG }}
         run: |
-          TAG="${{ steps.get_version.outputs.TAG }}"
-
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
@@ -158,4 +157,3 @@ jobs:
               --generate-notes
           fi
           echo "✓ GitHub release $TAG done."
-
