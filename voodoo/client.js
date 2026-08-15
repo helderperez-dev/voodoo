@@ -1,7 +1,8 @@
 const voodoo = {
     ws: null,
     init: function() {
-        this.ws = new WebSocket(`ws://${window.location.host}/_voodoo_ws`);
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.ws = new WebSocket(`${protocol}//${window.location.host}/_voodoo_ws`);
         this.ws.onmessage = this.handleMessage.bind(this);
         this.ws.onclose = () => {
             console.log("Voodoo WS disconnected. Reconnecting in 1s...");
