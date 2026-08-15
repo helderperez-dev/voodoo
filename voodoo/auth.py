@@ -16,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from voodoo.config import config
+from voodoo.core.errors import AuthError as _VoodooAuthError
 from voodoo.data import BaseModel, get_db
 
 # Context variable for the currently authenticated user in the current async task
@@ -24,8 +25,8 @@ current_user: ContextVar[Optional["AuthUser"]] = ContextVar(
 )
 
 
-class AuthError(Exception):
-    """Base exception for authentication errors."""
+class AuthError(_VoodooAuthError):
+    """Base exception for authentication errors (part of the VoodooError tree)."""
 
     def __init__(self, message: str, status_code: int = 401):
         super().__init__(message)

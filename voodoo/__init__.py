@@ -1,118 +1,85 @@
+"""Voodoo — the AI-native application framework for Python.
+
+The public API is intentionally small (~40 names). Everything else lives in
+its defining submodule (e.g. ``voodoo.auth``, ``voodoo.seo``) and legacy
+top-level imports resolve through a deprecation shim (PEP 562).
+"""
+
+import importlib
+import warnings
+from typing import Any
+
 from .agent import Agent
 from .api import api
-from .auth import (
-    AuthError,
-    AuthMiddleware,
-    AuthUser,
-    ExpiredTokenError,
-    InvalidCredentialsError,
-    InvalidTokenError,
-    PermissionDeniedError,
-    User,
-    clear_auth_cookie,
-    create_access_token,
-    current_user,
-    decode_access_token,
-    generate_api_key,
-    generate_secret_key,
-    get_current_user,
-    hash_api_key,
-    hash_password,
-    login_required,
-    require_api_key,
-    require_auth,
-    require_roles,
-    require_scopes,
-    requires_api_key,
-    requires_permission,
-    requires_role,
-    requires_roles,
-    requires_scopes,
-    set_auth_cookie,
-    verify_api_key,
-    verify_password,
-)
 from .components import (
     A,
-    Address,
     Article,
-    Aside,
-    AuthGuard,
     Avatar,
     Badge,
     Button,
     Card,
-    ChatBox,
     Checkbox,
     Component,
     Container,
     Dialog,
     Div,
     Divider,
-    FigCaption,
-    Figure,
     Flex,
     Footer,
     Form,
     Grid,
     Header,
     Heading,
-    Img,
     Input,
     Label,
     List,
     ListItem,
-    # Auth & Security Components
-    LoginForm,
     Main,
-    # Semantic HTML (SEO & Accessibility)
     Nav,
     Option,
-    Paragraph,
     Radio,
-    RegisterForm,
     Section,
     Select,
     Table,
     Text,
     Textarea,
-    Time,
-    UserBadge,
 )
-from .config import AuthConfig, SecurityConfig, SEOConfig, config
-from .core import create_app, register_event, ws_manager
-from .data import BaseModel, get_db, on_insert, on_update, rls_policy
-from .i18n import I18n, _, i18n_instance
-from .mcp import MCPClient, mcp
+from .config import config
+from .core import App, create_app, page, register_event, ws_manager
+from .data import BaseModel
 from .mesh import mesh
-from .queue import enqueue, queue
-from .security import (
-    CORSMiddleware,
-    CSRFMiddleware,
-    RateLimiter,
-    RateLimitMiddleware,
-    SecurityHeadersMiddleware,
-    generate_csrf_token,
-    rate_limiter,
-    set_csrf_cookie,
-    validate_password_strength,
-)
-from .seo import FAQ, GEO, SEO, OpenGraph, TwitterCard
-from .status import ServiceStatus
-from .storage import storage
-from .telemetry import TelemetryMiddleware, telemetry_store, trace
-from .theme import Theme, ThemeColors, default_theme, set_theme
+from .telemetry import trace
+from .theme import Theme, ThemeColors
+
+__version__ = "1.0.22"
 
 __all__ = [
+    # Core runtime
+    "App",
     "create_app",
+    "page",
+    "api",
+    "trace",
+    # Realtime
+    "mesh",
     "register_event",
     "ws_manager",
+    # AI (full provider abstraction lands with the AI sprints)
+    "Agent",
+    # Data
+    "BaseModel",
+    # Theming & configuration
+    "Theme",
+    "ThemeColors",
+    "config",
+    # UI — layout
     "Component",
     "Div",
     "Flex",
     "Grid",
     "Container",
     "A",
+    # UI — core components
     "Button",
     "Card",
     "Text",
@@ -121,8 +88,7 @@ __all__ = [
     "Avatar",
     "Divider",
     "Dialog",
-    "List",
-    "ListItem",
+    # UI — forms
     "Form",
     "Label",
     "Input",
@@ -131,102 +97,130 @@ __all__ = [
     "Option",
     "Checkbox",
     "Radio",
-    "ChatBox",
+    # UI — collections
     "Table",
-    # Semantic HTML
+    "List",
+    "ListItem",
+    # UI — semantic structure
     "Nav",
     "Header",
     "Footer",
     "Main",
     "Section",
     "Article",
-    "Aside",
-    "Figure",
-    "FigCaption",
-    "Time",
-    "Address",
-    "Img",
-    "Paragraph",
-    # Auth Components
-    "LoginForm",
-    "RegisterForm",
-    "UserBadge",
-    "AuthGuard",
-    # Data
-    "BaseModel",
-    "on_insert",
-    "on_update",
-    "rls_policy",
-    "get_db",
-    "queue",
-    "enqueue",
-    "Agent",
-    "api",
-    "storage",
-    "mcp",
-    "MCPClient",
-    "ServiceStatus",
-    "trace",
-    "TelemetryMiddleware",
-    "telemetry_store",
-    "config",
-    "SEOConfig",
-    "AuthConfig",
-    "SecurityConfig",
-    "Theme",
-    "ThemeColors",
-    "set_theme",
-    "default_theme",
-    "_",
-    "I18n",
-    "i18n_instance",
-    "mesh",
-    # SEO & GEO
-    "SEO",
-    "OpenGraph",
-    "TwitterCard",
-    "GEO",
-    "FAQ",
-    # Auth & Security
-    "hash_password",
-    "verify_password",
-    "create_access_token",
-    "decode_access_token",
-    "generate_api_key",
-    "hash_api_key",
-    "verify_api_key",
-    "generate_secret_key",
-    "AuthUser",
-    "User",
-    "get_current_user",
-    "current_user",
-    "set_auth_cookie",
-    "clear_auth_cookie",
-    "require_auth",
-    "require_roles",
-    "require_scopes",
-    "require_api_key",
-    "login_required",
-    "requires_role",
-    "requires_roles",
-    "requires_permission",
-    "requires_scopes",
-    "requires_api_key",
-    "AuthMiddleware",
-    "AuthError",
-    "InvalidCredentialsError",
-    "ExpiredTokenError",
-    "InvalidTokenError",
-    "PermissionDeniedError",
-    "SecurityHeadersMiddleware",
-    "CORSMiddleware",
-    "CSRFMiddleware",
-    "RateLimitMiddleware",
-    "RateLimiter",
-    "rate_limiter",
-    "generate_csrf_token",
-    "set_csrf_cookie",
-    "validate_password_strength",
 ]
 
-__version__ = "1.0.22"
+# ---------------------------------------------------------------------------
+# Deprecation shims: legacy top-level imports resolve from their submodule.
+# Removed only with a strong reason (not during the 1.0 cycle).
+# ---------------------------------------------------------------------------
+
+_DEPRECATED_EXPORTS: dict[str, str] = {
+    # voodoo.auth
+    "AuthError": "voodoo.auth",
+    "AuthMiddleware": "voodoo.auth",
+    "AuthUser": "voodoo.auth",
+    "ExpiredTokenError": "voodoo.auth",
+    "InvalidCredentialsError": "voodoo.auth",
+    "InvalidTokenError": "voodoo.auth",
+    "PermissionDeniedError": "voodoo.auth",
+    "User": "voodoo.auth",
+    "clear_auth_cookie": "voodoo.auth",
+    "create_access_token": "voodoo.auth",
+    "current_user": "voodoo.auth",
+    "decode_access_token": "voodoo.auth",
+    "generate_api_key": "voodoo.auth",
+    "generate_secret_key": "voodoo.auth",
+    "get_current_user": "voodoo.auth",
+    "hash_api_key": "voodoo.auth",
+    "hash_password": "voodoo.auth",
+    "login_required": "voodoo.auth",
+    "require_api_key": "voodoo.auth",
+    "require_auth": "voodoo.auth",
+    "require_roles": "voodoo.auth",
+    "require_scopes": "voodoo.auth",
+    "requires_api_key": "voodoo.auth",
+    "requires_permission": "voodoo.auth",
+    "requires_role": "voodoo.auth",
+    "requires_roles": "voodoo.auth",
+    "requires_scopes": "voodoo.auth",
+    "set_auth_cookie": "voodoo.auth",
+    "verify_api_key": "voodoo.auth",
+    "verify_password": "voodoo.auth",
+    # voodoo.components
+    "Address": "voodoo.components",
+    "Aside": "voodoo.components",
+    "AuthGuard": "voodoo.components",
+    "ChatBox": "voodoo.components",
+    "FigCaption": "voodoo.components",
+    "Figure": "voodoo.components",
+    "Img": "voodoo.components",
+    "LoginForm": "voodoo.components",
+    "Paragraph": "voodoo.components",
+    "RegisterForm": "voodoo.components",
+    "Time": "voodoo.components",
+    "UserBadge": "voodoo.components",
+    # voodoo.config
+    "AuthConfig": "voodoo.config",
+    "SecurityConfig": "voodoo.config",
+    "SEOConfig": "voodoo.config",
+    # voodoo.data
+    "get_db": "voodoo.data",
+    "on_insert": "voodoo.data",
+    "on_update": "voodoo.data",
+    "rls_policy": "voodoo.data",
+    # voodoo.i18n
+    "I18n": "voodoo.i18n",
+    "_": "voodoo.i18n",
+    "i18n_instance": "voodoo.i18n",
+    # voodoo.mcp
+    "MCPClient": "voodoo.mcp",
+    "mcp": "voodoo.mcp",
+    # voodoo.queue
+    "enqueue": "voodoo.queue",
+    "queue": "voodoo.queue",
+    # voodoo.security
+    "CORSMiddleware": "voodoo.security",
+    "CSRFMiddleware": "voodoo.security",
+    "RateLimiter": "voodoo.security",
+    "RateLimitMiddleware": "voodoo.security",
+    "SecurityHeadersMiddleware": "voodoo.security",
+    "generate_csrf_token": "voodoo.security",
+    "rate_limiter": "voodoo.security",
+    "set_csrf_cookie": "voodoo.security",
+    "validate_password_strength": "voodoo.security",
+    # voodoo.seo
+    "FAQ": "voodoo.seo",
+    "GEO": "voodoo.seo",
+    "SEO": "voodoo.seo",
+    "OpenGraph": "voodoo.seo",
+    "TwitterCard": "voodoo.seo",
+    # voodoo.status
+    "ServiceStatus": "voodoo.status",
+    # voodoo.storage
+    "storage": "voodoo.storage",
+    # voodoo.telemetry
+    "TelemetryMiddleware": "voodoo.telemetry",
+    "telemetry_store": "voodoo.telemetry",
+    # voodoo.theme
+    "default_theme": "voodoo.theme",
+    "set_theme": "voodoo.theme",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module_path = _DEPRECATED_EXPORTS.get(name)
+    if module_path is None:
+        raise AttributeError(f"module 'voodoo' has no attribute {name!r}")
+    value = getattr(importlib.import_module(module_path), name)
+    warnings.warn(
+        f"`from voodoo import {name}` is deprecated; "
+        f"import it from `{module_path}` instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_DEPRECATED_EXPORTS))

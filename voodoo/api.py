@@ -199,5 +199,12 @@ class API:
 
         return decorator
 
+    def patch(self, path: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            self._add_route(path, "PATCH", func)
+            return func
+
+        return decorator
+
 
 api = API()

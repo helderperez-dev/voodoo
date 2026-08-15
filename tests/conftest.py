@@ -17,6 +17,16 @@ def event_loop():
     loop.close()
 
 
+@pytest.fixture(autouse=True)
+def _clean_page_registry():
+    """Isolate the global @page registry between tests."""
+    from voodoo.core.routing import page_registry
+
+    page_registry.clear()
+    yield
+    page_registry.clear()
+
+
 @pytest.fixture
 def app(monkeypatch):
     """Fixture to provide the Starlette app with mocked database initialization."""

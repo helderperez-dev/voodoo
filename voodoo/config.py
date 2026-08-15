@@ -5,8 +5,45 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+from voodoo.core.errors import ConfigurationError
+
 # Load .env variables first
 load_dotenv()
+
+
+def _env_flag(name: str) -> bool | None:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _resolve_debug() -> bool:
+    """Debug mode: explicit VOODOO_DEBUG wins; otherwise on unless production."""
+    explicit = _env_flag("VOODOO_DEBUG")
+    if explicit is not None:
+        return explicit
+    return os.getenv("VOODOO_ENV", "development") != "production"
+
+
+def _resolve_db_path() -> str:
+    """Database location: VOODOO_DB_PATH > DATABASE_URL (sqlite) > default."""
+    explicit = os.getenv("VOODOO_DB_PATH")
+    if explicit:
+        return explicit
+    url = os.getenv("DATABASE_URL")
+    if url:
+        if url == "sqlite://":
+            return ":memory:"
+        if url.startswith("sqlite:///"):
+            return url[len("sqlite:///") :] or ":memory:"
+        scheme = url.split(":", 1)[0]
+        raise ConfigurationError(
+            f"DATABASE_URL scheme '{scheme}://' is not supported yet. "
+            "Use a sqlite:///... URL or VOODOO_DB_PATH. Additional backends "
+            "arrive as optional extras (e.g. voodoo[postgres]) in a later release."
+        )
+    return ".data/voodoo.db"
 
 
 class SEOConfig(BaseModel):
@@ -90,9 +127,8 @@ class VoodooConfig(BaseModel):
     """Core configuration for the Voodoo framework."""
 
     env: str = Field(default_factory=lambda: os.getenv("VOODOO_ENV", "development"))
-    db_path: str = Field(
-        default_factory=lambda: os.getenv("VOODOO_DB_PATH", ".data/voodoo.db")
-    )
+    debug: bool = Field(default_factory=_resolve_debug)
+    db_path: str = Field(default_factory=_resolve_db_path)
     storage_dir: str = Field(
         default_factory=lambda: os.getenv("VOODOO_STORAGE_DIR", "storage")
     )

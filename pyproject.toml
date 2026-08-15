@@ -39,7 +39,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["voodoo*", "app*"]
+include = ["voodoo*"]
 
 [tool.setuptools.package-data]
 voodoo = ["*.js", "*.html", "*.css"]
