@@ -43,7 +43,7 @@ event_handlers: Dict[str, Callable] = {}
 
 def register_event(name: str, handler: Callable):
     event_handlers[name] = handler
-@app.websocket("/_voodoo_ws")
+
 async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
