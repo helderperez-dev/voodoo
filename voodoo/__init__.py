@@ -229,4 +229,4 @@ __all__ = [
     "validate_password_strength",
 ]
 
-__version__ = "1.0.21"
+__version__ = "1.0.22"
