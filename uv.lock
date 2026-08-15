@@ -963,7 +963,7 @@ wheels = [
 
 [[package]]
 name = "voodoo-framework"
-version = "1.0.14"
+version = "1.0.18"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },

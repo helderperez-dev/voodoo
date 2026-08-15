@@ -166,19 +166,7 @@ class MeshClient:
         except Exception as e:
             print(f"MeshClient receive loop error: {e}")
             
-    async def broadcast(self, event: str, payload: Any):
-        """Broadcast an event to the connected Mesh Node."""
-        await self._ensure_connected()
-        await self.ws.send(json.dumps({
-            "jsonrpc": "2.0",
-            "method": "event",
-            "params": {
-                "event": event,
-                "payload": payload
-            }
-        }))
-        
-    async def call(self, _func_name: str, **kwargs) -> Any:
+    async def call(self, name: str, **kwargs) -> Any:
         """Invoke a remote function on the connected Mesh Node."""
         await self._ensure_connected()
         msg_id = str(uuid.uuid4())
@@ -190,7 +178,7 @@ class MeshClient:
             "jsonrpc": "2.0",
             "method": "call",
             "params": {
-                "name": _func_name,
+                "name": name,
                 "arguments": kwargs
             },
             "id": msg_id
