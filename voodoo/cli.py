@@ -171,6 +171,11 @@ if __name__ == "__main__":
                     progress.update(task, description="Installing dependencies with pip...")
                     pip_exe = ".venv/bin/pip" if os.name != "nt" else ".venv\\Scripts\\pip.exe"
                     subprocess.run([str(project_dir / pip_exe), "install", "-e", "."], cwd=project_dir, check=True, capture_output=True)
+                    
+                # Clean up build artifacts created by pip/uv install -e .
+                for item in project_dir.glob("*.egg-info"):
+                    if item.is_dir():
+                        shutil.rmtree(item)
             except subprocess.CalledProcessError as e:
                 console.print(f"\n[bold yellow]Warning:[/bold yellow] Failed to set up local environment or install dependencies.")
                 if e.stderr:
