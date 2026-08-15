@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Dict, Optional, Union, List as TList
+from typing import Any
 
 
 class Component:
@@ -234,9 +234,9 @@ class Avatar(Component):
             else:
                 children = (
                     Component(
+                        *[fallback],
                         tag="span",
                         className="flex h-full w-full items-center justify-center rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] text-sm font-medium",
-                        *[fallback],
                     ),
                 )
 
@@ -411,7 +411,7 @@ class ChatBox(Component):
 class Table(Component):
     tag = "table"
 
-    def __init__(self, headers: TList[str], rows: TList[TList[Any]], **kwargs):
+    def __init__(self, headers: list[str], rows: list[list[Any]], **kwargs):
         super().__init__(**kwargs)
         self.headers = headers
         self.rows = rows
@@ -567,7 +567,7 @@ class LoginForm(Component):
         subtitle: str = "Sign in to your account",
         submit_text: str = "Sign In",
         redirect_url: str = "/dashboard",
-        csrf_token: Optional[str] = None,
+        csrf_token: str | None = None,
         username_field: str = "username",
         **kwargs: Any,
     ):
@@ -635,7 +635,7 @@ class RegisterForm(Component):
         title: str = "Create an Account",
         subtitle: str = "Get started in seconds",
         submit_text: str = "Create Account",
-        csrf_token: Optional[str] = None,
+        csrf_token: str | None = None,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -695,7 +695,7 @@ class UserBadge(Component):
 
     def __init__(
         self,
-        user: Optional[Any] = None,
+        user: Any | None = None,
         logout_url: str = "/api/auth/logout",
         **kwargs: Any,
     ):
@@ -742,9 +742,9 @@ class AuthGuard(Component):
     def __init__(
         self,
         *children: Any,
-        user: Optional[Any] = None,
-        required_roles: Optional[TList[str]] = None,
-        fallback: Optional[Any] = None,
+        user: Any | None = None,
+        required_roles: list[str] | None = None,
+        fallback: Any | None = None,
         **kwargs: Any,
     ):
         super().__init__(*children, **kwargs)

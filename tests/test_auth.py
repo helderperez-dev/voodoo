@@ -1,41 +1,36 @@
 import asyncio
-import os
+
 import pytest
-import time
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
-from starlette.middleware import Middleware
 from starlette.testclient import TestClient
 
 from voodoo.auth import (
-    hash_password,
-    verify_password,
-    create_access_token,
-    decode_access_token,
-    generate_api_key,
-    hash_api_key,
-    verify_api_key,
-    generate_secret_key,
-    AuthUser,
-    User,
-    get_current_user,
-    current_user,
-    set_auth_cookie,
-    clear_auth_cookie,
-    require_auth,
-    require_roles,
-    require_scopes,
-    require_api_key,
     AuthMiddleware,
-    AuthError,
+    AuthUser,
     ExpiredTokenError,
     InvalidTokenError,
-    PermissionDeniedError,
+    User,
+    clear_auth_cookie,
+    create_access_token,
+    current_user,
+    decode_access_token,
+    generate_api_key,
+    generate_secret_key,
+    hash_api_key,
+    hash_password,
+    require_api_key,
+    require_auth,
+    require_roles,
+    set_auth_cookie,
+    verify_api_key,
+    verify_password,
 )
-from voodoo.data import BaseModel, init_db, rls_policy, get_db
 from voodoo.config import config
+from voodoo.data import BaseModel, init_db, rls_policy
 
 
 def test_password_hashing():

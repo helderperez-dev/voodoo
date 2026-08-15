@@ -6,9 +6,26 @@ Voodoo UI is built in Python with `voodoo.components`.
 
 ```python
 from voodoo.components import (
-    Div, Text, Heading, Button, A, Input, Form,
-    Nav, Header, Footer, Main, Section, Article, Aside,
-    Figure, FigCaption, Time, Address, Img, Paragraph
+    Div,
+    Text,
+    Heading,
+    Button,
+    A,
+    Input,
+    Form,
+    Nav,
+    Header,
+    Footer,
+    Main,
+    Section,
+    Article,
+    Aside,
+    Figure,
+    FigCaption,
+    Time,
+    Address,
+    Img,
+    Paragraph,
 )
 ```
 
@@ -40,12 +57,9 @@ For structure and SEO optimization, Voodoo provides native semantic HTML5 compon
 ```python
 from voodoo.components import Main, Header, Footer, Section, Article, Nav
 
+
 def BlogLayout():
-    return Main(
-        Header(Nav(...)),
-        Section(Article(...)),
-        Footer(...)
-    )
+    return Main(Header(Nav(...)), Section(Article(...)), Footer(...))
 ```
 
 The `Img` component also enforces accessibility by requiring an `alt` attribute and raising a Python warning if omitted.

@@ -1,13 +1,15 @@
 import asyncio
 import inspect
 import logging
-from typing import Callable, Dict, Any
+from collections.abc import Callable
+from typing import Any
 
-_queues: Dict[str, asyncio.Queue] = {}
-_workers: Dict[str, Callable] = {}
+_queues: dict[str, asyncio.Queue] = {}
+_workers: dict[str, Callable] = {}
 _worker_tasks: list[asyncio.Task] = []
 
 logger = logging.getLogger("voodoo.queue")
+
 
 def queue(name: str):
     def decorator(func: Callable):
@@ -15,20 +17,26 @@ def queue(name: str):
             _queues[name] = asyncio.Queue()
         _workers[name] = func
         return func
+
     return decorator
+
 
 async def enqueue(name: str, payload: Any):
     if name not in _queues:
         _queues[name] = asyncio.Queue()
     from voodoo.telemetry import trace_id_var
+
     trace_id = trace_id_var.get()
     await _queues[name].put({"payload": payload, "trace_id": trace_id})
+
 
 async def _run_worker(name: str):
     q = _queues[name]
     func = _workers[name]
-    from voodoo.telemetry import trace_id_var
     import uuid
+
+    from voodoo.telemetry import trace_id_var
+
     while True:
         try:
             item = await q.get()
@@ -48,10 +56,12 @@ async def _run_worker(name: str):
         except asyncio.CancelledError:
             break
 
+
 async def start_workers():
     for name in _workers.keys():
         task = asyncio.create_task(_run_worker(name))
         _worker_tasks.append(task)
+
 
 async def stop_workers():
     for task in _worker_tasks:

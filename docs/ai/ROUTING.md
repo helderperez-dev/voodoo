@@ -16,10 +16,11 @@ By default, routes return a Voodoo component. To inject SEO metadata (title, met
 from voodoo.components import Div, Heading
 from voodoo.seo import SEO
 
+
 async def page(request):
     seo = SEO(title="My Page", description="Welcome to Voodoo.")
     ui = Div(Heading("Hello World", level=1))
-    
+
     return seo, ui
 ```
 

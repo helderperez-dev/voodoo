@@ -28,7 +28,9 @@ load_env_file(ROOT_DIR / ".env")
 
 def run(cmd: list[str] | str, check: bool = True, shell: bool = False) -> str:
     print(f"➜ Running: {cmd if isinstance(cmd, str) else ' '.join(cmd)}")
-    res = subprocess.run(cmd, check=check, text=True, capture_output=True, shell=shell, cwd=ROOT_DIR)
+    res = subprocess.run(
+        cmd, check=check, text=True, capture_output=True, shell=shell, cwd=ROOT_DIR
+    )
     if res.stdout:
         print(res.stdout.strip())
     if res.stderr and res.returncode != 0:
@@ -67,14 +69,25 @@ def main() -> None:
 
     # 2. Bump versions
     print("\n📝 Updating version numbers...")
-    update_file(ROOT_DIR / "pyproject.toml", r'version\s*=\s*"[^"]+"', f'version = "{version}"')
-    update_file(ROOT_DIR / "voodoo" / "__init__.py", r'__version__\s*=\s*"[^"]+"', f'__version__ = "{version}"')
-    update_file(ROOT_DIR / "voodoo" / "cli.py", r'ver = getattr\(voodoo, "__version__", "[^"]+"\)', f'ver = getattr(voodoo, "__version__", "{version}")')
+    update_file(
+        ROOT_DIR / "pyproject.toml", r'version\s*=\s*"[^"]+"', f'version = "{version}"'
+    )
+    update_file(
+        ROOT_DIR / "voodoo" / "__init__.py",
+        r'__version__\s*=\s*"[^"]+"',
+        f'__version__ = "{version}"',
+    )
+    update_file(
+        ROOT_DIR / "voodoo" / "cli.py",
+        r'ver = getattr\(voodoo, "__version__", "[^"]+"\)',
+        f'ver = getattr(voodoo, "__version__", "{version}")',
+    )
 
     # 3. Clean old builds
     dist_dir = ROOT_DIR / "dist"
     if dist_dir.exists():
         import shutil
+
         shutil.rmtree(dist_dir)
 
     # 4. Build package
@@ -100,13 +113,21 @@ def main() -> None:
     # 5. Publish to PyPI
     pypi_password = os.getenv("PYPI_PASSWORD")
     if not pypi_password:
-        print("❌ Error: PYPI_PASSWORD not found in .env or environment.", file=sys.stderr)
+        print(
+            "❌ Error: PYPI_PASSWORD not found in .env or environment.", file=sys.stderr
+        )
         sys.exit(1)
 
     print("\n🌐 Publishing to PyPI...")
     env = os.environ.copy()
     env["UV_PUBLISH_TOKEN"] = pypi_password
-    pub_res = subprocess.run(["uv", "publish", "--token", pypi_password], cwd=ROOT_DIR, capture_output=True, text=True, env=env)
+    pub_res = subprocess.run(
+        ["uv", "publish", "--token", pypi_password],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
     if pub_res.returncode != 0:
         print(f"Error publishing: {pub_res.stderr}", file=sys.stderr)
         sys.exit(1)
@@ -136,14 +157,25 @@ end
 """
     # Fetch existing sha for formula to update via GitHub API
     try:
-        get_res = run(["gh", "api", "repos/helderperez-dev/homebrew-voodoo/contents/Formula/voodoo.rb", "--jq", ".sha"])
+        get_res = run(
+            [
+                "gh",
+                "api",
+                "repos/helderperez-dev/homebrew-voodoo/contents/Formula/voodoo.rb",
+                "--jq",
+                ".sha",
+            ]
+        )
         file_sha = get_res.strip()
         import base64
+
         b64_content = base64.b64encode(formula_content.encode("utf-8")).decode("utf-8")
         payload = f'{{"message":"chore(release): update voodoo to {version}","content":"{b64_content}","sha":"{file_sha}"}}'
-        put_cmd = f"gh api --method PUT repos/helderperez-dev/homebrew-voodoo/contents/Formula/voodoo.rb --input -"
+        put_cmd = "gh api --method PUT repos/helderperez-dev/homebrew-voodoo/contents/Formula/voodoo.rb --input -"
         subprocess.run(put_cmd, input=payload, text=True, check=True, shell=True)
-        print("✓ Homebrew formula successfully updated in helderperez-dev/homebrew-voodoo!")
+        print(
+            "✓ Homebrew formula successfully updated in helderperez-dev/homebrew-voodoo!"
+        )
     except Exception as e:
         print(f"⚠️  Note on Homebrew update: {e}")
 
@@ -157,7 +189,20 @@ end
 
     # 8. GitHub Release
     try:
-        run(["gh", "release", "create", f"v{version}", str(tar_path), str(wheel_path), "--title", f"v{version}", "--notes", f"Release v{version} of Voodoo Framework."])
+        run(
+            [
+                "gh",
+                "release",
+                "create",
+                f"v{version}",
+                str(tar_path),
+                str(wheel_path),
+                "--title",
+                f"v{version}",
+                "--notes",
+                f"Release v{version} of Voodoo Framework.",
+            ]
+        )
         print(f"✓ GitHub release v{version} created successfully!")
     except Exception as e:
         print(f"⚠️  Note on GitHub Release: {e}")

@@ -1,10 +1,10 @@
 import os
 from pathlib import Path
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from typer.testing import CliRunner
 
-from voodoo.cli import app, _detect_ide, _sync_ai_assets
+from voodoo.cli import _detect_ide, _sync_ai_assets, app
 
 runner = CliRunner()
 
@@ -99,7 +99,9 @@ def test_sync_ai_assets_all(tmp_path: Path):
 
 def test_cli_new_with_ide_flag(tmp_path: Path):
     project_dir = tmp_path / "test_app"
-    result = runner.invoke(app, ["new", str(project_dir), "--template", "", "--ide", "cursor"])
+    result = runner.invoke(
+        app, ["new", str(project_dir), "--template", "", "--ide", "cursor"]
+    )
     assert result.exit_code == 0
     assert (project_dir / ".cursor/rules/voodoo.mdc").exists()
     assert not (project_dir / ".trae").exists()
@@ -129,14 +131,23 @@ def test_cli_auth_create_user(tmp_path: Path):
     db_file = str(tmp_path / "cli_users.db")
     with patch.dict(os.environ, {"VOODOO_DB_PATH": db_file}, clear=False):
         from voodoo.config import config
+
         config.db_path = db_file
-        result = runner.invoke(app, [
-            "auth", "create-user",
-            "--email", "admin@voodoo.dev",
-            "--password", "StrongAdminPass123!",
-            "--username", "admin",
-            "--role", "admin"
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "auth",
+                "create-user",
+                "--email",
+                "admin@voodoo.dev",
+                "--password",
+                "StrongAdminPass123!",
+                "--username",
+                "admin",
+                "--role",
+                "admin",
+            ],
+        )
         assert result.exit_code == 0
         assert "User created successfully!" in result.output
         assert "admin@voodoo.dev" in result.output
@@ -153,5 +164,3 @@ def test_cli_doctor():
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
     assert "Voodoo Doctor" in result.output
-
-

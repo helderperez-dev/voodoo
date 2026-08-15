@@ -1,20 +1,15 @@
 import asyncio
-import base64
 import hashlib
-import hmac
-import os
 import re
 import secrets
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple, Union
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from voodoo.config import config
-
 
 # =========================================================================
 # Security Headers Middleware
@@ -26,7 +21,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Applies industry-standard HTTP security headers to all responses.
     """
 
-    async def dispatch(
+    async def dispatch(  # noqa: C901
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         response = await call_next(request)
@@ -96,7 +91,7 @@ class CORSMiddleware(BaseHTTPMiddleware):
         self._apply_cors_headers(response, origin)
         return response
 
-    def _apply_cors_headers(self, response: Response, origin: Optional[str]) -> None:
+    def _apply_cors_headers(self, response: Response, origin: str | None) -> None:
         sec_cfg = config.security
 
         # Determine allowed origin
@@ -134,7 +129,7 @@ def generate_csrf_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def set_csrf_cookie(response: Response, token: Optional[str] = None) -> str:
+def set_csrf_cookie(response: Response, token: str | None = None) -> str:
     """Sets a CSRF token cookie on the response."""
     csrf_token = token or generate_csrf_token()
     response.set_cookie(
@@ -154,8 +149,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     Exempts safe methods (GET, HEAD, OPTIONS) and machine-to-machine API key requests.
     """
 
-    EXEMPT_METHODS: Set[str] = {"GET", "HEAD", "OPTIONS", "TRACE"}
-    EXEMPT_PATHS: Set[str] = {"/_voodoo_ws", "/voodoo/mesh/ws", "/openapi.json"}
+    EXEMPT_METHODS: set[str] = {"GET", "HEAD", "OPTIONS", "TRACE"}
+    EXEMPT_PATHS: set[str] = {"/_voodoo_ws", "/voodoo/mesh/ws", "/openapi.json"}
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
@@ -217,12 +212,12 @@ class RateLimiter:
 
     def __init__(self):
         # Maps client_id -> list of timestamps
-        self.history: Dict[str, List[float]] = defaultdict(list)
+        self.history: dict[str, list[float]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
     async def is_allowed(
         self, client_id: str, max_requests: int, window_seconds: int
-    ) -> Tuple[bool, int, int]:
+    ) -> tuple[bool, int, int]:
         """
         Checks if client is allowed to make a request.
         Returns: (is_allowed, remaining_requests, reset_after_seconds)
@@ -312,7 +307,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 # =========================================================================
 
 
-def validate_password_strength(password: str, min_length: int = 8) -> Tuple[bool, str]:
+def validate_password_strength(password: str, min_length: int = 8) -> tuple[bool, str]:
     """
     Validates that a password satisfies minimum security requirements:
     - Minimum length

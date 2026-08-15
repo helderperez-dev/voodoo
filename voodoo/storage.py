@@ -1,7 +1,7 @@
-import os
-import aiofiles
 import asyncio
-from typing import Union
+import os
+
+import aiofiles
 
 try:
     import boto3
@@ -9,22 +9,23 @@ try:
 except ImportError:
     boto3 = None
 
+
 class StorageManager:
     def __init__(self):
         self.s3_bucket = os.getenv("VOODOO_S3_BUCKET")
         self.key = os.getenv("VOODOO_S3_KEY")
         self.secret = os.getenv("VOODOO_S3_SECRET")
         self.endpoint = os.getenv("VOODOO_S3_ENDPOINT")
-        
+
         self.use_s3 = all([self.s3_bucket, self.key, self.secret, self.endpoint])
-        
+
         if self.use_s3 and boto3:
             self.s3_client = boto3.client(
-                's3',
+                "s3",
                 aws_access_key_id=self.key,
                 aws_secret_access_key=self.secret,
                 endpoint_url=self.endpoint,
-                config=botocore.config.Config(signature_version='s3v4')
+                config=botocore.config.Config(signature_version="s3v4"),
             )
         else:
             self.s3_client = None
@@ -40,24 +41,26 @@ class StorageManager:
         """Helper to resolve the local file path for a specific bucket."""
         return os.path.join(self.base_dir, bucket, path)
 
-    async def upload(self, file_content: Union[bytes, str], path: str, bucket: str = "public") -> str:
+    async def upload(
+        self, file_content: bytes | str, path: str, bucket: str = "public"
+    ) -> str:
         """Uploads a file to a specific bucket and returns its path/url"""
         if isinstance(file_content, str):
-            file_content = file_content.encode('utf-8')
-            
+            file_content = file_content.encode("utf-8")
+
         if self.use_s3 and self.s3_client:
             s3_key = f"{bucket}/{path}"
             await asyncio.to_thread(
                 self.s3_client.put_object,
                 Bucket=self.s3_bucket,
                 Key=s3_key,
-                Body=file_content
+                Body=file_content,
             )
             return self.url(path, bucket)
         else:
             local_path = self._get_local_path(bucket, path)
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            async with aiofiles.open(local_path, 'wb') as f:
+            async with aiofiles.open(local_path, "wb") as f:
                 await f.write(file_content)
             return self.url(path, bucket)
 
@@ -66,9 +69,7 @@ class StorageManager:
         if self.use_s3 and self.s3_client:
             s3_key = f"{bucket}/{path}"
             await asyncio.to_thread(
-                self.s3_client.delete_object,
-                Bucket=self.s3_bucket,
-                Key=s3_key
+                self.s3_client.delete_object, Bucket=self.s3_bucket, Key=s3_key
             )
             return True
         else:
@@ -87,5 +88,6 @@ class StorageManager:
             return f"{self.endpoint}/{self.s3_bucket}/{s3_key}"
         else:
             return f"/storage/{bucket}/{path}"
+
 
 storage = StorageManager()

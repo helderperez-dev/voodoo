@@ -18,10 +18,12 @@ Use the `@mesh.expose()` decorator to expose a function. By doing this, Voodoo a
 ```python
 from voodoo.mesh import mesh
 
+
 @mesh.expose("get_server_time")
 def get_time():
     """Returns the current server time."""
     from datetime import datetime
+
     return datetime.now().isoformat()
 ```
 
@@ -31,6 +33,7 @@ Use the `@mesh.on("event_name")` decorator to listen to mesh broadcasts locally:
 
 ```python
 from voodoo.mesh import mesh
+
 
 @mesh.on("user_signup")
 async def handle_signup(payload):
@@ -43,6 +46,7 @@ To push an event to all connected WebSocket clients (like a notification system 
 
 ```python
 from voodoo.mesh import mesh
+
 
 async def process_payment():
     # ... logic ...

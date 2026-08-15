@@ -1,21 +1,19 @@
-import asyncio
 import base64
 import hashlib
 import hmac
 import inspect
 import json
-import os
 import secrets
 import time
+from collections.abc import Callable
 from contextvars import ContextVar, Token
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import wraps
-from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple, Union
+from typing import Any, Literal, Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response, RedirectResponse
-from starlette.websockets import WebSocket
+from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from voodoo.config import config
 from voodoo.data import BaseModel, get_db
@@ -58,7 +56,7 @@ class PermissionDeniedError(AuthError):
 
 
 def hash_password(
-    password: str, salt: Optional[str] = None, iterations: int = 600_000
+    password: str, salt: str | None = None, iterations: int = 600_000
 ) -> str:
     """
     Hashes a password using PBKDF2-HMAC-SHA256 with 600,000 iterations (OWASP standard).
@@ -114,9 +112,9 @@ def _b64decode_str(data: str) -> bytes:
 
 
 def create_access_token(
-    data: Dict[str, Any],
-    expires_delta_seconds: Optional[int] = None,
-    secret_key: Optional[str] = None,
+    data: dict[str, Any],
+    expires_delta_seconds: int | None = None,
+    secret_key: str | None = None,
 ) -> str:
     """
     Creates an HMAC-SHA256 signed access token (JWT format).
@@ -143,14 +141,14 @@ def create_access_token(
         json.dumps(payload, separators=(",", ":")).encode("utf-8")
     )
 
-    message = f"{header_b64}.{payload_b64}".encode("utf-8")
+    message = f"{header_b64}.{payload_b64}".encode()
     signature = hmac.new(secret.encode("utf-8"), message, hashlib.sha256).digest()
     sig_b64 = _b64encode_str(signature)
 
     return f"{header_b64}.{payload_b64}.{sig_b64}"
 
 
-def decode_access_token(token: str, secret_key: Optional[str] = None) -> Dict[str, Any]:
+def decode_access_token(token: str, secret_key: str | None = None) -> dict[str, Any]:
     """
     Decodes and validates an HMAC-SHA256 signed access token.
     Raises ExpiredTokenError or InvalidTokenError if invalid.
@@ -165,13 +163,13 @@ def decode_access_token(token: str, secret_key: Optional[str] = None) -> Dict[st
     header_b64, payload_b64, sig_b64 = parts
     secret = secret_key or config.auth.secret_key
 
-    message = f"{header_b64}.{payload_b64}".encode("utf-8")
+    message = f"{header_b64}.{payload_b64}".encode()
     expected_sig = hmac.new(secret.encode("utf-8"), message, hashlib.sha256).digest()
 
     try:
         provided_sig = _b64decode_str(sig_b64)
     except Exception:
-        raise InvalidTokenError("Corrupted token signature encoding")
+        raise InvalidTokenError("Corrupted token signature encoding") from None
 
     if not secrets.compare_digest(expected_sig, provided_sig):
         raise InvalidTokenError("Invalid token signature")
@@ -180,7 +178,7 @@ def decode_access_token(token: str, secret_key: Optional[str] = None) -> Dict[st
         payload_bytes = _b64decode_str(payload_b64)
         payload = json.loads(payload_bytes.decode("utf-8"))
     except Exception:
-        raise InvalidTokenError("Malformed token payload")
+        raise InvalidTokenError("Malformed token payload") from None
 
     if not isinstance(payload, dict):
         raise InvalidTokenError("Malformed token payload")
@@ -198,7 +196,7 @@ def decode_access_token(token: str, secret_key: Optional[str] = None) -> Dict[st
 # =========================================================================
 
 
-def generate_api_key(prefix: Optional[str] = None) -> Tuple[str, str]:
+def generate_api_key(prefix: str | None = None) -> tuple[str, str]:
     """
     Generates a secure API key with prefix and its SHA-256 hash.
     Returns: (raw_key, key_hash)
@@ -239,15 +237,15 @@ class AuthUser:
 
     def __init__(
         self,
-        id: Optional[Union[int, str]] = None,
-        email: Optional[str] = None,
-        username: Optional[str] = None,
+        id: int | str | None = None,
+        email: str | None = None,
+        username: str | None = None,
         role: str = "user",
-        roles: Optional[List[str]] = None,
-        scopes: Optional[List[str]] = None,
+        roles: list[str] | None = None,
+        scopes: list[str] | None = None,
         auth_type: str = "anonymous",
         is_authenticated: bool = False,
-        raw_data: Optional[Dict[str, Any]] = None,
+        raw_data: dict[str, Any] | None = None,
     ):
         self.id = id
         self.email = email
@@ -273,7 +271,7 @@ class AuthUser:
             return False
         return all(s in self.scopes for s in required_scopes)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "email": self.email,
@@ -289,7 +287,7 @@ class AuthUser:
         return f"<AuthUser id={self.id} email={self.email} role={self.role} authenticated={self.is_authenticated}>"
 
 
-def get_current_user(request: Optional[Request] = None) -> Optional[AuthUser]:
+def get_current_user(request: Request | None = None) -> AuthUser | None:
     """
     Retrieves the currently authenticated user from request state or ContextVar.
     """
@@ -327,23 +325,23 @@ class User(BaseModel):
         cls,
         email: str,
         password: str,
-        username: Optional[str] = None,
+        username: str | None = None,
         role: str = "user",
-        api_key_prefix: Optional[str] = None,
-    ) -> Tuple["User", Optional[str]]:
+        api_key_prefix: str | None = None,
+    ) -> tuple["User", str | None]:
         """
         Creates and stores a new User in the database with hashed password.
         Optionally generates an initial API key.
         Returns (user, raw_api_key)
         """
-        db = await get_db()
+        _ = await get_db()
         # Ensure table exists
         await cls._create_table()
 
         hashed = hash_password(password)
         uname = username or email.split("@")[0]
         raw_key, key_hash = generate_api_key(api_key_prefix)
-        created = datetime.now(timezone.utc).isoformat()
+        created = datetime.now(UTC).isoformat()
 
         user = cls()
         user.email = email
@@ -427,7 +425,7 @@ class User(BaseModel):
 # =========================================================================
 
 
-def _normalize_samesite(val: Optional[str]) -> Literal["lax", "strict", "none"]:
+def _normalize_samesite(val: str | None) -> Literal["lax", "strict", "none"]:
     if val and val.lower() in ("lax", "strict", "none"):
         return val.lower()  # type: ignore[return-value]
     return "lax"
@@ -436,9 +434,9 @@ def _normalize_samesite(val: Optional[str]) -> Literal["lax", "strict", "none"]:
 def set_auth_cookie(
     response: Response,
     token: str,
-    max_age: Optional[int] = None,
-    cookie_name: Optional[str] = None,
-    samesite: Optional[Literal["lax", "strict", "none"]] = None,
+    max_age: int | None = None,
+    cookie_name: str | None = None,
+    samesite: Literal["lax", "strict", "none"] | None = None,
 ) -> None:
     """Sets a secure HTTP-only authentication cookie on the response."""
     c_name = cookie_name or config.auth.cookie_name
@@ -458,8 +456,8 @@ def set_auth_cookie(
 
 def clear_auth_cookie(
     response: Response,
-    cookie_name: Optional[str] = None,
-    samesite: Optional[Literal["lax", "strict", "none"]] = None,
+    cookie_name: str | None = None,
+    samesite: Literal["lax", "strict", "none"] | None = None,
 ) -> None:
     """Clears the authentication cookie."""
     c_name = cookie_name or config.auth.cookie_name
@@ -478,8 +476,8 @@ def clear_auth_cookie(
 # =========================================================================
 
 
-def require_auth(
-    redirect_url: Optional[str] = None,
+def require_auth(  # noqa: C901
+    redirect_url: str | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator for API endpoints or Page views requiring authenticated user.
@@ -546,14 +544,14 @@ def require_auth(
     return decorator
 
 
-def require_roles(
-    *roles: str, redirect_url: Optional[str] = None
+def require_roles(  # noqa: C901
+    *roles: str, redirect_url: str | None = None
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator requiring the user to hold one of the specified roles.
     """
 
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:  # noqa: C901
         sig = inspect.signature(func)
 
         @wraps(func)
@@ -629,7 +627,7 @@ def require_roles(
     return decorator
 
 
-def require_scopes(*scopes: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def require_scopes(*scopes: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # noqa: C901
     """Decorator requiring specific API key scopes / permissions."""
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -697,7 +695,7 @@ def require_scopes(*scopes: str) -> Callable[[Callable[..., Any]], Callable[...,
 
 
 def require_api_key(
-    scopes: Optional[List[str]] = None,
+    scopes: list[str] | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator enforcing machine-to-machine API key authentication."""
 
@@ -830,7 +828,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Set request state and task context variable
         request.state.user = user
-        ctx_token: Token[Optional[AuthUser]] = current_user.set(user)
+        ctx_token: Token[AuthUser | None] = current_user.set(user)
         try:
             response = await call_next(request)
             return response

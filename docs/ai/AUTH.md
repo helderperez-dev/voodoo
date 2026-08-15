@@ -24,7 +24,7 @@ from voodoo.auth import hash_password, verify_password
 stored_hash = hash_password("super-secret-password")
 
 # Verify password against hash in constant time
-is_valid = verify_password("super-secret-password", stored_hash) # True
+is_valid = verify_password("super-secret-password", stored_hash)  # True
 ```
 
 ---
@@ -40,7 +40,7 @@ token = create_access_token(user, expires_in_seconds=3600)
 
 # Decode & verify
 payload = decode_access_token(token)
-print(payload["sub"]) # "1"
+print(payload["sub"])  # "1"
 ```
 
 ---
@@ -67,17 +67,19 @@ valid = verify_api_key(raw_key, key_hash)
 from voodoo.auth import login_required, requires_role, requires_permission
 from voodoo.components import Div, Heading, Text
 
+
 @login_required(redirect_url="/login")
 def dashboard(user):
     return Div(
-        Heading(f"Welcome back, {user.username}!"),
-        Text(f"Your role is {user.role}")
+        Heading(f"Welcome back, {user.username}!"), Text(f"Your role is {user.role}")
     )
+
 
 @requires_role("admin")
 async def delete_user(request):
     # Only admins can execute this endpoint
     return {"status": "user deleted"}
+
 
 @requires_permission("billing:manage")
 async def update_subscription(request):
@@ -92,6 +94,7 @@ async def update_subscription(request):
 from voodoo.components import LoginForm, RegisterForm, UserBadge, AuthGuard
 from voodoo.auth import current_user
 
+
 def page():
     user = current_user.get()
     return Div(
@@ -100,8 +103,8 @@ def page():
             Div(Heading("Admin Panel")),
             user=user,
             role="admin",
-            fallback=LoginForm(action="/api/auth/login")
-        )
+            fallback=LoginForm(action="/api/auth/login"),
+        ),
     )
 ```
 

@@ -1,16 +1,18 @@
 import asyncio
+import importlib.util
+import inspect
 import json
 import os
 import sys
-import importlib.util
-from typing import Dict, Any, Callable, Optional, Tuple, Union
+from collections.abc import Callable
+from typing import Any
+
 from starlette.applications import Starlette
-from starlette.routing import Route, WebSocketRoute, Mount, BaseRoute
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
-from starlette.websockets import WebSocket, WebSocketDisconnect
+from starlette.routing import BaseRoute, Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
-import inspect
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 
 class WebSocketManager:
@@ -43,7 +45,7 @@ class WebSocketManager:
 
 
 ws_manager = WebSocketManager()
-event_handlers: Dict[str, Callable] = {}
+event_handlers: dict[str, Callable] = {}
 
 
 def register_event(name: str, handler: Callable):
@@ -77,7 +79,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # In-memory cache for client.js to prevent disk I/O on every request
-_client_js_cache: Optional[str] = None
+_client_js_cache: str | None = None
 
 
 def _get_client_js() -> str:
@@ -85,7 +87,7 @@ def _get_client_js() -> str:
     if _client_js_cache is None:
         client_js_path = os.path.join(os.path.dirname(__file__), "client.js")
         try:
-            with open(client_js_path, "r", encoding="utf-8") as f:
+            with open(client_js_path, encoding="utf-8") as f:
                 _client_js_cache = f.read()
         except Exception:
             _client_js_cache = ""
@@ -101,9 +103,9 @@ def render_page(component, seo=None) -> str:
         seo: An optional SEO instance with page-level metadata.
     """
     from voodoo.components import Component
-    from voodoo.theme import default_theme
     from voodoo.config import config
     from voodoo.seo import SEO
+    from voodoo.theme import default_theme
 
     # Handle tuple if passed directly as component
     if isinstance(component, tuple) and len(component) == 2:
@@ -172,7 +174,7 @@ def render_page(component, seo=None) -> str:
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
             tailwind.config = {tailwind_config};
-            
+
             // Prevent flash of incorrect theme
             if (document.cookie.includes('voodoo_theme=light')) {{
                 document.documentElement.classList.remove('dark');
@@ -184,10 +186,10 @@ def render_page(component, seo=None) -> str:
         </script>
         <style>
             {css_vars}
-            body {{ 
-                background-color: var(--color-background); 
-                color: var(--color-text); 
-                font-family: var(--font-sans); 
+            body {{
+                background-color: var(--color-background);
+                color: var(--color-text);
+                font-family: var(--font-sans);
             }}
             ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
             ::-webkit-scrollbar-track {{ background: transparent; }}
@@ -207,14 +209,14 @@ def render_page(component, seo=None) -> str:
     """
 
 
-def _generate_sitemap_xml(app_dir: str, base_url: str = "") -> str:
+def _generate_sitemap_xml(app_dir: str, base_url: str = "") -> str:  # noqa: C901
     """Auto-generates deterministic sitemap.xml from file-based routes."""
     from datetime import datetime
 
     discovered_routes = []
 
     if os.path.exists(app_dir):
-        for root, dirs, files in os.walk(app_dir):
+        for root, _dirs, files in os.walk(app_dir):
             if "page.py" in files:
                 filepath = os.path.join(root, "page.py")
                 rel_path = os.path.relpath(root, app_dir)
@@ -233,7 +235,7 @@ def _generate_sitemap_xml(app_dir: str, base_url: str = "") -> str:
                 try:
                     import ast
 
-                    with open(filepath, "r", encoding="utf-8") as f:
+                    with open(filepath, encoding="utf-8") as f:
                         tree = ast.parse(f.read(), filename=filepath)
 
                     exclude = False
@@ -266,7 +268,7 @@ def _generate_sitemap_xml(app_dir: str, base_url: str = "") -> str:
                 discovered_routes.append((route_path, lastmod, priority))
 
     # Sort deterministically: root "/" first, then alphabetical
-    discovered_routes.sort(key=lambda r: ("" if r[0] == "/" else r[0]))
+    discovered_routes.sort(key=lambda r: "" if r[0] == "/" else r[0])
 
     urls = []
     for route_path, lastmod, priority in discovered_routes:
@@ -331,7 +333,7 @@ def _generate_robots_txt(seo_config, base_url: str = "") -> str:
     return "\n".join(lines)
 
 
-def create_app(app_dir: str = "app") -> Starlette:
+def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     from voodoo.config import config
 
     try:
@@ -377,7 +379,7 @@ def create_app(app_dir: str = "app") -> Starlette:
 
     # Simple file-based router (folder-based)
     if os.path.exists(app_dir):
-        for root, dirs, files in os.walk(app_dir):
+        for root, _dirs, files in os.walk(app_dir):
             if "page.py" in files:
                 filepath = os.path.join(root, "page.py")
                 rel_path = os.path.relpath(root, app_dir)
@@ -405,12 +407,12 @@ def create_app(app_dir: str = "app") -> Starlette:
 
                     if hasattr(page_module, "page"):
 
-                        def make_route(mod):
-                            async def handler(request: Request):
+                        def make_route(mod):  # noqa: C901
+                            async def handler(request: Request):  # noqa: C901
                                 from voodoo.seo import SEO
 
                                 sig = inspect.signature(mod.page)
-                                kwargs: Dict[str, Any] = {}
+                                kwargs: dict[str, Any] = {}
 
                                 # Inject request if requested
                                 if "request" in sig.parameters:
@@ -492,19 +494,21 @@ def create_app(app_dir: str = "app") -> Starlette:
 
     routes.extend(voodoo_api.routes)
 
-    from voodoo.queue import start_workers, stop_workers
+    from contextlib import asynccontextmanager
+
+    from starlette.middleware import Middleware
+
+    from voodoo.auth import AuthMiddleware
     from voodoo.data import init_db
-    from voodoo.telemetry import TelemetryMiddleware
     from voodoo.i18n import I18nMiddleware
+    from voodoo.queue import start_workers, stop_workers
     from voodoo.security import (
-        SecurityHeadersMiddleware,
         CORSMiddleware,
         CSRFMiddleware,
         RateLimitMiddleware,
+        SecurityHeadersMiddleware,
     )
-    from voodoo.auth import AuthMiddleware
-    from starlette.middleware import Middleware
-    from contextlib import asynccontextmanager
+    from voodoo.telemetry import TelemetryMiddleware
 
     @asynccontextmanager
     async def lifespan(app: Starlette):

@@ -1,8 +1,9 @@
 import os
+from typing import Any, Literal
+
 import yaml
-from typing import Any, Dict, Literal, Optional
-from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
 
 # Load .env variables first
 load_dotenv()
@@ -58,7 +59,7 @@ class SecurityConfig(BaseModel):
     content_type_options: str = "nosniff"
     xss_protection: str = "1; mode=block"
     referrer_policy: str = "strict-origin-when-cross-origin"
-    csp_directives: Dict[str, str] = Field(
+    csp_directives: dict[str, str] = Field(
         default_factory=lambda: {
             "default-src": "'self'",
             "script-src": "'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com",
@@ -100,13 +101,13 @@ class VoodooConfig(BaseModel):
     seo: SEOConfig = Field(default_factory=SEOConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
-    extra: Dict[str, Any] = Field(default_factory=dict)
+    extra: dict[str, Any] = Field(default_factory=dict)
 
 
-def load_yaml_config(file_path: str = "voodoo.yaml") -> Dict[str, Any]:
+def load_yaml_config(file_path: str = "voodoo.yaml") -> dict[str, Any]:
     """Loads configuration from a YAML file if it exists."""
     if os.path.exists(file_path):
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             try:
                 return yaml.safe_load(f) or {}
             except yaml.YAMLError as e:

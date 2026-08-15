@@ -1,107 +1,107 @@
-from .core import create_app, register_event, ws_manager
-from .components import (
-    Component,
-    Div,
-    Flex,
-    Grid,
-    Container,
-    A,
-    Button,
-    Card,
-    Text,
-    Heading,
-    Badge,
-    Avatar,
-    Divider,
-    Dialog,
-    List,
-    ListItem,
-    Form,
-    Label,
-    Input,
-    Textarea,
-    Select,
-    Option,
-    Checkbox,
-    Radio,
-    ChatBox,
-    Table,
-    # Semantic HTML (SEO & Accessibility)
-    Nav,
-    Header,
-    Footer,
-    Main,
-    Section,
-    Article,
-    Aside,
-    Figure,
-    FigCaption,
-    Time,
-    Address,
-    Img,
-    Paragraph,
-    # Auth & Security Components
-    LoginForm,
-    RegisterForm,
-    UserBadge,
-    AuthGuard,
-)
-from .data import BaseModel, on_insert, on_update, rls_policy, get_db
-from .queue import queue, enqueue
 from .agent import Agent
 from .api import api
-from .storage import storage
-from .mcp import mcp, MCPClient
-from .mesh import mesh
-from .status import ServiceStatus
-from .telemetry import trace, TelemetryMiddleware, telemetry_store
-from .config import config, SEOConfig, AuthConfig, SecurityConfig
-from .theme import Theme, ThemeColors, set_theme, default_theme
-from .i18n import _, I18n, i18n_instance
-from .seo import SEO, OpenGraph, TwitterCard, GEO, FAQ
 from .auth import (
-    hash_password,
-    verify_password,
+    AuthError,
+    AuthMiddleware,
+    AuthUser,
+    ExpiredTokenError,
+    InvalidCredentialsError,
+    InvalidTokenError,
+    PermissionDeniedError,
+    User,
+    clear_auth_cookie,
     create_access_token,
+    current_user,
     decode_access_token,
     generate_api_key,
-    hash_api_key,
-    verify_api_key,
     generate_secret_key,
-    AuthUser,
-    User,
     get_current_user,
-    current_user,
-    set_auth_cookie,
-    clear_auth_cookie,
+    hash_api_key,
+    hash_password,
+    login_required,
+    require_api_key,
     require_auth,
     require_roles,
     require_scopes,
-    require_api_key,
-    login_required,
+    requires_api_key,
+    requires_permission,
     requires_role,
     requires_roles,
-    requires_permission,
     requires_scopes,
-    requires_api_key,
-    AuthMiddleware,
-    AuthError,
-    InvalidCredentialsError,
-    ExpiredTokenError,
-    InvalidTokenError,
-    PermissionDeniedError,
+    set_auth_cookie,
+    verify_api_key,
+    verify_password,
 )
+from .components import (
+    A,
+    Address,
+    Article,
+    Aside,
+    AuthGuard,
+    Avatar,
+    Badge,
+    Button,
+    Card,
+    ChatBox,
+    Checkbox,
+    Component,
+    Container,
+    Dialog,
+    Div,
+    Divider,
+    FigCaption,
+    Figure,
+    Flex,
+    Footer,
+    Form,
+    Grid,
+    Header,
+    Heading,
+    Img,
+    Input,
+    Label,
+    List,
+    ListItem,
+    # Auth & Security Components
+    LoginForm,
+    Main,
+    # Semantic HTML (SEO & Accessibility)
+    Nav,
+    Option,
+    Paragraph,
+    Radio,
+    RegisterForm,
+    Section,
+    Select,
+    Table,
+    Text,
+    Textarea,
+    Time,
+    UserBadge,
+)
+from .config import AuthConfig, SecurityConfig, SEOConfig, config
+from .core import create_app, register_event, ws_manager
+from .data import BaseModel, get_db, on_insert, on_update, rls_policy
+from .i18n import I18n, _, i18n_instance
+from .mcp import MCPClient, mcp
+from .mesh import mesh
+from .queue import enqueue, queue
 from .security import (
-    SecurityHeadersMiddleware,
     CORSMiddleware,
     CSRFMiddleware,
-    RateLimitMiddleware,
     RateLimiter,
-    rate_limiter,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
     generate_csrf_token,
+    rate_limiter,
     set_csrf_cookie,
     validate_password_strength,
 )
+from .seo import FAQ, GEO, SEO, OpenGraph, TwitterCard
+from .status import ServiceStatus
+from .storage import storage
+from .telemetry import TelemetryMiddleware, telemetry_store, trace
+from .theme import Theme, ThemeColors, default_theme, set_theme
 
 __all__ = [
     "create_app",

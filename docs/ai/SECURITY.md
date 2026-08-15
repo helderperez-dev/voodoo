@@ -28,8 +28,8 @@ app.add_middleware(
         hsts_max_age=31536000,
         frame_options="DENY",
         content_type_options="nosniff",
-        referrer_policy="strict-origin-when-cross-origin"
-    )
+        referrer_policy="strict-origin-when-cross-origin",
+    ),
 )
 ```
 
@@ -63,7 +63,8 @@ Protect endpoints from abuse and brute-force attacks:
 ```python
 from voodoo.security import rate_limit
 
-@rate_limit(requests=5, window_seconds=60) # Max 5 requests per minute
+
+@rate_limit(requests=5, window_seconds=60)  # Max 5 requests per minute
 async def sensitive_api(request):
     return {"message": "Rate limited endpoint"}
 ```
@@ -76,6 +77,6 @@ async def sensitive_api(request):
 from voodoo.security import sanitize_html, escape_xss
 
 raw_input = "<script>alert('pwned')</script>Hello"
-safe_text = sanitize_html(raw_input) # "Hello"
-escaped_text = escape_xss(raw_input) # "&lt;script&gt;..."
+safe_text = sanitize_html(raw_input)  # "Hello"
+escaped_text = escape_xss(raw_input)  # "&lt;script&gt;..."
 ```

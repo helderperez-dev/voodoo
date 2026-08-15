@@ -16,32 +16,27 @@ Global SEO configuration is defined in `voodoo.yaml` and loaded via `voodoo.conf
 from voodoo.components import Div, Heading, Text
 from voodoo.seo import SEO, OpenGraph, TwitterCard, GEO
 
+
 def page():
     ui = Div(
         Heading("Voodoo Analytics", level=1),
-        Text("Real-time telemetry for your framework.")
+        Text("Real-time telemetry for your framework."),
     )
-    
+
     seo = SEO(
         title="Voodoo Analytics Dashboard",
         description="Monitor real-time metrics and telemetry.",
         canonical="https://voodoo.example.com/analytics",
-        og=OpenGraph(
-            image="https://voodoo.example.com/og.png",
-            type="website"
-        ),
-        twitter=TwitterCard(
-            card="summary_large_image",
-            site="@voodoo_app"
-        ),
+        og=OpenGraph(image="https://voodoo.example.com/og.png", type="website"),
+        twitter=TwitterCard(card="summary_large_image", site="@voodoo_app"),
         geo=GEO(
             author="Voodoo Team",
             tags=["analytics", "telemetry", "python"],
             is_article=True,
-            publish_date="2026-08-15"
-        )
+            publish_date="2026-08-15",
+        ),
     )
-    
+
     return seo, ui
 ```
 

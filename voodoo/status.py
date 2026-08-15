@@ -1,14 +1,14 @@
-import asyncio
-from typing import Dict, Any
+from typing import Any
+
 from voodoo.api import api
+from voodoo.components import Card, Div, Heading
 from voodoo.data import get_db
-from voodoo.queue import _worker_tasks, _queues
-from voodoo.storage import storage
-from voodoo.components import Div, Card, Heading
-
 from voodoo.i18n import _
+from voodoo.queue import _queues, _worker_tasks
+from voodoo.storage import storage
 
-async def check_database() -> Dict[str, Any]:
+
+async def check_database() -> dict[str, Any]:
     try:
         db = await get_db()
         await db.execute("SELECT 1")
@@ -16,33 +16,38 @@ async def check_database() -> Dict[str, Any]:
     except Exception as e:
         return {"status": "Down", "error": str(e)}
 
-async def check_queue() -> Dict[str, Any]:
+
+async def check_queue() -> dict[str, Any]:
     try:
         total_workers = len(_worker_tasks)
         active_queues = len(_queues)
         return {
             "status": "Operational" if total_workers > 0 else "Degraded",
             "workers": total_workers,
-            "queues": active_queues
+            "queues": active_queues,
         }
     except Exception as e:
         return {"status": "Down", "error": str(e)}
 
-async def check_storage() -> Dict[str, Any]:
+
+async def check_storage() -> dict[str, Any]:
     try:
         if storage.use_s3 and storage.s3_client:
             return {"status": "Operational", "type": "S3"}
         else:
             import os
+
             if os.path.exists(storage.base_dir):
                 return {"status": "Operational", "type": "Local"}
             return {"status": "Degraded", "type": "Local", "error": "Dir missing"}
     except Exception as e:
         return {"status": "Down", "error": str(e)}
 
-async def check_agent() -> Dict[str, Any]:
+
+async def check_agent() -> dict[str, Any]:
     # Placeholder for Agent connectivity
     return {"status": "Operational", "provider": "Simulated"}
+
 
 @api.get("/status")
 async def get_status():
@@ -52,7 +57,10 @@ async def get_status():
     agent_health = await check_agent()
 
     status_code = 200
-    if any(s["status"] == "Down" for s in [db_health, queue_health, storage_health, agent_health]):
+    if any(
+        s["status"] == "Down"
+        for s in [db_health, queue_health, storage_health, agent_health]
+    ):
         status_code = 503
 
     return {
@@ -60,10 +68,11 @@ async def get_status():
             "database": db_health,
             "queue": queue_health,
             "storage": storage_health,
-            "agent": agent_health
+            "agent": agent_health,
         },
-        "overall": "Operational" if status_code == 200 else "Down"
+        "overall": "Operational" if status_code == 200 else "Down",
     }
+
 
 @api.get("/status/locales")
 async def get_status_locales():
@@ -74,8 +83,9 @@ async def get_status_locales():
         "agent": _("status.agent"),
         "Operational": _("status.operational"),
         "Degraded": _("status.degraded"),
-        "Down": _("status.down")
+        "Down": _("status.down"),
     }
+
 
 class ServiceStatus(Div):
     def __init__(self, **kwargs):
@@ -84,7 +94,11 @@ class ServiceStatus(Div):
         card_classes = f"bg-[var(--color-surface)] border-[var(--color-border)] backdrop-blur-xl {classes}".strip()
         super().__init__(
             Card(
-                Heading(_("status.title"), level=2, className="text-xl font-semibold mb-6 text-[var(--color-text)] tracking-tight"),
+                Heading(
+                    _("status.title"),
+                    level=2,
+                    className="text-xl font-semibold mb-6 text-[var(--color-text)] tracking-tight",
+                ),
                 Div(id="service-status-container", className="space-y-3"),
                 Div(
                     """
@@ -97,7 +111,7 @@ class ServiceStatus(Div):
                                 ]);
                                 const data = await resStatus.json();
                                 const locales = await resLocales.json();
-                                
+
                                 const container = document.getElementById('service-status-container');
                                 let html = '';
                                 for (const [service, info] of Object.entries(data.services)) {
@@ -126,6 +140,6 @@ class ServiceStatus(Div):
                     """
                 ),
                 className=card_classes,
-                **kwargs
+                **kwargs,
             )
         )

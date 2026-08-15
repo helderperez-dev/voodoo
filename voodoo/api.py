@@ -1,15 +1,17 @@
 import inspect
-from typing import Any, Callable, Dict, List, Type, Optional, Union, get_type_hints
+from collections.abc import Callable
+from typing import Any
+
+from pydantic import BaseModel
 from starlette.requests import Request
-from starlette.responses import JSONResponse, HTMLResponse, Response
+from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route
-from pydantic import BaseModel, create_model
 
 
 class API:
     def __init__(self) -> None:
-        self.routes: List[Route] = []
-        self.paths: Dict[str, Dict[str, Any]] = {}
+        self.routes: list[Route] = []
+        self.paths: dict[str, dict[str, Any]] = {}
 
         # Add docs routes
         self.routes.append(
@@ -88,7 +90,7 @@ class API:
         """
         return HTMLResponse(html)
 
-    def _add_route(self, path: str, method: str, func: Callable[..., Any]) -> None:
+    def _add_route(self, path: str, method: str, func: Callable[..., Any]) -> None:  # noqa: C901
         # Register in OpenAPI paths
         if path not in self.paths:
             self.paths[path] = {}
@@ -98,28 +100,31 @@ class API:
             "responses": {"200": {"description": "Successful Response"}},
         }
 
-        async def endpoint(request: Request) -> Response:
+        async def endpoint(request: Request) -> Response:  # noqa: C901
             sig = inspect.signature(func)
-            kwargs: Dict[str, Any] = {}
+            kwargs: dict[str, Any] = {}
 
             for name, param in sig.parameters.items():
                 if param.annotation is Request or name == "request":
                     kwargs[name] = request
                 elif name == "user" or (
                     param.annotation is not inspect._empty
-                    and getattr(param.annotation, "__name__", "") in ("AuthUser", "User")
+                    and getattr(param.annotation, "__name__", "")
+                    in ("AuthUser", "User")
                 ):
                     from voodoo.auth import get_current_user
 
                     kwargs[name] = get_current_user(request)
-                elif inspect.isclass(param.annotation) and issubclass(param.annotation, BaseModel):
+                elif inspect.isclass(param.annotation) and issubclass(
+                    param.annotation, BaseModel
+                ):
                     # Parse JSON body using Pydantic
                     try:
                         body: Any = await request.json()
                     except Exception:
                         body = {}
 
-                    model_cls: Type[BaseModel] = param.annotation
+                    model_cls: type[BaseModel] = param.annotation
                     if isinstance(body, dict):
                         kwargs[name] = model_cls(**body)
                     elif hasattr(model_cls, "model_validate"):
