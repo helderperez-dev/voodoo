@@ -39,6 +39,17 @@ class Component:
 class Div(Component):
     tag = "div"
 
+class A(Component):
+    tag = "a"
+    def __init__(self, *children, href="#", target=None, **kwargs):
+        kwargs["href"] = href
+        if target:
+            kwargs["target"] = target
+        # Default styling for a tags if they act like buttons
+        classes = kwargs.get("className", "")
+        kwargs["className"] = classes
+        super().__init__(*children, **kwargs)
+
 class Button(Component):
     tag = "button"
     

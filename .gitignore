@@ -22,3 +22,7 @@ env/
 
 # User-uploaded storage files
 storage/public/*
+
+# Build artifacts
+dist/
+build/

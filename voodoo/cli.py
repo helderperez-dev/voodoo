@@ -2,7 +2,12 @@ import os
 import sys
 import time
 import asyncio
+import shutil
+import subprocess
+import tempfile
+import urllib.request
 from pathlib import Path
+from textwrap import dedent
 
 import typer
 from rich.console import Console
@@ -17,6 +22,281 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
+
+AI_DOCS_BASE_URL = "https://raw.githubusercontent.com/helderperez-dev/voodoo/main/docs/ai"
+AI_TRAE_SKILL_URL = "https://raw.githubusercontent.com/helderperez-dev/voodoo/main/.trae/skills/voodoo-builder/SKILL.md"
+
+
+def _write_text_file(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def _fetch_text(url: str, timeout: int = 3) -> str | None:
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return response.read().decode("utf-8")
+    except Exception:
+        return None
+
+
+def _build_workspace_rules() -> str:
+    return dedent(
+        """
+        # Voodoo AI Workspace
+
+        This project uses the Voodoo Framework.
+
+        Start by reading these local files in order:
+        1. `.voodoo/ai/README.md`
+        2. `.voodoo/ai/RULES.md`
+        3. `.voodoo/ai/ARCHITECTURE.md`
+        4. `.voodoo/ai/ROUTING.md`
+        5. `.voodoo/ai/COMPONENTS.md`
+        6. `.voodoo/ai/STATE.md`
+        7. `.voodoo/ai/DATABASE.md`
+        8. `.voodoo/ai/SKILLS.md`
+
+        Core rules:
+        - Use `voodoo.components` instead of raw HTML templates.
+        - Prefer `async def` for handlers, I/O, and database work.
+        - Use Voodoo's `A` component plus `voodoo.navigate()` for internal links.
+        - Keep app code in `app/` and data in `.data/`.
+        - Use `aiosqlite` with `.data/voodoo.db` by default.
+        - Preserve the large-cookie websocket settings in `main.py` and `voodoo dev`.
+
+        If Trae skills are available, use `.trae/skills/voodoo-builder/SKILL.md`.
+        """
+    ).strip() + "\n"
+
+
+def _build_cursor_rules() -> str:
+    return (
+        "---\n"
+        "description: Voodoo framework guidance for Cursor.\n"
+        "globs:\n"
+        '  - "**/*.py"\n'
+        '  - "**/*.md"\n'
+        "alwaysApply: true\n"
+        "---\n\n"
+        + _build_workspace_rules()
+    )
+
+
+def _fallback_ai_assets() -> dict[str, str]:
+    return {
+        ".voodoo/ai/README.md": dedent(
+            """
+            # Voodoo AI Kit
+
+            This folder gives AI IDEs high-context guidance for building serious Voodoo applications.
+
+            Read these files in order:
+            1. `RULES.md`
+            2. `ARCHITECTURE.md`
+            3. `ROUTING.md`
+            4. `COMPONENTS.md`
+            5. `STATE.md`
+            6. `DATABASE.md`
+            7. `SKILLS.md`
+
+            Recommended behavior:
+            - Treat Voodoo as a Python-first UI framework.
+            - Prefer simple, composable route files and reusable components.
+            - Respect Voodoo navigation, websocket, and data conventions.
+            """
+        ).strip() + "\n",
+        ".voodoo/ai/RULES.md": dedent(
+            """
+            # Voodoo Rules
+
+            - Build UI with `voodoo.components`.
+            - Prefer `async def` for handlers and I/O.
+            - Use Tailwind via `className`.
+            - Use `A(..., href=..., onClick="voodoo.navigate('...')")` for internal links.
+            - Keep route files inside `app/`.
+            - Keep persistent data inside `.data/`.
+            - Use `aiosqlite` and `.data/voodoo.db` by default.
+            - Preserve `WEBSOCKETS_MAX_LINE_LENGTH="8388608"` and `http="h11"` when working with websocket-heavy apps.
+            """
+        ).strip() + "\n",
+        ".voodoo/ai/ARCHITECTURE.md": dedent(
+            """
+            # Voodoo Architecture
+
+            Voodoo is a Starlette-based framework with Python-defined UI and file-based routing.
+
+            Main conventions:
+            - `app/` contains routes and app-facing code.
+            - `main.py` boots the app with `create_app()`.
+            - `voodoo.components` is the primary UI surface.
+            - Internal framework API routes remain mounted automatically.
+            """
+        ).strip() + "\n",
+        ".voodoo/ai/ROUTING.md": dedent(
+            """
+            # Voodoo Routing
+
+            - `app/page.py` maps to `/`
+            - Nested `page.py` files map to nested routes
+            - Dynamic segments use bracket folders such as `app/users/[id]/page.py`
+
+            Internal links must use Voodoo navigation:
+
+            ```python
+            from voodoo.components import A
+
+            A("Dashboard", href="/dashboard", onClick="voodoo.navigate('/dashboard')")
+            ```
+            """
+        ).strip() + "\n",
+        ".voodoo/ai/COMPONENTS.md": dedent(
+            """
+            # Voodoo Components
+
+            Import UI primitives from `voodoo.components`.
+
+            Common components:
+            - `Div`
+            - `Text`
+            - `Heading`
+            - `Button`
+            - `A`
+            - `Input`
+            - `Form`
+
+            Use `className` for styling and favor small reusable Python functions for custom components.
+            """
+        ).strip() + "\n",
+        ".voodoo/ai/STATE.md": dedent(
+            """
+            # Voodoo State
+
+            Voodoo does not use React-style client state hooks.
+
+            Preferred patterns:
+            - Form posts for mutations
+            - Async route handlers for derived UI
+            - Database-backed state for persistence
+            - WebSockets only when real-time behavior is truly needed
+            """
+        ).strip() + "\n",
+        ".voodoo/ai/DATABASE.md": dedent(
+            """
+            # Voodoo Database
+
+            Default stack:
+            - `aiosqlite`
+            - database path: `.data/voodoo.db`
+
+            Example:
+
+            ```python
+            import aiosqlite
+
+            async with aiosqlite.connect(".data/voodoo.db") as db:
+                await db.execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, name TEXT)")
+                await db.commit()
+            ```
+            """
+        ).strip() + "\n",
+        ".voodoo/ai/SKILLS.md": dedent(
+            """
+            # Voodoo AI Skills
+
+            ## Scaffold a Route
+            - Create the correct `app/.../page.py` file
+            - Export `page(request, ...)`
+            - Return `voodoo.components`
+
+            ## Create a Component
+            - Build a reusable Python function
+            - Accept meaningful arguments
+            - Style through `className`
+
+            ## Add Data
+            - Use `aiosqlite`
+            - Store the database in `.data/voodoo.db`
+            - Keep queries async
+
+            ## Debug Navigation
+            - Check file-based route placement
+            - Check `A` + `voodoo.navigate()`
+
+            ## Debug Cookies / WebSockets
+            - Check `WEBSOCKETS_MAX_LINE_LENGTH`
+            - Check `http="h11"`
+            """
+        ).strip() + "\n",
+        ".trae/skills/voodoo-builder/SKILL.md": dedent(
+            """
+            ---
+            name: "voodoo-builder"
+            description: "Builds and refactors Voodoo apps. Invoke when creating routes, components, data flows, or debugging Voodoo-specific behavior."
+            ---
+
+            # Voodoo Builder
+
+            Use this skill when working on Voodoo Framework applications.
+
+            Read these local files before making major changes:
+            1. `.voodoo/ai/README.md`
+            2. `.voodoo/ai/RULES.md`
+            3. `.voodoo/ai/ARCHITECTURE.md`
+            4. `.voodoo/ai/ROUTING.md`
+            5. `.voodoo/ai/COMPONENTS.md`
+            6. `.voodoo/ai/STATE.md`
+            7. `.voodoo/ai/DATABASE.md`
+            8. `.voodoo/ai/SKILLS.md`
+
+            Follow these Voodoo rules:
+            - Build UI with `voodoo.components`
+            - Prefer `async def`
+            - Use `A` plus `voodoo.navigate()` for internal links
+            - Keep data in `.data/`
+            - Use `aiosqlite` by default
+            - Preserve websocket large-cookie configuration
+            """
+        ).lstrip(),
+    }
+
+
+def _sync_ai_assets(project_dir: Path, progress: Progress) -> None:
+    task = progress.add_task(description="Setting up Voodoo AI assets...", total=None)
+    time.sleep(0.2)
+
+    fallback_assets = _fallback_ai_assets()
+    remote_assets = {
+        ".voodoo/ai/README.md": f"{AI_DOCS_BASE_URL}/README.md",
+        ".voodoo/ai/RULES.md": f"{AI_DOCS_BASE_URL}/RULES.md",
+        ".voodoo/ai/ARCHITECTURE.md": f"{AI_DOCS_BASE_URL}/ARCHITECTURE.md",
+        ".voodoo/ai/ROUTING.md": f"{AI_DOCS_BASE_URL}/ROUTING.md",
+        ".voodoo/ai/COMPONENTS.md": f"{AI_DOCS_BASE_URL}/COMPONENTS.md",
+        ".voodoo/ai/STATE.md": f"{AI_DOCS_BASE_URL}/STATE.md",
+        ".voodoo/ai/DATABASE.md": f"{AI_DOCS_BASE_URL}/DATABASE.md",
+        ".voodoo/ai/SKILLS.md": f"{AI_DOCS_BASE_URL}/SKILLS.md",
+        ".trae/skills/voodoo-builder/SKILL.md": AI_TRAE_SKILL_URL,
+    }
+
+    for relative_path, url in remote_assets.items():
+        target = project_dir / relative_path
+        if target.exists():
+            continue
+        content = _fetch_text(url, timeout=3) or fallback_assets[relative_path]
+        _write_text_file(target, content)
+
+    ide_rules = {
+        ".trae/rules": _build_workspace_rules(),
+        ".windsurfrules": _build_workspace_rules(),
+        ".cursor/rules/voodoo.mdc": _build_cursor_rules(),
+    }
+
+    for relative_path, content in ide_rules.items():
+        target = project_dir / relative_path
+        if target.exists():
+            continue
+        _write_text_file(target, content)
 
 @app.command()
 def new(
@@ -51,10 +331,6 @@ def new(
                 console.print("\n[bold red]Error:[/bold red] Template must be a valid Git URL, local path, or 'user/repo'.")
                 raise typer.Exit(1)
                 
-            import subprocess
-            import shutil
-            import tempfile
-            
             fallback_to_offline = False
             
             try:
@@ -156,10 +432,11 @@ if __name__ == "__main__":
     )
 """)
 
+        _sync_ai_assets(project_dir, progress)
+
         # Set up local virtual environment and install dependencies
         if (project_dir / "pyproject.toml").exists():
             task = progress.add_task(description="Setting up local virtual environment (.venv)...", total=None)
-            import shutil
             has_uv = shutil.which("uv") is not None
             try:
                 if has_uv:
