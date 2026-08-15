@@ -147,51 +147,49 @@ def create_app(app_dir: str = "app") -> Starlette:
         Mount("/storage/public", app=StaticFiles(directory=public_storage_dir), name="storage_public")
     ]
     
-    # Simple file-based router
-    pages_dir = os.path.join(app_dir, "pages")
-    if os.path.exists(pages_dir):
-        for filename in os.listdir(pages_dir):
-            if filename.endswith(".py") and not filename.startswith("_"):
-                name = filename[:-3]
-                route_path = "/" if name == "index" else f"/{name}"
-                filepath = os.path.join(pages_dir, filename)
-                spec = importlib.util.spec_from_file_location(f"page_{name}", filepath)
-                if spec and spec.loader:
-                    page_module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(page_module)
-                    if hasattr(page_module, "page"):
-                        # create a closure to capture the module
-                        def make_route(mod):
-                            async def handler(request):
-                                sig = inspect.signature(mod.page)
-                                if "request" in sig.parameters:
-                                    component = mod.page(request)
-                                else:
-                                    component = mod.page()
-                                if inspect.iscoroutine(component):
-                                    component = await component
-                                return HTMLResponse(render_page(component))
-                            return handler
-                        routes.append(Route(route_path, make_route(page_module)))
-    else:
-        page_path = os.path.join(app_dir, "page.py")
-        if os.path.exists(page_path):
-            spec = importlib.util.spec_from_file_location("page", page_path)
+    # Simple file-based router (folder-based)
+    for root, dirs, files in os.walk(app_dir):
+        if "page.py" in files:
+            filepath = os.path.join(root, "page.py")
+            rel_path = os.path.relpath(root, app_dir)
+            
+            # Compute the route path
+            if rel_path == ".":
+                route_path = "/"
+            else:
+                # Convert path separators and change [param] to {param} for Starlette
+                route_path = "/" + rel_path.replace("\\", "/").replace("[", "{").replace("]", "}")
+            
+            # Create a unique module name
+            module_name = f"page_{route_path.replace('/', '_').replace('{', '').replace('}', '')}"
+            spec = importlib.util.spec_from_file_location(module_name, filepath)
+            
             if spec and spec.loader:
                 page_module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(page_module)
                 
                 if hasattr(page_module, "page"):
-                    async def index(request):
-                        sig = inspect.signature(page_module.page)
-                        if "request" in sig.parameters:
-                            component = page_module.page(request)
-                        else:
-                            component = page_module.page()
-                        if inspect.iscoroutine(component):
-                            component = await component
-                        return HTMLResponse(render_page(component))
-                    routes.append(Route("/", index))
+                    def make_route(mod):
+                        async def handler(request):
+                            sig = inspect.signature(mod.page)
+                            kwargs = {}
+                            
+                            # Inject request if requested
+                            if "request" in sig.parameters:
+                                kwargs["request"] = request
+                                
+                            # Inject dynamic path parameters (e.g. from /users/[id]/page.py)
+                            for param in request.path_params:
+                                if param in sig.parameters:
+                                    kwargs[param] = request.path_params[param]
+                                    
+                            component = mod.page(**kwargs)
+                            if inspect.iscoroutine(component):
+                                component = await component
+                            return HTMLResponse(render_page(component))
+                        return handler
+                        
+                    routes.append(Route(route_path, make_route(page_module)))
 
     # Initialize components if needed
     models_path = os.path.join(app_dir, "models.py")
