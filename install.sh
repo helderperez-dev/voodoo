@@ -15,7 +15,7 @@ if command -v uv &> /dev/null; then
     echo "⚡ Using uv for blazing fast installation..."
     rm -rf "$INSTALL_DIR/venv"
     uv venv "$INSTALL_DIR/venv"
-    uv pip install --python "$INSTALL_DIR/venv" voodoo-framework
+    uv pip install --python "$INSTALL_DIR/venv" --refresh voodoo-framework
 else
     if command -v python3 &> /dev/null; then
         rm -rf "$INSTALL_DIR/venv"
