@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.0.21)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run test suite
+        run: uv run pytest
+
+      - name: Build distribution packages
+        run: |
+          rm -rf dist/
+          uv build
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TAR_FILE=$(ls dist/*.tar.gz | head -n 1)
+          SHA256=$(sha256sum "$TAR_FILE" | awk '{print $1}')
+          echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+          echo "TAR_FILE=$TAR_FILE" >> $GITHUB_OUTPUT
+          echo "SHA256 is $SHA256"
+
+      - name: Publish to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          uv publish --token "${{ secrets.PYPI_PASSWORD }}"
+
+      - name: Update Homebrew Formula
+        if: env.HOMEBREW_TAP_TOKEN != ''
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          SHA256="${{ steps.sha.outputs.SHA256 }}"
+          
+          FORMULA_CONTENT=$(cat <<EOF
+          class Voodoo < Formula
+            include Language::Python::Virtualenv
+
+            desc "Fast, Animated, AI-Powered Python Web Framework"
+            homepage "https://github.com/helderperez-dev/voodoo"
+            url "https://files.pythonhosted.org/packages/source/v/voodoo-framework/voodoo_framework-${VERSION}.tar.gz"
+            sha256 "${SHA256}"
+            license "MIT"
+
+            depends_on "python@3.12"
+
+            def install
+              virtualenv_install_with_resources
+            end
+
+            test do
+              assert_match "Voodoo Framework CLI", shell_output("#{bin}/voodoo --help")
+            end
+          end
+          EOF
+          )
+          
+          B64_CONTENT=$(echo "$FORMULA_CONTENT" | base64 | tr -d '\n')
+          
+          # Get current file SHA
+          FILE_SHA=$(gh api repos/helderperez-dev/homebrew-voodoo/contents/Formula/voodoo.rb --jq .sha || echo "")
+          
+          if [ -n "$FILE_SHA" ]; then
+            gh api --method PUT repos/helderperez-dev/homebrew-voodoo/contents/Formula/voodoo.rb \
+              -f message="chore(release): update voodoo to ${VERSION}" \
+              -f content="$B64_CONTENT" \
+              -f sha="$FILE_SHA"
+            echo "✓ Updated Homebrew formula in helderperez-dev/homebrew-voodoo"
+          fi
+
+      - name: Create or Update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TAG="v${VERSION}"
+          
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "$TAG" --notes "Release $TAG of Voodoo Framework."
+          fi
+          echo "✓ GitHub release $TAG created/updated."
