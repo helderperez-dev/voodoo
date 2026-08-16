@@ -1,3 +1,8 @@
+"""Theme tokens: one source of truth translated into CSS variables and a
+Tailwind config. Components reference semantic names only (``primary``,
+``danger``, ``radius``); the concrete values live here.
+"""
+
 import json
 
 from pydantic import BaseModel, Field
@@ -7,7 +12,13 @@ class ThemeColors(BaseModel):
     """Modern color palette for the theme."""
 
     primary: str = "#007AFF"  # Apple blue
+    primary_hover: str = "#0066D6"  # Darkened primary
     secondary: str = "#5856D6"  # Violet
+
+    # Status
+    success: str = "#22C55E"
+    warning: str = "#F59E0B"
+    danger: str = "#EF4444"
 
     # Dark mode
     background: str = "#0A0A0A"  # Charcoal
@@ -26,6 +37,34 @@ class ThemeColors(BaseModel):
     # Allow extra colors
     extra: dict[str, str] = Field(default_factory=dict)
 
+    def semantic(self) -> dict[str, str]:
+        """All named colors (built-in + ``extra``) as semantic→value.
+
+        Keys use hyphenated names (``primary-hover`` not ``primary_hover``)
+        to match Tailwind/CSS conventions.
+        """
+        named = self.model_dump(
+            exclude={
+                "extra",
+                "light_background",
+                "light_surface",
+                "light_text",
+                "light_text_muted",
+                "light_border",
+            }
+        )
+        hyphenated = {k.replace("_", "-"): v for k, v in named.items()}
+        return {**hyphenated, **self.extra}
+
+
+class ThemeRadius(BaseModel):
+    """Corner radii."""
+
+    sm: str = "0.375rem"
+    md: str = "0.5rem"
+    lg: str = "0.75rem"
+    full: str = "9999px"
+
 
 class ThemeFonts(BaseModel):
     """Typography settings."""
@@ -42,28 +81,22 @@ class Theme(BaseModel):
 
     mode: str = "dark"  # dark, light, system
     colors: ThemeColors = Field(default_factory=ThemeColors)
+    radius: ThemeRadius = Field(default_factory=ThemeRadius)
     fonts: ThemeFonts = Field(default_factory=ThemeFonts)
 
     def to_tailwind_config(self) -> str:
         """Generates the Tailwind configuration script."""
-
-        # Build the colors dictionary for Tailwind
-        tw_colors = {
-            "primary": self.colors.primary,
-            "secondary": self.colors.secondary,
-            "background": self.colors.background,
-            "surface": self.colors.surface,
-            "text": self.colors.text,
-            "text-muted": self.colors.text_muted,
-            "border": self.colors.border,
-        }
-        tw_colors.update(self.colors.extra)
-
         config = {
             "darkMode": "class",
             "theme": {
                 "extend": {
-                    "colors": {"voodoo": tw_colors},
+                    "colors": self.colors.semantic(),
+                    "borderRadius": {
+                        "sm": self.radius.sm,
+                        "md": self.radius.md,
+                        "lg": self.radius.lg,
+                        "full": self.radius.full,
+                    },
                     "fontFamily": {
                         "sans": [self.fonts.sans],
                         "mono": [self.fonts.mono],
@@ -75,32 +108,44 @@ class Theme(BaseModel):
 
     def to_css_variables(self) -> str:
         """Generates global CSS variables for the theme."""
-        dark_vars = [
-            f"--color-primary: {self.colors.primary};",
-            f"--color-secondary: {self.colors.secondary};",
-            f"--color-background: {self.colors.background};",
-            f"--color-surface: {self.colors.surface};",
-            f"--color-text: {self.colors.text};",
-            f"--color-text-muted: {self.colors.text_muted};",
-            f"--color-border: {self.colors.border};",
-            f"--font-sans: {self.fonts.sans};",
-            f"--font-mono: {self.fonts.mono};",
-        ]
-        light_vars = [
-            f"--color-primary: {self.colors.primary};",
-            f"--color-secondary: {self.colors.secondary};",
-            f"--color-background: {self.colors.light_background};",
-            f"--color-surface: {self.colors.light_surface};",
-            f"--color-text: {self.colors.light_text};",
-            f"--color-text-muted: {self.colors.light_text_muted};",
-            f"--color-border: {self.colors.light_border};",
-            f"--font-sans: {self.fonts.sans};",
-            f"--font-mono: {self.fonts.mono};",
-        ]
+        base_colors = self.colors.semantic()
 
-        for k, v in self.colors.extra.items():
-            dark_vars.append(f"--color-{k}: {v};")
-            light_vars.append(f"--color-{k}: {v};")
+        dark_vars = (
+            [
+                f"--color-{name.replace('_', '-')}: {value};"
+                for name, value in base_colors.items()
+            ]
+            + [
+                f"--radius-{name}: {value};"
+                for name, value in self.radius.model_dump().items()
+            ]
+            + [
+                f"--font-sans: {self.fonts.sans};",
+                f"--font-mono: {self.fonts.mono};",
+            ]
+        )
+
+        light_overrides = {
+            "background": self.colors.light_background,
+            "surface": self.colors.light_surface,
+            "text": self.colors.light_text,
+            "text_muted": self.colors.light_text_muted,
+            "border": self.colors.light_border,
+        }
+        light_vars = (
+            [
+                f"--color-{name.replace('_', '-')}: {value};"
+                for name, value in {**base_colors, **light_overrides}.items()
+            ]
+            + [
+                f"--radius-{name}: {value};"
+                for name, value in self.radius.model_dump().items()
+            ]
+            + [
+                f"--font-sans: {self.fonts.sans};",
+                f"--font-mono: {self.fonts.mono};",
+            ]
+        )
 
         return (
             ":root {\n    "

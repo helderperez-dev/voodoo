@@ -28,12 +28,18 @@ EXPECTED_EXPORTS = {
     "Theme",
     "ThemeColors",
     "config",
+    # Styling seam
+    "StyleAdapter",
+    "NoopAdapter",
+    "set_style_adapter",
+    "current_adapter",
     # UI — layout
     "Component",
     "Div",
     "Flex",
     "Grid",
     "Container",
+    "Page",
     "A",
     # UI — core components
     "Button",
@@ -44,6 +50,7 @@ EXPECTED_EXPORTS = {
     "Avatar",
     "Divider",
     "Dialog",
+    "Modal",
     # UI — forms
     "Form",
     "Label",

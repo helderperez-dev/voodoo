@@ -11,7 +11,13 @@ from typing import Any
 
 from .agent import Agent
 from .api import api
-from .components import (
+from .config import config
+from .core import App, create_app, page, register_event, ws_manager
+from .data import BaseModel
+from .mesh import mesh
+from .telemetry import trace
+from .theme import Theme, ThemeColors
+from .ui import (
     A,
     Article,
     Avatar,
@@ -35,8 +41,10 @@ from .components import (
     List,
     ListItem,
     Main,
+    Modal,
     Nav,
     Option,
+    Page,
     Radio,
     Section,
     Select,
@@ -44,12 +52,12 @@ from .components import (
     Text,
     Textarea,
 )
-from .config import config
-from .core import App, create_app, page, register_event, ws_manager
-from .data import BaseModel
-from .mesh import mesh
-from .telemetry import trace
-from .theme import Theme, ThemeColors
+from .ui.styles import (
+    NoopAdapter,
+    StyleAdapter,
+    current_adapter,
+    set_style_adapter,
+)
 
 __version__ = "1.0.22"
 
@@ -72,12 +80,18 @@ __all__ = [
     "Theme",
     "ThemeColors",
     "config",
+    # Styling seam
+    "StyleAdapter",
+    "NoopAdapter",
+    "set_style_adapter",
+    "current_adapter",
     # UI — layout
     "Component",
     "Div",
     "Flex",
     "Grid",
     "Container",
+    "Page",
     "A",
     # UI — core components
     "Button",
@@ -88,6 +102,7 @@ __all__ = [
     "Avatar",
     "Divider",
     "Dialog",
+    "Modal",
     # UI — forms
     "Form",
     "Label",

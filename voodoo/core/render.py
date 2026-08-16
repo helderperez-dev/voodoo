@@ -5,8 +5,18 @@ sitemap/robots generation consumed by the application factory.
 import os
 from typing import Any
 
-# In-memory cache for client.js to prevent disk I/O on every request
+# In-memory cache for client.js and styles.css to prevent disk I/O on every request
 _client_js_cache: str | None = None
+_styles_css_cache: str | None = None
+
+
+def _read_optional(path: str) -> str:
+    """Read a file if it exists; return ``""`` otherwise."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
 
 
 def _get_client_js() -> str:
@@ -15,12 +25,21 @@ def _get_client_js() -> str:
         client_js_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "client.js"
         )
-        try:
-            with open(client_js_path, encoding="utf-8") as f:
-                _client_js_cache = f.read()
-        except Exception:
-            _client_js_cache = ""
+        _client_js_cache = _read_optional(client_js_path)
     return _client_js_cache
+
+
+def _get_project_styles() -> str:
+    """Load a project-level ``styles.css`` (next to the app dir) by convention.
+
+    Apps can drop a ``styles.css`` file in their root to add custom CSS beyond
+    the theme. The file is read once and cached.
+    """
+    global _styles_css_cache
+    if _styles_css_cache is None:
+        candidate = os.path.join(os.getcwd(), "styles.css")
+        _styles_css_cache = _read_optional(candidate)
+    return _styles_css_cache
 
 
 def render_page(component: Any, seo: Any = None) -> str:
@@ -31,10 +50,10 @@ def render_page(component: Any, seo: Any = None) -> str:
         component: A Component instance, a string, or a tuple of (SEO, Component) / (Component, SEO).
         seo: An optional SEO instance with page-level metadata.
     """
-    from voodoo.components import Component
     from voodoo.config import config
     from voodoo.seo import SEO
     from voodoo.theme import default_theme
+    from voodoo.ui.component import Component
 
     # Handle tuple if passed directly as component
     if isinstance(component, tuple) and len(component) == 2:
@@ -57,6 +76,7 @@ def render_page(component: Any, seo: Any = None) -> str:
     )
 
     client_js = _get_client_js()
+    project_styles = _get_project_styles()
     tailwind_config = default_theme.to_tailwind_config()
     css_vars = default_theme.to_css_variables()
 
@@ -124,6 +144,9 @@ def render_page(component: Any, seo: Any = None) -> str:
             ::-webkit-scrollbar-track {{ background: transparent; }}
             ::-webkit-scrollbar-thumb {{ background: var(--color-surface); border-radius: 4px; border: 1px solid var(--color-border); }}
             ::-webkit-scrollbar-thumb:hover {{ background: var(--color-text-muted); }}
+
+            /* Project custom styles (styles.css by convention) */
+            {project_styles}
         </style>
     </head>
     <body class="bg-[var(--color-background)] text-[var(--color-text)] min-h-screen antialiased selection:bg-[var(--color-secondary)] selection:text-white">
