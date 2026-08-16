@@ -64,19 +64,17 @@ jobs:
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
-          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
-          sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" voodoo/__init__.py
-          sed -i "s/ver = getattr(voodoo, \"__version__\", \".*\")/ver = getattr(voodoo, \"__version__\", \"$VERSION\")/" voodoo/cli.py
+          sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" src/voodoo/__init__.py
 
           echo "Bumped to $VERSION"
-          grep '^version' pyproject.toml
+          grep '__version__' src/voodoo/__init__.py
 
       - name: Commit, tag and push
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
           TAG: ${{ steps.get_version.outputs.TAG }}
         run: |
-          git add pyproject.toml voodoo/__init__.py voodoo/cli.py
+          git add pyproject.toml src/voodoo/__init__.py
           git commit -m "chore(release): bump version to $TAG" || echo "Nothing to commit"
           git push origin main
           git tag -a "$TAG" -m "Release $TAG"

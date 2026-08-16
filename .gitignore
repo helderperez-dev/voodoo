@@ -11,6 +11,9 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Logs
+*.log
+
 # Virtual environments & local env
 venv/
 env/

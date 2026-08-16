@@ -187,3 +187,148 @@ def test_config_database_url(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgres://user:pw@host/db")
     with pytest.raises(ConfigurationError, match="postgres"):
         _resolve_db_path()
+
+
+# =========================================================================
+# File-based page loading tests (S5-3c)
+# =========================================================================
+
+
+@pytest.fixture
+def file_based_app(tmp_path, monkeypatch):
+    """Factory that creates an App with real file-based pages on disk."""
+    import voodoo.data
+
+    real_init_db = voodoo.data.init_db
+
+    async def memory_db(db_path=":memory:"):
+        await real_init_db(":memory:")
+
+    monkeypatch.setattr(config, "db_path", ":memory:")
+    monkeypatch.setattr(voodoo.data, "init_db", memory_db)
+
+    app_dir = tmp_path / "app"
+    app_dir.mkdir()
+
+    def _write(rel_path: str, content: str):
+        target = app_dir / rel_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+
+    return app_dir, _write
+
+
+def test_pages_directory_index_route(file_based_app):
+    """pages/index.py should map to /."""
+    app_dir, _write = file_based_app
+    _write(
+        "pages/index.py",
+        "from voodoo.components import Div, Text\n\n"
+        "def page(request):\n"
+        "    return Div(Text('Home page'))\n",
+    )
+
+    app = App(app_dir=str(app_dir))
+    with TestClient(app) as client:
+        response = client.get("/")
+    assert response.status_code == 200
+    assert "Home page" in response.text
+
+
+def test_pages_directory_about_route(file_based_app):
+    """pages/about.py should map to /about."""
+    app_dir, _write = file_based_app
+    _write(
+        "pages/about.py",
+        "from voodoo.components import Div, Text\n\n"
+        "def page(request):\n"
+        "    return Div(Text('About page'))\n",
+    )
+
+    app = App(app_dir=str(app_dir))
+    with TestClient(app) as client:
+        response = client.get("/about")
+    assert response.status_code == 200
+    assert "About page" in response.text
+
+
+def test_pages_directory_dynamic_route(file_based_app):
+    """pages/users/[id].py should map to /users/{id}."""
+    app_dir, _write = file_based_app
+    _write(
+        "pages/users/[id].py",
+        "from voodoo.components import Div, Text\n\n"
+        "def page(request, id: str):\n"
+        "    return Div(Text(f'User ' + id))\n",
+    )
+
+    app = App(app_dir=str(app_dir))
+    with TestClient(app) as client:
+        response = client.get("/users/42")
+    assert response.status_code == 200
+    assert "User 42" in response.text
+
+
+def test_pages_directory_and_page_py_coexist(file_based_app):
+    """Both pages/ convention and app/page.py convention should work."""
+    app_dir, _write = file_based_app
+    _write(
+        "page.py",
+        "from voodoo.components import Div, Text\n\n"
+        "def page(request):\n"
+        "    return Div(Text('Root page'))\n",
+    )
+    _write(
+        "pages/about.py",
+        "from voodoo.components import Div, Text\n\n"
+        "def page(request):\n"
+        "    return Div(Text('About'))\n",
+    )
+
+    app = App(app_dir=str(app_dir))
+    with TestClient(app) as client:
+        r1 = client.get("/")
+        r2 = client.get("/about")
+    assert r1.status_code == 200
+    assert "Root page" in r1.text
+    assert r2.status_code == 200
+    assert "About" in r2.text
+
+
+def test_pages_directory_nested_dynamic_route(file_based_app):
+    """pages/blog/[slug].py should map to /blog/{slug}."""
+    app_dir, _write = file_based_app
+    _write(
+        "pages/blog/[slug].py",
+        "from voodoo.components import Div, Text\n\n"
+        "def page(request, slug: str):\n"
+        "    return Div(Text(f'Post: ' + slug))\n",
+    )
+
+    app = App(app_dir=str(app_dir))
+    with TestClient(app) as client:
+        response = client.get("/blog/hello-world")
+    assert response.status_code == 200
+    assert "Post: hello-world" in response.text
+
+
+def test_pages_directory_ignores_underscore_files(file_based_app):
+    """Files starting with _ should be ignored in pages/ directory."""
+    app_dir, _write = file_based_app
+    _write(
+        "pages/_helpers.py",
+        "# This should not be treated as a page\ndef page(request):\n    return None\n",
+    )
+    _write(
+        "pages/index.py",
+        "from voodoo.components import Div, Text\n\n"
+        "def page(request):\n"
+        "    return Div(Text('Index'))\n",
+    )
+
+    app = App(app_dir=str(app_dir))
+    with TestClient(app) as client:
+        # _helpers.py should not create a route
+        response = client.get("/")
+    assert response.status_code == 200
+    assert "Index" in response.text

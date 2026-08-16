@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voodoo-framework"
-version = "1.0.22"
+dynamic = ["version"]
 description = "Voodoo Framework"
 requires-python = ">=3.12"
 dependencies = [
@@ -26,6 +26,13 @@ dependencies = [
 voodoo = "voodoo.cli:app"
 
 [project.optional-dependencies]
+ai = [
+    "openai",
+    "anthropic",
+    "google-generativeai",
+    "ollama"
+]
+mcp = []
 dev = [
     "pytest",
     "pytest-asyncio",
@@ -34,15 +41,18 @@ dev = [
     "pre-commit"
 ]
 
+[tool.setuptools.dynamic]
+version = { attr = "voodoo.__version__" }
+
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["voodoo*"]
 
 [tool.setuptools.package-data]
-voodoo = ["*.js", "*.html", "*.css"]
+voodoo = ["py.typed", "static/*.js", "*.html", "*.css"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

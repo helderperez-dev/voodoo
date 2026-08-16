@@ -85,23 +85,28 @@ from voodoo import App, page, Agent, Model, Button, Card, Text, tool, mesh
 
 app = App()
 
+
 class Lead(Model):
     name: str
     company: str
 
+
 @tool
-async def research_company(company: str):
-    ...
+async def research_company(company: str): ...
+
 
 agent = Agent(model="openai:gpt-5", tools=[research_company])
+
 
 @mesh.on("lead.created")
 async def analyze_lead(lead):
     await agent.run(f"Research {lead.company}")
 
+
 @page("/")
 async def home():
     return Card(Text("AI Sales Agent"), Button("Start"))
+
 
 app.run()
 ```
@@ -385,9 +390,15 @@ flowchart LR
 ```python
 from voodoo import (
     # Core runtime
-    App, page, api, state, event, trace,
+    App,
+    page,
+    api,
+    state,
+    event,
+    trace,
     # AI
-    Agent, tool,
+    Agent,
+    tool,
     # Data
     Model,
     # Events
@@ -395,8 +406,23 @@ from voodoo import (
     # Theming
     Theme,
     # UI — core set
-    Page, Button, Card, Text, Heading, Input, Form, Modal, Table,
-    Badge, Avatar, Nav, Header, Main, Section, Article, Footer,
+    Page,
+    Button,
+    Card,
+    Text,
+    Heading,
+    Input,
+    Form,
+    Modal,
+    Table,
+    Badge,
+    Avatar,
+    Nav,
+    Header,
+    Main,
+    Section,
+    Article,
+    Footer,
 )
 ```
 
@@ -575,9 +601,13 @@ flowchart LR
 **Exit criteria**
 ```python
 from voodoo import App, page
+
 app = App()
+
+
 @page("/")
-def home(): return Text("Hello")
+def home():
+    return Text("Hello")
 ```
 works; contract test pins `__all__`; all Phase 0 baseline tests still green; startup benchmark not regressed.
 

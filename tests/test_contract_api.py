@@ -3,6 +3,8 @@
 These pin `voodoo.__all__` exactly: CI fails if an export is added or removed
 without a deliberate update to EXPECTED_EXPORTS. Legacy names must keep
 resolving through the deprecation shims.
+
+Semver: 1.0 — no new exports without a version bump.
 """
 
 import pytest
@@ -16,14 +18,26 @@ EXPECTED_EXPORTS = {
     "page",
     "api",
     "trace",
+    # Reactive state & events
+    "state",
+    "event",
+    "State",
     # Realtime
     "mesh",
     "register_event",
     "ws_manager",
+    # Workers
+    "task",
     # AI
     "Agent",
+    "AgentRun",
+    "tool",
+    "ToolSpec",
+    "ToolRegistry",
+    "LLMProvider",
     # Data
     "BaseModel",
+    "Model",
     # Theming & configuration
     "Theme",
     "ThemeColors",
@@ -142,3 +156,9 @@ def test_unknown_attribute_raises():
 def test_version_is_string():
     assert isinstance(voodoo.__version__, str)
     assert voodoo.__version__.count(".") == 2
+
+
+def test_version_is_1_0():
+    """The public API is frozen at semver 1.0."""
+    major = voodoo.__version__.split(".")[0]
+    assert major == "1", f"Expected major version 1, got {major}"
