@@ -15,16 +15,25 @@ Guarantees provided by the base:
 - **Escaping** — text children and attribute values are HTML-escaped. Event
   handler attributes (``on*``, framework-generated) and :class:`Html` content
   are the only trusted paths.
+- **``css={}`` prop** — escape hatch for inline styles; keys use underscores
+  (``margin_top``) which are converted to hyphens (``margin-top``).
+- **``tone`` prop** — semantic color mapping (``"muted"``, ``"primary"``,
+  ``"danger"``, …) resolved via the active theme.
 """
 
 from __future__ import annotations
 
 import html
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any, ClassVar
 from uuid import uuid4
 
 SELF_CLOSING_TAGS = frozenset({"input", "img", "br", "hr"})
+
+#: Tones that map to theme color tokens.
+_VALID_TONES = frozenset(
+    {"default", "primary", "secondary", "muted", "success", "warning", "danger", "info"}
+)
 
 
 def escape(value: Any) -> str:
@@ -53,6 +62,30 @@ def _flatten(children: tuple[Any, ...]) -> tuple[Any, ...]:
     return tuple(flat)
 
 
+def _css_to_inline(css: Mapping[str, Any]) -> str:
+    """Convert a ``css={}`` dict to an inline style string.
+
+    Keys use underscores (``margin_top``) → hyphens (``margin-top``).
+    """
+    return "; ".join(
+        f"{k.replace('_', '-')}: {v}" for k, v in css.items() if v is not None
+    )
+
+
+def tone_to_color_var(tone: str) -> str:
+    """Map a semantic tone to a CSS variable reference."""
+    mapping = {
+        "primary": "var(--vd-color-primary)",
+        "secondary": "var(--vd-color-secondary)",
+        "muted": "var(--vd-color-text-muted)",
+        "success": "var(--vd-color-success)",
+        "warning": "var(--vd-color-warning)",
+        "danger": "var(--vd-color-danger)",
+        "info": "var(--vd-color-info)",
+    }
+    return mapping.get(tone, "")
+
+
 class Component:
     """Base class for all rendered UI elements."""
 
@@ -66,15 +99,19 @@ class Component:
         self,
         *children: Any,
         id: str | None = None,
+        css: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         self.children: tuple[Any, ...] = _flatten(children)
         self.props: dict[str, Any] = {}
         self.attrs: dict[str, Any] = {}
+        self._inline_css: str = ""
         if id is None and self.auto_id:
             id = f"vd-{uuid4().hex[:8]}"
         if id is not None:
             self.attrs["id"] = id
+        if css:
+            self._inline_css = _css_to_inline(css)
         self.attrs.update(kwargs)
 
     # -- public API ----------------------------------------------------------
@@ -121,6 +158,7 @@ class Component:
 
         For styled components the merged class (framework + user) renders
         last; plain components keep ``class`` at its declared position.
+        Inline styles from ``css={}`` are emitted as a ``style`` attribute.
         """
         user_class = self.user_class() if self.style is not None else ""
         framework = self.framework_classes(user_class) if self.style is not None else ""
@@ -148,6 +186,9 @@ class Component:
 
         if merged:
             rendered.append(f'class="{escape(merged)}"')
+
+        if self._inline_css:
+            rendered.append(f'style="{escape(self._inline_css)}"')
 
         return f" {' '.join(rendered)}" if rendered else ""
 

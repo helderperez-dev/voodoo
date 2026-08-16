@@ -20,15 +20,15 @@ from voodoo.theme import Theme
 _BTN_DEFAULT = (
     "inline-flex items-center justify-center rounded-md text-sm font-medium "
     "transition-colors focus-visible:outline-none focus-visible:ring-1 "
-    "focus-visible:ring-[var(--color-primary)] disabled:pointer-events-none "
-    "disabled:opacity-50 bg-[var(--color-text)] text-[var(--color-surface)] "
-    "hover:bg-[var(--color-text)]/90 h-9 px-4 py-2"
+    "focus-visible:ring-[var(--vd-color-primary)] disabled:pointer-events-none "
+    "disabled:opacity-50 bg-[var(--vd-color-text)] text-[var(--vd-color-surface)] "
+    "hover:bg-[var(--vd-color-text)]/90 h-9 px-4 py-2"
 )
 
 _BTN_BASE = (
     "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md "
     "text-sm font-medium transition-colors focus-visible:outline-none "
-    "focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] "
+    "focus-visible:ring-1 focus-visible:ring-[var(--vd-color-primary)] "
     "disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none "
     "[&_svg]:size-4 [&_svg]:shrink-0"
 )
@@ -41,22 +41,24 @@ _BTN_SIZES = {
 
 _BTN_VARIANTS = {
     "primary": (
-        "bg-[var(--color-primary)] text-white "
-        "hover:bg-[var(--color-primary-hover)] cursor-pointer"
+        "bg-[var(--vd-color-primary)] text-white "
+        "hover:bg-[var(--vd-color-primary-hover)] cursor-pointer"
     ),
     "secondary": (
-        "bg-[var(--color-secondary)] text-white hover:opacity-90 cursor-pointer"
+        "bg-[var(--vd-color-secondary)] text-white hover:opacity-90 cursor-pointer"
     ),
     "outline": (
-        "border border-[var(--color-border)] bg-transparent "
-        "text-[var(--color-text)] hover:bg-[var(--color-surface)] cursor-pointer"
+        "border border-[var(--vd-color-border)] bg-transparent "
+        "text-[var(--vd-color-text)] hover:bg-[var(--vd-color-surface)] cursor-pointer"
     ),
     "ghost": (
-        "bg-transparent text-[var(--color-text-muted)] "
-        "hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] "
+        "bg-transparent text-[var(--vd-color-text-muted)] "
+        "hover:bg-[var(--vd-color-surface)] hover:text-[var(--vd-color-text)] "
         "cursor-pointer"
     ),
-    "danger": ("bg-[var(--color-danger)] text-white hover:opacity-90 cursor-pointer"),
+    "danger": (
+        "bg-[var(--vd-color-danger)] text-white hover:opacity-90 cursor-pointer"
+    ),
 }
 
 # Legacy "already styled" heuristic: if the developer supplied background /
@@ -68,11 +70,11 @@ _BTN_MARKERS = ("bg-", "border", "hover:")
 # ---------------------------------------------------------------------------
 
 _INPUT_DEFAULT = (
-    "flex h-9 w-full rounded-md border border-[var(--color-border)] "
+    "flex h-9 w-full rounded-md border border-[var(--vd-color-border)] "
     "bg-transparent px-3 py-1 text-sm shadow-sm transition-colors "
     "file:border-0 file:bg-transparent file:text-sm file:font-medium "
-    "placeholder:text-[var(--color-text-muted)] focus-visible:outline-none "
-    "focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] "
+    "placeholder:text-[var(--vd-color-text-muted)] focus-visible:outline-none "
+    "focus-visible:ring-1 focus-visible:ring-[var(--vd-color-primary)] "
     "disabled:cursor-not-allowed disabled:opacity-50"
 )
 
@@ -83,41 +85,41 @@ _INPUT_SIZES = {
 }
 
 _TEXTAREA_DEFAULT = (
-    "flex min-h-[80px] w-full rounded-md border border-[var(--color-border)] "
+    "flex min-h-[80px] w-full rounded-md border border-[var(--vd-color-border)] "
     "bg-transparent px-3 py-2 text-sm shadow-sm "
-    "placeholder:text-[var(--color-text-muted)] focus-visible:outline-none "
-    "focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] "
+    "placeholder:text-[var(--vd-color-text-muted)] focus-visible:outline-none "
+    "focus-visible:ring-1 focus-visible:ring-[var(--vd-color-primary)] "
     "disabled:cursor-not-allowed disabled:opacity-50"
 )
 
 _SELECT_DEFAULT = (
     "flex h-9 w-full items-center justify-between rounded-md border "
-    "border-[var(--color-border)] bg-transparent px-3 py-2 text-sm shadow-sm "
-    "ring-offset-[var(--color-surface)] "
-    "placeholder:text-[var(--color-text-muted)] focus:outline-none "
-    "focus:ring-1 focus:ring-[var(--color-primary)] "
+    "border-[var(--vd-color-border)] bg-transparent px-3 py-2 text-sm shadow-sm "
+    "ring-offset-[var(--vd-color-surface)] "
+    "placeholder:text-[var(--vd-color-text-muted)] focus:outline-none "
+    "focus:ring-1 focus:ring-[var(--vd-color-primary)] "
     "disabled:cursor-not-allowed disabled:opacity-50"
 )
 
 _LABEL_DEFAULT = (
-    "block text-sm font-medium leading-none text-[var(--color-text)] "
+    "block text-sm font-medium leading-none text-[var(--vd-color-text)] "
     "peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
 )
 
 _CHECKBOX_DEFAULT = (
-    "peer h-4 w-4 shrink-0 rounded-sm border border-[var(--color-border)] "
-    "ring-offset-[var(--color-surface)] focus-visible:outline-none "
-    "focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] "
+    "peer h-4 w-4 shrink-0 rounded-sm border border-[var(--vd-color-border)] "
+    "ring-offset-[var(--vd-color-surface)] focus-visible:outline-none "
+    "focus-visible:ring-2 focus-visible:ring-[var(--vd-color-primary)] "
     "focus-visible:ring-offset-2 disabled:cursor-not-allowed "
-    "disabled:opacity-50 data-[state=checked]:bg-[var(--color-primary)] "
-    "data-[state=checked]:text-[var(--color-surface)]"
+    "disabled:opacity-50 data-[state=checked]:bg-[var(--vd-color-primary)] "
+    "data-[state=checked]:text-[var(--vd-color-surface)]"
 )
 
 _RADIO_DEFAULT = (
-    "aspect-square h-4 w-4 rounded-full border border-[var(--color-border)] "
-    "text-[var(--color-primary)] ring-offset-[var(--color-surface)] "
+    "aspect-square h-4 w-4 rounded-full border border-[var(--vd-color-border)] "
+    "text-[var(--vd-color-primary)] ring-offset-[var(--vd-color-surface)] "
     "focus:outline-none focus-visible:ring-2 "
-    "focus-visible:ring-[var(--color-primary)] "
+    "focus-visible:ring-[var(--vd-color-primary)] "
     "focus-visible:ring-offset-2 disabled:cursor-not-allowed "
     "disabled:opacity-50"
 )
@@ -129,22 +131,22 @@ _RADIO_DEFAULT = (
 _BADGE_BASE = (
     "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold "
     "transition-colors focus:outline-none focus:ring-2 "
-    "focus:ring-[var(--color-primary)]"
+    "focus:ring-[var(--vd-color-primary)]"
 )
 
 _BADGE_VARIANTS = {
     "default": (
-        "bg-[var(--color-text)] text-[var(--color-surface)] "
-        "hover:bg-[var(--color-text)]/80"
+        "bg-[var(--vd-color-text)] text-[var(--vd-color-surface)] "
+        "hover:bg-[var(--vd-color-text)]/80"
     ),
     "secondary": (
-        "bg-[var(--color-surface)] text-[var(--color-text)] border "
-        "border-[var(--color-border)] hover:bg-[var(--color-surface)]/80"
+        "bg-[var(--vd-color-surface)] text-[var(--vd-color-text)] border "
+        "border-[var(--vd-color-border)] hover:bg-[var(--vd-color-surface)]/80"
     ),
-    "outline": "text-[var(--color-text)] border border-[var(--color-border)]",
-    "success": "bg-[var(--color-success)] text-white",
-    "warning": "bg-[var(--color-warning)] text-black",
-    "danger": "bg-[var(--color-danger)] text-white",
+    "outline": "text-[var(--vd-color-text)] border border-[var(--vd-color-border)]",
+    "success": "bg-[var(--vd-color-success)] text-white",
+    "warning": "bg-[var(--vd-color-warning)] text-black",
+    "danger": "bg-[var(--vd-color-danger)] text-white",
 }
 
 _HEADING_LEVELS = {
@@ -156,16 +158,16 @@ _HEADING_LEVELS = {
 
 _AVATAR_FALLBACK_DEFAULT = (
     "flex h-full w-full items-center justify-center rounded-full "
-    "bg-[var(--color-surface)] border border-[var(--color-border)] "
-    "text-[var(--color-text)] text-sm font-medium"
+    "bg-[var(--vd-color-surface)] border border-[var(--vd-color-border)] "
+    "text-[var(--vd-color-text)] text-sm font-medium"
 )
 
 _DIALOG_DEFAULT = (
-    "backdrop:bg-black/50 p-0 rounded-xl border border-[var(--color-border)] "
-    "bg-[var(--color-surface)] shadow-2xl open:flex flex-col"
+    "backdrop:bg-black/50 p-0 rounded-xl border border-[var(--vd-color-border)] "
+    "bg-[var(--vd-color-surface)] shadow-2xl open:flex flex-col"
 )
 
-_DIVIDER_DEFAULT = "m-0 h-px w-full border-none bg-[var(--color-border)]"
+_DIVIDER_DEFAULT = "m-0 h-px w-full border-none bg-[var(--vd-color-border)]"
 
 _FLEX_DIRECTIONS = {
     "row": "flex-row",
@@ -190,16 +192,16 @@ _CONTAINER_SIZES = {
     "full": "w-full",
 }
 
-_TABLE_HEAD = "bg-[var(--color-surface)] border-b border-[var(--color-border)]"
+_TABLE_HEAD = "bg-[var(--vd-color-surface)] border-b border-[var(--vd-color-border)]"
 _TABLE_ROW = (
-    "border-b border-[var(--color-border)] hover:bg-[var(--color-surface)] "
+    "border-b border-[var(--vd-color-border)] hover:bg-[var(--vd-color-surface)] "
     "transition-colors"
 )
 _TABLE_HEADER_CELL = (
-    "px-6 py-4 text-left text-xs font-medium text-[var(--color-text-muted)] "
+    "px-6 py-4 text-left text-xs font-medium text-[var(--vd-color-text-muted)] "
     "uppercase tracking-wider"
 )
-_TABLE_CELL = "px-6 py-4 whitespace-nowrap text-sm text-[var(--color-text)]"
+_TABLE_CELL = "px-6 py-4 whitespace-nowrap text-sm text-[var(--vd-color-text)]"
 
 
 def _has_any(user: str, markers: tuple[str, ...]) -> bool:
@@ -258,9 +260,9 @@ def _card(props: dict[str, Any], theme: Theme) -> str:
     user = str(props.get("class_") or "")
     parts: list[str] = []
     if "bg-" not in user:
-        parts.append("bg-[var(--color-surface)]")
+        parts.append("bg-[var(--vd-color-surface)]")
     if "border" not in user:
-        parts.append("border border-[var(--color-border)]")
+        parts.append("border border-[var(--vd-color-border)]")
     parts.append("rounded-xl p-6 shadow-sm")
     return " ".join(parts)
 
@@ -270,7 +272,7 @@ def _heading(props: dict[str, Any], theme: Theme) -> str:
     if "text-" in user:
         return ""
     size = _HEADING_LEVELS.get(props.get("level"), "text-lg font-medium")
-    return f"{size} text-[var(--color-text)]"
+    return f"{size} text-[var(--vd-color-text)]"
 
 
 def _badge(props: dict[str, Any], theme: Theme) -> str:
@@ -302,8 +304,8 @@ def _dialog(props: dict[str, Any], theme: Theme) -> str:
 def _modal(props: dict[str, Any], theme: Theme) -> str:
     return (
         "backdrop:bg-black/60 p-6 w-full max-w-lg rounded-2xl "
-        "border border-[var(--color-border)] bg-[var(--color-surface)] "
-        "shadow-2xl open:flex flex-col gap-4 text-[var(--color-text)] m-auto"
+        "border border-[var(--vd-color-border)] bg-[var(--vd-color-surface)] "
+        "shadow-2xl open:flex flex-col gap-4 text-[var(--vd-color-text)] m-auto"
     )
 
 
@@ -363,6 +365,16 @@ def _table_cell(props: dict[str, Any], theme: Theme) -> str:
     return _TABLE_CELL
 
 
+_LINK_DEFAULT = (
+    "text-[var(--vd-color-primary)] underline-offset-4 hover:underline "
+    "cursor-pointer transition-colors"
+)
+
+
+def _link(props: dict[str, Any], theme: Theme) -> str:
+    return _LINK_DEFAULT
+
+
 _STYLES: dict[str, Callable[[dict[str, Any], Theme], str]] = {
     "button": _button,
     "input": _input,
@@ -386,6 +398,7 @@ _STYLES: dict[str, Callable[[dict[str, Any], Theme], str]] = {
     "grid": _grid,
     "container": _container,
     "page": _page,
+    "link": _link,
     "table.head": _table_head,
     "table.row": _table_row,
     "table.header_cell": _table_header_cell,

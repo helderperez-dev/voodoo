@@ -9,6 +9,7 @@ import importlib
 import warnings
 from typing import Any
 
+from .adapters import TailwindAdapter, VoodooCSSAdapter
 from .agent import Agent
 from .api import api
 from .config import config
@@ -16,12 +17,13 @@ from .core import App, create_app, page, register_event, ws_manager
 from .data import BaseModel
 from .mesh import mesh
 from .telemetry import trace
-from .theme import Theme, ThemeColors
+from .theme import Theme, ThemeColors, create_theme
 from .ui import (
     A,
     Article,
     Avatar,
     Badge,
+    Box,
     Button,
     Card,
     Checkbox,
@@ -38,6 +40,7 @@ from .ui import (
     Heading,
     Input,
     Label,
+    Link,
     List,
     ListItem,
     Main,
@@ -48,6 +51,7 @@ from .ui import (
     Radio,
     Section,
     Select,
+    Stack,
     Table,
     Text,
     Textarea,
@@ -79,20 +83,26 @@ __all__ = [
     # Theming & configuration
     "Theme",
     "ThemeColors",
+    "create_theme",
     "config",
     # Styling seam
     "StyleAdapter",
     "NoopAdapter",
+    "TailwindAdapter",
+    "VoodooCSSAdapter",
     "set_style_adapter",
     "current_adapter",
     # UI — layout
     "Component",
     "Div",
     "Flex",
+    "Stack",
     "Grid",
+    "Box",
     "Container",
     "Page",
     "A",
+    "Link",
     # UI — core components
     "Button",
     "Card",

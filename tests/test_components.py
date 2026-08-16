@@ -1,3 +1,6 @@
+import pytest
+
+from voodoo.adapters import TailwindAdapter
 from voodoo.components import (
     Button,
     Card,
@@ -9,6 +12,15 @@ from voodoo.components import (
     Table,
     Text,
 )
+from voodoo.ui.styles import current_adapter, set_style_adapter
+
+
+@pytest.fixture(autouse=True)
+def _use_tailwind_adapter():
+    original = current_adapter()
+    set_style_adapter(TailwindAdapter())
+    yield
+    set_style_adapter(original)
 
 
 def test_component_base():
@@ -27,7 +39,7 @@ def test_button():
     html = btn.render()
     assert (
         html
-        == '<button id="btn-1" onclick="voodoo.sendEvent(\'my_action\', this.id, this.value)" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] disabled:pointer-events-none disabled:opacity-50 bg-[var(--color-text)] text-[var(--color-surface)] hover:bg-[var(--color-text)]/90 h-9 px-4 py-2">Click Me</button>'
+        == '<button id="btn-1" onclick="voodoo.sendEvent(\'my_action\', this.id, this.value)" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--vd-color-primary)] disabled:pointer-events-none disabled:opacity-50 bg-[var(--vd-color-text)] text-[var(--vd-color-surface)] hover:bg-[var(--vd-color-text)]/90 h-9 px-4 py-2">Click Me</button>'
     )
 
 
@@ -36,7 +48,7 @@ def test_input():
     html = inp.render()
     assert (
         html
-        == '<input id="inp-1" type="text" onchange="voodoo.sendEvent(\'input_changed\', this.id, this.value)" class="flex h-9 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[var(--color-text-muted)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50" />'
+        == '<input id="inp-1" type="text" onchange="voodoo.sendEvent(\'input_changed\', this.id, this.value)" class="flex h-9 w-full rounded-md border border-[var(--vd-color-border)] bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[var(--vd-color-text-muted)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--vd-color-primary)] disabled:cursor-not-allowed disabled:opacity-50" />'
     )
 
 
@@ -45,7 +57,7 @@ def test_card():
     html = card.render()
     assert (
         html
-        == '<div id="card-1" class="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-6 shadow-sm extra-class">Card Content</div>'
+        == '<div id="card-1" class="bg-[var(--vd-color-surface)] border border-[var(--vd-color-border)] rounded-xl p-6 shadow-sm extra-class">Card Content</div>'
     )
 
 
@@ -58,13 +70,13 @@ def test_heading():
     h1 = Heading("H1 Title", id="h-1")
     assert (
         h1.render()
-        == '<h1 id="h-1" class="text-4xl font-bold tracking-tight text-[var(--color-text)]">H1 Title</h1>'
+        == '<h1 id="h-1" class="text-4xl font-bold tracking-tight text-[var(--vd-color-text)]">H1 Title</h1>'
     )
 
     h3 = Heading("H3 Title", id="h-3", level=3)
     assert (
         h3.render()
-        == '<h3 id="h-3" class="text-2xl font-semibold tracking-tight text-[var(--color-text)]">H3 Title</h3>'
+        == '<h3 id="h-3" class="text-2xl font-semibold tracking-tight text-[var(--vd-color-text)]">H3 Title</h3>'
     )
 
 
@@ -86,11 +98,11 @@ def test_table():
     html = table.render()
     assert html.startswith('<table id="tbl-1" class="my-table">')
     assert (
-        '<th class="px-6 py-4 text-left text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wider">Name</th>'
+        '<th class="px-6 py-4 text-left text-xs font-medium text-[var(--vd-color-text-muted)] uppercase tracking-wider">Name</th>'
         in html
     )
     assert (
-        '<td class="px-6 py-4 whitespace-nowrap text-sm text-[var(--color-text)]">Alice</td>'
+        '<td class="px-6 py-4 whitespace-nowrap text-sm text-[var(--vd-color-text)]">Alice</td>'
         in html
     )
 

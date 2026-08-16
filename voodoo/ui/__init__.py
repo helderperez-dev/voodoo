@@ -2,7 +2,7 @@
 
 Import the component library from here::
 
-    from voodoo.ui import Button, Card, Page
+    from voodoo.ui import Button, Card, Page, Stack, Link
 
 Styling is pluggable — swap the CSS framework without touching components::
 
@@ -10,7 +10,7 @@ Styling is pluggable — swap the CSS framework without touching components::
     set_style_adapter(NoopAdapter())
 """
 
-from voodoo.ui.component import Component, Html, escape
+from voodoo.ui.component import Component, Html, escape, tone_to_color_var
 from voodoo.ui.library import (
     A,
     Address,
@@ -19,6 +19,7 @@ from voodoo.ui.library import (
     AuthGuard,
     Avatar,
     Badge,
+    Box,
     Button,
     Card,
     ChatBox,
@@ -38,6 +39,7 @@ from voodoo.ui.library import (
     Img,
     Input,
     Label,
+    Link,
     List,
     ListItem,
     LoginForm,
@@ -51,6 +53,7 @@ from voodoo.ui.library import (
     RegisterForm,
     Section,
     Select,
+    Stack,
     Table,
     Text,
     Textarea,
@@ -69,6 +72,7 @@ __all__ = [
     "Component",
     "Html",
     "escape",
+    "tone_to_color_var",
     # Style adapters
     "StyleAdapter",
     "NoopAdapter",
@@ -77,11 +81,14 @@ __all__ = [
     # Layout
     "Div",
     "Flex",
+    "Stack",
     "Grid",
+    "Box",
     "Container",
     "Page",
     # Core elements
     "A",
+    "Link",
     "Button",
     "Card",
     "Text",

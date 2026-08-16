@@ -77,8 +77,42 @@ def render_page(component: Any, seo: Any = None) -> str:
 
     client_js = _get_client_js()
     project_styles = _get_project_styles()
-    tailwind_config = default_theme.to_tailwind_config()
     css_vars = default_theme.to_css_variables()
+
+    # Detect active adapter to include the right CSS runtime
+    from voodoo.adapters.voodoo_css import VoodooCSSAdapter, generate_component_css
+    from voodoo.ui.styles import current_adapter
+
+    adapter = current_adapter()
+    is_voodoo_css = isinstance(adapter, VoodooCSSAdapter)
+
+    if is_voodoo_css:
+        component_css = generate_component_css(default_theme)
+        head_scripts = ""
+        body_classes = "min-h-screen antialiased"
+    else:
+        tailwind_config = default_theme.to_tailwind_config()
+        component_css = ""
+        head_scripts = f"""
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {tailwind_config};
+
+            // Prevent flash of incorrect theme
+            if (document.cookie.includes('voodoo_theme=light')) {{
+                document.documentElement.classList.remove('dark');
+                document.documentElement.classList.add('light');
+            }} else if (document.cookie.includes('voodoo_theme=dark')) {{
+                document.documentElement.classList.remove('light');
+                document.documentElement.classList.add('dark');
+            }}
+        </script>
+        """
+        body_classes = (
+            "bg-[var(--vd-color-background)] text-[var(--vd-color-text)] "
+            "min-h-screen antialiased "
+            "selection:bg-[var(--vd-color-secondary)] selection:text-white"
+        )
 
     html_class = (
         f"dark {default_theme.mode}"
@@ -120,36 +154,27 @@ def render_page(component: Any, seo: Any = None) -> str:
         {meta_tags}
         {generator_tag}
         {structured_data}
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script>
-            tailwind.config = {tailwind_config};
-
-            // Prevent flash of incorrect theme
-            if (document.cookie.includes('voodoo_theme=light')) {{
-                document.documentElement.classList.remove('dark');
-                document.documentElement.classList.add('light');
-            }} else if (document.cookie.includes('voodoo_theme=dark')) {{
-                document.documentElement.classList.remove('light');
-                document.documentElement.classList.add('dark');
-            }}
-        </script>
+        {head_scripts}
         <style>
             {css_vars}
             body {{
-                background-color: var(--color-background);
-                color: var(--color-text);
-                font-family: var(--font-sans);
+                background-color: var(--vd-color-background);
+                color: var(--vd-color-text);
+                font-family: var(--vd-font-sans);
             }}
             ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
             ::-webkit-scrollbar-track {{ background: transparent; }}
-            ::-webkit-scrollbar-thumb {{ background: var(--color-surface); border-radius: 4px; border: 1px solid var(--color-border); }}
-            ::-webkit-scrollbar-thumb:hover {{ background: var(--color-text-muted); }}
+            ::-webkit-scrollbar-thumb {{ background: var(--vd-color-surface); border-radius: 4px; border: 1px solid var(--vd-color-border); }}
+            ::-webkit-scrollbar-thumb:hover {{ background: var(--vd-color-text-muted); }}
+
+            /* Voodoo component CSS (when using VoodooCSS adapter) */
+            {component_css}
 
             /* Project custom styles (styles.css by convention) */
             {project_styles}
         </style>
     </head>
-    <body class="bg-[var(--color-background)] text-[var(--color-text)] min-h-screen antialiased selection:bg-[var(--color-secondary)] selection:text-white">
+    <body class="{body_classes}">
         <div id="root">
             {html_content}
         </div>

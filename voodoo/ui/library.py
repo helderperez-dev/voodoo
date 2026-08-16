@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from voodoo.ui.component import Component
+from voodoo.ui.component import Component, tone_to_color_var
 
 # ---------------------------------------------------------------------------
 # Layout
@@ -80,6 +80,51 @@ class Page(Component):
         self.props = {"size": size, "pad": pad}
 
 
+class Stack(Flex):
+    """Vertical flex layout with semantic gap — the most common layout.
+
+    ::
+
+        Stack(Heading("Title"), Text("Body"), Button("Go"), gap="lg")
+    """
+
+    def __init__(self, *children: Any, gap: str = "md", **kwargs: Any) -> None:
+        kwargs.setdefault("direction", "col")
+        super().__init__(*children, gap=gap, **kwargs)
+
+
+class Box(Component):
+    """Generic styled container with optional padding.
+
+    ::
+
+        Box(Text("Hello"), padding="lg")
+    """
+
+    tag = "div"
+
+    _PADDING_MAP = {
+        "xs": "var(--vd-space-xs)",
+        "sm": "var(--vd-space-sm)",
+        "md": "var(--vd-space-md)",
+        "lg": "var(--vd-space-lg)",
+        "xl": "var(--vd-space-xl)",
+        "xxl": "var(--vd-space-xxl)",
+        "none": "0",
+    }
+
+    def __init__(
+        self, *children: Any, padding: str | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(*children, **kwargs)
+        if padding and padding != "none":
+            value = self._PADDING_MAP.get(padding, padding)
+            css_str = f"padding: {value}"
+            self._inline_css = (
+                f"{self._inline_css}; {css_str}" if self._inline_css else css_str
+            )
+
+
 # ---------------------------------------------------------------------------
 # Core elements
 # ---------------------------------------------------------------------------
@@ -99,6 +144,12 @@ class A(Component):
         self.attrs["href"] = href
         if target:
             self.attrs["target"] = target
+
+
+class Link(A):
+    """Themed link — styled by the active adapter."""
+
+    style = "link"
 
 
 class Button(Component):
@@ -127,16 +178,71 @@ class Card(Component):
 
 
 class Text(Component):
+    """Inline text with optional semantic tone.
+
+    ::
+
+        Text("Subtitle", tone="muted")
+        Text("Error!", tone="danger")
+    """
+
     tag = "span"
+
+    def __init__(self, *children: Any, tone: str | None = None, **kwargs: Any) -> None:
+        super().__init__(*children, **kwargs)
+        if tone and tone != "default":
+            color = tone_to_color_var(tone)
+            if color:
+                css_str = f"color: {color}"
+                self._inline_css = (
+                    f"{self._inline_css}; {css_str}" if self._inline_css else css_str
+                )
+
+
+# Heading size → font-size token mapping
+_HEADING_SIZES = {
+    "sm": "var(--vd-text-lg)",
+    "md": "var(--vd-text-xl)",
+    "lg": "var(--vd-text-xxl)",
+    "xl": "var(--vd-text-xxxl)",
+    "display": "var(--vd-text-display)",
+}
 
 
 class Heading(Component):
+    """Heading with ``level`` (HTML tag) and optional ``size``/``tone``.
+
+    ::
+
+        Heading("Page Title", level=1, size="xl")
+        Heading("Error", tone="danger")
+    """
+
     style = "heading"
 
-    def __init__(self, *children: Any, level: int = 1, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *children: Any,
+        level: int = 1,
+        size: str | None = None,
+        tone: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*children, **kwargs)
         self.tag = f"h{level}"
-        self.props = {"level": level}
+        self.props = {"level": level, "size": size}
+        extra_css: list[str] = []
+        if size and size in _HEADING_SIZES:
+            extra_css.append(f"font-size: {_HEADING_SIZES[size]}")
+        if tone and tone != "default":
+            color = tone_to_color_var(tone)
+            if color:
+                extra_css.append(f"color: {color}")
+        if extra_css:
+            css_str = "; ".join(extra_css)
+            self._inline_css = (
+                f"{self._inline_css}; {css_str}" if self._inline_css else css_str
+            )
 
 
 class Badge(Component):

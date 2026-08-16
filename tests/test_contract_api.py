@@ -27,20 +27,26 @@ EXPECTED_EXPORTS = {
     # Theming & configuration
     "Theme",
     "ThemeColors",
+    "create_theme",
     "config",
     # Styling seam
     "StyleAdapter",
     "NoopAdapter",
+    "TailwindAdapter",
+    "VoodooCSSAdapter",
     "set_style_adapter",
     "current_adapter",
     # UI — layout
     "Component",
     "Div",
     "Flex",
+    "Stack",
     "Grid",
+    "Box",
     "Container",
     "Page",
     "A",
+    "Link",
     # UI — core components
     "Button",
     "Card",

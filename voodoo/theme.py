@@ -1,38 +1,51 @@
-"""Theme tokens: one source of truth translated into CSS variables and a
-Tailwind config. Components reference semantic names only (``primary``,
+"""Design tokens: one source of truth translated into CSS variables and
+adapter config. Components reference semantic names only (``primary``,
 ``danger``, ``radius``); the concrete values live here.
+
+All CSS variables use the ``--vd-*`` prefix to namespace Voodoo tokens and
+avoid collisions with project-level CSS.
 """
 
+from __future__ import annotations
+
 import json
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+# ---------------------------------------------------------------------------
+# Token groups
+# ---------------------------------------------------------------------------
+
 
 class ThemeColors(BaseModel):
-    """Modern color palette for the theme."""
+    """Semantic color palette."""
 
-    primary: str = "#007AFF"  # Apple blue
-    primary_hover: str = "#0066D6"  # Darkened primary
-    secondary: str = "#5856D6"  # Violet
+    primary: str = "#18181B"  # Near-black (Linear/Vercel aesthetic)
+    primary_hover: str = "#27272A"  # Darkened primary
+    secondary: str = "#6366F1"  # Indigo accent
 
     # Status
     success: str = "#22C55E"
     warning: str = "#F59E0B"
     danger: str = "#EF4444"
+    info: str = "#3B82F6"
 
-    # Dark mode
-    background: str = "#0A0A0A"  # Charcoal
-    surface: str = "rgba(255, 255, 255, 0.05)"  # Glass surface
-    text: str = "#F3F4F6"
-    text_muted: str = "#9CA3AF"
-    border: str = "rgba(255, 255, 255, 0.1)"
+    # Surfaces — dark mode
+    background: str = "#09090B"  # Zinc-950
+    surface: str = "#18181B"  # Zinc-900
+    surface_raised: str = "#27272A"  # Zinc-800
+    text: str = "#FAFAFA"
+    text_muted: str = "#71717A"  # Zinc-500
+    border: str = "#27272A"  # Zinc-800
 
-    # Light mode
-    light_background: str = "#F9FAFB"
-    light_surface: str = "rgba(0, 0, 0, 0.05)"
-    light_text: str = "#111827"
-    light_text_muted: str = "#4B5563"
-    light_border: str = "rgba(0, 0, 0, 0.1)"
+    # Surfaces — light mode
+    light_background: str = "#FFFFFF"
+    light_surface: str = "#FAFAFA"
+    light_surface_raised: str = "#F4F4F5"
+    light_text: str = "#18181B"
+    light_text_muted: str = "#71717A"
+    light_border: str = "#E4E4E7"
 
     # Allow extra colors
     extra: dict[str, str] = Field(default_factory=dict)
@@ -48,6 +61,7 @@ class ThemeColors(BaseModel):
                 "extra",
                 "light_background",
                 "light_surface",
+                "light_surface_raised",
                 "light_text",
                 "light_text_muted",
                 "light_border",
@@ -56,6 +70,28 @@ class ThemeColors(BaseModel):
         hyphenated = {k.replace("_", "-"): v for k, v in named.items()}
         return {**hyphenated, **self.extra}
 
+    def light_overrides(self) -> dict[str, str]:
+        return {
+            "background": self.light_background,
+            "surface": self.light_surface,
+            "surface-raised": self.light_surface_raised,
+            "text": self.light_text,
+            "text-muted": self.light_text_muted,
+            "border": self.light_border,
+        }
+
+
+class ThemeSpacing(BaseModel):
+    """Spacing scale (8px base)."""
+
+    xs: str = "0.25rem"  # 4px
+    sm: str = "0.5rem"  # 8px
+    md: str = "0.75rem"  # 12px
+    lg: str = "1rem"  # 16px
+    xl: str = "1.5rem"  # 24px
+    xxl: str = "2rem"  # 32px
+    xxxl: str = "3rem"  # 48px
+
 
 class ThemeRadius(BaseModel):
     """Corner radii."""
@@ -63,105 +99,287 @@ class ThemeRadius(BaseModel):
     sm: str = "0.375rem"
     md: str = "0.5rem"
     lg: str = "0.75rem"
+    xl: str = "1rem"
     full: str = "9999px"
 
 
-class ThemeFonts(BaseModel):
+class ThemeShadows(BaseModel):
+    """Shadow scale — extremely subtle by default."""
+
+    sm: str = "0 1px 2px 0 rgb(0 0 0 / 0.05)"
+    md: str = "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)"
+    lg: str = "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)"
+
+
+class ThemeMotion(BaseModel):
+    """Transition durations."""
+
+    fast: str = "150ms"
+    normal: str = "200ms"
+    slow: str = "300ms"
+
+
+class ThemeTypography(BaseModel):
     """Typography settings."""
 
-    sans: str = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
-    mono: str = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+    font_family: str = (
+        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, '
+        "Arial, sans-serif"
+    )
+    mono_family: str = (
+        "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "
+        '"Liberation Mono", "Courier New", monospace'
+    )
+    # Font size scale
+    xs: str = "0.75rem"  # 12px
+    sm: str = "0.875rem"  # 14px
+    md: str = "1rem"  # 16px
+    lg: str = "1.125rem"  # 18px
+    xl: str = "1.25rem"  # 20px
+    xxl: str = "1.5rem"  # 24px
+    xxxl: str = "2rem"  # 32px
+    display: str = "3rem"  # 48px
+    # Line heights
+    tight: str = "1.2"
+    normal: str = "1.5"
+    relaxed: str = "1.75"
+    # Font weights
+    normal_weight: str = "400"
+    medium_weight: str = "500"
+    semibold_weight: str = "600"
+    bold_weight: str = "700"
+
+
+# ---------------------------------------------------------------------------
+# Component overrides (Level 3 customization)
+# ---------------------------------------------------------------------------
+
+
+class ComponentOverrides(BaseModel):
+    """Per-component class overrides from the theme.
+
+    Each key is a component style key (``"button"``, ``"card"``); the value
+    is a dict of slot→class-string. The adapter merges these with its own
+    defaults.
+
+    Example::
+
+        theme.components = ComponentOverrides(
+            button={
+                "primary": "my-btn-primary",
+            },
+        )
+    """
+
+    model_config = {"extra": "allow"}
+
+    def for_slot(self, component: str, slot: str = "root") -> str:
+        """Return the override class for a component slot, or ``""``."""
+        overrides: dict[str, Any] = getattr(self, component, None) or {}
+        if isinstance(overrides, dict):
+            return str(overrides.get(slot, ""))
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Theme
+# ---------------------------------------------------------------------------
 
 
 class Theme(BaseModel):
-    """
-    Core Theme configuration for Voodoo.
-    Designed for modern macOS 'glass' aesthetic.
+    """Core theme configuration for Voodoo.
+
+    The default theme is minimalist, modern, and follows an
+    Apple × Linear × Vercel × Raycast aesthetic: generous whitespace,
+    clean typography, subtle borders, moderate radius, extremely discreet
+    shadows, and excellent dark mode.
     """
 
     mode: str = "dark"  # dark, light, system
     colors: ThemeColors = Field(default_factory=ThemeColors)
+    spacing: ThemeSpacing = Field(default_factory=ThemeSpacing)
     radius: ThemeRadius = Field(default_factory=ThemeRadius)
-    fonts: ThemeFonts = Field(default_factory=ThemeFonts)
+    shadows: ThemeShadows = Field(default_factory=ThemeShadows)
+    motion: ThemeMotion = Field(default_factory=ThemeMotion)
+    typography: ThemeTypography = Field(default_factory=ThemeTypography)
+    components: ComponentOverrides = Field(default_factory=ComponentOverrides)
+
+    # -- CSS output ----------------------------------------------------------
+
+    def to_css_variables(self) -> str:
+        """Generate CSS custom properties with the ``--vd-`` prefix."""
+        dark_color_vars = [
+            f"--vd-color-{name}: {value};"
+            for name, value in self.colors.semantic().items()
+        ]
+        light_color_vars = [
+            f"--vd-color-{name}: {value};"
+            for name, value in {
+                **self.colors.semantic(),
+                **self.colors.light_overrides(),
+            }.items()
+        ]
+        spacing_vars = [
+            f"--vd-space-{name}: {value};"
+            for name, value in self.spacing.model_dump().items()
+        ]
+        radius_vars = [
+            f"--vd-radius-{name}: {value};"
+            for name, value in self.radius.model_dump().items()
+        ]
+        shadow_vars = [
+            f"--vd-shadow-{name}: {value};"
+            for name, value in self.shadows.model_dump().items()
+        ]
+        motion_vars = [
+            f"--vd-motion-{name}: {value};"
+            for name, value in self.motion.model_dump().items()
+        ]
+        typo_vars = [
+            f"--vd-font-sans: {self.typography.font_family};",
+            f"--vd-font-mono: {self.typography.mono_family};",
+            f"--vd-text-xs: {self.typography.xs};",
+            f"--vd-text-sm: {self.typography.sm};",
+            f"--vd-text-md: {self.typography.md};",
+            f"--vd-text-lg: {self.typography.lg};",
+            f"--vd-text-xl: {self.typography.xl};",
+            f"--vd-text-xxl: {self.typography.xxl};",
+            f"--vd-text-xxxl: {self.typography.xxxl};",
+            f"--vd-text-display: {self.typography.display};",
+            f"--vd-leading-tight: {self.typography.tight};",
+            f"--vd-leading-normal: {self.typography.normal};",
+            f"--vd-leading-relaxed: {self.typography.relaxed};",
+            f"--vd-weight-normal: {self.typography.normal_weight};",
+            f"--vd-weight-medium: {self.typography.medium_weight};",
+            f"--vd-weight-semibold: {self.typography.semibold_weight};",
+            f"--vd-weight-bold: {self.typography.bold_weight};",
+        ]
+
+        all_vars = (
+            light_color_vars
+            + spacing_vars
+            + radius_vars
+            + shadow_vars
+            + motion_vars
+            + typo_vars
+        )
+
+        return (
+            ":root {\n    "
+            + "\n    ".join(all_vars)
+            + "\n}\n"
+            + ".dark {\n    "
+            + "\n    ".join(
+                dark_color_vars
+                + spacing_vars
+                + radius_vars
+                + shadow_vars
+                + motion_vars
+                + typo_vars
+            )
+            + "\n}"
+        )
 
     def to_tailwind_config(self) -> str:
-        """Generates the Tailwind configuration script."""
+        """Generate a Tailwind config JSON using ``--vd-*`` variables."""
+        colors = {name: f"var(--vd-color-{name})" for name in self.colors.semantic()}
         config = {
             "darkMode": "class",
             "theme": {
                 "extend": {
-                    "colors": self.colors.semantic(),
+                    "colors": colors,
                     "borderRadius": {
-                        "sm": self.radius.sm,
-                        "md": self.radius.md,
-                        "lg": self.radius.lg,
-                        "full": self.radius.full,
+                        "sm": "var(--vd-radius-sm)",
+                        "md": "var(--vd-radius-md)",
+                        "lg": "var(--vd-radius-lg)",
+                        "xl": "var(--vd-radius-xl)",
+                        "full": "var(--vd-radius-full)",
+                    },
+                    "spacing": {
+                        name: f"var(--vd-space-{name})"
+                        for name in self.spacing.model_dump()
+                    },
+                    "boxShadow": {
+                        "sm": "var(--vd-shadow-sm)",
+                        "md": "var(--vd-shadow-md)",
+                        "lg": "var(--vd-shadow-lg)",
                     },
                     "fontFamily": {
-                        "sans": [self.fonts.sans],
-                        "mono": [self.fonts.mono],
+                        "sans": ["var(--vd-font-sans)"],
+                        "mono": ["var(--vd-font-mono)"],
+                    },
+                    "transitionDuration": {
+                        "fast": "var(--vd-motion-fast)",
+                        "normal": "var(--vd-motion-normal)",
+                        "slow": "var(--vd-motion-slow)",
                     },
                 }
             },
         }
         return json.dumps(config)
 
-    def to_css_variables(self) -> str:
-        """Generates global CSS variables for the theme."""
-        base_colors = self.colors.semantic()
 
-        dark_vars = (
-            [
-                f"--color-{name.replace('_', '-')}: {value};"
-                for name, value in base_colors.items()
-            ]
-            + [
-                f"--radius-{name}: {value};"
-                for name, value in self.radius.model_dump().items()
-            ]
-            + [
-                f"--font-sans: {self.fonts.sans};",
-                f"--font-mono: {self.fonts.mono};",
-            ]
-        )
+# ---------------------------------------------------------------------------
+# create_theme() — ergonomic factory
+# ---------------------------------------------------------------------------
 
-        light_overrides = {
-            "background": self.colors.light_background,
-            "surface": self.colors.light_surface,
-            "text": self.colors.light_text,
-            "text_muted": self.colors.light_text_muted,
-            "border": self.colors.light_border,
-        }
-        light_vars = (
-            [
-                f"--color-{name.replace('_', '-')}: {value};"
-                for name, value in {**base_colors, **light_overrides}.items()
-            ]
-            + [
-                f"--radius-{name}: {value};"
-                for name, value in self.radius.model_dump().items()
-            ]
-            + [
-                f"--font-sans: {self.fonts.sans};",
-                f"--font-mono: {self.fonts.mono};",
-            ]
-        )
 
-        return (
-            ":root {\n    "
-            + "\n    ".join(light_vars)
-            + "\n}\n"
-            + ".dark {\n    "
-            + "\n    ".join(dark_vars)
-            + "\n}"
-        )
+def create_theme(
+    *,
+    primary: str | None = None,
+    secondary: str | None = None,
+    background: str | None = None,
+    surface: str | None = None,
+    text: str | None = None,
+    border: str | None = None,
+    font: str | None = None,
+    radius: str | None = None,
+    mode: str = "dark",
+    **extra_colors: str,
+) -> Theme:
+    """Create a theme with sensible defaults and simple overrides.
+
+    Example::
+
+        theme = create_theme(primary="#635BFF", font="Inter", radius="md")
+        app = App(theme=theme)
+    """
+    colors = ThemeColors()
+    if primary:
+        colors.primary = primary
+    if secondary:
+        colors.secondary = secondary
+    if background:
+        colors.background = background
+    if surface:
+        colors.surface = surface
+    if text:
+        colors.text = text
+    if border:
+        colors.border = border
+    if extra_colors:
+        colors.extra = {**colors.extra, **extra_colors}
+
+    typography = ThemeTypography()
+    if font:
+        typography.font_family = font
+
+    radius_obj = ThemeRadius()
+    # radius="md" is already the default; this is for future token-mapped sizes
+
+    return Theme(
+        mode=mode,
+        colors=colors,
+        typography=typography,
+        radius=radius_obj,
+    )
 
 
 # Global default theme
 default_theme = Theme()
 
 
-def set_theme(theme: Theme):
-    """Sets the global default theme."""
+def set_theme(theme: Theme) -> None:
+    """Set the global default theme."""
     global default_theme
     default_theme = theme

@@ -2,12 +2,15 @@
 
 Components never embed CSS framework classes. They declare a semantic style
 key (``"button"``, ``"card"``, ``"table.cell"``) plus props; the active
-adapter resolves that to a concrete class string. Swapping Tailwind for
-vanilla CSS (or anything else) means implementing this protocol once —
+adapter resolves that to a concrete class string. Swapping Voodoo CSS for
+Tailwind (or anything else) means implementing this protocol once —
 components and apps do not change.
 
-The default adapter (:class:`~voodoo.adapters.tailwind.TailwindAdapter`) is
-installed at import time.
+The default adapter (:class:`~voodoo.adapters.voodoo_css.VoodooCSSAdapter`) is
+installed at import time. To use Tailwind instead::
+
+    from voodoo import TailwindAdapter, set_style_adapter
+    set_style_adapter(TailwindAdapter())
 """
 
 from __future__ import annotations
@@ -56,9 +59,9 @@ def current_adapter() -> StyleAdapter:
 
 
 def _install_default() -> None:
-    from voodoo.adapters.tailwind import TailwindAdapter
+    from voodoo.adapters.voodoo_css import VoodooCSSAdapter
 
-    set_style_adapter(TailwindAdapter())
+    set_style_adapter(VoodooCSSAdapter())
 
 
 _install_default()

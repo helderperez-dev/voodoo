@@ -25,3 +25,7 @@ storage/
 dist/
 build/
 *.egg-info/
+
+# Local strategy notes (not for public repo)
+SPEC.md
+
