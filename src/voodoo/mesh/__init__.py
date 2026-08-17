@@ -136,16 +136,36 @@ class MeshNetwork:
         await self.broadcast(event, payload)
 
     async def _fire_local(self, event: str, payload: Any):
-        """Fire local handlers for an event (no remote fan-out)."""
-        if event in self.event_handlers:
-            for handler in self.event_handlers[event]:
-                try:
-                    if inspect.iscoroutinefunction(handler):
-                        await handler(payload)
-                    else:
-                        handler(payload)
-                except Exception as e:  # noqa: BLE001
-                    print(f"Local mesh event handler error: {e}")
+        """Fire local handlers for an event (no remote fan-out).
+
+        Each handler executes through the Voodoo runtime engine as an
+        Execution (intent ``mesh:{event}``). When the broadcast happens
+        inside another execution, the handler becomes a child execution of
+        it (shared trace, ``parent_execution_id`` link).
+        """
+        if event not in self.event_handlers:
+            return
+
+        from voodoo.primitives.intent import Intent
+        from voodoo.runtime.context import current_context
+        from voodoo.runtime.engine import engine as runtime_engine
+
+        parent = current_context()
+        # Run on the engine that owns the current execution (when inside
+        # one), otherwise on the global engine.
+        engine = (parent.engine if parent is not None else None) or runtime_engine
+        for handler in self.event_handlers[event]:
+            intent = Intent(name=f"mesh:{event}", params={"payload": payload})
+
+            async def compute(ctx, _handler=handler, _payload=payload):
+                if inspect.iscoroutinefunction(_handler):
+                    return await _handler(_payload)
+                return _handler(_payload)
+
+            try:
+                await engine.execute(intent, compute, actor="mesh", parent=parent)
+            except Exception as e:  # noqa: BLE001
+                print(f"Local mesh event handler error: {e}")
 
     async def connect(self, endpoint_url: str):
         """Connect to another Mesh Node."""

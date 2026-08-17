@@ -126,6 +126,9 @@ if __name__ == "__main__":
 | **Voodoo Mesh** | Unified event layer connecting UI, workers, agents, and applications |
 | **One tool, many consumers** | A single `@tool` definition serves Python calls, agents, MCP, and mesh |
 | **Observability everywhere** | Correlation IDs and telemetry built into every subsystem |
+| **Unified runtime engine** | Every operation (HTTP, Agent, Tool, MCP, Worker, Human, Event) produces an `Execution` record with full traceability |
+| **Human-in-the-Loop** | `ask_human()` + `approve()`/`deny()` — humans as compute participants, not afterthoughts |
+| **Adaptive execution** | Planner resolves capabilities to compute participants; supervisor steers with retry, fallback, budget control |
 | **Zero-config runtime** | `voodoo new` → `voodoo dev` → working app. No build step. Add `voodoo.toml` when you need configuration |
 
 ## Architectural Primitives
@@ -152,6 +155,11 @@ See [docs/primitives.md](docs/primitives.md) for the full model.
 - **Auth** — JWT tokens, API keys, session cookies, RBAC route guards
 - **Security** — CORS, CSRF, rate limiting, security headers — all on by default
 - **Telemetry** — Correlation IDs, request tracking, agent token/cost accounting
+- **Runtime Engine** — Unified `ExecutionEngine` producing `Execution` records for every operation (HTTP, Agent, Tool, MCP, Worker, Task, Workflow, Human, Event)
+- **Human-in-the-Loop** — `ask_human()`, `engine.approve()`/`deny()`, `Task(human=True)` — humans as compute participants with durable approval persistence
+- **Durable Recovery** — JSONL execution store, `voodoo recover` CLI, mid-workflow checkpointing
+- **Planner** — Deterministic capability → compute participant resolution with fallbacks
+- **Adaptive Runtime** — Supervisor loop with retry, fallback, delegation, budget steering, and constraint-driven retry hints
 
 ## Installation
 
@@ -245,6 +253,9 @@ pipx uninstall voodoo-framework
 - [Deployment](docs/deployment.md)
 - [Architecture](docs/architecture.md)
 - [Architectural Primitives](docs/primitives.md)
+- [Runtime Engine](docs/runtime.md)
+- [Human-in-the-Loop](docs/hitl.md)
+- [Planner & Adaptive Runtime](docs/adaptive.md)
 
 ## Examples
 

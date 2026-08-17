@@ -12,6 +12,10 @@ class API:
     def __init__(self) -> None:
         self.routes: list[Route] = []
         self.paths: dict[str, dict[str, Any]] = {}
+        # When True (default), every API handler executes through the Voodoo
+        # runtime engine, producing an Execution record (intent ``http:...``)
+        # with actor, effects, cost and telemetry.
+        self.run_through_runtime: bool = True
 
         # Add docs routes
         self.routes.append(
@@ -19,6 +23,41 @@ class API:
         )
         self.routes.append(Route("/docs", self._swagger_ui, methods=["GET"]))
         self.routes.append(Route("/redoc", self._redoc_ui, methods=["GET"]))
+
+    async def _run_through_runtime(
+        self, path: str, method: str, func: Callable[..., Any], kwargs: dict[str, Any]
+    ) -> Any:
+        """Execute an API handler through the runtime engine.
+
+        The handler becomes an Execution (intent ``http:{method} {path}``);
+        the authenticated user (if any) is the actor. The handler's return
+        value is the execution result.
+        """
+        if not self.run_through_runtime:
+            if inspect.iscoroutinefunction(func):
+                return await func(**kwargs)
+            return func(**kwargs)
+
+        from voodoo.primitives.intent import Intent
+        from voodoo.runtime.engine import engine as runtime_engine
+
+        actor = "anonymous"
+        user = kwargs.get("user")
+        if user is not None:
+            actor = getattr(user, "id", None) or getattr(user, "username", None) or actor
+
+        intent = Intent(
+            name=f"http:{method} {path}",
+            params={k: v for k, v in kwargs.items() if k != "request"},
+        )
+
+        async def compute(ctx: Any) -> Any:
+            if inspect.iscoroutinefunction(func):
+                return await func(**kwargs)
+            return func(**kwargs)
+
+        execution = await runtime_engine.execute(intent, compute, actor=actor)
+        return execution.result
 
     def _openapi_schema(self, request: Request) -> JSONResponse:
         schema = {
@@ -148,10 +187,7 @@ class API:
                                 pass
                         kwargs[name] = val
 
-            if inspect.iscoroutinefunction(func):
-                res = await func(**kwargs)
-            else:
-                res = func(**kwargs)
+            res = await self._run_through_runtime(path, method, func, kwargs)
 
             # Serialize response
             if isinstance(res, Response):

@@ -143,3 +143,59 @@ async def test_mesh_on_to_task_chain():
     await mesh.broadcast("lead.created", "Ada")
     assert received == ["Ada"]
     assert _spans_for("task:mesh_handler")
+
+
+@pytest.mark.asyncio
+async def test_worker_job_executes_through_runtime_engine():
+    """Background queue jobs produce an Execution record (intent worker:<name>)."""
+    from voodoo.queue import start_workers, stop_workers
+    from voodoo.runtime.engine import engine as runtime_engine
+    from voodoo.runtime.execution import ExecutionStatus
+
+    processed: list[str] = []
+
+    @task(retries=0, name="rt_job")
+    async def rt_job(payload):
+        processed.append(payload)
+
+    await rt_job.enqueue("payload-1")
+    await start_workers()
+    await asyncio.sleep(0.1)
+    await stop_workers()
+
+    assert processed == ["payload-1"]
+
+    matches = [
+        ex
+        for ex in runtime_engine.executions.values()
+        if ex.intent and ex.intent.name == "worker:rt_job"
+    ]
+    assert len(matches) == 1
+    assert matches[0].status is ExecutionStatus.COMPLETED
+    assert matches[0].actor == "worker:rt_job"
+    assert matches[0].intent.params == {"payload": "payload-1"}
+
+
+@pytest.mark.asyncio
+async def test_worker_failure_records_failed_execution_and_keeps_running():
+    """A failing job marks the Execution failed but the worker stays alive."""
+    from voodoo.queue import start_workers, stop_workers
+    from voodoo.runtime.engine import engine as runtime_engine
+    from voodoo.runtime.execution import ExecutionStatus
+
+    @task(retries=0, name="rt_bad_job")
+    async def rt_bad_job(payload):
+        raise RuntimeError("worker blew up")
+
+    await rt_bad_job.enqueue({"x": 1})
+    await start_workers()
+    await asyncio.sleep(0.1)
+    await stop_workers()
+
+    matches = [
+        ex
+        for ex in runtime_engine.executions.values()
+        if ex.intent and ex.intent.name == "worker:rt_bad_job"
+    ]
+    assert len(matches) == 1
+    assert matches[0].status is ExecutionStatus.FAILED

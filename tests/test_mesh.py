@@ -225,6 +225,71 @@ async def test_isolated_mesh_does_not_leak_to_global():
     assert global_received == []  # global handler not called by local mesh
 
 
+# ---------------------------------------------------------------------------
+# Mesh × Runtime integration
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mesh_handler_produces_execution_record():
+    """Every local handler runs through the engine (intent ``mesh:<event>``)."""
+    from voodoo.runtime.engine import engine as runtime_engine
+    from voodoo.runtime.execution import ExecutionStatus
+
+    received = []
+
+    @mesh.on("runtime.fired")
+    async def handler(payload):
+        received.append(payload)
+
+    await mesh.emit("runtime.fired", {"n": 1})
+
+    assert received == [{"n": 1}]
+    matches = [
+        ex
+        for ex in runtime_engine.executions.values()
+        if ex.intent and ex.intent.name == "mesh:runtime.fired"
+    ]
+    assert len(matches) == 1
+    assert matches[0].status is ExecutionStatus.COMPLETED
+    assert matches[0].actor == "mesh"
+
+
+@pytest.mark.asyncio
+async def test_mesh_handler_is_child_of_broadcasting_execution():
+    """A handler fired inside another execution links parent_execution_id."""
+    from voodoo.primitives.intent import Intent
+    from voodoo.runtime import ExecutionContext, ExecutionEngine
+    from voodoo.runtime.execution import ExecutionStatus
+
+    engine = ExecutionEngine()
+    received = []
+
+    @mesh.on("runtime.child")
+    async def handler(payload):
+        received.append(payload)
+
+    async def compute(ctx: ExecutionContext):
+        # broadcasting from inside an execution → handler becomes a child
+        await mesh.emit("runtime.child", {"child": True})
+        return None
+
+    parent_ex = await engine.execute(Intent(name="runtime.parent"), compute)
+
+    assert parent_ex.status is ExecutionStatus.COMPLETED
+    assert received == [{"child": True}]
+
+    child_matches = [
+        ex
+        for ex in engine.executions.values()
+        if ex.intent and ex.intent.name == "mesh:runtime.child"
+    ]
+    assert len(child_matches) == 1
+    child = child_matches[0]
+    assert child.parent_execution_id == parent_ex.id
+    assert child.trace_id == parent_ex.trace_id
+
+
 @pytest.mark.asyncio
 async def test_handler_error_does_not_break_others():
     received = []

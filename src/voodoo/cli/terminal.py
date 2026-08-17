@@ -143,10 +143,15 @@ def next_steps(steps: list[str]) -> None:
 
 
 def json_output(data: Any) -> None:
-    """Print clean JSON for machine-readable output."""
+    """Print clean JSON for machine-readable output (no ANSI/rich styling).
+
+    ``soft_wrap=True`` prevents rich from word-wrapping long values, which
+    would otherwise inject real newlines inside JSON strings and break
+    machine parsing.
+    """
     import json
 
-    console.print(json.dumps(data, indent=2, default=str))
+    console.print(json.dumps(data, indent=2, default=str), highlight=False, soft_wrap=True)
 
 
 def is_json_mode() -> bool:

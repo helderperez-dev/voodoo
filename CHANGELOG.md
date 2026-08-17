@@ -1,5 +1,61 @@
 # Changelog
 
+## 1.2.0 — 2026-08-17
+
+### Unified Runtime Engine — every participant runs through one execution system
+
+Voodoo now has a single `ExecutionEngine` that produces an `Execution` record (with `execution_id`, `trace_id`, `status`, `effects`, `state`, `cost`, `error`, `parent_execution_id`) for every meaningful operation. All nine participant types — HTTP, Agent, Tool, MCP, Worker, Task, Workflow, Human approval, Event handler — are now integrated.
+
+### Human-in-the-Loop (HITL)
+
+- **`ask_human()`** — humans as compute participants. Raises `ApprovalRequired`, execution enters `waiting` state.
+- **`engine.approve(id)` / `engine.deny(id)`** — resume or fail a waiting execution as a child execution (shared trace, `parent_execution_id` link).
+- **`Task(human=True, approval_capability=...)`** — human tasks inside workflows.
+- **`voodoo inspect approvals`** — CLI command to list pending/decided approvals.
+- **`voodoo recover`** — CLI command to reload unfinished executions from the persistence store after a restart.
+
+### Durable Persistence & Recovery
+
+- **`JSONFileExecutionStore`** — append-only JSONL store, corrupt-line tolerant.
+- **`Engine.use_store(store)`** — attach a persistence backend.
+- **Checkpointing** — executions persisted on terminal states + `waiting` (approval) + mid-workflow (per-task in sequential/parallel strategies).
+- **`Engine.recover()`** — reloads unfinished executions (created/planned/authorized/running/waiting) and rebuilds pending approval records.
+
+### Planner (Phase 12)
+
+- **`Planner`** — deterministic capability → compute participant resolution. Registers agents, tools, workers, humans as `ComputeParticipant` with declared capabilities.
+- **`Plan`** — strategy + per-capability step assignment with fallbacks and approval flags.
+- **`voodoo inspect plan <intent> --requires cap1,cap2`** — debug surface showing the planner's decisions.
+
+### Adaptive Runtime (Phase 13)
+
+- **`AdaptiveSupervisor`** — supervisor loop with explicit decisions: `continue | retry | delegate | fallback | wait | request_approval | fail`.
+- **Resource budget steering** — `SupervisorConfig.budget` accumulates per-step cost/tokens/latency and stops when exhausted.
+- **Constraint → retry hook** — `ConstraintEnforcer.retry_hint(intent=...)` checks for `kind="retry"` constraints; the supervisor retries the same step instead of failing.
+- **`WorkflowStrategy.ADAPTIVE`** — delegates to planner + supervisor.
+
+### Integration: all participants through the engine
+
+| Participant | Integration |
+|---|---|
+| HTTP request | `api._run_through_runtime` → `engine.execute` |
+| Agent | capability-gated tool calls, effects lifted to Execution |
+| Tool | `ToolSpec.permissions` enforced |
+| MCP tool | `_run_tool_call` routes through engine (intent `mcp:<tool>`) |
+| Worker | `_run_worker` executes via engine (intent `worker:<name>`) |
+| Event handler | mesh handlers as child executions (intent `mesh:<event>`) |
+
+### CLI
+
+- `voodoo inspect plan <intent> --requires ...` — planner debug surface
+- `voodoo inspect approvals [--pending] [--json]` — human approvals
+- `voodoo recover [--store path] [--json]` — reload unfinished executions
+
+### Tests
+
+- **547 tests passing**, ruff clean.
+- New test files: `test_human.py` (6), `test_persistence.py` (12), `test_http_runtime.py` (5), `test_mcp_runtime.py` (3), `test_planner_adaptive.py` (13), plus additions to `test_mesh.py` (2), `test_workers.py` (2), `test_cli_inspect.py` (6).
+
 ## 1.1.1 — 2026-08-17
 
 ### Default scaffold — Voodoo CSS + folder-based routing

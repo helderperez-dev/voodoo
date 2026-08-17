@@ -60,10 +60,17 @@ async def _run_worker(name: str):
             trace_id = item.get("trace_id") or str(uuid.uuid4())
             token = trace_id_var.set(trace_id)
             try:
-                if inspect.iscoroutinefunction(func):
-                    await func(payload)
-                else:
-                    func(payload)
+                from voodoo.primitives.intent import Intent
+                from voodoo.runtime.engine import engine as runtime_engine
+
+                intent = Intent(name=f"worker:{name}", params={"payload": payload})
+
+                async def compute(ctx, _func=func, _payload=payload):
+                    if inspect.iscoroutinefunction(_func):
+                        return await _func(_payload)
+                    return _func(_payload)
+
+                await runtime_engine.execute(intent, compute, actor=f"worker:{name}")
             except Exception as e:
                 logger.error(f"Error in worker {name}: {e}")
             finally:

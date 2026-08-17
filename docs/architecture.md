@@ -48,6 +48,17 @@ The sophistication is in the model, not in the API surface. Voodoo should feel a
 │  State, Capability, Intent, Effect, Time,    │
 │  Compute, Resource, Constraint               │
 ├─────────────────────────────────────────────┤
+│              Runtime Engine Layer             │
+│  ExecutionEngine (execute, delegate, recover) │
+│  ExecutionContext (trace, capabilities, ...)  │
+│  Execution (status, effects, cost, state)    │
+│  CapabilityResolver (allow/deny/approve)     │
+│  ConstraintEnforcer + ResourceAccountant     │
+│  Planner (capability → compute resolution)   │
+│  AdaptiveSupervisor (retry/fallback/budget)  │
+│  Human (ask_human, approve, deny)            │
+│  Persistence (JSONFileExecutionStore)        │
+├─────────────────────────────────────────────┤
 │                  UI Layer                     │
 │  Components (Div, Card, Button, ...)          │
 │  Reactive State (State, StateRenderer)        │
@@ -116,6 +127,74 @@ Every request gets a `trace_id` (UUID) via `ContextVar`. This ID propagates thro
 - Tool call telemetry
 - Queue items (stored in envelope, restored in worker)
 - Mesh event envelopes (`correlation_id` field)
+
+## Runtime Engine
+
+The `ExecutionEngine` is the unified execution model. Every meaningful operation — HTTP request, agent run, tool call, MCP dispatch, worker job, task, workflow step, human approval, event handler — produces an `Execution` record with:
+
+- `execution_id` / `trace_id` / `parent_execution_id` — full traceability
+- `status` — created → planned → authorized → running → waiting → completed | failed | cancelled | timed_out
+- `effects` — side effects recorded on the execution
+- `state_changes` — observable state transitions
+- `cost` / `duration_seconds` — resource accounting
+- `error` — structured error with execution context
+
+### Intent → Capability → Compute → Effect → State
+
+```python
+from voodoo.runtime import Intent, execute, Task, Workflow
+
+result = await execute(
+    Intent(name="qualify_customer", params={"customer_id": 123}),
+    compute=some_fn,
+)
+```
+
+### Human-in-the-Loop
+
+```python
+from voodoo.runtime import ask_human, ExecutionEngine
+
+engine = ExecutionEngine()
+
+# Raises ApprovalRequired — execution enters "waiting"
+await engine.execute(Intent(name="payout"), ask_human("Approve payout?"))
+
+# Resume or deny
+await engine.approve(execution_id, by="admin")
+await engine.deny(execution_id, by="admin", reason="not now")
+```
+
+### Planner & Adaptive Supervisor
+
+```python
+from voodoo.runtime import Planner, ComputeParticipant, AdaptiveSupervisor
+
+planner = Planner()
+planner.register(ComputeParticipant(name="agent", kind="agent", capabilities=["reason"]))
+planner.register(ComputeParticipant(name="human", kind="human", capabilities=["approve"]))
+
+supervisor = AdaptiveSupervisor(planner)
+run = await supervisor.run(Intent(name="complex").require("reason").require("approve"))
+```
+
+### Durable Recovery
+
+```python
+from voodoo.runtime import ExecutionEngine
+from voodoo.runtime.persistence import JSONFileExecutionStore
+
+engine = ExecutionEngine()
+engine.use_store(JSONFileExecutionStore(".voodoo/executions.jsonl"))
+# After restart:
+recovered = engine.recover()  # reloads unfinished executions
+```
+
+```bash
+voodoo recover --store .voodoo/executions.jsonl
+voodoo inspect approvals --pending
+voodoo inspect plan notify.customer --requires email.send,sms.send
+```
 
 ## Framework boundaries
 

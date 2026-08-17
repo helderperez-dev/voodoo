@@ -114,12 +114,17 @@ class Agent:
         system_prompt: str | None = None,
         registry: ToolRegistry | None = None,
         max_iterations: int = 10,
+        capabilities: list[str] | None = None,
         **provider_kwargs: Any,
     ) -> None:
         self.model = model
         self.system_prompt = system_prompt
         self.registry = registry or default_registry
         self.max_iterations = max_iterations
+        # Capability names granted to this agent. Tools that declare
+        # ``permissions`` require a matching grant (or an active runtime
+        # execution context holding the capability) before they execute.
+        self.capabilities: list[str] = list(capabilities) if capabilities else []
         self.state: AgentState = AgentState.created
         self.provider: LLMProvider = get_provider(model, **provider_kwargs)
 
@@ -171,12 +176,61 @@ class Agent:
         return specs or None
 
     async def _execute_tool_call(self, name: str, arguments: dict[str, Any]) -> Any:
-        """Invoke a registered tool, returning its result or an error dict."""
+        """Invoke a registered tool through the runtime authorization path.
+
+        Flow: Agent → Intent → capability check → Tool → Effect → Mesh.
+        Tools that declare ``permissions`` require a matching capability,
+        granted either to this agent or held by the active runtime
+        :class:`~voodoo.runtime.context.ExecutionContext`. Unauthorized
+        tool calls are denied before any side effect executes.
+        """
+        from voodoo.primitives.effect import Effect
+        from voodoo.runtime.context import current_context
+
+        spec = self.registry.get(name)
+        required = list(spec.permissions) if spec else []
+
+        ctx = current_context()
+        held = (
+            {c.name for c in ctx.capabilities if c.valid} if ctx else set(self.capabilities)
+        )
+        missing = [p for p in required if p not in held]
+        if missing:
+            effect = Effect(
+                name=f"tool.{name}",
+                capability_name=required[0] if required else None,
+            )
+            effect.mark_failed(f"capability denied: {', '.join(missing)}")
+            if ctx is not None:
+                ctx.add_effect(effect)
+            await self._broadcast(
+                "tool.called",
+                {"tool": name, "arguments": arguments, "denied": missing},
+            )
+            return {
+                "error": f"CapabilityDenied: tool '{name}' requires "
+                f"{', '.join(missing)}"
+            }
+
+        effect = Effect(name=f"tool.{name}", capability_name=required[0] if required else None)
+        await self._broadcast("tool.called", {"tool": name, "arguments": arguments})
         try:
             result = await self.registry.call(name, **arguments)
-            return result
         except Exception as e:  # noqa: BLE001 — capture for telemetry
+            effect.mark_failed(str(e))
+            if ctx is not None:
+                ctx.add_effect(effect)
+            await self._broadcast(
+                "tool.completed", {"tool": name, "status": "failed", "error": str(e)}
+            )
             return {"error": str(e)}
+        effect.mark_succeeded(result={"ok": True})
+        if ctx is not None:
+            ctx.add_effect(effect)
+        await self._broadcast(
+            "tool.completed", {"tool": name, "status": "succeeded"}
+        )
+        return result
 
     # -- run ---------------------------------------------------------------
 

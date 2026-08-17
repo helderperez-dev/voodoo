@@ -36,12 +36,17 @@ class MCPServer:
         name: str = "voodoo-mcp",
         version: str = "1.0.0",
         registry: ToolRegistry | None = None,
+        engine: Any | None = None,
     ):
         self.name = name
         self.version = version
         self.tools: dict[str, dict[str, Any]] = {}
         self.resources: dict[str, dict[str, Any]] = {}
         self.registry = registry or default_registry
+        # The runtime engine MCP tool calls flow through. When ``None``
+        # (e.g. tests constructing the server via ``__new__``) the default
+        # runtime engine is used lazily.
+        self.engine = engine
 
         # Sessions map: session_id -> asyncio.Queue
         self.sessions: dict[str, asyncio.Queue] = {}
@@ -180,8 +185,10 @@ class MCPServer:
 
             # Try self.tools first, then the registry.
             func = None
+            spec = None
             if tool_name in self.tools:
                 func = self.tools[tool_name]["func"]
+                spec = self.tools[tool_name].get("spec")
             else:
                 spec = self.registry.get(tool_name)
                 if spec:
@@ -189,10 +196,7 @@ class MCPServer:
 
             if func is not None:
                 try:
-                    if inspect.iscoroutinefunction(func):
-                        result = await func(**args)
-                    else:
-                        result = func(**args)
+                    result = await self._run_tool_call(tool_name, func, spec, args)
                     await queue.put(
                         {
                             "jsonrpc": "2.0",
@@ -294,6 +298,34 @@ class MCPServer:
                 {"jsonrpc": "2.0", "error": {"code": -32603, "message": str(e)}},
                 status_code=500,
             )
+
+    async def _run_tool_call(
+        self, tool_name: str, func: Callable, spec: ToolSpec | None, args: dict[str, Any]
+    ) -> Any:
+        """Execute an MCP tool call through the runtime execution engine.
+
+        The call becomes an :class:`~voodoo.runtime.execution.Execution`
+        (intent ``mcp:<tool>``) with the tool's declared permissions enforced
+        as required capabilities. Unauthorized calls raise ``CapabilityDenied``
+        before the tool executes — same authority model as agents.
+        """
+        from voodoo.primitives.intent import Intent
+        from voodoo.runtime.engine import engine as default_engine
+
+        eng = getattr(self, "engine", None) or default_engine
+        permissions = list(spec.permissions) if spec else []
+
+        async def compute(ctx: Any) -> Any:
+            if inspect.iscoroutinefunction(func):
+                return await func(**args)
+            return func(**args)
+
+        intent = Intent(name=f"mcp:{tool_name}", params=dict(args))
+        for perm in permissions:
+            intent.require(perm)
+
+        execution = await eng.execute(intent, compute, actor="mcp")
+        return execution.result
 
 
 mcp = MCPServer()
