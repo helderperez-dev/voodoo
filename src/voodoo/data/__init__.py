@@ -6,10 +6,13 @@ This package re-exports the names that previously lived in the flat
 
 Storage backend boundary
 -------------------------
-The default backend is SQLite (via :mod:`aiosqlite`).  The functions
-``init_db`` and ``get_db`` together with the module-level ``_db_connection``
-form the seam a future PostgreSQL adapter would replace; everything above
-them (``BaseModel``, ``Model`` and the hooks) is backend-agnostic.
+The default backend is SQLite (via :mod:`aiosqlite`) managed by the
+``VoodooDatabase`` adapter in :mod:`voodoo.storage.database` — it owns
+connection lifecycle, WAL pragmas and the ``schema_migrations`` ledger.
+``init_db`` publishes the raw aiosqlite connection as
+``_db_connection`` / ``get_db()``; everything above it (``BaseModel``,
+``Model`` and the hooks) is backend-agnostic.  A future PostgreSQL
+adapter replaces the adapter, not this package.
 """
 
 from voodoo.data.base import (

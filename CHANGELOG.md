@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.3.0 — 2026-08-17
+
+### Storage Core & Migrations (Sprint 1 — durable runtime foundation)
+
+- **`VoodooDatabase` protocol** (`voodoo.storage.database`) — backend-neutral
+  database capability: connection lifecycle, migration runner, transaction
+  helper, query primitives, and declarative `DatabaseCapabilities`
+  (transactions, migrations, native JSON, concurrent writers). The adapter
+  boundary for the future PostgreSQL backend.
+- **`SQLiteDatabase`** — the default embedded backend, now with WAL
+  journaling on file-backed databases, `busy_timeout`, and an ordered
+  idempotent migration runner tracked in a `schema_migrations` ledger.
+  Migrations support static statements, async functions, and re-runnable
+  idempotent steps; duplicate versions are rejected.
+- **User-model DDL is now migration 0001** (`user_model_baseline`) —
+  registered by `voodoo.data`, re-runs its `CREATE TABLE IF NOT EXISTS` DDL
+  on every `init_db` so late-imported models keep working. Existing
+  databases upgrade in place: the first run records the baseline without
+  touching existing tables.
+- **`voodoo.storage` is now a package** — `StorageManager` moved to
+  `voodoo.storage.manager` with import-compatible re-exports
+  (`from voodoo.storage import storage` unchanged).
+- **Database contract test suite** (`tests/contracts/test_database.py`) —
+  `DatabaseContractTests` portability mixin (ledger tracking, idempotent
+  migrations, write/read roundtrip, transaction commit/rollback, reconnect
+  durability, capability declaration). Every future adapter must pass it
+  unchanged.
+
 ## 1.2.0 — 2026-08-17
 
 ### Unified Runtime Engine — every participant runs through one execution system

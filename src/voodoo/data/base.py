@@ -1,30 +1,52 @@
 import asyncio
-import os
 from collections.abc import Callable
 from typing import Any, get_type_hints
 
-import aiosqlite
+from voodoo.storage.database import Migration, SQLiteDatabase, VoodooDatabase
 
 _db_connection = None
 _triggers: dict[str, dict[str, list[Callable]]] = {}
 _rls_policies: dict[str, Callable] = {}
 
 
+async def _ensure_user_tables(db: VoodooDatabase) -> None:
+    """Create tables for every registered user model (idempotent DDL)."""
+    for model in _models:
+        await model._create_table()
+
+
+# Migration 0001: the user-model baseline. Runs once to enter the ledger,
+# then re-runs its idempotent DDL on every ``init_db`` so models imported
+# after the baseline still get their tables (preserves pre-migration
+# behavior exactly).
+USER_MODEL_BASELINE = Migration(
+    version=1,
+    name="user_model_baseline",
+    fn=_ensure_user_tables,
+    rerun=True,
+)
+
+
 async def init_db(db_path: str = None):
+    """Open (and migrate) the SQLite database backing the data layer.
+
+    The raw :class:`aiosqlite.Connection` remains the value of
+    ``_db_connection`` / ``get_db()`` so all existing callers keep working;
+    schema management now flows through the ``SQLiteDatabase`` adapter and
+    its migration ledger.
+    """
     if db_path is None:
         from voodoo.config import config
 
         db_path = config.db_path
 
-    db_dir = os.path.dirname(db_path)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
-
     global _db_connection
-    _db_connection = await aiosqlite.connect(db_path)
-    _db_connection.row_factory = aiosqlite.Row
-    for model in _models:
-        await model._create_table()
+    database = SQLiteDatabase(db_path, migrations=(USER_MODEL_BASELINE,))
+    await database.connect()
+    _db_connection = database.connection
+    # Migrate after the connection is published so rerunnable migration
+    # functions can use ``get_db()``.
+    await database.migrate()
 
 
 async def get_db():
