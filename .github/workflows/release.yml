@@ -108,18 +108,20 @@ jobs:
         run: |
           FORMULA_CONTENT=$(cat <<EOF
           class Voodoo < Formula
-            include Language::Python::Virtualenv
-
             desc "Fast, Animated, AI-Powered Python Web Framework"
             homepage "https://github.com/helderperez-dev/voodoo"
             url "https://files.pythonhosted.org/packages/source/v/voodoo-framework/voodoo_framework-${VERSION}.tar.gz"
             sha256 "${SHA256}"
             license "MIT"
 
+            depends_on "uv"
             depends_on "python@3.12"
 
             def install
-              virtualenv_install_with_resources
+              # Use uv instead of pip to avoid truststore bug on macOS Tahoe
+              system "uv", "venv", libexec, "--python", "3.12"
+              system "uv", "pip", "install", "--python", libexec/"bin/python", "voodoo-framework"
+              bin.install_symlink libexec/"bin/voodoo"
             end
 
             test do

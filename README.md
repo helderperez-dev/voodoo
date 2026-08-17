@@ -150,6 +150,27 @@ See [docs/primitives.md](docs/primitives.md) for the full model.
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew tap helderperez-dev/voodoo
+brew install voodoo
+```
+
+### uv
+
+```bash
+uv tool install voodoo-framework
+```
+
+### Magic install script
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/helderperez-dev/voodoo/main/install.sh | bash
+```
+
+### pip / pipx
+
 ```bash
 # Core (lean — no AI SDKs)
 pip install voodoo-framework
@@ -159,22 +180,45 @@ pip install "voodoo-framework[ai]"
 
 # With dev tools
 pip install "voodoo-framework[dev]"
+
+# Isolated environment
+pipx install voodoo-framework
 ```
 
-## Installation methods
+### Verify
 
 ```bash
-# Homebrew (macOS/Linux)
-brew install helderperez-dev/voodoo/voodoo
+voodoo version
+```
 
-# uv
-uv tool install voodoo-framework
+## Uninstall
 
-# Magic install script
-curl -fsSL https://raw.githubusercontent.com/helderperez-dev/voodoo/main/install.sh | bash
+### Homebrew
 
-# pipx
-pipx install voodoo-framework
+```bash
+brew uninstall voodoo
+brew untap helderperez-dev/voodoo
+```
+
+### uv
+
+```bash
+uv tool uninstall voodoo-framework
+```
+
+### Magic install script
+
+```bash
+rm -rf ~/.voodoo/venv
+rm -f ~/.local/bin/voodoo
+```
+
+### pip / pipx
+
+```bash
+pip uninstall voodoo-framework
+# or
+pipx uninstall voodoo-framework
 ```
 
 ## Documentation
