@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.1.0 — 2026-08-16
+
+### Scaffold revision — progressive complexity
+
+- **Minimal scaffold**: `voodoo new` now produces only `app/page.py`, `voodoo.toml`, `pyproject.toml`. No `main.py`, `.env`, placeholder directories, or infrastructure files.
+- **`voodoo ai init`**: New CLI command for opt-in AI development context. Replaces automatic AI asset generation during `voodoo new`. Supports `--ide` flag (trae, cursor, windsurf, vscode, all).
+- **`voodoo dev` auto-discovery**: When no `main.py` exists, `voodoo dev` uses `voodoo.core:app` (lazy ASGI app). `main:app` still supported for backward compatibility.
+
+### Lazy runtime
+
+- **Lazy database**: SQLite initializes on first `get_db()` call, not at startup. Default path changed from `.data/voodoo.db` to `.voodoo/state/data.db`.
+- **Lazy storage**: No storage directories created unless storage is used. Conditional `/storage` mount only if directory exists.
+- **Lazy workers**: Worker subsystem starts only if workers are registered.
+- **Conditional `public/` mount**: Static assets mounted only if `public/` directory exists.
+
+### Configuration
+
+- **`voodoo.toml`**: Added TOML config support (preferred for new projects). YAML compatibility preserved. Precedence: `voodoo.toml` > `voodoo.yaml` > env vars > defaults.
+
+### Architectural primitives
+
+- **`voodoo.primitives` package**: Eight fundamental computational primitives — State, Capability, Intent, Effect, TimeSpec, ComputeSpec, Resource, Constraint.
+- **Execution model**: STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE, with TIME + CONSTRAINTS surrounding the lifecycle and RESOURCE determining execution.
+- **AI as Compute**: AI is one class of Compute, not a separate subsystem. `ComputeSpec.reasoning(provider="openai", model="gpt-4o")`.
+- **Capability-based security**: Explicit, composable, revocable, delegatable permissions. `Capability.timed("payment.execute", expires_in=600)`.
+- **59 new tests** for all primitives and their composition.
+
+### CLI
+
+- `voodoo new` — minimal scaffold (no `--ide` flag, no AI sync)
+- `voodoo ai init [--ide <ide>]` — opt-in AI context
+- `voodoo dev` — auto-discovers app
+- `voodoo routes` — auto-discovers app
+- `voodoo doctor` — updated AI kit hint to `voodoo ai init`
+
+### Backward compatibility
+
+- Existing projects with `main.py`, `app/pages/`, `.data/`, `storage/`, `voodoo.yaml` continue to work.
+- `create_app()` and `App` preserved.
+- All existing features (agents, MCP, mesh, workers, auth, security, SEO, telemetry, components, state, CLI generation) preserved.
+
+---
+
 ## 1.0.0 — 2026-08-15
 
 First stable release of Voodoo — the AI-native application framework for Python.

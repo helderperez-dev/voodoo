@@ -4,6 +4,10 @@
 
 Build reactive UIs, APIs, agents, background workers, realtime systems, MCP tools, and data-driven applications in one Python runtime. Built for the future of adaptive applications.
 
+> Voodoo favors composition over configuration, Python over DSLs, adapters over
+> lock-in, events over tightly coupled systems, and explicit capabilities over
+> unrestricted AI autonomy.
+
 ## Quick start
 
 ```bash
@@ -14,6 +18,10 @@ voodoo dev
 ```
 
 Open `http://localhost:8000` — that's it. No npm, no bundler, no config files.
+
+The scaffold produces only `app/page.py`, `voodoo.toml`, and `pyproject.toml` — nothing else. No `main.py`, no `.env`, no placeholder directories.
+
+Want AI development context in your editor? Run `voodoo ai init` (opt-in, supports `--ide trae|cursor|windsurf|vscode|all`).
 
 ## The AI SaaS app
 
@@ -113,7 +121,19 @@ if __name__ == "__main__":
 | **Voodoo Mesh** | Unified event layer connecting UI, workers, agents, and applications |
 | **One tool, many consumers** | A single `@tool` definition serves Python calls, agents, MCP, and mesh |
 | **Observability everywhere** | Correlation IDs and telemetry built into every subsystem |
-| **Zero-config runtime** | `voodoo new` → `voodoo dev` → working app. No build step, no config |
+| **Zero-config runtime** | `voodoo new` → `voodoo dev` → working app. No build step. Add `voodoo.toml` when you need configuration |
+
+## Architectural Primitives
+
+Voodoo is built on eight fundamental computational primitives:
+
+    State · Capability · Intent · Effect · Time · Compute · Resource · Constraint
+
+```python
+from voodoo.primitives import State, Capability, Intent, Effect
+```
+
+See [docs/primitives.md](docs/primitives.md) for the full model.
 
 ## Features
 
@@ -175,6 +195,7 @@ pipx install voodoo-framework
 - [Telemetry](docs/telemetry.md)
 - [Deployment](docs/deployment.md)
 - [Architecture](docs/architecture.md)
+- [Architectural Primitives](docs/primitives.md)
 
 ## Examples
 

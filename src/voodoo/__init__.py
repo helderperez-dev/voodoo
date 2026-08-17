@@ -3,6 +3,15 @@
 The public API is intentionally small (~40 names). Everything else lives in
 its defining submodule (e.g. ``voodoo.auth``, ``voodoo.seo``) and legacy
 top-level imports resolve through a deprecation shim (PEP 562).
+
+Architectural primitives — the fundamental computational model from which
+all higher-level capabilities emerge — live in ``voodoo.primitives``:
+
+    from voodoo.primitives import State, Capability, Intent, Effect
+    from voodoo.primitives import TimeSpec, ComputeSpec, Resource, Constraint
+
+    STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE
+    TIME + CONSTRAINTS surround the entire lifecycle.
 """
 
 import importlib
@@ -67,7 +76,7 @@ from .ui.styles import (
 from .ui.styles.theme import Theme, ThemeColors, create_theme
 from .workers import task
 
-__version__ = "1.0.23"
+__version__ = "1.0.0"
 
 __all__ = [
     # Core runtime

@@ -64,9 +64,7 @@ async def test_db():
     await voodoo.data.init_db(":memory:")
     db = await voodoo.data.get_db()
     yield db
-    if voodoo.data._db_connection:
-        await voodoo.data._db_connection.close()
-        voodoo.data._db_connection = None
+    await voodoo.data.close_db()
 
 
 # ---------------------------------------------------------------------------

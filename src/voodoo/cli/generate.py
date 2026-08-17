@@ -4,11 +4,9 @@ import time
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-console = Console()
+from voodoo.cli import terminal
 
 
 def generate(
@@ -29,22 +27,29 @@ def generate(
     )
 
     if not api_key:
-        console.print(
-            "[bold red]Error:[/bold red] Neither OPENROUTER_API_KEY nor OPENAI_API_KEY is set in the environment."
+        terminal.error(
+            "Neither OPENROUTER_API_KEY nor OPENAI_API_KEY is set",
+            hint="set an API key in your environment",
         )
         raise typer.Exit(1)
 
     client = AsyncOpenAI(api_key=api_key, base_url=base_url)
     model = "openai/gpt-4o" if base_url else "gpt-4o"
 
+    terminal.wordmark()
+    terminal.blank()
+    terminal.muted(f"generating {component}")
+    terminal.muted(description)
+    terminal.blank()
+
     async def _generate():
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
+            SpinnerColumn(style="white"),
+            TextColumn("[dim]{task.description}[/]"),
             transient=True,
         ) as progress:
             progress.add_task(
-                description=f"AI is thinking about your [bold magenta]{component}[/bold magenta]...",
+                description="thinking...",
                 total=None,
             )
 
@@ -65,7 +70,6 @@ def generate(
 
                 raw_content = response.choices[0].message.content
                 code = (raw_content or "").strip()
-                # Clean up if the model accidentally included markdown blocks
                 if code.startswith("```python"):
                     code = code[9:]
                 if code.startswith("```"):
@@ -76,18 +80,14 @@ def generate(
                 return code.strip()
 
             except Exception as e:
-                console.print(f"[bold red]Failed to generate code:[/bold red] {e}")
+                terminal.error(f"Failed to generate code: {e}")
                 raise typer.Exit(1) from None
 
-    # Run async function
     code = asyncio.run(_generate())
 
-    # Save the file
     filename = f"{component}_{int(time.time())}.py"
     Path(filename).write_text(code + "\n")
 
-    console.print(f"[bold green]✓ Generated {component} successfully![/bold green]")
-    console.print(f"Saved to: [bold cyan]{filename}[/bold cyan]")
-
-    # Show preview
-    console.print(Panel(code, title=f"Preview: {filename}", border_style="green"))
+    terminal.success("ready")
+    terminal.muted(f"saved to {filename}")
+    terminal.blank()

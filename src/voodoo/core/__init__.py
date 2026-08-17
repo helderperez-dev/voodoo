@@ -5,7 +5,7 @@ compatibility; their implementations live in ``voodoo.ui`` and
 ``voodoo.routing`` respectively.
 """
 
-from voodoo.core.app import App, create_app
+from voodoo.core.app import App, app, create_app
 from voodoo.core.errors import (
     AgentError,
     AuthError,
@@ -34,6 +34,7 @@ from voodoo.ui.state import State, StateRenderer, state, state_renderer
 
 __all__ = [
     "App",
+    "app",
     "create_app",
     "WebSocketManager",
     "event",

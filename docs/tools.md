@@ -20,7 +20,7 @@ async def search_leads(query: str) -> list[dict]:
 results = await search_leads("Ada")
 
 # Also available to agents and MCP
-from voodoo.tools.registry import default_registry
+from voodoo.ai.tools import default_registry
 
 spec = default_registry.get("search_leads")
 ```
@@ -46,7 +46,7 @@ async def get_lead(lead_id: int) -> dict: ...
 ### Direct registry call
 
 ```python
-from voodoo.tools.registry import default_registry
+from voodoo.ai.tools import default_registry
 
 result = await default_registry.call("search_leads", query="test")
 ```
@@ -54,7 +54,7 @@ result = await default_registry.call("search_leads", query="test")
 ### Custom registry
 
 ```python
-from voodoo.tools.registry import ToolRegistry
+from voodoo.ai.tools import ToolRegistry
 
 registry = ToolRegistry()
 spec = build_spec(my_function)

@@ -53,7 +53,7 @@ async def reset(element_id, value):
 ### Registering events programmatically
 
 ```python
-from voodoo.core.events import register_event
+from voodoo.ui.events import register_event
 
 register_event("custom_event", my_handler)
 ```
@@ -63,7 +63,7 @@ register_event("custom_event", my_handler)
 The `WebSocketManager` handles connections and broadcasts:
 
 ```python
-from voodoo.core.events import ws_manager
+from voodoo.ui.events import ws_manager
 
 await ws_manager.broadcast_patch("element-id", "<div>New content</div>")
 await ws_manager.broadcast_append("list-id", "<li>New item</li>")

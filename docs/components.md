@@ -87,11 +87,15 @@ Text("Danger!", tone="danger")
 
 ### Style adapters
 
-Voodoo supports pluggable style adapters. TailwindCSS ships out of the box:
+Voodoo supports pluggable style adapters. `VoodooCSSAdapter` is the default CSS adapter; `TailwindAdapter` ships out of the box as an alternative:
 
 ```python
-from voodoo import set_style_adapter, TailwindAdapter
+from voodoo import set_style_adapter, VoodooCSSAdapter, TailwindAdapter
 
+# Default
+set_style_adapter(VoodooCSSAdapter())
+
+# Or use Tailwind
 set_style_adapter(TailwindAdapter())
 ```
 

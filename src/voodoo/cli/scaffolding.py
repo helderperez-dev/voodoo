@@ -56,9 +56,9 @@ def _build_workspace_rules() -> str:
         - Use `voodoo.components` instead of raw HTML templates.
         - Prefer `async def` for handlers, I/O, and database work.
         - Use Voodoo's `A` component plus `voodoo.navigate()` for internal links.
-        - Keep app code in `app/` and data in `.data/`.
-        - Use `aiosqlite` with `.data/voodoo.db` by default.
-        - Preserve the large-cookie websocket settings in `main.py` and `voodoo dev`.
+        - Keep app code in `app/` and data in `.voodoo/state/`.
+        - Use `aiosqlite` with `.voodoo/state/data.db` by default.
+        - Preserve the large-cookie websocket settings in `voodoo dev`.
 
         If Trae skills are available, use `.trae/skills/voodoo-builder/SKILL.md`.
         """
@@ -114,8 +114,8 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Use Tailwind via `className`.
             - Use `A(..., href=..., onClick="voodoo.navigate('...')")` for internal links.
             - Keep route files inside `app/`.
-            - Keep persistent data inside `.data/`.
-            - Use `aiosqlite` and `.data/voodoo.db` by default.
+            - Keep persistent data inside `.voodoo/state/`.
+            - Use `aiosqlite` and `.voodoo/state/data.db` by default.
             - Preserve `WEBSOCKETS_MAX_LINE_LENGTH="8388608"` and `http="h11"` when working with websocket-heavy apps.
             """
         ).strip()
@@ -128,7 +128,7 @@ def _fallback_ai_assets() -> dict[str, str]:
 
             Main conventions:
             - `app/` contains routes and app-facing code.
-            - `main.py` boots the app with `create_app()`.
+            - `voodoo dev` boots the app (`main.py` is optional).
             - `voodoo.components` is the primary UI surface.
             - Internal framework API routes remain mounted automatically.
             """
@@ -187,14 +187,14 @@ def _fallback_ai_assets() -> dict[str, str]:
 
             Default stack:
             - `aiosqlite`
-            - database path: `.data/voodoo.db`
+            - database path: `.voodoo/state/data.db`
 
             Example:
 
             ```python
             import aiosqlite
 
-            async with aiosqlite.connect(".data/voodoo.db") as db:
+            async with aiosqlite.connect(".voodoo/state/data.db") as db:
                 await db.execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, name TEXT)")
                 await db.commit()
             ```
@@ -217,7 +217,7 @@ def _fallback_ai_assets() -> dict[str, str]:
 
             ## Add Data
             - Use `aiosqlite`
-            - Store the database in `.data/voodoo.db`
+            - Store the database in `.voodoo/state/data.db`
             - Keep queries async
 
             ## Debug Navigation
@@ -282,7 +282,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Build UI with `voodoo.components`
             - Prefer `async def`
             - Use `A` plus `voodoo.navigate()` for internal links
-            - Keep data in `.data/`
+            - Keep data in `.voodoo/state/`
             - Use `aiosqlite` by default
             - Preserve websocket large-cookie configuration
             """

@@ -59,7 +59,7 @@ count.set(20)  # no output
 The `StateRenderer` binds state cells to page functions and re-renders on change:
 
 ```python
-from voodoo.core.state import StateRenderer
+from voodoo.ui.state import StateRenderer
 
 renderer = StateRenderer()
 renderer.bind("element-id", my_page_func, [count])

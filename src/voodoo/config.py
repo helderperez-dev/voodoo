@@ -43,7 +43,7 @@ def _resolve_db_path() -> str:
             "Use a sqlite:///... URL or VOODOO_DB_PATH. Additional backends "
             "arrive as optional extras (e.g. voodoo[postgres]) in a later release."
         )
-    return ".data/voodoo.db"
+    return ".voodoo/state/data.db"
 
 
 class SEOConfig(BaseModel):
@@ -152,39 +152,58 @@ def load_yaml_config(file_path: str = "voodoo.yaml") -> dict[str, Any]:
     return {}
 
 
-def get_config() -> VoodooConfig:
-    """Gets the merged configuration from env vars and YAML."""
-    yaml_data = load_yaml_config()
+def load_toml_config(file_path: str = "voodoo.toml") -> dict[str, Any]:
+    """Loads configuration from a TOML file if it exists."""
+    if os.path.exists(file_path):
+        try:
+            import tomllib
 
-    # We allow yaml to override or extend defaults
+            with open(file_path, "rb") as f:
+                return tomllib.load(f)
+        except Exception as e:
+            print(f"Error parsing {file_path}: {e}")
+    return {}
+
+
+def get_config() -> VoodooConfig:
+    """Gets the merged configuration from env vars and config file.
+
+    Precedence: voodoo.toml > voodoo.yaml > environment variables > defaults.
+    """
+    # Prefer voodoo.toml; fall back to voodoo.yaml for compatibility
+    file_data = load_toml_config()
+    if not file_data:
+        file_data = load_yaml_config()
+
+    # We allow config file to override or extend defaults
     # but environment variables usually take precedence in production.
     # For this simple implementation, we'll merge them.
     config_args = {}
 
-    # Add mapped YAML fields if they match our known fields
-    if "env" in yaml_data:
-        config_args["env"] = yaml_data["env"]
-    if "db_path" in yaml_data:
-        config_args["db_path"] = yaml_data["db_path"]
-    if "storage_dir" in yaml_data:
-        config_args["storage_dir"] = yaml_data["storage_dir"]
-    if "port" in yaml_data:
-        config_args["port"] = yaml_data["port"]
-    if "host" in yaml_data:
-        config_args["host"] = yaml_data["host"]
+    # Add mapped file fields if they match our known fields
+    if "env" in file_data:
+        config_args["env"] = file_data["env"]
+    if "db_path" in file_data:
+        config_args["db_path"] = file_data["db_path"]
+    if "storage_dir" in file_data:
+        config_args["storage_dir"] = file_data["storage_dir"]
+    if "port" in file_data:
+        config_args["port"] = file_data["port"]
+    if "host" in file_data:
+        config_args["host"] = file_data["host"]
 
     # Load sub-configurations
-    if "seo" in yaml_data and isinstance(yaml_data["seo"], dict):
-        config_args["seo"] = SEOConfig(**yaml_data["seo"])
-    if "auth" in yaml_data and isinstance(yaml_data["auth"], dict):
-        config_args["auth"] = AuthConfig(**yaml_data["auth"])
-    if "security" in yaml_data and isinstance(yaml_data["security"], dict):
-        config_args["security"] = SecurityConfig(**yaml_data["security"])
+    if "seo" in file_data and isinstance(file_data["seo"], dict):
+        config_args["seo"] = SEOConfig(**file_data["seo"])
+    if "auth" in file_data and isinstance(file_data["auth"], dict):
+        config_args["auth"] = AuthConfig(**file_data["auth"])
+    if "security" in file_data and isinstance(file_data["security"], dict):
+        config_args["security"] = SecurityConfig(**file_data["security"])
 
     # Store any extra custom configuration
     config_args["extra"] = {
         k: v
-        for k, v in yaml_data.items()
+        for k, v in file_data.items()
         if k not in config_args and k not in ("seo", "auth", "security")
     }
 

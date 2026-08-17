@@ -33,6 +33,21 @@ async def get_db():
     return _db_connection
 
 
+async def close_db():
+    """Close the database connection if one is open.
+
+    aiosqlite runs each connection on a dedicated non-daemon thread; an
+    unclosed connection would keep the interpreter alive at shutdown.
+    No-op when no connection is open (keeps startup lazy).
+    """
+    global _db_connection
+    if _db_connection is not None:
+        try:
+            await _db_connection.close()
+        finally:
+            _db_connection = None
+
+
 def _get_table_name(cls_or_obj: Any) -> str:
     cls = cls_or_obj if isinstance(cls_or_obj, type) else cls_or_obj.__class__
     if hasattr(cls, "__tablename__") and cls.__tablename__:

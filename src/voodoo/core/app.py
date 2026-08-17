@@ -149,21 +149,26 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         cwd = os.getcwd()
     except FileNotFoundError:
         cwd = "."
-    base_storage_dir = os.path.join(cwd, config.storage_dir)
-    public_storage_dir = os.path.join(base_storage_dir, "public")
-    os.makedirs(public_storage_dir, exist_ok=True)
-
     from voodoo.mesh import mesh
 
     routes: list[BaseRoute] = [
         WebSocketRoute("/_voodoo_ws", websocket_endpoint),
         WebSocketRoute("/voodoo/mesh/ws", mesh._handle_websocket),
-        Mount(
-            "/storage/public",
-            app=StaticFiles(directory=public_storage_dir),
-            name="storage_public",
-        ),
     ]
+
+    # Mount public/ static assets only if the directory exists
+    public_dir = os.path.join(cwd, "public")
+    if os.path.isdir(public_dir):
+        routes.append(
+            Mount("/public", app=StaticFiles(directory=public_dir), name="public")
+        )
+
+    # Mount storage/ for local file serving only if the directory exists
+    storage_dir = os.path.join(cwd, config.storage_dir)
+    if os.path.isdir(storage_dir):
+        routes.append(
+            Mount("/storage", app=StaticFiles(directory=storage_dir), name="storage")
+        )
 
     # --- Decorator-registered pages (@page) take precedence over convention ---
     routes.extend(page_registry.routes)
@@ -224,7 +229,6 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     routes.extend(voodoo_api.routes)
 
     from voodoo.auth import AuthMiddleware
-    from voodoo.data import init_db
     from voodoo.i18n import I18nMiddleware
     from voodoo.security import (
         CORSMiddleware,
@@ -237,13 +241,22 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        # Startup
-        await init_db()
-        worker_task = asyncio.create_task(start_workers())
+        # Startup - DB and workers are lazily initialized
+        worker_task = None
+        from voodoo.workers.queue import _workers
+
+        if _workers:
+            worker_task = asyncio.create_task(start_workers())
         yield
         # Shutdown
         await stop_workers()
-        worker_task.cancel()
+        if worker_task:
+            worker_task.cancel()
+        # Close the database connection if one was lazily opened
+        # (no-op when the app never touched the data layer)
+        from voodoo.data import close_db
+
+        await close_db()
 
     middleware = [
         Middleware(SecurityHeadersMiddleware),
@@ -314,6 +327,16 @@ def _scan_page_convention(app_dir: str, routes: list[BaseRoute]) -> None:
                 routes.append(route)
 
 
+# Module-level ASGI app for `voodoo dev` when no main.py exists.
+# The underlying Starlette app is built lazily on first request.
+app = App()
+
+
+# Module-level ASGI app for `voodoo dev` when no main.py exists.
+# The underlying Starlette app is built lazily on first request.
+app = App()
+
+
 def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
     """Scan ``app_dir/pages/`` for file-per-page routing.
 
@@ -348,3 +371,8 @@ def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
             route = _load_page_file(filepath, route_path, module_name)
             if route:
                 routes.append(route)
+
+
+# Module-level ASGI app for `voodoo dev` when no main.py exists.
+# The underlying Starlette app is built lazily on first request.
+app = App()

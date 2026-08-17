@@ -1,18 +1,17 @@
 import platform
 
-from rich.console import Console
-
 from voodoo import __version__
-
-console = Console()
+from voodoo.cli import terminal
 
 
 def version():
     """
     Show Voodoo Framework version and environment info.
     """
-    console.print(f"[bold magenta]🔮 Voodoo Framework[/bold magenta] v{__version__}")
-    console.print(
-        f"  • Python: [cyan]{platform.python_version()}[/cyan] ({platform.python_implementation()})"
+    terminal.wordmark(__version__)
+    terminal.blank()
+    terminal.label_value(
+        "python", f"{platform.python_version()} ({platform.python_implementation()})"
     )
-    console.print(f"  • Platform: [dim]{platform.platform()}[/dim]")
+    terminal.label_value("platform", platform.platform())
+    terminal.blank()

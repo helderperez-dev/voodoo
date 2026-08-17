@@ -9,14 +9,6 @@ import voodoo.queue
 from voodoo.core import create_app
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for each test case."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
 @pytest.fixture(autouse=True)
 def _clean_page_registry():
     """Isolate the global @page registry between tests."""
@@ -25,6 +17,28 @@ def _clean_page_registry():
     page_registry.clear()
     yield
     page_registry.clear()
+
+
+@pytest.fixture(autouse=True)
+def _close_db_after_test():
+    """Close any lazily-opened database connection after each test.
+
+    aiosqlite runs each connection on a dedicated non-daemon thread; a
+    connection left open would keep the pytest process alive at
+    interpreter shutdown. Reads of ``voodoo.data._db_connection`` forward
+    to ``voodoo.data.base`` via PEP 562 — never *assign* through the
+    package, that would create a stale shadow global (there is no module
+    ``__setattr__`` in Python).
+    """
+    yield
+    from voodoo.data import base
+
+    if base._db_connection is not None:
+        try:
+            asyncio.run(voodoo.data.close_db())
+        except Exception:
+            # Best-effort cleanup; never fail a test here
+            base._db_connection = None
 
 
 @pytest.fixture
@@ -53,6 +67,4 @@ async def test_db():
     await voodoo.data.init_db(":memory:")
     db = await voodoo.data.get_db()
     yield db
-    if voodoo.data._db_connection:
-        await voodoo.data._db_connection.close()
-        voodoo.data._db_connection = None
+    await voodoo.data.close_db()

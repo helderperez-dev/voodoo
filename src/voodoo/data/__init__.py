@@ -16,6 +16,7 @@ from voodoo.data.base import (
     BaseModel,
     ModelMeta,
     _get_table_name,
+    close_db,
     get_db,
     init_db,
     on_insert,
@@ -30,6 +31,7 @@ __all__ = [
     "Model",
     "ModelMeta",
     # Helpers
+    "close_db",
     "get_db",
     "init_db",
     "on_insert",
@@ -44,10 +46,14 @@ __all__ = [
 ]
 
 # Mutable module-level globals that live in ``base`` and are mutated in place
-# (e.g. ``init_db`` reassigns ``_db_connection``).  We forward attribute access
-# on this package back to ``base`` so callers using ``voodoo.data._db_connection``
-# always see — and can reset — the *live* value rather than a stale import-time
-# copy.  PEP 562 supplies the module-level ``__getattr__`` / ``__setattr__`` hooks.
+# (e.g. ``init_db`` reassigns ``_db_connection``).  Attribute *reads* on this
+# package forward to ``base`` via the PEP 562 module ``__getattr__`` hook, so
+# callers using ``voodoo.data._db_connection`` always see the *live* value.
+#
+# NOTE: Python has no module-level ``__setattr__`` — assigning
+# ``voodoo.data._db_connection = x`` would create a stale shadow global in
+# this package's namespace.  Always assign through ``voodoo.data.base``
+# (or use ``init_db`` / ``close_db``).
 _FORWARDED_GLOBALS = frozenset(
     {"_db_connection", "_models", "_triggers", "_rls_policies"}
 )
@@ -59,12 +65,3 @@ def __getattr__(name: str):
 
         return getattr(base, name)
     raise AttributeError(f"module 'voodoo.data' has no attribute {name!r}")
-
-
-def __setattr__(name: str, value):
-    if name in _FORWARDED_GLOBALS:
-        from voodoo.data import base
-
-        setattr(base, name, value)
-    else:
-        globals()[name] = value

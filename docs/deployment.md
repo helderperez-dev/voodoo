@@ -11,6 +11,7 @@ Voodoo runs on standard ASGI. The built-in dev server (`voodoo dev`) uses uvicor
 voodoo dev
 
 # Production
+# `voodoo dev` auto-discovers the app; for manual ASGI deployment use:
 uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
@@ -19,6 +20,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 ### With gunicorn
 
 ```bash
+# `voodoo dev` auto-discovers the app; for gunicorn use:
 gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
 ```
 
@@ -40,6 +42,7 @@ WORKDIR /app
 COPY . .
 RUN pip install voodoo-framework
 EXPOSE 8000
+# `voodoo dev` auto-discovers the app; for Docker use:
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
 ```
 

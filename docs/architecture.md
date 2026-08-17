@@ -6,43 +6,75 @@ Voodoo is an AI-native application framework for Python. It combines reactive UI
 
 ## Design principles
 
-1. **AI-native by design** — Agents, tools, and MCP are first-class primitives, not add-ons.
-2. **Agents as application primitives** — `Agent()` sits next to `Button()` and `Card()`.
-3. **One tool, many consumers** — `@tool` serves Python, agents, MCP, and mesh simultaneously.
-4. **Observability everywhere** — Correlation IDs + telemetry as the sensory system.
-5. **Zero-config runtime** — `voodoo new` → `voodoo dev` → working app.
+1. **Progressive complexity** — Start with the smallest executable application. Add capabilities when needed. Voodoo manages implementation details.
+2. **Minimal scaffold** — `voodoo new` produces only `app/page.py`. No empty directories, no placeholder files, no infrastructure boilerplate.
+3. **Lazy capabilities** — Database, storage, and workers initialize only when actually used. A project that doesn't use persistence doesn't create a database.
+4. **AI as Compute** — AI is not a separate subsystem. It is one class of Compute within the architectural primitives model.
+5. **Capability-based security** — Explicit, composable, revocable permissions rather than implicit role-based access.
+6. **Observability everywhere** — Correlation IDs + telemetry as the sensory system.
+7. **Zero-config runtime** — `voodoo new` → `voodoo dev` → working app.
+
+## Architectural primitives
+
+Voodoo is built on eight fundamental computational primitives that remain valid regardless of how computation evolves:
+
+    State       — durable system truth
+    Capability  — explicit permission to act
+    Intent      — what the system is trying to accomplish
+    Effect      — a change caused outside pure computation
+    Time        — first-class temporal concept
+    Compute     — the act of performing computation
+    Resource    — something consumed or depended upon
+    Constraint  — what the system must or must not do
+
+They form a coherent execution model:
+
+    STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE
+    TIME + CONSTRAINTS surround the entire lifecycle.
+    RESOURCE determines how execution should be performed.
+
+```python
+from voodoo.primitives import State, Capability, Intent, Effect
+from voodoo.primitives import TimeSpec, ComputeSpec, Resource, Constraint
+```
+
+The sophistication is in the model, not in the API surface. Voodoo should feel almost boring at first — that is intentional.
 
 ## System layers
 
 ```
 ┌─────────────────────────────────────────────┐
-│                  UI Layer                    │
-│  Components (Div, Card, Button, ...)         │
-│  Reactive State (State, StateRenderer)       │
-│  WebSocket Transport (ws_manager, events)    │
+│              Primitives Layer                 │
+│  State, Capability, Intent, Effect, Time,    │
+│  Compute, Resource, Constraint               │
 ├─────────────────────────────────────────────┤
-│                AI Layer                      │
-│  Agent (run, stream, tool calling)           │
-│  LLM Providers (OpenAI, Anthropic, Mock)     │
-│  Tool Registry (@tool, ToolSpec)            │
+│                  UI Layer                     │
+│  Components (Div, Card, Button, ...)          │
+│  Reactive State (State, StateRenderer)        │
+│  WebSocket Transport (ws_manager, events)     │
 ├─────────────────────────────────────────────┤
-│              Realtime Layer                  │
-│  Voodoo Mesh (events, expose, WS nodes)      │
+│                  AI Layer                      │
+│  Agent (run, stream, tool calling)            │
+│  LLM Providers (OpenAI, Anthropic, Mock)      │
+│  Tool Registry (@tool, ToolSpec)              │
+├─────────────────────────────────────────────┤
+│               Realtime Layer                   │
+│  Voodoo Mesh (events, expose, WS nodes)       │
 │  MCP Server (SSE, tools/list, tools/call)     │
 ├─────────────────────────────────────────────┤
-│              Worker Layer                     │
-│  @task (retries, timeout, telemetry)         │
-│  Async Queue (enqueue, start_workers)        │
+│               Worker Layer                    │
+│  @task (retries, timeout, telemetry)          │
+│  Async Queue (enqueue, start_workers)         │
 ├─────────────────────────────────────────────┤
-│               Data Layer                     │
-│  Model / BaseModel (async CRUD)              │
-│  SQLite (aiosqlite) with RLS policies        │
+│                Data Layer                      │
+│  Model / BaseModel (async CRUD)               │
+│  SQLite (aiosqlite) with RLS policies         │
 ├─────────────────────────────────────────────┤
-│             Infrastructure                    │
-│  Auth (JWT, API keys, RBAC)                  │
-│  Security (CORS, CSRF, rate limit, headers)  │
-│  Telemetry (trace_id, metrics, spans)         │
-│  Config (env vars, YAML)                    │
+│              Infrastructure                    │
+│  Auth (JWT, API keys, RBAC)                   │
+│  Security (CORS, CSRF, rate limit, headers)   │
+│  Telemetry (trace_id, metrics, spans)          │
+│  Config (voodoo.toml, env vars)               │
 └─────────────────────────────────────────────┘
 ```
 
@@ -85,9 +117,29 @@ Every request gets a `trace_id` (UUID) via `ContextVar`. This ID propagates thro
 - Queue items (stored in envelope, restored in worker)
 - Mesh event envelopes (`correlation_id` field)
 
+## Framework boundaries
+
+The boundary between core and ecosystem is explicit. This keeps the framework small.
+
+**Voodoo core** — runtime, routing, components, state, events, mesh, data, auth, tools, agent abstraction, MCP, telemetry, CLI.
+
+**Voodoo ecosystem** (adapters and integrations) — OpenAI/Anthropic adapters, Postgres, Redis, Stripe, GitHub, Cloudflare, AWS, etc.
+
+**The adapter philosophy** — Voodoo does not try to own every technology. A developer must eventually be able to replace Tailwind without replacing Voodoo. The same applies to LLM providers, databases, queues, auth providers, storage, and deployment. Built on Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python async — Voodoo must remain interoperable with FastAPI, SQLAlchemy, httpx, pytest, and asyncio. It must not become an island.
+
+**The "do not build" list** — no custom programming language, no JSX equivalent, no full React clone, no custom CSS/JS framework, no distributed database, no Kubernetes orchestration, no Celery replacement, no fully autonomous coding agent, no automatic production deployments, no self-modifying production code, no autonomous financial transactions, no vector database abstraction, no custom LLM training infrastructure.
+
+**Security threat model** — the AI trust chain is Browser → Application → Agent → Tool → Internet → External system. Modeled threats: prompt injection, tool injection, SSRF, credential leakage, malicious MCP servers, unauthorized mesh events, agent privilege escalation, arbitrary code execution, malicious generated code. The `Capability` primitive is the structural answer — agents never receive ambient authority, only explicit, revocable, time-limited capabilities.
+
 ## Key design decisions
 
-- **Starlette as ASGI base** — not reinventing the wheel; Starlette handles routing, middleware, responses.
-- **SQLite default** — zero-config persistence; PostgreSQL is a future optional extra.
+- **Minimal scaffold** — `voodoo new` creates only `app/page.py`, `voodoo.toml`, `pyproject.toml`. No `main.py`, no `.env`, no placeholder directories.
+- **`voodoo dev` is canonical** — Auto-discovers the app (`main:app` if `main.py` exists, otherwise `voodoo.core:app`). No manual ASGI setup needed.
+- **Lazy database** — SQLite initializes on first `get_db()` call, not at startup. Default path: `.voodoo/state/data.db`.
+- **Lazy storage** — No storage directories created unless storage is used.
+- **Lazy workers** — Worker subsystem starts only if workers are registered.
+- **`voodoo.toml` preferred** — TOML config preferred for new projects; YAML compatibility preserved.
+- **`voodoo ai init`** — AI development context is opt-in, not generated during `voodoo new`.
+- **Starlette as ASGI base** — not reinventing the wheel.
 - **Single-process queue** — asyncio.Queue today; distributed backend (Redis) is a seam.
 - **Lazy provider imports** — `voodoo[ai]` installs SDKs, but they're imported only when a provider is used.

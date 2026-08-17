@@ -63,6 +63,10 @@ async def settings(user):
 
 ### File-based routing
 
+The default scaffold produces a single `app/page.py` file using the `@page` decorator (see Minimal example above). `voodoo dev` auto-discovers the app without requiring a `main.py` entrypoint.
+
+For projects that prefer convention over decorators, the `app/pages/` directory is still supported for backward compatibility. When present, each file maps to a route based on its path:
+
 ```
 app/
   pages/
@@ -82,6 +86,8 @@ from voodoo import Text
 def page():
     return Text("About us")
 ```
+
+> **Note:** `app/page.py` (singular) with `@page` decorators is the default convention. `app/pages/` (plural) is supported but not the scaffold default.
 
 ## Advanced
 
@@ -106,4 +112,4 @@ If a handler returns a Starlette `Response`, it is passed through untouched.
 - `page(path)` — decorator registering a GET HTML route.
 - `page_registry` — global registry of `@page` routes.
 - `call_page(func, request)` — invoke a page handler (used internally).
-- File-based: `app/pages/` directory with `page()` function in each file.
+- File-based: `app/pages/` directory with `page()` function in each file (supported for backward compatibility; the default scaffold uses `app/page.py` with `@page` decorators).

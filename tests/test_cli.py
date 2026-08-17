@@ -4,7 +4,8 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from voodoo.cli import _detect_ide, _sync_ai_assets, app
+from voodoo.cli import app
+from voodoo.cli.scaffolding import _detect_ide, _sync_ai_assets
 
 runner = CliRunner()
 
@@ -97,15 +98,35 @@ def test_sync_ai_assets_all(tmp_path: Path):
     assert (tmp_path / ".github/copilot-instructions.md").exists()
 
 
-def test_cli_new_with_ide_flag(tmp_path: Path):
-    project_dir = tmp_path / "test_app"
-    result = runner.invoke(
-        app, ["new", str(project_dir), "--template", "", "--ide", "cursor"]
-    )
-    assert result.exit_code == 0
-    assert (project_dir / ".cursor/rules/voodoo.mdc").exists()
-    assert not (project_dir / ".trae").exists()
-    assert not (project_dir / ".windsurfrules").exists()
+def test_cli_ai_init_with_ide_flag(tmp_path: Path):
+    """voodoo ai init --ide cursor should generate cursor rules."""
+    import os
+
+    original_cwd = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = runner.invoke(app, ["ai", "init", "--ide", "cursor"])
+        assert result.exit_code == 0
+        assert (tmp_path / ".cursor" / "rules" / "voodoo.mdc").exists()
+        assert not (tmp_path / ".trae").exists()
+        assert not (tmp_path / ".windsurfrules").exists()
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_cli_ai_init_no_prompt(tmp_path: Path):
+    """voodoo ai init should NOT prompt for IDE selection - auto-detect only."""
+    import os
+
+    original_cwd = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = runner.invoke(app, ["ai", "init"])
+        assert result.exit_code == 0
+        assert "Select" not in result.output
+        assert ".voodoo/ai/" in result.output
+    finally:
+        os.chdir(original_cwd)
 
 
 def test_cli_auth_secret_key():
@@ -156,85 +177,80 @@ def test_cli_auth_create_user(tmp_path: Path):
 def test_cli_version():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "Voodoo Framework" in result.output
+    assert "voodoo" in result.output.lower()
     assert "Python" in result.output
 
 
 def test_cli_doctor():
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
-    assert "Voodoo Doctor" in result.output
+    assert "voodoo" in result.output.lower()
 
 
 def test_cli_doctor_checks_subsystems():
     """Doctor should check runtime/db/auth/mesh/workers/telemetry subsystems."""
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
-    assert "Voodoo Framework" in result.output
-    assert "Auth" in result.output
-    assert "Mesh" in result.output
-    assert "Workers" in result.output
-    assert "Telemetry" in result.output
+    assert "environment" in result.output.lower()
+    assert "runtime" in result.output.lower()
+    assert "modules" in result.output.lower()
+    assert "auth" in result.output.lower()
+    assert "mesh" in result.output.lower()
+    assert "workers" in result.output.lower()
+    assert "telemetry" in result.output.lower()
 
 
 def test_cli_version_shows_version():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "Voodoo Framework" in result.output
+    assert "voodoo" in result.output.lower()
     import voodoo
 
     ver = getattr(voodoo, "__version__", "unknown")
-    assert f"v{ver}" in result.output
+    assert ver in result.output
 
 
-def test_cli_new_scaffolds_pages_directory(tmp_path: Path):
-    """voodoo new should create the pages/ directory with file-based pages."""
-    project_dir = tmp_path / "pages_app"
-    result = runner.invoke(
-        app, ["new", str(project_dir), "--template", "", "--ide", "none"]
-    )
+def test_cli_new_minimal_scaffold(tmp_path: Path):
+    """voodoo new should create a minimal project with only app/page.py."""
+    project_dir = tmp_path / "minimal_app"
+    result = runner.invoke(app, ["new", str(project_dir), "--template", ""])
     assert result.exit_code == 0
 
-    # Check for pages/ directory with file-based pages
-    assert (project_dir / "app" / "pages").is_dir()
-    assert (project_dir / "app" / "pages" / "index.py").exists()
-    assert (project_dir / "app" / "pages" / "about.py").exists()
-    assert (project_dir / "app" / "pages" / "users" / "[id].py").exists()
-
-    # Check for other required directories/files
-    assert (project_dir / "app" / "components").is_dir()
-    assert (project_dir / "app" / "agents").is_dir()
-    assert (project_dir / "app" / "workers").is_dir()
-    assert (project_dir / "app" / "models.py").exists()
-    assert (project_dir / "app" / "styles.css").exists()
-    assert (project_dir / "tests").is_dir()
+    # Must exist
+    assert (project_dir / "app" / "page.py").exists()
     assert (project_dir / "pyproject.toml").exists()
-    assert (project_dir / "main.py").exists()
+    assert (project_dir / "voodoo.toml").exists()
+
+    # Must NOT exist
+    assert not (project_dir / "app" / "pages").exists()
+    assert not (project_dir / "app" / "components").exists()
+    assert not (project_dir / "app" / "agents").exists()
+    assert not (project_dir / "app" / "workers").exists()
+    assert not (project_dir / "app" / "models.py").exists()
+    assert not (project_dir / "app" / "styles.css").exists()
+    assert not (project_dir / "tests").exists()
+    assert not (project_dir / "main.py").exists()
+    assert not (project_dir / ".env").exists()
+    assert not (project_dir / ".data").exists()
+    assert not (project_dir / "storage").exists()
+    assert not (project_dir / ".voodoo").exists()
+    assert not (project_dir / ".trae").exists()
+    assert not (project_dir / ".cursor").exists()
 
 
-def test_cli_new_index_page_content(tmp_path: Path):
-    """The scaffolded index.py should have a page() function."""
+def test_cli_new_page_content(tmp_path: Path):
+    """The scaffolded app/page.py should use the Voodoo public API."""
     project_dir = tmp_path / "content_app"
-    result = runner.invoke(
-        app, ["new", str(project_dir), "--template", "", "--ide", "none"]
-    )
+    result = runner.invoke(app, ["new", str(project_dir), "--template", ""])
     assert result.exit_code == 0
 
-    index_content = (project_dir / "app" / "pages" / "index.py").read_text()
-    assert "def page(request)" in index_content
-    assert "Div" in index_content
-
-
-def test_cli_new_dynamic_route_content(tmp_path: Path):
-    """The scaffolded [id].py should have a page() function with id parameter."""
-    project_dir = tmp_path / "dyn_app"
-    result = runner.invoke(
-        app, ["new", str(project_dir), "--template", "", "--ide", "none"]
-    )
-    assert result.exit_code == 0
-
-    dyn_content = (project_dir / "app" / "pages" / "users" / "[id].py").read_text()
-    assert "def page(request, id" in dyn_content
+    page_content = (project_dir / "app" / "page.py").read_text()
+    assert "from voodoo import" in page_content
+    assert "@page" in page_content
+    assert "def home" in page_content
+    assert "Div" in page_content
+    assert "Heading" in page_content
+    assert "Text" in page_content
 
 
 def test_cli_routes_command(tmp_path: Path):
@@ -265,4 +281,4 @@ def test_cli_dev_missing_module():
     """voodoo dev should exit with error if module not found."""
     result = runner.invoke(app, ["dev", "nonexistent:app"])
     assert result.exit_code == 1
-    assert "Error" in result.output or "error" in result.output.lower()
+    assert "error" in result.output.lower() or "could not find" in result.output.lower()

@@ -11,9 +11,6 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Logs
-*.log
-
 # Virtual environments & local env
 venv/
 env/
@@ -31,4 +28,5 @@ build/
 
 # Local strategy notes (not for public repo)
 SPEC.md
+.scaffold_check.txt
 

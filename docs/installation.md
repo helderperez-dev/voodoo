@@ -33,8 +33,6 @@ pip install "voodoo-framework[ai,dev]" # combine extras
 voodoo version
 ```
 
-You should see the installed version printed. If the command is not found, ensure `pip`'s bin directory is on your `PATH`.
-
 ## Scaffold a new project
 
 ```bash
@@ -45,19 +43,27 @@ voodoo dev
 
 The app starts on `http://localhost:8000` with hot-reloading enabled.
 
-## Clean-env validation
+The scaffold produces a minimal project:
 
-Voodoo is designed to work from a clean environment with zero manual steps:
-
-```bash
-# In a fresh virtualenv
-uv tool install voodoo-framework
-voodoo new my_app
-cd my_app
-voodoo dev
+```
+my_app/
+├── app/
+│   └── page.py
+├── pyproject.toml
+└── voodoo.toml
 ```
 
-No `npm`, no bundler, no configuration files required. The framework ships with everything needed to run.
+No `main.py`, no `.env`, no placeholder directories, no infrastructure configuration. Capabilities like database, storage, workers, and AI activate lazily when used.
+
+## AI development context (optional)
+
+```bash
+voodoo ai init              # auto-detect IDE
+voodoo ai init --ide cursor # specific IDE
+voodoo ai init --ide all    # all supported IDEs
+```
+
+Generates `.voodoo/ai/` context docs and IDE-specific rule files. Removing `.voodoo/ai` never breaks the application.
 
 ## Python version
 
@@ -77,14 +83,27 @@ pytest
 
 ## Configuration
 
-Voodoo reads configuration from environment variables and an optional `voodoo.yaml` file:
+Voodoo reads configuration from `voodoo.toml` (preferred), `voodoo.yaml` (compatibility), and environment variables.
+
+**Precedence:** `voodoo.toml` > `voodoo.yaml` > environment variables > defaults
+
+Minimal `voodoo.toml`:
+
+```toml
+[app]
+name = "my_app"
+```
+
+Environment variables:
 
 | Variable | Default | Description |
 |---|---|---|
 | `VOODOO_ENV` | `development` | Environment name |
+| `VOODOO_DEBUG` | `true` (dev) | Debug mode |
 | `VOODOO_SECRET_KEY` | dev secret | JWT signing secret |
-| `VOODOO_DB_PATH` | `.data/voodoo.db` | SQLite database path |
+| `VOODOO_DB_PATH` | `.voodoo/state/data.db` | SQLite database path |
+| `DATABASE_URL` | — | Database URL (overrides path) |
 | `VOODOO_HOST` | `0.0.0.0` | Server host |
 | `VOODOO_PORT` | `8000` | Server port |
 
-See `voodoo.yaml` for full configuration options.
+Infrastructure configuration (database provider, storage provider, etc.) is optional — Voodoo provides intelligent defaults.

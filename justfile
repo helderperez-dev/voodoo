@@ -19,13 +19,13 @@ lint:
 test:
     uv run pytest
 
-# Run performance micro-benchmarks (baseline tracked in docs/BASELINE.md)
+# Run performance micro-benchmarks
 bench:
     uv run python scripts/benchmark.py
 
 # Clean up build artifacts and cache directories
 clean:
-    rm -rf build/ dist/ *.egg-info/ .data/ storage/ .mypy_cache/ .ruff_cache/
+    rm -rf build/ dist/ *.egg-info/ .voodoo/ storage/ .mypy_cache/ .ruff_cache/
     find . -type d -name __pycache__ -exec rm -rf {} +
     find . -type f -name "*.pyc" -delete
 
