@@ -43,12 +43,17 @@ voodoo dev
 
 The app starts on `http://localhost:8000` with hot-reloading enabled.
 
-The scaffold produces a minimal project:
+The scaffold produces a minimal project using Voodoo CSS (the default style adapter) and folder-based routing:
 
 ```
 my_app/
 ├── app/
-│   └── page.py
+│   ├── page.py              → /
+│   ├── about/
+│   │   └── page.py          → /about
+│   └── users/
+│       └── [id]/
+│           └── page.py      → /users/{id}
 ├── pyproject.toml
 └── voodoo.toml
 ```

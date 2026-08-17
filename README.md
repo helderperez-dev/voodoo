@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/voodoo-logo-white.png">
+  <img alt="Voodoo" src="docs/assets/voodoo-logo-black.png" width="200" align="right">
+</picture>
+
 # Voodoo
 
 **The AI-native application framework for Python.**

@@ -211,13 +211,15 @@ def test_cli_version_shows_version():
 
 
 def test_cli_new_minimal_scaffold(tmp_path: Path):
-    """voodoo new should create a minimal project with only app/page.py."""
+    """voodoo new should create a minimal project with folder-based routes only."""
     project_dir = tmp_path / "minimal_app"
     result = runner.invoke(app, ["new", str(project_dir), "--template", ""])
     assert result.exit_code == 0
 
-    # Must exist
+    # Must exist — routes via folder-based routing (app/<dir>/page.py)
     assert (project_dir / "app" / "page.py").exists()
+    assert (project_dir / "app" / "about" / "page.py").exists()
+    assert (project_dir / "app" / "users" / "[id]" / "page.py").exists()
     assert (project_dir / "pyproject.toml").exists()
     assert (project_dir / "voodoo.toml").exists()
 
@@ -239,18 +241,34 @@ def test_cli_new_minimal_scaffold(tmp_path: Path):
 
 
 def test_cli_new_page_content(tmp_path: Path):
-    """The scaffolded app/page.py should use the Voodoo public API."""
+    """The scaffolded app/page.py should use the Voodoo public API and file
+    convention (folder-based routing), not the @page decorator."""
     project_dir = tmp_path / "content_app"
     result = runner.invoke(app, ["new", str(project_dir), "--template", ""])
     assert result.exit_code == 0
 
     page_content = (project_dir / "app" / "page.py").read_text()
     assert "from voodoo import" in page_content
-    assert "@page" in page_content
-    assert "def home" in page_content
-    assert "Div" in page_content
+    # File-based convention: a module-level `page` function drives routing.
+    assert "def page(request)" in page_content
+    # No @page decorator in the scaffold (it conflicts with the file scanner
+    # when app/page.py is imported via the folder convention).
+    assert "@page" not in page_content
+    # Voodoo CSS best practices: semantic components and props.
     assert "Heading" in page_content
     assert "Text" in page_content
+    assert "Button" in page_content
+    assert "variant=" in page_content
+    assert "tone=" in page_content
+    # SEO tuple return.
+    assert "from voodoo.seo import SEO" in page_content
+    assert "return seo, ui" in page_content
+    # Internal navigation uses voodoo.navigate.
+    assert "voodoo.navigate(" in page_content
+
+    # The dynamic route should use a bracket folder + typed segment.
+    user_content = (project_dir / "app" / "users" / "[id]" / "page.py").read_text()
+    assert "def page(request, id: int)" in user_content
 
 
 def test_cli_routes_command(tmp_path: Path):
@@ -282,3 +300,16 @@ def test_cli_dev_missing_module():
     result = runner.invoke(app, ["dev", "nonexistent:app"])
     assert result.exit_code == 1
     assert "error" in result.output.lower() or "could not find" in result.output.lower()
+
+
+def test_cli_dev_missing_dotted_module():
+    """voodoo dev should not crash when a dotted module's parent is missing.
+
+    Regression: importlib.util.find_spec raises ModuleNotFoundError for dotted
+    names whose parent package isn't installed (e.g. "myapp.sub"). The CLI
+    should catch it and show the clean error, not a traceback.
+    """
+    result = runner.invoke(app, ["dev", "nonexistent_pkg.submodule:app"])
+    assert result.exit_code == 1
+    assert "could not find" in result.output.lower()
+    assert "Traceback" not in result.output

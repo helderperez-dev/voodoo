@@ -111,9 +111,13 @@ def _fallback_ai_assets() -> dict[str, str]:
 
             - Build UI with `voodoo.components`.
             - Prefer `async def` for handlers and I/O.
-            - Use Tailwind via `className`.
+            - Voodoo CSS is the default style adapter: components emit semantic
+              `vd-*` classes driven by theme tokens. Prefer semantic props
+              (`variant`, `size`, `tone`, `level`) over utility classes. Opt into
+              Tailwind only with `set_style_adapter(TailwindAdapter())`.
             - Use `A(..., href=..., onClick="voodoo.navigate('...')")` for internal links.
-            - Keep route files inside `app/`.
+            - Use folder-based routing: `app/<segment>/page.py` defines a `page(request)`
+              function. `app/pages/` (file-per-page) is supported for backward compat.
             - Keep persistent data inside `.voodoo/state/`.
             - Use `aiosqlite` and `.voodoo/state/data.db` by default.
             - Preserve `WEBSOCKETS_MAX_LINE_LENGTH="8388608"` and `http="h11"` when working with websocket-heavy apps.
@@ -138,10 +142,20 @@ def _fallback_ai_assets() -> dict[str, str]:
             """
             # Voodoo Routing
 
-            - `app/page.py` maps to `/`
-            - Nested `page.py` files map to nested routes
-            - Dynamic segments use bracket folders such as `app/users/[id]/page.py`
-            - Return `(SEO, Component)` or `(Component, SEO)` tuples to inject head metadata
+            Folder-based routing (the scaffold default): each directory under `app/`
+            containing a `page.py` maps to a route.
+
+            - `app/page.py` -> `/`
+            - `app/about/page.py` -> `/about`
+            - `app/dashboard/settings/page.py` -> `/dashboard/settings`
+            - Dynamic segments use bracket folders such as `app/users/[id]/page.py` -> `/users/{id}`
+
+            Each `page.py` defines a `page(request, ...)` function. Path parameters
+            are injected by name and coerced to their annotation.
+
+            Return `(SEO, Component)` or `(Component, SEO)` tuples to inject head metadata.
+
+            `app/pages/` (one file per page) is supported for backward compatibility.
 
             Internal links must use Voodoo navigation:
 
@@ -157,13 +171,31 @@ def _fallback_ai_assets() -> dict[str, str]:
             """
             # Voodoo Components
 
-            Import UI primitives from `voodoo.components`.
+            Import UI primitives from `voodoo.components` (or the `voodoo` top level).
 
             Common components:
             - `Div`, `Text`, `Heading`, `Button`, `A`, `Input`, `Form`
+            - Layout: `Page`, `Container`, `Stack`, `Flex`, `Grid`, `Box`
             - Semantic HTML: `Nav`, `Header`, `Footer`, `Main`, `Section`, `Article`, `Aside`, `Figure`, `FigCaption`, `Time`, `Address`, `Img`, `Paragraph`
 
-            Use `className` for styling and favor small reusable Python functions for custom components.
+            Voodoo CSS (the default adapter) generates semantic `vd-*` classes from
+            each component's style key and props, all driven by `--vd-*` theme tokens.
+            Prefer semantic props over utility classes:
+
+            ```python
+            from voodoo import Button, Heading, Stack, Text, Card
+
+            Stack(
+                Heading("Hello, Voodoo!", level=1, size="xl"),
+                Text("Build your UI in Python.", tone="muted"),
+                Button("Get Started", variant="primary"),
+                Card(Heading("Folder-based routing", level=3), Text("app/page.py → /")),
+            )
+            ```
+
+            Use `className` only for one-off overrides. Swap to Tailwind with
+            `set_style_adapter(TailwindAdapter())`. Build reusable components as
+            small Python functions.
             """
         ).strip()
         + "\n",

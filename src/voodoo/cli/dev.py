@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import subprocess
 import sys
@@ -26,12 +27,25 @@ def dev(
             app_str = "voodoo.core:app"
 
     module_name = app_str.split(":")[0]
+
+    # Resolve the module either as a local file/dir (e.g. main.py) or as an
+    # importable installed package (e.g. voodoo.core). Folder-based routing
+    # projects have no main.py and rely on the bundled voodoo.core:app fallback.
     module_path = Path(module_name.replace(".", "/") + ".py")
     module_dir = Path(module_name.replace(".", "/"))
-
-    if not module_path.exists() and not (
+    local_exists = module_path.exists() or (
         module_dir.is_dir() and (module_dir / "__init__.py").exists()
-    ):
+    )
+    try:
+        importable = importlib.util.find_spec(module_name) is not None
+    except (ModuleNotFoundError, ValueError):
+        # find_spec raises ModuleNotFoundError for dotted names whose parent
+        # package is missing (e.g. "myapp.sub" when "myapp" isn't installed)
+        # and ValueError for relative names without a package context. Treat
+        # both as "not importable" so the caller gets the clean error below.
+        importable = False
+
+    if not local_exists and not importable:
         terminal.error(
             f"Could not find module '{module_name}'",
             hint="run from inside a voodoo project, or use 'voodoo new <name>' to create one",

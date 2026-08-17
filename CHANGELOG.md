@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.1 — 2026-08-17
+
+### Default scaffold — Voodoo CSS + folder-based routing
+
+- **`voodoo new` default template** now uses Voodoo CSS (the default adapter) and folder-based routing instead of Tailwind utility classes + `main.py`/`@page`.
+- **Scaffold structure**: `app/page.py` → `/`, `app/about/page.py` → `/about`, `app/users/[id]/page.py` → `/users/{id}` (dynamic segment with `int` coercion).
+- **Best practices showcased**: semantic component props (`variant`, `size`, `tone`, `level`), `Page`/`Stack`/`Flex`/`Card` layout, `(SEO, Component)` tuple returns, `A` + `voodoo.navigate()` for internal links.
+- **Remote template repo** (`helderperez-dev/voodoo-templates`) `default/` variant updated to match.
+- No `main.py`, `.env`, or infrastructure boilerplate — `voodoo dev` auto-discovers via `voodoo.core:app`.
+
+### Bug fixes
+
+- **`voodoo dev` module resolution**: Added `importlib.util.find_spec` check so importable packages (e.g. `voodoo.core`) are recognized even when not present as local files. Fixes `voodoo dev` in folder-routing projects with no `main.py`.
+- **`find_spec` exception handling**: Wrapped `find_spec` in `try/except (ModuleNotFoundError, ValueError)` to prevent unhandled tracebacks when a dotted module's parent package is missing.
+
+### Documentation
+
+- Updated `docs/routing.md` and `docs/installation.md` to reflect folder-based routing as the scaffold default.
+- Updated fallback AI rules (`scaffolding.py`) to describe Voodoo CSS as the default adapter and folder-based routing convention.
+
 ## 1.1.0 — 2026-08-16
 
 ### Scaffold revision — progressive complexity

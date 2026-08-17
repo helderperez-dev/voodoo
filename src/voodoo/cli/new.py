@@ -10,6 +10,140 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from voodoo.cli import terminal
 
 
+# ---------------------------------------------------------------------------
+# Offline scaffold — used when no template repository is available.
+# Showcases Voodoo CSS (the default adapter), folder-based routing, and the
+# file-based `page(request)` convention. Keeps the surface minimal: routes
+# only, no main.py / .env / infrastructure directories.
+# ---------------------------------------------------------------------------
+
+_HOME_PAGE = '''"""Home route — app/page.py maps to / via folder-based routing.
+
+Voodoo CSS is the default style adapter: components emit semantic `vd-*`
+classes (e.g. `vd-button vd-button--primary`) resolved by theme tokens, so
+prefer semantic props (`variant`, `size`, `tone`) over utility classes.
+"""
+from voodoo import A, Button, Card, Flex, Heading, Page, Stack, Text
+from voodoo.seo import SEO
+
+
+def page(request):
+    seo = SEO(
+        title="My Voodoo App",
+        description="Built with Voodoo: Python UI, semantic components, themeable tokens.",
+    )
+    ui = Page(
+        Stack(
+            Heading("Hello, Voodoo", level=1, size="xl"),
+            Text(
+                "Build your UI in Python. Voodoo CSS ships themed, semantic "
+                "components out of the box.",
+                tone="muted",
+            ),
+            Flex(
+                Button("Get Started", variant="primary"),
+                A(
+                    "View about",
+                    href="/about",
+                    onClick="voodoo.navigate('/about')",
+                ),
+                direction="row",
+                gap="sm",
+            ),
+            Card(
+                Heading("Folder-based routing", level=3),
+                Text("This page lives at app/page.py and maps to /."),
+                Text(
+                    "Add app/about/page.py to create /about — no extra wiring.",
+                    tone="muted",
+                ),
+            ),
+            gap="lg",
+        )
+    )
+    return seo, ui
+'''
+
+_ABOUT_PAGE = '''"""About route — app/about/page.py maps to /about."""
+from voodoo import Container, Heading, Page, Text
+from voodoo.seo import SEO
+
+
+def page(request):
+    seo = SEO(title="About — My Voodoo App", description="About this project.")
+    ui = Page(
+        Container(
+            Heading("About", level=1, size="xl"),
+            Text("This route is defined by app/about/page.py.", tone="muted"),
+            Text(
+                "Folder structure drives routing: app/about/page.py → /about.",
+                tone="muted",
+            ),
+        )
+    )
+    return seo, ui
+'''
+
+_USER_PAGE = '''"""User route — app/users/[id]/page.py maps to /users/{id}.
+
+Bracket folders create dynamic segments; the `id: int` annotation coerces
+the path segment to the declared type.
+"""
+from voodoo import Card, Heading, Page, Text
+from voodoo.seo import SEO
+
+
+def page(request, id: int):
+    seo = SEO(title=f"User {id} — My Voodoo App")
+    ui = Page(
+        Card(
+            Heading(f"User #{id}", level=2),
+            Text(
+                "Dynamic segments use bracket folders: "
+                "app/users/[id]/page.py → /users/{id}.",
+                tone="muted",
+            ),
+            Text(
+                "The int annotation coerces the segment: '42' → 42.",
+                tone="muted",
+            ),
+        )
+    )
+    return seo, ui
+'''
+
+
+def _scaffold_offline(project_dir: Path, name: str) -> None:
+    """Write the minimal default Voodoo project (Voodoo CSS + folder routing)."""
+    (project_dir / "app").mkdir(parents=True, exist_ok=True)
+    (project_dir / "app" / "page.py").write_text(_HOME_PAGE)
+
+    about_dir = project_dir / "app" / "about"
+    about_dir.mkdir(parents=True, exist_ok=True)
+    (about_dir / "page.py").write_text(_ABOUT_PAGE)
+
+    user_dir = project_dir / "app" / "users" / "[id]"
+    user_dir.mkdir(parents=True, exist_ok=True)
+    (user_dir / "page.py").write_text(_USER_PAGE)
+
+    (project_dir / "voodoo.toml").write_text(
+        f'[app]\nname = "{name}"\n'
+        "# Voodoo CSS is the default style adapter.\n"
+        "# To opt into Tailwind instead:\n"
+        "#   from voodoo import TailwindAdapter, set_style_adapter\n"
+        "#   set_style_adapter(TailwindAdapter())\n"
+    )
+
+    (project_dir / "pyproject.toml").write_text(
+        f"[project]\n"
+        f'name = "{name}"\n'
+        f'version = "0.1.0"\n'
+        f"dependencies = [\n"
+        f'    "voodoo-framework"\n'
+        f"]\n"
+    )
+
+
 def new(  # noqa: C901
     project_name: str,
     template: str = typer.Option(
@@ -107,31 +241,7 @@ def new(  # noqa: C901
                 total=None,
             )
 
-            # Minimal application: app/page.py only
-            (project_dir / "app").mkdir(parents=True, exist_ok=True)
-
-            (project_dir / "app" / "page.py").write_text(
-                "from voodoo import page, Div, Heading, Text\n\n\n"
-                '@page("/")\n'
-                "def home():\n"
-                "    return Div(\n"
-                '        Heading("Hello, Voodoo", level=1),\n'
-                '        Text("Build differently."),\n'
-                "    )\n"
-            )
-
-            (project_dir / "voodoo.toml").write_text(
-                f'[app]\nname = "{project_dir.name}"\n'
-            )
-
-            (project_dir / "pyproject.toml").write_text(
-                f"[project]\n"
-                f'name = "{project_dir.name}"\n'
-                f'version = "0.1.0"\n'
-                f"dependencies = [\n"
-                f'    "voodoo-framework"\n'
-                f"]\n"
-            )
+            _scaffold_offline(project_dir, project_dir.name)
 
         # Set up local virtual environment and install dependencies
         if (project_dir / "pyproject.toml").exists():

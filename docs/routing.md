@@ -63,9 +63,42 @@ async def settings(user):
 
 ### File-based routing
 
-The default scaffold produces a single `app/page.py` file using the `@page` decorator (see Minimal example above). `voodoo dev` auto-discovers the app without requiring a `main.py` entrypoint.
+Voodoo's default scaffold uses **folder-based routing**: each directory under `app/` that contains a `page.py` file maps to a route based on its path. `voodoo dev` auto-discovers the app without requiring a `main.py` entrypoint.
 
-For projects that prefer convention over decorators, the `app/pages/` directory is still supported for backward compatibility. When present, each file maps to a route based on its path:
+```
+app/
+  page.py              → /
+  about/
+    page.py            → /about
+  users/
+    [id]/
+      page.py          → /users/{id}
+```
+
+Each `page.py` defines a `page` function (the file convention), optionally accepting `request` and typed path parameters:
+
+```python
+# app/about/page.py
+from voodoo import Page, Text
+from voodoo.seo import SEO
+
+
+def page(request):
+    return SEO(title="About"), Page(Text("About us"))
+```
+
+Bracket folders (`[id]`) create dynamic segments; the parameter is injected by name and coerced to its annotation:
+
+```python
+# app/users/[id]/page.py
+from voodoo import Text
+
+
+def page(request, id: int):
+    return Text(f"User #{id}")
+```
+
+For projects that prefer one file per page, the `app/pages/` directory is also supported for backward compatibility. When present, each file maps to a route based on its path:
 
 ```
 app/
@@ -76,18 +109,7 @@ app/
       [id].py       → /users/{id}
 ```
 
-Each file defines a `page` function:
-
-```python
-# app/pages/about.py
-from voodoo import Text
-
-
-def page():
-    return Text("About us")
-```
-
-> **Note:** `app/page.py` (singular) with `@page` decorators is the default convention. `app/pages/` (plural) is supported but not the scaffold default.
+> **Note:** Folder-based routing (`app/<segment>/page.py`) is the scaffold default. `app/pages/` (plural, file-per-page) is supported but not the scaffold default. The `@page` decorator remains available for explicit, imperative registration (e.g. inside a `main.py`).
 
 ## Advanced
 
@@ -112,4 +134,4 @@ If a handler returns a Starlette `Response`, it is passed through untouched.
 - `page(path)` — decorator registering a GET HTML route.
 - `page_registry` — global registry of `@page` routes.
 - `call_page(func, request)` — invoke a page handler (used internally).
-- File-based: `app/pages/` directory with `page()` function in each file (supported for backward compatibility; the default scaffold uses `app/page.py` with `@page` decorators).
+- Folder-based routing: `app/<segment>/page.py` files, each defining a `page(request, ...)` function (the scaffold default). `app/pages/` (file-per-page) is supported for backward compatibility.
