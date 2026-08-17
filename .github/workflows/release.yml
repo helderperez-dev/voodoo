@@ -121,11 +121,13 @@ jobs:
               # Use uv instead of pip to avoid truststore bug on macOS Tahoe
               system "uv", "venv", libexec, "--python", "3.12"
               system "uv", "pip", "install", "--python", libexec/"bin/python", "voodoo-framework"
+
+              # Remove .so files whose Mach-O headers lack padding for Homebrew's dylib fixup.
+              # jiter (pydantic/openai dependency) ships without -headerpad_max_install_names.
+              rm_rf Dir.glob(libexec/"lib/python*/site-packages/jiter/*.so")
+
               bin.install_symlink libexec/"bin/voodoo"
             end
-
-            # Skip dylib fixup — vendored Python .so files lack header padding
-            skip_clean libexec
 
             test do
               assert_match "Voodoo Framework CLI", shell_output("#{bin}/voodoo --help")
