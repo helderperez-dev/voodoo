@@ -171,8 +171,12 @@ await engine.deny(execution_id, by="admin", reason="not now")
 from voodoo.runtime import Planner, ComputeParticipant, AdaptiveSupervisor
 
 planner = Planner()
-planner.register(ComputeParticipant(name="agent", kind="agent", capabilities=["reason"]))
-planner.register(ComputeParticipant(name="human", kind="human", capabilities=["approve"]))
+planner.register(
+    ComputeParticipant(name="agent", kind="agent", capabilities=["reason"])
+)
+planner.register(
+    ComputeParticipant(name="human", kind="human", capabilities=["approve"])
+)
 
 supervisor = AdaptiveSupervisor(planner)
 run = await supervisor.run(Intent(name="complex").require("reason").require("approve"))

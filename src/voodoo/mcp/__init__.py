@@ -300,7 +300,11 @@ class MCPServer:
             )
 
     async def _run_tool_call(
-        self, tool_name: str, func: Callable, spec: ToolSpec | None, args: dict[str, Any]
+        self,
+        tool_name: str,
+        func: Callable,
+        spec: ToolSpec | None,
+        args: dict[str, Any],
     ) -> Any:
         """Execute an MCP tool call through the runtime execution engine.
 

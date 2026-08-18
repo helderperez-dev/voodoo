@@ -63,11 +63,11 @@ DONE  |  WIP  |  TODO
 |---|--------|---------|----------|--------|
 | 1 | Storage core & migrations | 1.3.0 | VoodooDatabase + SQLite + migration runner | DONE |
 | 2 | Durable task queue | 1.4.0 | SQLite queue: claim/lease/retry — tasks survive restart | DONE |
-| 3 | Durable executions | 1.5.0 | SQLite ExecutionStore + execution event journal | TODO |
-| 4 | Checkpoints & resume | 1.6.0 | Resume waiting/unfinished executions after restart | TODO |
-| 5 | Durable scheduler | 1.7.0 | schedule.at/after/every/cron backed by SQLite | TODO |
-| 6 | Object store & artifacts | 1.8.0 | VoodooObjectStore + provenance records | TODO |
-| 7 | EventBus protocol | 1.9.0 | Event envelope + durable SQLite bus, mesh unified | TODO |
+| 3 | Durable executions | 1.5.0 | SQLite ExecutionStore + execution event journal | DONE |
+| 4 | Checkpoints & resume | 1.6.0 | Resume waiting/unfinished executions after restart | DONE |
+| 5 | Durable scheduler | 1.7.0 | schedule.at/after/every/cron backed by SQLite | DONE |
+| 6 | Object store & artifacts | 1.8.0 | VoodooObjectStore + provenance records | DONE |
+| 7 | EventBus protocol | 1.9.0 | Event envelope + durable SQLite bus, mesh unified | DONE |
 | 8 | Adapter contracts | 1.10.0 | Capability declarations + portability test suite | TODO |
 | 9 | Runtime configuration | 1.11.0 | `voodoo.yaml` selects providers | TODO |
 | 10 | PostgreSQL database | 1.12.0 | Postgres adapter, same logical model + migrations | TODO |
@@ -142,125 +142,125 @@ Done when: kill -9 the worker mid-task, restart, task completes exactly-once
 *effect* with at-least-once delivery visible in tests.
 
 ## Sprint 3 — Durable executions
-**Version 1.5.0 · Spec §13, §39 (persistence.py → ExecutionStore) · Status: TODO · Released as: —**
+**Version 1.5.0 · Spec §13, §39 (persistence.py → ExecutionStore) · Status: DONE · Released as: 1.5.0**
 
 Goal: executions live in SQLite (journal + materialized state), replacing
 JSONL as the default store.
 
 Scope:
-- [ ] `executions` table (materialized state, per §4 Layer 3 fields) and
+- [x] `executions` table (materialized state, per §4 Layer 3 fields) and
       `execution_events` append-only journal (sequence, execution_id,
       event_type, payload, timestamp).
-- [ ] Journal event types: `execution.created/started/completed/failed`,
+- [x] Journal event types: `execution.created/started/completed/failed`,
       `step.started`, `state.changed`, `task.scheduled`,
       `execution.waiting` (full set lands in Sprint 4).
-- [ ] `SQLiteExecutionStore` implementing the existing `ExecutionStore`
+- [x] `SQLiteExecutionStore` implementing the existing `ExecutionStore`
       protocol + journal append; becomes the engine default when a DB path
       exists.
-- [ ] `JSONFileExecutionStore` stays as reader for one-time migration of
+- [x] `JSONFileExecutionStore` stays as reader for one-time migration of
       existing `.voodoo/executions.jsonl` (import command).
-- [ ] `engine.recover()` reads SQLite; unfinished executions restored with
+- [x] `engine.recover()` reads SQLite; unfinished executions restored with
       journal history intact.
-- [ ] Telemetry/`inspect` read from the store, not engine memory.
-- [ ] CLI: `voodoo executions`, `voodoo execution <id>` (timeline from
+- [x] Telemetry/`inspect` read from the store, not engine memory.
+- [x] CLI: `voodoo executions`, `voodoo execution <id>` (timeline from
       journal), `voodoo events`; `voodoo recover` uses SQLite by default.
-- [ ] Persistence failures are **never silently swallowed** (log + raise
+- [x] Persistence failures are **never silently swallowed** (log + raise
       surface per §51.16).
 
 Done when: restart the process mid-workflow and `voodoo execution <id>` shows
 the full history; JSONL import works; failure tests green.
 
 ## Sprint 4 — Checkpoints & resume
-**Version 1.6.0 · Spec §14, §30 (resumability), §50 · Status: TODO · Released as: —**
+**Version 1.6.0 · Spec §14, §30 (resumability), §50 · Status: DONE · Released as: 1.6.0**
 
 Goal: an interrupted execution can resume from a durable checkpoint (spec gap
 #3).
 
 Scope:
-- [ ] Checkpoint writes at meaningful boundaries: after model completion,
+- [x] Checkpoint writes at meaningful boundaries: after model completion,
       tool completion, state mutation, task scheduling, before waiting
       (engine hooks already exist — extend `_persist`).
-- [ ] Durable representation of resumable work: JSON-serializable state,
+- [x] Durable representation of resumable work: JSON-serializable state,
       object refs, deterministic ids (never live Python objects — §14).
-- [ ] Recovery flow: on restart, unfinished `running` executions → `waiting`
+- [x] Recovery flow: on restart, unfinished `running` executions → `waiting`
       (recoverable) or re-driven from last checkpoint for task-based
       workflows (pending-work reconstruction).
-- [ ] Waiting executions: pending `Approval` records persisted (not just
+- [x] Waiting executions: pending `Approval` records persisted (not just
       rebuilt in memory), decisions recorded as journal events.
-- [ ] Effects recorded in the journal carry `idempotency_key` so a resumed
+- [x] Effects recorded in the journal carry `idempotency_key` so a resumed
       execution does not blindly re-run non-idempotent effects (§15).
-- [ ] Tests: crash between steps → resume skips completed steps; duplicate
+- [x] Tests: crash between steps → resume skips completed steps; duplicate
       resume attempts are safe; checkpoint payload stays JSON-compatible.
 
 Done when: a workflow interrupted by process kill resumes and completes
 without re-executing finished steps.
 
 ## Sprint 5 — Durable scheduler
-**Version 1.7.0 · Spec §25, TimeSpec gap · Status: TODO · Released as: —**
+**Version 1.7.0 · Spec §25, TimeSpec gap · Status: DONE · Released as: 1.7.0**
 
 Goal: schedules are durable runtime primitives, not Python loops.
 
 Scope:
-- [ ] `schedules` table: id, name, kind (`at` | `after` | `interval` | `cron`),
+- [x] `schedules` table: id, name, kind (`at` | `after` | `interval` | `cron`),
       spec, next_run_at, last_run_at, task_type, payload, active.
-- [ ] Scheduler service in the app lifespan: tick loop claims due schedules
+- [x] Scheduler service in the app lifespan: tick loop claims due schedules
       transactionally and **enqueues durable tasks** (Sprint 2).
-- [ ] Consume `TimeSpec.schedule` / `TimeSpec.interval` from
+- [x] Consume `TimeSpec.schedule` / `TimeSpec.interval` from
       `primitives/time.py` (currently dead fields).
-- [ ] Cron parsing (minimal 5-field subset is acceptable; document it).
-- [ ] Missed-run policy on restart (run-once catch-up, documented).
-- [ ] Tests: schedule survives restart; duplicate scheduler instances don't
+- [x] Cron parsing (minimal 5-field subset is acceptable; document it).
+- [x] Missed-run policy on restart (run-once catch-up, documented).
+- [x] Tests: schedule survives restart; duplicate scheduler instances don't
       double-fire (claim is transactional); `at`/`after` fire once.
-- [ ] CLI: `voodoo schedules` (list/inspect), pause/resume.
+- [x] CLI: `voodoo schedules` (list/inspect), pause/resume.
 
 Done when: schedule `every 5s` → kill process → restart → exactly one task
 per due tick, none lost, none duplicated beyond catch-up policy.
 
 ## Sprint 6 — Object store & artifacts
-**Version 1.8.0 · Spec §18, §46 · Status: TODO · Released as: —**
+**Version 1.8.0 · Spec §18, §46 · Status: DONE · Released as: 1.8.0**
 
 Goal: object storage as a first-class capability with provenance (spec gap #5).
 
 Scope:
-- [ ] `VoodooObjectStore` interface: `put, get, delete, exists, stat, list,
+- [x] `VoodooObjectStore` interface: `put, get, delete, exists, stat, list,
       url/presign` (where supported) + capability declaration.
-- [ ] `LocalObjectStore` under `.voodoo/objects/` (sharded paths); metadata
+- [x] `LocalObjectStore` under `.voodoo/objects/` (sharded paths); metadata
       table (object_id, bucket, key, size, content_type, checksum, metadata).
-- [ ] Move current S3 logic out of `StorageManager` into `S3ObjectStore`
+- [x] Move current S3 logic out of `StorageManager` into `S3ObjectStore`
       (behavior-compatible); `StorageManager` becomes a thin facade over the
       active adapter (breaking nothing).
-- [ ] Object references as the standard way to link large payloads from
+- [x] Object references as the standard way to link large payloads from
       executions/journal (no blobs in SQLite).
-- [ ] Artifacts + provenance (§46): `artifacts` table (artifact_id,
+- [x] Artifacts + provenance (§46): `artifacts` table (artifact_id,
       execution_id, parent_artifact_id, created_by, tool/model, timestamp,
       checksum, metadata) + `execution.artifact()` helper.
-- [ ] `tests/contracts/test_objectstore.py` — `ObjectStoreContractTests`.
-- [ ] CLI: `voodoo objects list/get`, `voodoo artifacts <execution_id>`.
+- [x] `tests/contracts/test_objectstore.py` — `ObjectStoreContractTests`.
+- [x] CLI: `voodoo objects list/get`, `voodoo artifacts <execution_id>`.
 
 Done when: agent/tool outputs can be stored as artifacts and reproduced with
 full provenance from `voodoo artifacts`.
 
 ## Sprint 7 — EventBus protocol & mesh unification
-**Version 1.9.0 · Spec §16, §17 · Status: TODO · Released as: —**
+**Version 1.9.0 · Spec §16, §17 · Status: DONE · Released as: 1.9.0**
 
 Goal: explicit Event semantics; mesh sits on top of the bus instead of being
 its own subsystem (spec gap #4).
 
 Scope:
-- [ ] Event envelope per §17: event_id, event_type, timestamp, source,
+- [x] Event envelope per §17: event_id, event_type, timestamp, source,
       subject, correlation_id, causation_id, payload, schema_version.
-- [ ] `VoodooEventBus` interface: `publish`, `subscribe`, `replay` (where
+- [x] `VoodooEventBus` interface: `publish`, `subscribe`, `replay` (where
       supported) + capability declaration.
-- [ ] `LocalEventBus` (in-process; today's mesh behavior) and
+- [x] `LocalEventBus` (in-process; today's mesh behavior) and
       `SQLiteEventBus` (durable event log, replayable subscriptions).
-- [ ] `mesh` refactored to publish/subscribe through the active bus; WS
+- [x] `mesh` refactored to publish/subscribe through the active bus; WS
       remote mesh and `expose()` unchanged externally; handler execution still
       flows through the engine.
-- [ ] Correlation/causation ids propagated from `ExecutionContext` → events
+- [x] Correlation/causation ids propagated from `ExecutionContext` → events
       (trace linkage end-to-end).
-- [ ] Events ≠ tasks ≠ commands documented and enforced by naming rules
+- [x] Events ≠ tasks ≠ commands documented and enforced by naming rules
       (dotted event types, §16).
-- [ ] `tests/contracts/test_eventbus.py` — `EventBusContractTests`
+- [x] `tests/contracts/test_eventbus.py` — `EventBusContractTests`
       (publish/subscribe/replay/no-lost-subscriber-on-error).
 
 Done when: publish an event, restart the process, replay delivers it to a

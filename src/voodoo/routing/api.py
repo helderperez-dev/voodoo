@@ -44,7 +44,9 @@ class API:
         actor = "anonymous"
         user = kwargs.get("user")
         if user is not None:
-            actor = getattr(user, "id", None) or getattr(user, "username", None) or actor
+            actor = (
+                getattr(user, "id", None) or getattr(user, "username", None) or actor
+            )
 
         intent = Intent(
             name=f"http:{method} {path}",

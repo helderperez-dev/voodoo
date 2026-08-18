@@ -137,7 +137,6 @@ class ConstraintEnforcer:
                 trace_id=context.trace_id,
             )
 
-
     def retry_hint(
         self,
         context: ExecutionContext | None = None,
@@ -187,13 +186,23 @@ class ResourceAccountant:
             raise ResourceExceeded(
                 f"Cost budget exceeded: {self.consumed.cost} > {self.budget.cost}",
                 execution_id=execution_id,
-                context={"consumed": self.consumed.describe(), "budget": self.budget.describe()},
+                context={
+                    "consumed": self.consumed.describe(),
+                    "budget": self.budget.describe(),
+                },
             )
-        if self.budget.tokens and self.consumed.tokens and self.consumed.tokens > self.budget.tokens:
+        if (
+            self.budget.tokens
+            and self.consumed.tokens
+            and self.consumed.tokens > self.budget.tokens
+        ):
             raise ResourceExceeded(
                 f"Token budget exceeded: {self.consumed.tokens} > {self.budget.tokens}",
                 execution_id=execution_id,
-                context={"consumed": self.consumed.describe(), "budget": self.budget.describe()},
+                context={
+                    "consumed": self.consumed.describe(),
+                    "budget": self.budget.describe(),
+                },
             )
         if (
             self.budget.latency_ms
@@ -204,18 +213,25 @@ class ResourceAccountant:
                 f"Latency budget exceeded: {self.consumed.latency_ms}ms > "
                 f"{self.budget.latency_ms}ms",
                 execution_id=execution_id,
-                context={"consumed": self.consumed.describe(), "budget": self.budget.describe()},
+                context={
+                    "consumed": self.consumed.describe(),
+                    "budget": self.budget.describe(),
+                },
             )
         return self.consumed
 
     def remaining(self) -> Resource:
         """Return the remaining budget as a Resource."""
         return Resource(
-            cost=max(self.budget.cost - self.consumed.cost, 0.0) if self.budget.cost else 0.0,
+            cost=max(self.budget.cost - self.consumed.cost, 0.0)
+            if self.budget.cost
+            else 0.0,
             tokens=max((self.budget.tokens or 0) - (self.consumed.tokens or 0), 0)
             if self.budget.tokens
             else None,
-            latency_ms=max((self.budget.latency_ms or 0) - (self.consumed.latency_ms or 0), 0.0)
+            latency_ms=max(
+                (self.budget.latency_ms or 0) - (self.consumed.latency_ms or 0), 0.0
+            )
             if self.budget.latency_ms
             else None,
         )

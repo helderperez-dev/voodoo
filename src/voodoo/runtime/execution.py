@@ -92,6 +92,7 @@ class Execution(BaseModel):
     result: Any | None = None
     error: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    checkpoint: dict[str, Any] | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
@@ -100,6 +101,9 @@ class Execution(BaseModel):
     # internal wall-clock timing (seconds since epoch) for accounting
     _started_ts: float | None = None
     _completed_ts: float | None = None
+
+    # checkpoint bookkeeping — non-serialized runtime state
+    # (module-private, not Pydantic fields)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -180,6 +184,35 @@ class Execution(BaseModel):
     @property
     def failed(self) -> bool:
         return self.status in (ExecutionStatus.FAILED, ExecutionStatus.TIMED_OUT)
+
+    # -- artifacts (Sprint 6) ----------------------------------------------
+
+    def artifact(
+        self,
+        checksum: str,
+        *,
+        created_by: str | None = None,
+        tool: str | None = None,
+        model: str | None = None,
+        parent_artifact_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Record an artifact produced by this execution (spec §46)."""
+        from datetime import UTC, datetime
+        from uuid import uuid4
+
+        artifact = {
+            "id": str(uuid4()),
+            "execution_id": self.id,
+            "parent_artifact_id": parent_artifact_id,
+            "created_by": created_by or self.actor,
+            "tool": tool,
+            "model": model,
+            "checksum": checksum,
+            "metadata": metadata or {},
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        return artifact
 
     # -- inspectability ----------------------------------------------------
 

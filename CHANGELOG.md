@@ -1,5 +1,108 @@
 # Changelog
 
+## 1.9.0 — 2026-08-18
+
+### EventBus protocol & mesh unification (Sprint 7 — events survive restarts)
+
+- **`VoodooEventBus` protocol** (`voodoo.storage.events`) — `publish`,
+  `subscribe`, `replay` with a declarative `EventBusCapabilities`
+  (durability, replay, ordering, delivery semantics).
+- **Event envelope** (§17) — every event carries `event_id`, `event_type`,
+  `timestamp`, `source`, `subject`, `correlation_id`, `causation_id`,
+  `payload`, and `schema_version`; correlation id defaults to the ambient
+  trace id so execution trace linkage is end-to-end.
+- **`LocalEventBus`** (in-process, non-durable — today's mesh behavior) and
+  **`SQLiteEventBus`** (durable event log, replayable subscriptions), both
+  registered as framework migrations; WAL mode + `check_same_thread=False`.
+- **Mesh unified** — `mesh` publishes through the active bus while local
+  handlers still flow through the engine (`_fire_local`) with the raw payload;
+  `expose()`/WS remote mesh are unchanged externally.
+- **`tests/contracts/test_eventbus.py`** — `EventBusContractTests`
+  (publish/subscribe/replay/no-lost-subscriber-on-error).
+
+## 1.8.0 — 2026-08-18
+
+### Object store & artifacts (Sprint 6 — provenance for generated payloads)
+
+- **`VoodooObjectStore` protocol** (`voodoo.storage.objects`) —
+  `put/get/delete/exists/stat/list` + `presign`/`url` where supported, with a
+  declarative `ObjectStoreCapabilities` (presign_urls, checksums, metadata,
+  multipart).
+- **`LocalObjectStore`** — the default embedded backend under
+  `.voodoo/objects/` with SHA-256 sharded paths and a `metadata.db` table
+  (key, size, content_type, checksum, created_at).
+- **`S3ObjectStore`** — S3 logic extracted out of `StorageManager` into its
+  own adapter; `StorageManager` is now a thin facade (behavior-compatible),
+  so `status.py` and downstream callers are unchanged.
+- **Artifacts + provenance** (§46) — `artifacts` table (id, execution_id,
+  parent_artifact_id, created_by, tool, model, checksum, metadata,
+  created_at) + `Execution.artifact()` helper + `SQLiteExecutionStore`
+  `record_artifact`/`list_artifacts`.
+- **`tests/contracts/test_objectstore.py`** — `ObjectStoreContractTests`.
+
+## 1.7.0 — 2026-08-18
+
+### Durable Scheduler (Sprint 5 — schedule.at/after/every/cron)
+
+- **`voodoo.schedule` public API** — `at(when, task_type, payload)`,
+  `after(seconds, task_type, payload)`, `every(seconds, task_type, payload)`,
+  `cron(expr, task_type, payload)` durably persist schedule rows via
+  `SQLiteScheduleStore`; the `ScheduleService` tick loop (already wired into
+  the app lifespan) claims due schedules and enqueues them as durable tasks.
+  Available as `voodoo.schedule` (module) or `from voodoo import schedule`.
+- **`TimeSpec` consumed** — `schedule.from_spec(TimeSpec, task_type, payload)`
+  dispatches to `cron`/`every`/`at` based on `TimeSpec.schedule`,
+  `TimeSpec.interval`, and `TimeSpec.deadline` respectively, closing the
+  previously-dead `TimeSpec.schedule`/`TimeSpec.interval` fields.
+- **`voodoo schedules` CLI registered** — `list`, `pause <id>`, `resume <id>`
+  (the command module existed but was never mounted on the root Typer app).
+
+## 1.6.0 — 2026-08-18
+
+### Checkpoints & resume (Sprint 4 — interrupted executions resume)
+
+- **Durable checkpoints** — `Execution.checkpoint` captures JSON-serializable
+  resumable state (completed effect ids, state-changes count, step sequence)
+  at meaningful boundaries: after state mutation, before waiting, and on
+  completion.
+- **Recovery flow** — `engine.recover()` restores unfinished executions,
+  marks leftover `running` executions `waiting`, and rehydrates persisted
+  `Approval` records (status, decided_by, reason) from the new `approvals`
+  table.
+- **Approval persistence** — pending approvals are written to the store and
+  decisions (`human.approved` / `human.denied`) are recorded as journal
+  events, so a restart no longer rebuilds approvals as memory-only placeholders.
+- **Idempotent effects** — journaled effects carry `idempotency_key`
+  (`{execution_id}:{effect_id}`) so a resumed execution skips already-completed
+  non-idempotent effects (§15).
+
+## 1.5.0 — 2026-08-18
+
+### Durable Executions (Sprint 3 — executions survive restarts)
+
+- **`SQLiteExecutionStore`** (`voodoo.storage.execution`) — the default durable
+  execution store: a materialized `executions` table (id, trace_id,
+  parent_execution_id, status, actor, intent, capabilities, resources, effects,
+  state_changes, result, error, metadata, checkpoint, timestamps) plus an
+  append-only `execution_events` journal (sequence, execution_id, event_type,
+  payload, timestamp). Registered as framework migration version 3; WAL mode
+  and `check_same_thread=False` for cross-thread asyncio workers.
+- **Event journal** — every `save()` appends a status-derived event
+  (`execution.created` / `execution.started` / `execution.completed` /
+  `execution.failed` / `execution.waiting`) and provides `timeline(id)` /
+  `list_events()` for reconstruction and inspection.
+- **Engine default** — the app lifespan now attaches `SQLiteExecutionStore`
+  (`config.db_path`, default `.voodoo/state/data.db`) to the engine, so
+  `engine.recover()` reads SQLite and restores unfinished executions with
+  journal history intact.
+- **CLI wired** — `voodoo executions list|show|events`, plus top-level
+  `voodoo execution <id>` (timeline from the journal) and `voodoo events`;
+  `voodoo recover` now defaults to SQLite (legacy `.jsonl` still readable via
+  `--store …/executions.jsonl`); `voodoo executions import-jsonl <file>`
+  migrates a legacy `JSONFileExecutionStore` into SQLite.
+- **Failure surface** — persistence failures raise (`engine._persist`) rather
+  than being silently swallowed, per spec §51.16, with a regression test.
+
 ## 1.4.0 — 2026-08-17
 
 ### Durable Task Queue (Sprint 2 — tasks survive restarts)

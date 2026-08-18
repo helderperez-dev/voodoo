@@ -241,7 +241,25 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        # Startup - DB and workers are lazily initialized
+        # Startup — wire the durable execution store (Sprint 3).
+        from voodoo.runtime.engine import engine as runtime_engine
+        from voodoo.storage.execution import SQLiteExecutionStore
+
+        store_path = config.db_path.replace(":memory:", ".voodoo/state/data.db")
+        store = SQLiteExecutionStore(store_path)
+        runtime_engine.use_store(store)
+
+        # Scheduler (Sprint 5)
+        from voodoo.runtime.scheduler import ScheduleService
+        from voodoo.storage.scheduler import SQLiteScheduleStore
+
+        schedule_store = SQLiteScheduleStore(
+            store_path.replace("data.db", "schedules.db")
+        )
+        scheduler = ScheduleService(schedule_store)
+        await scheduler.start()
+
+        # DB and workers are lazily initialized
         worker_task = None
         from voodoo.workers.queue import _workers
 
@@ -257,6 +275,8 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         from voodoo.data import close_db
 
         await close_db()
+        await scheduler.stop()
+        schedule_store.close()
 
     middleware = [
         Middleware(SecurityHeadersMiddleware),
@@ -325,16 +345,6 @@ def _scan_page_convention(app_dir: str, routes: list[BaseRoute]) -> None:
             route = _load_page_file(filepath, route_path, module_name)
             if route:
                 routes.append(route)
-
-
-# Module-level ASGI app for `voodoo dev` when no main.py exists.
-# The underlying Starlette app is built lazily on first request.
-app = App()
-
-
-# Module-level ASGI app for `voodoo dev` when no main.py exists.
-# The underlying Starlette app is built lazily on first request.
-app = App()
 
 
 def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:

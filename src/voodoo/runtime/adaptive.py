@@ -31,7 +31,12 @@ from voodoo.runtime.errors import (
 )
 from voodoo.runtime.planner import Plan, Planner
 
-__all__ = ["SupervisorDecision", "SupervisorConfig", "AdaptiveRun", "AdaptiveSupervisor"]
+__all__ = [
+    "SupervisorDecision",
+    "SupervisorConfig",
+    "AdaptiveRun",
+    "AdaptiveSupervisor",
+]
 
 
 class SupervisorDecision(StrEnum):
@@ -97,7 +102,9 @@ class AdaptiveSupervisor:
         self.config = config or SupervisorConfig()
         self._accountant = ResourceAccountant(budget=self.config.budget or Resource())
 
-    def _record(self, run: AdaptiveRun, decision: SupervisorDecision, detail: str = "") -> None:
+    def _record(
+        self, run: AdaptiveRun, decision: SupervisorDecision, detail: str = ""
+    ) -> None:
         run.decisions.append(decision.value + (f" ({detail})" if detail else ""))
 
     def _check_budget(self, run: AdaptiveRun, execution: Any) -> bool:
@@ -157,7 +164,9 @@ class AdaptiveSupervisor:
             step = plan.steps[step_idx]
             run.steps.append(step.participant)
             self._record(
-                run, SupervisorDecision.CONTINUE, f"step {step.participant} ({step.kind})"
+                run,
+                SupervisorDecision.CONTINUE,
+                f"step {step.participant} ({step.kind})",
             )
 
             participant = self.planner.participants.get(step.participant)
@@ -175,7 +184,9 @@ class AdaptiveSupervisor:
                 return run
 
             try:
-                execution = await self.engine.execute(intent, step_compute, actor="adaptive")
+                execution = await self.engine.execute(
+                    intent, step_compute, actor="adaptive"
+                )
                 run.execution_id = execution.id
                 run.trace_id = execution.trace_id
                 run.result = execution.result
@@ -202,7 +213,9 @@ class AdaptiveSupervisor:
                         run.execution_id = execution.id
                         run.trace_id = execution.trace_id
                         run.result = execution.result
-                        self._record(run, SupervisorDecision.CONTINUE, "fallback completed")
+                        self._record(
+                            run, SupervisorDecision.CONTINUE, "fallback completed"
+                        )
                         if not self._check_budget(run, execution):
                             return run
                         step_idx += 1
@@ -229,7 +242,9 @@ class AdaptiveSupervisor:
                     and self.engine.constraints.retry_hint(intent=intent, error=e)
                 ):
                     retries += 1
-                    self._record(run, SupervisorDecision.RETRY, f"constraint hint ({retries})")
+                    self._record(
+                        run, SupervisorDecision.RETRY, f"constraint hint ({retries})"
+                    )
                     continue
                 run.status = "failed"
                 run.error = str(e)

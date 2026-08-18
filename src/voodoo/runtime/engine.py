@@ -24,6 +24,7 @@ import inspect
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Union
 
 from voodoo.primitives.effect import Effect
@@ -48,7 +49,9 @@ __all__ = [
 ]
 
 #: A compute participant. Receives the shared context, returns a result.
-ComputeFn = Callable[[ExecutionContext], Union[Awaitable["ComputeResult"], "ComputeResult"]]
+ComputeFn = Callable[
+    [ExecutionContext], Union[Awaitable["ComputeResult"], "ComputeResult"]
+]
 
 
 @dataclass
@@ -76,11 +79,19 @@ class ComputeResult:
         try:
             if hasattr(self.output_type, "model_validate"):
                 return self.output_type.model_validate(self.value)
-            return self.output_type(**self.value) if isinstance(self.value, dict) else self.value
+            return (
+                self.output_type(**self.value)
+                if isinstance(self.value, dict)
+                else self.value
+            )
         except Exception as e:  # noqa: BLE001
             raise ValidationError(
                 f"Structured output validation failed: {e}",
-                context={"output_type": getattr(self.output_type, "__name__", str(self.output_type))},
+                context={
+                    "output_type": getattr(
+                        self.output_type, "__name__", str(self.output_type)
+                    )
+                },
             ) from e
 
 
@@ -105,6 +116,7 @@ class ExecutionEngine:
 
         self.approvals = ApprovalRegistry()
         self._execution_store: Any = None
+        self._checkpoint_sequences: dict[str, int] = {}
 
     # -- persistence / recovery ---------------------------------------------
 
@@ -113,13 +125,25 @@ class ExecutionEngine:
         self._execution_store = store
 
     def _persist(self, execution: Execution) -> None:
-        """Checkpoint an execution (best-effort — never breaks execution)."""
+        """Checkpoint an execution — raises on failure (spec §51.16)."""
         if self._execution_store is None:
             return
-        try:
-            self._execution_store.save(execution)
-        except Exception:  # noqa: BLE001
-            pass
+        self._execution_store.save(execution)
+
+    def _persist_approval(self, approval: Any) -> None:
+        """Persist an approval record when the store supports it (Sprint 4)."""
+        store = self._execution_store
+        if store is None or not hasattr(store, "save_approval"):
+            return
+        store.save_approval(approval)
+
+    def _journal_approval_decision(
+        self, execution_id: str, event: str, payload: dict
+    ) -> None:
+        """Record an approval decision as a journal event (Sprint 4)."""
+        store = self._execution_store
+        if store is not None and hasattr(store, "append_event"):
+            store.append_event(execution_id, event, payload)
 
     def checkpoint(self, execution: Execution) -> None:
         """Public checkpoint API — persists an execution mid-flight.
@@ -127,7 +151,41 @@ class ExecutionEngine:
         Used by workflows to checkpoint per-task progress so a restart
         can recover partial workflow state.
         """
+        self._build_checkpoint(execution)
         self._persist(execution)
+
+    def _build_checkpoint(self, execution: Execution) -> None:
+        """Build a JSON-serializable checkpoint payload (spec §14).
+
+        Captures resumable state: completed effect ids (for idempotency
+        skip), current step, state changes count, and metadata.
+        Never includes live Python objects.
+        """
+        from voodoo.primitives.effect import EffectStatus
+
+        completed_effects = [
+            e.id for e in execution.effects if e.status is EffectStatus.SUCCEEDED
+        ]
+        execution.checkpoint = {
+            "sequence": self._checkpoint_sequences.get(execution.id, 0),
+            "completed_effects": completed_effects,
+            "state_changes_count": len(execution.state_changes),
+            "status": execution.status.value,
+            "metadata": execution.metadata,
+        }
+        self._checkpoint_sequences[execution.id] = (
+            self._checkpoint_sequences.get(execution.id, 0) + 1
+        )
+
+    def resume_checkpoint(self, execution: Execution) -> list[str]:
+        """Return effect ids already completed at last checkpoint.
+
+        Used by resumed executions to skip re-running non-idempotent
+        effects (spec §15).
+        """
+        if execution.checkpoint is None:
+            return []
+        return list(execution.checkpoint.get("completed_effects", []))
 
     def recover(self) -> list[Execution]:
         """Reload unfinished executions from the attached store.
@@ -146,19 +204,57 @@ class ExecutionEngine:
             return []
         recovered = []
         for ex in filter_unfinished(all_execs):
+            # A running execution left over from a crash is recoverable:
+            # mark it waiting so it can be resumed from its last checkpoint.
+            if ex.status is ExecutionStatus.RUNNING:
+                ex.wait()
             self.executions.setdefault(ex.id, ex)
             ex = self.executions[ex.id]
             recovered.append(ex)
             # Rebuild a pending approval record for waiting executions so
             # `inspect approvals` and `approve()` work after a restart.
-            # Note: the original compute/intent are not serialized yet, so a
-            # restarted approval can be decided but not re-run (documented).
-            if ex.status is ExecutionStatus.WAITING and self.approvals.get(ex.id) is None:
-                self.approvals.create(
-                    execution=ex,
-                    requested_by=ex.actor,
-                )
+            # When the store persisted the approval (Sprint 4), rehydrate
+            # it (status, decided_by, reason, …); otherwise create an
+            # in-memory placeholder (the original compute/intent are not
+            # serialized, so a restarted approval can be decided but not
+            # re-run — documented).
+            if (
+                ex.status is ExecutionStatus.WAITING
+                and self.approvals.get(ex.id) is None
+            ):
+                persisted = None
+                if hasattr(self._execution_store, "load_approval"):
+                    persisted = self._execution_store.load_approval(ex.id)
+                if persisted is not None:
+                    self._rehydrate_approval(ex, persisted)
+                else:
+                    self.approvals.create(
+                        execution=ex,
+                        requested_by=ex.actor,
+                    )
         return recovered
+
+    def _rehydrate_approval(self, execution: Execution, record: dict) -> None:
+        """Reconstruct an approval record from its persisted form (Sprint 4)."""
+        from voodoo.runtime.human import Approval, ApprovalStatus
+
+        approval = Approval(
+            id=record["id"],
+            execution_id=record["execution_id"],
+            trace_id=record["trace_id"] or execution.trace_id,
+            capability=record["capability"],
+            question=record["question"] or "",
+            requested_by=record["requested_by"] or execution.actor,
+            status=ApprovalStatus(record["status"]),
+            decided_by=record["decided_by"],
+            decided_at=(
+                datetime.fromisoformat(record["decided_at"])
+                if record["decided_at"]
+                else None
+            ),
+            reason=record["reason"],
+        )
+        self.approvals.records[execution.id] = approval
 
     # -- human-in-the-loop --------------------------------------------------
 
@@ -174,6 +270,12 @@ class ExecutionEngine:
         )
         if approval is None:
             return None
+        self._persist_approval(approval)
+        self._journal_approval_decision(
+            execution_id,
+            "human.approved",
+            {"by": by, "capability": approval.capability},
+        )
         waiting = self.executions.get(execution_id)
         if waiting is not None:
             waiting.metadata["approved_by"] = by
@@ -214,9 +316,17 @@ class ExecutionEngine:
         """Deny a waiting execution; it fails with the denial reason."""
         from voodoo.runtime.human import ApprovalStatus
 
-        approval = self.approvals.decide(execution_id, ApprovalStatus.DENIED, by=by, reason=reason)
+        approval = self.approvals.decide(
+            execution_id, ApprovalStatus.DENIED, by=by, reason=reason
+        )
         if approval is None:
             return None
+        self._persist_approval(approval)
+        self._journal_approval_decision(
+            execution_id,
+            "human.denied",
+            {"by": by, "reason": reason},
+        )
         waiting = self.executions.get(execution_id)
         if waiting is not None:
             waiting.fail(f"denied by {by}: {reason}")
@@ -278,16 +388,24 @@ class ExecutionEngine:
             ctx.intent.execute()
         self.executions[execution.id] = execution
 
-        await self._emit("intent.created", {"intent": intent.name, "execution_id": execution.id})
+        await self._emit(
+            "intent.created", {"intent": intent.name, "execution_id": execution.id}
+        )
         await self._emit(
             "execution.started",
-            {"execution_id": execution.id, "trace_id": ctx.trace_id, "intent": intent.name},
+            {
+                "execution_id": execution.id,
+                "trace_id": ctx.trace_id,
+                "intent": intent.name,
+            },
         )
 
         try:
             # 1. Capability resolution
             for required in intent.requires:
-                self.capabilities.authorize(required, context=ctx, execution_id=execution.id)
+                self.capabilities.authorize(
+                    required, context=ctx, execution_id=execution.id
+                )
             execution.mark_authorized()
 
             # 2. Constraint pre-check
@@ -308,12 +426,22 @@ class ExecutionEngine:
 
             await self._emit(
                 "execution.completed",
-                {"execution_id": execution.id, "status": "completed", "cost": execution.cost},
+                {
+                    "execution_id": execution.id,
+                    "status": "completed",
+                    "cost": execution.cost,
+                },
             )
+            self._build_checkpoint(execution)
             self._persist(execution)
         except Exception as e:  # noqa: BLE001
             await self._handle_failure(
-                execution, ctx, e, intent=intent, compute=compute, output_type=output_type
+                execution,
+                ctx,
+                e,
+                intent=intent,
+                compute=compute,
+                output_type=output_type,
             )
 
         # Record to existing telemetry store for continuity.
@@ -321,11 +449,19 @@ class ExecutionEngine:
         return execution
 
     async def _record_result(
-        self, execution: Execution, intent: Intent, result: ComputeResult, ctx: ExecutionContext
+        self,
+        execution: Execution,
+        intent: Intent,
+        result: ComputeResult,
+        ctx: ExecutionContext,
     ) -> None:
         """Record a compute result's effects, state changes and resources."""
         for effect in result.effects:
             effect.intent_id = intent.id
+            # Idempotency key: stable per execution+effect so a resumed
+            # execution can safely skip already-completed effects (spec §15).
+            if effect.idempotency_key is None:
+                effect.idempotency_key = f"{execution.id}:{effect.id}"
             execution.add_effect(effect)
             await self._emit(
                 "effect.executed",
@@ -344,6 +480,9 @@ class ExecutionEngine:
         if result.resources is not None:
             execution.add_resources(result.resources)
             self.resources.account(result.resources, execution_id=execution.id)
+
+        # Checkpoint after state mutation / effects recorded (Sprint 4).
+        self._build_checkpoint(execution)
 
         # Post-compute constraint enforcement against accumulated usage.
         self.constraints.enforce(
@@ -371,9 +510,10 @@ class ExecutionEngine:
         """
         if isinstance(exc, ApprovalRequired):
             execution.wait()
+            self._build_checkpoint(execution)
             # Register a resumable approval: approve() re-runs the compute
             # under a child context carrying the decision.
-            self.approvals.create(
+            approval = self.approvals.create(
                 execution=execution,
                 capability=exc.context.get("capability"),
                 question=exc.message,
@@ -383,6 +523,9 @@ class ExecutionEngine:
                 output_type=output_type,
                 context=ctx,
             )
+            # Persist the pending approval so a restart can rehydrate it
+            # (spec §30 — decisions recorded as journal events on decide).
+            self._persist_approval(approval)
             await self._emit(
                 "human.approval_required",
                 {
@@ -479,7 +622,9 @@ class ExecutionEngine:
         output_type: type | None,
     ) -> ComputeResult:
         if compute is None:
-            return ComputeResult(value=ctx.intent.params if ctx.intent else None, output_type=output_type)
+            return ComputeResult(
+                value=ctx.intent.params if ctx.intent else None, output_type=output_type
+            )
 
         async with use_context(ctx):
             started = time.time()

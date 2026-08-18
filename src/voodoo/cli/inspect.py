@@ -75,8 +75,27 @@ def _emit(data: Any, json_mode: bool = False) -> None:
         terminal.blank()
 
 
+def _load_from_store(limit: int = 20):
+    """Fall back to the durable SQLite store (Sprint 3)."""
+    from voodoo.storage.execution import SQLiteExecutionStore
+
+    store = SQLiteExecutionStore(".voodoo/state/data.db")
+    try:
+        return store.load_all()[-limit:]
+    finally:
+        store.close()
+
+
+def _find_in_store(execution_id: str):
+    """Find one execution in the SQLite store by prefix."""
+    return next(
+        (e for e in _load_from_store(1000) if e.id.startswith(execution_id)),
+        None,
+    )
+
+
 @inspect_app.command("run")
-def inspect_run(
+def inspect_run(  # noqa: C901
     execution_id: str = typer.Argument(
         None, help="Execution id (lists recent if omitted)"
     ),
@@ -90,6 +109,8 @@ def inspect_run(
 
     if execution_id is None:
         executions = engine.recent(20)
+        if not executions:
+            executions = _load_from_store(20)
         _emit(None, json_mode)
         if not executions and not terminal.is_json_mode():
             terminal.muted("no executions recorded in this process")
@@ -111,6 +132,8 @@ def inspect_run(
         return
 
     ex = engine.get(execution_id)
+    if ex is None:
+        ex = _find_in_store(execution_id)
     _emit(None, json_mode)
     if ex is None:
         terminal.error(f"execution '{execution_id}' not found")

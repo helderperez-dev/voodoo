@@ -101,7 +101,12 @@ class ApprovalRegistry:
             execution_id=execution.id,
             trace_id=execution.trace_id,
             capability=capability,
-            question=question or (f"Capability '{capability}' requested" if capability else "Approval required"),
+            question=question
+            or (
+                f"Capability '{capability}' requested"
+                if capability
+                else "Approval required"
+            ),
             requested_by=requested_by,
             intent=intent,
             compute=compute,
@@ -118,7 +123,12 @@ class ApprovalRegistry:
         return [a for a in self.records.values() if a.status is ApprovalStatus.PENDING]
 
     def decide(
-        self, execution_id: str, status: ApprovalStatus, *, by: str, reason: str | None = None
+        self,
+        execution_id: str,
+        status: ApprovalStatus,
+        *,
+        by: str,
+        reason: str | None = None,
     ) -> Approval | None:
         approval = self.records.get(execution_id)
         if approval is None or approval.decided:

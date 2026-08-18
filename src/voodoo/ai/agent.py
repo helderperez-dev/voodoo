@@ -192,7 +192,9 @@ class Agent:
 
         ctx = current_context()
         held = (
-            {c.name for c in ctx.capabilities if c.valid} if ctx else set(self.capabilities)
+            {c.name for c in ctx.capabilities if c.valid}
+            if ctx
+            else set(self.capabilities)
         )
         missing = [p for p in required if p not in held]
         if missing:
@@ -212,7 +214,9 @@ class Agent:
                 f"{', '.join(missing)}"
             }
 
-        effect = Effect(name=f"tool.{name}", capability_name=required[0] if required else None)
+        effect = Effect(
+            name=f"tool.{name}", capability_name=required[0] if required else None
+        )
         await self._broadcast("tool.called", {"tool": name, "arguments": arguments})
         try:
             result = await self.registry.call(name, **arguments)
@@ -227,9 +231,7 @@ class Agent:
         effect.mark_succeeded(result={"ok": True})
         if ctx is not None:
             ctx.add_effect(effect)
-        await self._broadcast(
-            "tool.completed", {"tool": name, "status": "succeeded"}
-        )
+        await self._broadcast("tool.completed", {"tool": name, "status": "succeeded"})
         return result
 
     # -- run ---------------------------------------------------------------

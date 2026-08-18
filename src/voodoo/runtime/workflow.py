@@ -114,7 +114,11 @@ class Workflow:
         return order
 
     def _ready_tasks(self, done: set[str]) -> list[Task]:
-        return [t for t in self.tasks if t.name not in done and all(d.name in done for d in t.depends_on)]
+        return [
+            t
+            for t in self.tasks
+            if t.name not in done and all(d.name in done for d in t.depends_on)
+        ]
 
     # -- execution ---------------------------------------------------------
 
@@ -166,23 +170,37 @@ class Workflow:
     # -- strategies --------------------------------------------------------
 
     async def _run_sequential(
-        self, run: WorkflowRun, engine: ExecutionEngine, parent: ExecutionContext | None, ctx: dict | None
+        self,
+        run: WorkflowRun,
+        engine: ExecutionEngine,
+        parent: ExecutionContext | None,
+        ctx: dict | None,
     ) -> None:
         results: dict[str, Any] = dict(ctx or {})
         for task in self._topological_order():
-            execution = await task.run(context=ctx, engine=engine, parent=parent, results=results)
+            execution = await task.run(
+                context=ctx, engine=engine, parent=parent, results=results
+            )
             run.executions.append(execution)
             run.task_statuses[task.name] = task.status.value
             run.task_results[task.name] = task.result
             results[task.name] = task.result
             engine.checkpoint(execution)
             if task.status is TaskStatus.FAILED:
-                raise WorkflowFailure(f"Task '{task.name}' failed", context={"task": task.name})
+                raise WorkflowFailure(
+                    f"Task '{task.name}' failed", context={"task": task.name}
+                )
 
     async def _run_parallel(
-        self, run: WorkflowRun, engine: ExecutionEngine, parent: ExecutionContext | None, ctx: dict | None
+        self,
+        run: WorkflowRun,
+        engine: ExecutionEngine,
+        parent: ExecutionContext | None,
+        ctx: dict | None,
     ) -> None:
-        await self._emit("workflow.started", {"workflow_id": self.id, "strategy": "parallel"})
+        await self._emit(
+            "workflow.started", {"workflow_id": self.id, "strategy": "parallel"}
+        )
         results: dict[str, Any] = dict(ctx or {})
         done: set[str] = set()
 
@@ -190,13 +208,18 @@ class Workflow:
             ready = self._ready_tasks(done)
             if not ready:
                 break
-            coros = [task.run(context=ctx, engine=engine, parent=parent, results=results) for task in ready]
+            coros = [
+                task.run(context=ctx, engine=engine, parent=parent, results=results)
+                for task in ready
+            ]
             executions = await asyncio.gather(*coros, return_exceptions=True)
             for task, ex in zip(ready, executions, strict=True):
                 if isinstance(ex, Exception):
                     run.task_statuses[task.name] = TaskStatus.FAILED.value
                     run.task_results[task.name] = None
-                    raise WorkflowFailure(f"Task '{task.name}' failed: {ex}", context={"task": task.name})
+                    raise WorkflowFailure(
+                        f"Task '{task.name}' failed: {ex}", context={"task": task.name}
+                    )
                 run.executions.append(ex)
                 run.task_statuses[task.name] = task.status.value
                 run.task_results[task.name] = task.result
@@ -204,24 +227,40 @@ class Workflow:
                 done.add(task.name)
                 engine.checkpoint(ex)
                 if task.status is TaskStatus.FAILED:
-                    raise WorkflowFailure(f"Task '{task.name}' failed", context={"task": task.name})
+                    raise WorkflowFailure(
+                        f"Task '{task.name}' failed", context={"task": task.name}
+                    )
 
     async def _run_conditional(
-        self, run: WorkflowRun, engine: ExecutionEngine, parent: ExecutionContext | None, ctx: dict | None
+        self,
+        run: WorkflowRun,
+        engine: ExecutionEngine,
+        parent: ExecutionContext | None,
+        ctx: dict | None,
     ) -> None:
-        await self._emit("workflow.started", {"workflow_id": self.id, "strategy": "conditional"})
+        await self._emit(
+            "workflow.started", {"workflow_id": self.id, "strategy": "conditional"}
+        )
         results: dict[str, Any] = dict(ctx or {})
         for task in self._topological_order():
-            execution = await task.run(context=ctx, engine=engine, parent=parent, results=results)
+            execution = await task.run(
+                context=ctx, engine=engine, parent=parent, results=results
+            )
             run.executions.append(execution)
             run.task_statuses[task.name] = task.status.value
             run.task_results[task.name] = task.result
             results[task.name] = task.result
 
     async def _run_iterative(
-        self, run: WorkflowRun, engine: ExecutionEngine, parent: ExecutionContext | None, ctx: dict | None
+        self,
+        run: WorkflowRun,
+        engine: ExecutionEngine,
+        parent: ExecutionContext | None,
+        ctx: dict | None,
     ) -> None:
-        await self._emit("workflow.started", {"workflow_id": self.id, "strategy": "iterative"})
+        await self._emit(
+            "workflow.started", {"workflow_id": self.id, "strategy": "iterative"}
+        )
         iteration = 0
         while iteration < self.max_iterations:
             run.iterations = iteration + 1
@@ -231,23 +270,37 @@ class Workflow:
             iteration += 1
 
     async def _run_delegated(
-        self, run: WorkflowRun, engine: ExecutionEngine, parent: ExecutionContext | None, ctx: dict | None
+        self,
+        run: WorkflowRun,
+        engine: ExecutionEngine,
+        parent: ExecutionContext | None,
+        ctx: dict | None,
     ) -> None:
-        await self._emit("workflow.started", {"workflow_id": self.id, "strategy": "delegated"})
+        await self._emit(
+            "workflow.started", {"workflow_id": self.id, "strategy": "delegated"}
+        )
         results: dict[str, Any] = dict(ctx or {})
         for task in self._topological_order():
             # Each task runs as a child execution (delegation).
             child_parent = parent or ExecutionContext(actor="workflow")
-            execution = await task.run(context=ctx, engine=engine, parent=child_parent, results=results)
+            execution = await task.run(
+                context=ctx, engine=engine, parent=child_parent, results=results
+            )
             run.executions.append(execution)
             run.task_statuses[task.name] = task.status.value
             run.task_results[task.name] = task.result
             results[task.name] = task.result
 
     async def _run_hierarchical(
-        self, run: WorkflowRun, engine: ExecutionEngine, parent: ExecutionContext | None, ctx: dict | None
+        self,
+        run: WorkflowRun,
+        engine: ExecutionEngine,
+        parent: ExecutionContext | None,
+        ctx: dict | None,
     ) -> None:
-        await self._emit("workflow.started", {"workflow_id": self.id, "strategy": "hierarchical"})
+        await self._emit(
+            "workflow.started", {"workflow_id": self.id, "strategy": "hierarchical"}
+        )
         # Treat nested Workflow objects in self.tasks as sub-workflows.
         results: dict[str, Any] = dict(ctx or {})
         for item in self.tasks:
@@ -257,7 +310,9 @@ class Workflow:
                 run.task_results[item.name or item.id] = sub_run.task_results
                 run.executions.extend(sub_run.executions)
             else:
-                execution = await item.run(context=ctx, engine=engine, parent=parent, results=results)
+                execution = await item.run(
+                    context=ctx, engine=engine, parent=parent, results=results
+                )
                 run.executions.append(execution)
                 run.task_statuses[item.name] = item.status.value
                 run.task_results[item.name] = item.result
@@ -266,7 +321,11 @@ class Workflow:
     # -- mesh --------------------------------------------------------------
 
     async def _run_adaptive(
-        self, run: WorkflowRun, engine: ExecutionEngine, parent: ExecutionContext | None, ctx: dict | None
+        self,
+        run: WorkflowRun,
+        engine: ExecutionEngine,
+        parent: ExecutionContext | None,
+        ctx: dict | None,
     ) -> None:
         """Adaptive strategy: build a Planner from the workflow's tasks and
         let the :class:`AdaptiveSupervisor` steer execution step-by-step.
@@ -275,13 +334,19 @@ class Workflow:
         participant; the planner resolves the sequence and the supervisor
         records decisions on the run.
         """
-        await self._emit("workflow.started", {"workflow_id": self.id, "strategy": "adaptive"})
+        await self._emit(
+            "workflow.started", {"workflow_id": self.id, "strategy": "adaptive"}
+        )
         from voodoo.runtime.adaptive import AdaptiveSupervisor
         from voodoo.runtime.planner import ComputeParticipant, Planner
 
         planner = Planner(engine=engine)
         for task in self._topological_order():
-            kind = "human" if task.human else ("agent" if task.agent is not None else "compute")
+            kind = (
+                "human"
+                if task.human
+                else ("agent" if task.agent is not None else "compute")
+            )
             planner.register(
                 ComputeParticipant(
                     name=task.name,

@@ -39,8 +39,14 @@ RESOURCE determines how execution should be performed.
 
 ```python
 from voodoo.primitives import (
-    State, Capability, Intent, Effect,
-    TimeSpec, ComputeSpec, Resource, Constraint,
+    State,
+    Capability,
+    Intent,
+    Effect,
+    TimeSpec,
+    ComputeSpec,
+    Resource,
+    Constraint,
 )
 ```
 
@@ -63,7 +69,7 @@ restored = State.restore(checkpoint)
 # Temporal validity
 user.expire_in(3600)  # expires in 1 hour
 user.expired  # False
-user.valid    # True
+user.valid  # True
 ```
 
 ### Capability
@@ -149,7 +155,7 @@ from voodoo.primitives import TimeSpec
 
 # Deadline
 t = TimeSpec.with_deadline(3600)
-t.remaining     # ~3600 seconds
+t.remaining  # ~3600 seconds
 t.deadline_passed  # False
 
 # Expiration
@@ -181,9 +187,11 @@ c = ComputeSpec.inference(provider="local", model="llama-3")
 c = ComputeSpec.human()
 
 # With constraints and resources
-c = (ComputeSpec.reasoning(provider="anthropic", model="claude-3")
-     .constrain(Constraint.cost(maximum=0.05))
-     .with_resources(Resource(cost=0.03, latency_ms=500)))
+c = (
+    ComputeSpec.reasoning(provider="anthropic", model="claude-3")
+    .constrain(Constraint.cost(maximum=0.05))
+    .with_resources(Resource(cost=0.03, latency_ms=500))
+)
 ```
 
 ### Resource
@@ -213,7 +221,7 @@ c.evaluate(0.15)  # False
 
 # Latency constraint
 c = Constraint.latency(maximum_ms=100)
-c.evaluate(50)   # True
+c.evaluate(50)  # True
 c.evaluate(150)  # False
 
 # Data locality

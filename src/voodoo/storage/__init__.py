@@ -8,8 +8,22 @@ Two concerns live here:
 - ``voodoo.storage.database`` — the ``VoodooDatabase`` capability adapters
   (SQLite default, PostgreSQL later) that own all durable schema through
   the migration runner.
+- ``voodoo.storage.events`` — event bus capability (Sprint 7).
 """
 
+from voodoo.storage.events import (
+    EventBusCapabilities,
+    LocalEventBus,
+    SQLiteEventBus,
+    VoodooEventBus,
+)
 from voodoo.storage.manager import StorageManager, storage
 
-__all__ = ["StorageManager", "storage"]
+__all__ = [
+    "StorageManager",
+    "storage",
+    "EventBusCapabilities",
+    "VoodooEventBus",
+    "LocalEventBus",
+    "SQLiteEventBus",
+]

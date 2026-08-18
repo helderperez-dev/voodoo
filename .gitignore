@@ -19,6 +19,7 @@ env/
 
 # Local databases & storage (runtime output dirs, not the source package)
 .data/
+.voodoo/
 storage/
 !src/voodoo/storage/
 !src/voodoo/storage/**

@@ -132,7 +132,7 @@ class TestSQLiteDatabase(DatabaseContractTests):
             str(tmp_path / "rerun.db"),
             migrations=(
                 CONTRACT_MIGRATION,
-                Migration(version=3, name="counter", fn=marker, rerun=True),
+                Migration(version=30, name="counter", fn=marker, rerun=True),
             ),
         )
         await db.connect()
@@ -141,7 +141,7 @@ class TestSQLiteDatabase(DatabaseContractTests):
             await db.migrate()  # rerun branch
             assert calls == [db.provider, db.provider]
             rows = await db.fetch_all(
-                "SELECT version FROM schema_migrations WHERE version = 3"
+                "SELECT version FROM schema_migrations WHERE version = 30"
             )
             assert len(rows) == 1  # ledger row recorded once
         finally:

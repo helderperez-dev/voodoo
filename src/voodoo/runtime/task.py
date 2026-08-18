@@ -137,7 +137,9 @@ class Task:
                 )
                 self.execution = execution
                 self.result = execution.result
-                self.status = TaskStatus.COMPLETED if execution.succeeded else TaskStatus.FAILED
+                self.status = (
+                    TaskStatus.COMPLETED if execution.succeeded else TaskStatus.FAILED
+                )
                 if execution.failed:
                     self.error = execution.error
                 return execution
@@ -207,7 +209,9 @@ class Task:
 
             async def agent_compute(ctx: ExecutionContext) -> ComputeResult:
                 prompt = self.description or self.name
-                upstream = results.get("_upstream", {}) if isinstance(results, dict) else {}
+                upstream = (
+                    results.get("_upstream", {}) if isinstance(results, dict) else {}
+                )
                 if upstream:
                     prompt = f"{prompt}\n\nUpstream results: {upstream}"
                 run = await agent.run(prompt, context=dict(ctx.state))
@@ -224,7 +228,9 @@ class Task:
                     resources=Resource(
                         cost=run.cost,
                         tokens=(run.tokens_in + run.tokens_out) or None,
-                        latency_ms=(run.timings.get("total_ms") if run.timings else None),
+                        latency_ms=(
+                            run.timings.get("total_ms") if run.timings else None
+                        ),
                     ),
                 )
 

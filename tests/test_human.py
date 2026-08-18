@@ -36,7 +36,8 @@ class TestAskHuman:
         engine = ExecutionEngine()
         with pytest.raises(ApprovalRequired):
             await engine.execute(
-                Intent(name="debit.account"), ask_human("Approve debit?", capability="pay.debit")
+                Intent(name="debit.account"),
+                ask_human("Approve debit?", capability="pay.debit"),
             )
 
         ex = engine.get(list(engine.executions)[-1])
@@ -123,7 +124,8 @@ class TestWorkflowHuman:
         pending = [
             ex
             for ex in engine.executions.values()
-            if ex.intent and ex.intent.name == "approve"
+            if ex.intent
+            and ex.intent.name == "approve"
             and ex.status is ExecutionStatus.WAITING
         ]
         assert pending

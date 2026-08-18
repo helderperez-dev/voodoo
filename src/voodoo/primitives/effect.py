@@ -55,6 +55,7 @@ class Effect(BaseModel):
     capability_name: str | None = None
     reversible: bool = False
     idempotent: bool = False
+    idempotency_key: str | None = None
     status: EffectStatus = EffectStatus.PENDING
     result: Any | None = None
     error: str | None = None
@@ -115,6 +116,7 @@ class Effect(BaseModel):
             "capability": self.capability_name,
             "reversible": self.reversible,
             "idempotent": self.idempotent,
+            "idempotency_key": self.idempotency_key,
             "succeeded": self.succeeded,
             "has_result": self.result is not None,
         }

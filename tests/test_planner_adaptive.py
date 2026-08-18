@@ -38,10 +38,14 @@ class TestPlanner:
     def test_fallback_when_multiple_participants_match(self):
         planner = Planner()
         planner.register(
-            ComputeParticipant(name="general", kind="compute", capabilities=["search", "read"])
+            ComputeParticipant(
+                name="general", kind="compute", capabilities=["search", "read"]
+            )
         )
         planner.register(
-            ComputeParticipant(name="dedicated", kind="compute", capabilities=["search"])
+            ComputeParticipant(
+                name="dedicated", kind="compute", capabilities=["search"]
+            )
         )
         plan = planner.plan(Intent(name="search").require("search"))
         # most-specific (fewest other capabilities) is primary
@@ -59,11 +63,13 @@ class TestPlanner:
 
     def test_parallel_strategy_when_multiple_capabilities(self):
         planner = Planner()
-        planner.register(ComputeParticipant(name="a", kind="compute", capabilities=["cap.a"]))
-        planner.register(ComputeParticipant(name="b", kind="compute", capabilities=["cap.b"]))
-        plan = planner.plan(
-            Intent(name="multi").require("cap.a").require("cap.b")
+        planner.register(
+            ComputeParticipant(name="a", kind="compute", capabilities=["cap.a"])
         )
+        planner.register(
+            ComputeParticipant(name="b", kind="compute", capabilities=["cap.b"])
+        )
+        plan = planner.plan(Intent(name="multi").require("cap.a").require("cap.b"))
         assert plan.strategy is WorkflowStrategy.PARALLEL
 
     def test_describe_lists_participants(self):
@@ -101,7 +107,9 @@ class TestAdaptiveSupervisor:
         assert run.result == 42
         assert run.execution_id is not None
         assert run.trace_id is not None
-        assert any(d.startswith(SupervisorDecision.CONTINUE.value) for d in run.decisions)
+        assert any(
+            d.startswith(SupervisorDecision.CONTINUE.value) for d in run.decisions
+        )
 
     async def test_unresolved_capability_fails(self):
         engine = ExecutionEngine()
@@ -126,13 +134,18 @@ class TestAdaptiveSupervisor:
         supervisor = AdaptiveSupervisor(planner, engine=engine)
         run = await supervisor.run(intent)
         assert run.status == "waiting"
-        assert any(d.startswith(SupervisorDecision.REQUEST_APPROVAL.value) for d in run.decisions)
+        assert any(
+            d.startswith(SupervisorDecision.REQUEST_APPROVAL.value)
+            for d in run.decisions
+        )
 
     async def test_step_without_compute_fails(self):
         engine = ExecutionEngine()
         planner = Planner(engine=engine)
         planner.register(
-            ComputeParticipant(name="noisy", kind="compute", capabilities=["c.x"], compute=None)
+            ComputeParticipant(
+                name="noisy", kind="compute", capabilities=["c.x"], compute=None
+            )
         )
         supervisor = AdaptiveSupervisor(planner, engine=engine)
         run = await supervisor.run(Intent(name="x").require("c.x"))
@@ -156,12 +169,18 @@ class TestAdaptiveSupervisor:
 
         planner.register(
             ComputeParticipant(
-                name="primary", kind="compute", capabilities=["cap.x"], compute=primary_compute
+                name="primary",
+                kind="compute",
+                capabilities=["cap.x"],
+                compute=primary_compute,
             )
         )
         planner.register(
             ComputeParticipant(
-                name="backup", kind="compute", capabilities=["cap.x"], compute=fallback_compute
+                name="backup",
+                kind="compute",
+                capabilities=["cap.x"],
+                compute=fallback_compute,
             )
         )
         intent = Intent(name="x").require("cap.x")
@@ -170,7 +189,9 @@ class TestAdaptiveSupervisor:
         # primary raises CapabilityDenied -> supervisor should try fallback
         assert run.status == "completed"
         assert run.result == "fallback-ok"
-        assert any(d.startswith(SupervisorDecision.FALLBACK.value) for d in run.decisions)
+        assert any(
+            d.startswith(SupervisorDecision.FALLBACK.value) for d in run.decisions
+        )
 
     async def test_resource_budget_stops_when_exceeded(self):
         """The supervisor accumulates per-step cost and stops when the
@@ -188,10 +209,14 @@ class TestAdaptiveSupervisor:
             return ComputeResult(value="step", resources=Resource(cost=1.0))
 
         planner.register(
-            ComputeParticipant(name="a", kind="compute", capabilities=["cap.x"], compute=expensive)
+            ComputeParticipant(
+                name="a", kind="compute", capabilities=["cap.x"], compute=expensive
+            )
         )
         planner.register(
-            ComputeParticipant(name="b", kind="compute", capabilities=["cap.y"], compute=expensive)
+            ComputeParticipant(
+                name="b", kind="compute", capabilities=["cap.y"], compute=expensive
+            )
         )
 
         intent = Intent(name="multi").require("cap.x").require("cap.y")
@@ -227,7 +252,10 @@ class TestAdaptiveSupervisor:
 
         planner.register(
             ComputeParticipant(
-                name="flaky_svc", kind="compute", capabilities=["cap.flaky"], compute=flaky
+                name="flaky_svc",
+                kind="compute",
+                capabilities=["cap.flaky"],
+                compute=flaky,
             )
         )
         intent = Intent(name="flaky").require("cap.flaky")

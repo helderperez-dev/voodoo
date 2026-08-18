@@ -3,32 +3,28 @@ import os
 
 import aiofiles
 
-try:
-    import boto3
-    import botocore.config
-except ImportError:
-    boto3 = None
+from voodoo.storage.objects.s3 import S3ObjectStore
 
 
 class StorageManager:
+    """Thin facade over the active storage adapter (Sprint 6).
+
+    When S3 env vars are set, upload/delete/url delegate to
+    :class:`~voodoo.storage.objects.S3ObjectStore`; otherwise a local
+    filesystem backend under ``base_dir`` is used. The public surface
+    (``upload`` / ``delete`` / ``url`` / ``base_dir`` / ``use_s3`` /
+    ``s3_client``) is preserved so ``status.py`` and downstream callers
+    are unchanged.
+    """
+
     def __init__(self):
-        self.s3_bucket = os.getenv("VOODOO_S3_BUCKET")
-        self.key = os.getenv("VOODOO_S3_KEY")
-        self.secret = os.getenv("VOODOO_S3_SECRET")
-        self.endpoint = os.getenv("VOODOO_S3_ENDPOINT")
-
-        self.use_s3 = all([self.s3_bucket, self.key, self.secret, self.endpoint])
-
-        if self.use_s3 and boto3:
-            self.s3_client = boto3.client(
-                "s3",
-                aws_access_key_id=self.key,
-                aws_secret_access_key=self.secret,
-                endpoint_url=self.endpoint,
-                config=botocore.config.Config(signature_version="s3v4"),
-            )
-        else:
-            self.s3_client = None
+        self._s3 = S3ObjectStore()
+        self.s3_bucket = self._s3.bucket
+        self.key = self._s3.key
+        self.secret = self._s3.secret
+        self.endpoint = self._s3.endpoint
+        self.use_s3 = self._s3.use_s3
+        self.s3_client = self._s3.s3_client
 
     @property
     def base_dir(self) -> str:
@@ -51,10 +47,7 @@ class StorageManager:
         if self.use_s3 and self.s3_client:
             s3_key = f"{bucket}/{path}"
             await asyncio.to_thread(
-                self.s3_client.put_object,
-                Bucket=self.s3_bucket,
-                Key=s3_key,
-                Body=file_content,
+                self._s3.put, s3_key, file_content, "application/octet-stream"
             )
             return self.url(path, bucket)
         else:
@@ -67,10 +60,7 @@ class StorageManager:
     async def delete(self, path: str, bucket: str = "public") -> bool:
         """Deletes a file from a specific bucket"""
         if self.use_s3 and self.s3_client:
-            s3_key = f"{bucket}/{path}"
-            await asyncio.to_thread(
-                self.s3_client.delete_object, Bucket=self.s3_bucket, Key=s3_key
-            )
+            await asyncio.to_thread(self._s3.delete, f"{bucket}/{path}")
             return True
         else:
             local_path = self._get_local_path(bucket, path)
@@ -82,10 +72,7 @@ class StorageManager:
     def url(self, path: str, bucket: str = "public") -> str:
         """Returns the URL for a file in a specific bucket"""
         if self.use_s3 and self.s3_client:
-            s3_key = f"{bucket}/{path}"
-            if "amazonaws.com" in self.endpoint:
-                return f"https://{self.s3_bucket}.s3.amazonaws.com/{s3_key}"
-            return f"{self.endpoint}/{self.s3_bucket}/{s3_key}"
+            return self._s3.url(f"{bucket}/{path}")
         else:
             return f"/storage/{bucket}/{path}"
 

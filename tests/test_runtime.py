@@ -420,6 +420,7 @@ class TestWorkflow:
         async def mk(v):
             async def c(ctx):
                 return ComputeResult(value=v)
+
             return c
 
         a = Task(name="a", compute=await mk("A"))
@@ -481,7 +482,9 @@ class TestExecutionGraph:
             async def child_compute(c):
                 return ComputeResult(value="child")
 
-            await engine.delegate(RTIntent(name="child"), child_compute, parent=ctx, actor="sub")
+            await engine.delegate(
+                RTIntent(name="child"), child_compute, parent=ctx, actor="sub"
+            )
             return ComputeResult(value="parent")
 
         await engine.execute(RTIntent(name="parent"), parent_compute)
@@ -564,7 +567,9 @@ class TestAgentRuntimeIntegration:
         assert ctx.effects[0].succeeded
 
     @pytest.mark.asyncio
-    async def test_agent_run_inside_engine_records_effects(self, engine: ExecutionEngine):
+    async def test_agent_run_inside_engine_records_effects(
+        self, engine: ExecutionEngine
+    ):
         """A tool call inside an agent executed via the runtime lands on the Execution."""
         agent, registry = self._make_agent_with_gated_tool(granted=["email.send"])
 

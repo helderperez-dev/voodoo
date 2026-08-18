@@ -76,7 +76,7 @@ from .ui.styles import (
 from .ui.styles.theme import Theme, ThemeColors, create_theme
 from .workers import task
 
-__version__ = "1.4.0"
+__version__ = "1.9.0"
 
 __all__ = [
     # Core runtime
@@ -229,6 +229,8 @@ _DEPRECATED_EXPORTS: dict[str, str] = {
     # voodoo.queue
     "enqueue": "voodoo.queue",
     "queue": "voodoo.queue",
+    # voodoo.schedule
+    "schedule": "voodoo.schedule",
     # voodoo.security
     "CORSMiddleware": "voodoo.security",
     "CSRFMiddleware": "voodoo.security",

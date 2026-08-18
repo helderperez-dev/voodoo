@@ -29,6 +29,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from voodoo.mcp import mcp
 from voodoo.mesh.client import MeshClient
+from voodoo.storage.events import LocalEventBus, VoodooEventBus
 
 
 def _make_envelope(
@@ -62,7 +63,8 @@ def _validate_namespace(event: str) -> None:
 
 
 class MeshNetwork:
-    def __init__(self):
+    def __init__(self, bus: VoodooEventBus | None = None):
+        self.bus = bus or LocalEventBus()
         self.exposed_functions: dict[str, Callable] = {}
         self.event_handlers: dict[str, list[Callable]] = {}
         self.active_nodes: list[WebSocket] = []
@@ -92,9 +94,9 @@ class MeshNetwork:
 
         Event names must be namespaced (e.g. ``"agent.started"``).
         """
+        _validate_namespace(event)
 
         def decorator(func: Callable):
-            _validate_namespace(event)
             if event not in self.event_handlers:
                 self.event_handlers[event] = []
             self.event_handlers[event].append(func)
@@ -128,7 +130,10 @@ class MeshNetwork:
             except Exception:  # noqa: BLE001
                 pass
 
-        # Also trigger locally (local boundary — handlers get raw payload)
+        # Also trigger locally via the bus (local boundary)
+        self.bus.publish(
+            event, payload, source="voodoo", correlation_id=envelope["correlation_id"]
+        )
         await self._fire_local(event, payload)
 
     async def emit(self, event: str, payload: Any):

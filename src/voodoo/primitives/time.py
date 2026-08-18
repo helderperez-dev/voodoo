@@ -89,6 +89,36 @@ class TimeSpec(BaseModel):
         delta = (self.deadline - datetime.now(UTC)).total_seconds()
         return max(delta, 0.0)
 
+    def to_schedule_record(self, name: str, task_type: str) -> dict:
+        """Convert this TimeSpec into a schedule record (Sprint 5).
+
+        Returns a dict with kind/spec/next_run_at for the scheduler.
+        Returns None if this TimeSpec has no schedule or interval.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        if self.schedule is not None:
+            # cron-like or at/after spec
+            return {
+                "name": name,
+                "kind": "cron" if " " in self.schedule else "at",
+                "spec": self.schedule,
+                "next_run_at": now,
+                "task_type": task_type,
+            }
+        if self.interval is not None:
+            return {
+                "name": name,
+                "kind": "interval",
+                "spec": str(int(self.interval))
+                if self.interval == int(self.interval)
+                else str(self.interval),
+                "next_run_at": now + timedelta(seconds=self.interval),
+                "task_type": task_type,
+            }
+        return None
+
     # -- inspectability ----------------------------------------------------
 
     def describe(self) -> dict[str, Any]:

@@ -126,9 +126,7 @@ class Planner:
             return WorkflowStrategy.PARALLEL
         return WorkflowStrategy.SEQUENTIAL
 
-    def plan(
-        self, intent: Intent, *, strategy: WorkflowStrategy | None = None
-    ) -> Plan:
+    def plan(self, intent: Intent, *, strategy: WorkflowStrategy | None = None) -> Plan:
         """Resolve an intent to a plan: strategy + one step per capability."""
         plan = Plan(intent=intent, strategy=strategy or self._pick_strategy(intent))
 

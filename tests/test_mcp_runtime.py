@@ -47,7 +47,9 @@ class TestMCPRuntime:
         spec.permissions = ["email.send"]
         fresh_mcp.engine.capabilities.register(Capability(name="email.send"))
 
-        result = await fresh_mcp._run_tool_call("send_email", send_email, spec, {"to": "a@b.c"})
+        result = await fresh_mcp._run_tool_call(
+            "send_email", send_email, spec, {"to": "a@b.c"}
+        )
         assert result == "sent to a@b.c"
 
         matches = [
