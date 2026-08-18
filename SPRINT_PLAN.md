@@ -61,7 +61,7 @@ DONE  |  WIP  |  TODO
 
 | # | Sprint | Version | Delivers | Status |
 |---|--------|---------|----------|--------|
-| 1 | Storage core & migrations | 1.3.0 | VoodooDatabase + SQLite + migration runner | WIP |
+| 1 | Storage core & migrations | 1.3.0 | VoodooDatabase + SQLite + migration runner | DONE |
 | 2 | Durable task queue | 1.4.0 | SQLite queue: claim/lease/retry — tasks survive restart | TODO |
 | 3 | Durable executions | 1.5.0 | SQLite ExecutionStore + execution event journal | TODO |
 | 4 | Checkpoints & resume | 1.6.0 | Resume waiting/unfinished executions after restart | TODO |
@@ -91,7 +91,7 @@ Spec §52 "Definition of Done — Durable Runtime" is achieved after Sprint 6.
 # MILESTONE A — DURABLE LOCAL RUNTIME (zero infra)
 
 ## Sprint 1 — Storage core & migrations
-**Version 1.3.0 · Spec §11, §38, §48 · Status: WIP · Released as: —**
+**Version 1.3.0 · Spec §11, §38, §48 · Status: DONE · Released as: 1.3.0**
 
 Goal: one internal database layer the whole runtime persists through, with
 real migrations (today: create-if-absent DDL only).
