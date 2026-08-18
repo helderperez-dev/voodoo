@@ -62,7 +62,7 @@ DONE  |  WIP  |  TODO
 | # | Sprint | Version | Delivers | Status |
 |---|--------|---------|----------|--------|
 | 1 | Storage core & migrations | 1.3.0 | VoodooDatabase + SQLite + migration runner | DONE |
-| 2 | Durable task queue | 1.4.0 | SQLite queue: claim/lease/retry — tasks survive restart | WIP |
+| 2 | Durable task queue | 1.4.0 | SQLite queue: claim/lease/retry — tasks survive restart | DONE |
 | 3 | Durable executions | 1.5.0 | SQLite ExecutionStore + execution event journal | TODO |
 | 4 | Checkpoints & resume | 1.6.0 | Resume waiting/unfinished executions after restart | TODO |
 | 5 | Durable scheduler | 1.7.0 | schedule.at/after/every/cron backed by SQLite | TODO |
@@ -113,7 +113,7 @@ Done when: `init_db` goes through the new layer, migrations run idempotently
 on fresh and existing DBs, contract tests green, full suite green.
 
 ## Sprint 2 — Durable task queue
-**Version 1.4.0 · Spec §12, §26, §37.7 · Status: WIP · Released as: —**
+**Version 1.4.0 · Spec §12, §26, §37.7 · Status: DONE · Released as: 1.4.0**
 
 Goal: background tasks survive process restarts. Replaces `asyncio.Queue` as
 source of truth (§37.7).
