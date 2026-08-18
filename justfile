@@ -19,10 +19,6 @@ lint:
 test:
     uv run pytest
 
-# Run performance micro-benchmarks
-bench:
-    uv run python scripts/benchmark.py
-
 # Clean up build artifacts and cache directories
 clean:
     rm -rf build/ dist/ *.egg-info/ .voodoo/ storage/ .mypy_cache/ .ruff_cache/

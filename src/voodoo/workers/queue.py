@@ -32,35 +32,42 @@ logger = logging.getLogger("voodoo.queue")
 
 
 def _get_provider() -> str:
-    return os.environ.get("VOODOO_QUEUE_PROVIDER", "sqlite").lower()
+    from voodoo.config import get_config
+
+    return get_config().queue.provider.lower()
 
 
 async def _get_queue() -> VoodooQueue:
-    """Get or create the active queue provider."""
+    """Resolve the active queue backend.
+
+    Resolved using the central ProviderRegistry and VoodooConfig (Spec §31).
+    """
     global _queue
     if _queue is not None:
         return _queue
 
-    provider = _get_provider()
+    from voodoo.adapters.registry import registry
+    from voodoo.config import get_config
+    from voodoo.data.base import _database, get_db
+
+    cfg = get_config().queue
+    provider = cfg.provider.lower()
+
     if provider == "memory":
-        from voodoo.storage.queue import MemoryQueue
-
-        _queue = MemoryQueue()
+        _queue = registry.get_queue(cfg)
     else:
-        from voodoo.data.base import _database, get_db
-        from voodoo.storage.database import SQLiteDatabase
-        from voodoo.storage.queue import SQLiteQueue
-
-        # Ensure the data layer is initialized (shared DB file).
-        await get_db()
+        # SQLiteQueue requires a database
         db = _database
         if db is None:
-            # Fallback: create a standalone connection on the same path.
-            from voodoo.config import config
+            await get_db()
+            from voodoo.data.base import _database as active_db
 
-            db = SQLiteDatabase(config.db_path)
+            db = active_db
+        if db is None:
+            db = registry.get_database()
             await db.connect()
-        _queue = SQLiteQueue(db)
+        _queue = registry.get_queue(cfg, db=db)
+
     await _queue.setup()
     return _queue
 

@@ -210,6 +210,50 @@ The boundary between core and ecosystem is explicit. This keeps the framework sm
 
 **The adapter philosophy** — Voodoo does not try to own every technology. A developer must eventually be able to replace Tailwind without replacing Voodoo. The same applies to LLM providers, databases, queues, auth providers, storage, and deployment. Built on Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python async — Voodoo must remain interoperable with FastAPI, SQLAlchemy, httpx, pytest, and asyncio. It must not become an island.
 
+### Runtime Configuration & Provider Migration (§28, §31)
+
+Infrastructure is selected by configuration, never by code changes. Standard application code (`storage.upload()`, `enqueue()`, `mesh.publish()`, `model.generate()`) runs identically across providers.
+
+#### Provider Migration Matrix (§28)
+
+| Capability | Local (Default) | Production | Future / Scaled |
+|------------|-----------------|------------|-----------------|
+| **Database** | SQLite (`sqlite`) | PostgreSQL (`postgres`) | PostgreSQL / CockroachDB |
+| **Queue** | SQLite (`sqlite`) or Memory (`memory`) | PostgreSQL (`postgres`) / Redis (`redis`) | SQS / NATS / RabbitMQ |
+| **Events** | SQLite (`sqlite`) or In-Process (`local`) | PostgreSQL (`postgres`) | NATS / Kafka |
+| **Objects** | Local Filesystem (`local`) | S3 (`s3`) | Cloudflare R2 / GCS |
+| **Cache** | In-Memory (`memory`) | Redis (`redis`) | Memcached / Dragonfly |
+| **Models** | Local / Mock (`mock:default`, `ollama:...`) | OpenAI / Anthropic / Gemini | Custom fine-tuned / Router |
+
+#### Configuration Example (`voodoo.yaml`)
+
+```yaml
+runtime:
+  mode: production
+
+database:
+  provider: sqlite
+  path: ${DATABASE_URL:.voodoo/state/data.db}
+
+queue:
+  provider: sqlite
+
+events:
+  provider: sqlite
+
+objects:
+  provider: local
+  base_dir: ${VOODOO_OBJECTS_DIR:.voodoo/objects}
+
+cache:
+  provider: memory
+
+models:
+  default: openai:gpt-4o
+```
+
+**Precedence:** Explicit file configuration (`voodoo.yaml` / `voodoo.toml`) > Environment variables (`VOODOO_QUEUE_PROVIDER`, `DATABASE_URL`, etc.) > Local zero-infra defaults.
+
 **The "do not build" list** — no custom programming language, no JSX equivalent, no full React clone, no custom CSS/JS framework, no distributed database, no Kubernetes orchestration, no Celery replacement, no fully autonomous coding agent, no automatic production deployments, no self-modifying production code, no autonomous financial transactions, no vector database abstraction, no custom LLM training infrastructure.
 
 **Security threat model** — the AI trust chain is Browser → Application → Agent → Tool → Internet → External system. Modeled threats: prompt injection, tool injection, SSRF, credential leakage, malicious MCP servers, unauthorized mesh events, agent privilege escalation, arbitrary code execution, malicious generated code. The `Capability` primitive is the structural answer — agents never receive ambient authority, only explicit, revocable, time-limited capabilities.

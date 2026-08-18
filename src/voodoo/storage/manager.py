@@ -3,13 +3,15 @@ import os
 
 import aiofiles
 
+from voodoo.adapters.registry import registry
+from voodoo.config import get_config
 from voodoo.storage.objects.s3 import S3ObjectStore
 
 
 class StorageManager:
-    """Thin facade over the active storage adapter (Sprint 6).
+    """Thin facade over the active storage adapter (Sprint 6, Sprint 9).
 
-    When S3 env vars are set, upload/delete/url delegate to
+    When S3 is configured, upload/delete/url delegate to
     :class:`~voodoo.storage.objects.S3ObjectStore`; otherwise a local
     filesystem backend under ``base_dir`` is used. The public surface
     (``upload`` / ``delete`` / ``url`` / ``base_dir`` / ``use_s3`` /
@@ -18,12 +20,16 @@ class StorageManager:
     """
 
     def __init__(self):
-        self._s3 = S3ObjectStore()
+        cfg = get_config().objects
+        self._store = registry.get_objects(cfg)
+        self._s3 = (
+            self._store if isinstance(self._store, S3ObjectStore) else S3ObjectStore()
+        )
         self.s3_bucket = self._s3.bucket
         self.key = self._s3.key
         self.secret = self._s3.secret
         self.endpoint = self._s3.endpoint
-        self.use_s3 = self._s3.use_s3
+        self.use_s3 = isinstance(self._store, S3ObjectStore) and self._s3.use_s3
         self.s3_client = self._s3.s3_client
 
     @property

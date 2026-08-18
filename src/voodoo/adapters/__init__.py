@@ -17,6 +17,7 @@ from voodoo.adapters.capabilities import (
     negotiate,
     require,
 )
+from voodoo.adapters.registry import ProviderRegistry, registry
 from voodoo.adapters.tailwind import TailwindAdapter
 from voodoo.adapters.voodoo_css import VoodooCSSAdapter, generate_component_css
 
@@ -33,4 +34,6 @@ __all__ = [
     "capability_matrix",
     "negotiate",
     "require",
+    "ProviderRegistry",
+    "registry",
 ]

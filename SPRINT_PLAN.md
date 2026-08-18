@@ -292,21 +292,21 @@ Done when: asking the memory queue for delayed delivery raises an explicit
 adapter.
 
 ## Sprint 9 — Runtime configuration
-**Version 1.11.0 · Spec §31, §28 · Status: TODO · Released as: —**
+**Version 1.11.0 · Spec §31, §28 · Status: DONE · Released as: —**
 
 Goal: infrastructure is selected by configuration, never by code changes.
 
 Scope:
-- [ ] `voodoo.yaml` (+ env interpolation `${VAR}`): `database`, `queue`,
+- [x] `voodoo.yaml` (+ env interpolation `${VAR}`): `database`, `queue`,
       `events`, `objects`, `cache`, `models` provider blocks; default file =
       all-local, zero-config behavior identical to today.
-- [ ] Provider registry mapping names → adapters (Sprints 1–7 implementations
+- [x] Provider registry mapping names → adapters (Sprints 1–7 implementations
       registered).
-- [ ] Precedence: explicit config > env vars (`VOODOO_QUEUE_PROVIDER`, …) >
+- [x] Precedence: explicit config > env vars (`VOODOO_QUEUE_PROVIDER`, …) >
       local defaults.
-- [ ] Validation with actionable errors; `voodoo doctor` prints resolved
+- [x] Validation with actionable errors; `voodoo doctor` prints resolved
       config.
-- [ ] Docs: local → production → later migration paths (§28 table).
+- [x] Docs: local → production → later migration paths (§28 table).
 
 Done when: switching `queue: sqlite` → `queue: memory` in `voodoo.yaml`
 changes behavior with zero application-code edits, verified by tests running

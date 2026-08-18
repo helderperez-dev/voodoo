@@ -1,7 +1,7 @@
-import sys
 from pathlib import Path
 
 from voodoo.cli import terminal
+from voodoo.config import get_config
 
 
 def _print_capability_matrix() -> None:
@@ -76,51 +76,59 @@ def doctor():  # noqa: C901
     Run environment and configuration diagnostics.
     """
     import importlib
-    import platform
+    import os
 
-    import voodoo
+    from voodoo import __version__ as ver
 
-    ver = getattr(voodoo, "__version__", "unknown")
+    cfg = get_config()
 
     terminal.wordmark(ver)
     terminal.blank()
 
     # ── Environment ─────────────────────────────────
     terminal.heading("environment")
-
-    py_ver = sys.version_info
-    py_ok = py_ver >= (3, 10)
     terminal.status(
-        "python",
-        "ready" if py_ok else "failed",
+        "mode",
+        "production" if os.getenv("VOODOO_ENV") == "production" else "development",
     )
     terminal.muted(
-        f"  {platform.python_version()} ({platform.python_implementation()})"
+        "  set VOODOO_ENV=production to enforce production security defaults"
+        if os.getenv("VOODOO_ENV") != "production"
+        else "  production security defaults active"
     )
-
     terminal.status("voodoo", "ready")
     terminal.muted(f"  v{ver}")
 
     # ── Runtime ─────────────────────────────────────
     terminal.heading("runtime")
 
-    from voodoo.config import config
-
-    # Database
-    db_path = Path(config.db_path)
-    if db_path.exists():
+    # Database resolution
+    db_path = cfg.db_path
+    if db_path == ":memory:" or Path(db_path).exists():
         terminal.status("database", "ready")
-        terminal.muted(f"  {db_path}")
+        terminal.muted(f"  {cfg.database.provider} ({db_path})")
     else:
         terminal.status("database", "not found")
-        terminal.muted(f"  {db_path}")
+        terminal.muted(f"  {cfg.database.provider} ({db_path})")
 
-    # Auth
-    from voodoo.config import config as _cfg
+    # Resolved providers (Sprint 9)
+    terminal.status("queue", "ready")
+    terminal.muted(f"  {cfg.queue.provider}")
 
-    if _cfg.auth.secret_key and _cfg.auth.secret_key != (
-        "dev-secret-key-change-in-production-voodoo-2026"
-    ):
+    terminal.status("events", "ready")
+    terminal.muted(f"  {cfg.events.provider}")
+
+    terminal.status("objects", "ready")
+    terminal.muted(f"  {cfg.objects.provider}")
+
+    terminal.status("cache", "ready")
+    terminal.muted(f"  {cfg.cache.provider}")
+
+    terminal.status("models", "ready")
+    terminal.muted(f"  {cfg.models.default}")
+
+    # Auth secret
+    if cfg.auth.secret_key != "dev-secret-key-change-in-production-voodoo-2026":
         terminal.status("auth", "ready")
     else:
         terminal.status("auth", "warning")
@@ -129,19 +137,19 @@ def doctor():  # noqa: C901
     # Security
     terminal.status(
         "security headers",
-        "enabled" if _cfg.security.headers_enabled else "disabled",
+        "enabled" if cfg.security.headers_enabled else "disabled",
     )
     terminal.status(
-        "rate limiting",
-        "enabled" if _cfg.security.rate_limit_enabled else "disabled",
+        "rate limit",
+        "enabled" if cfg.security.rate_limit_enabled else "disabled",
     )
     terminal.status(
         "cors",
-        "enabled" if _cfg.security.cors_enabled else "disabled",
+        "enabled" if cfg.security.cors_enabled else "disabled",
     )
     terminal.status(
         "csrf",
-        "enabled" if _cfg.security.csrf_enabled else "disabled",
+        "enabled" if cfg.security.csrf_enabled else "disabled",
     )
 
     # ── Modules ─────────────────────────────────────

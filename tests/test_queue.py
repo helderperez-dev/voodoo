@@ -29,8 +29,12 @@ async def test_queue_workers():
     # Start workers
     await start_workers()
 
-    # Allow workers to process the queue
-    await asyncio.sleep(0.1)
+    # Wait (with a generous deadline) for all three items to be processed —
+    # polling is deterministic, unlike a fixed sleep which flakes under load.
+    for _ in range(100):
+        if {"item1", "item2", "sync-item3"} <= set(processed_items):
+            break
+        await asyncio.sleep(0.05)
 
     # Stop workers
     await stop_workers()

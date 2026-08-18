@@ -29,7 +29,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from voodoo.mcp import mcp
 from voodoo.mesh.client import MeshClient
-from voodoo.storage.events import LocalEventBus, VoodooEventBus
+from voodoo.storage.events import VoodooEventBus
 
 
 def _make_envelope(
@@ -63,11 +63,26 @@ def _validate_namespace(event: str) -> None:
 
 
 class MeshNetwork:
+    """A decentralized-ready mesh router for AI Agent Swarms and Distributed Services.
+
+    The mesh routes events through the active
+    :class:`~voodoo.storage.events.VoodooEventBus` (Sprint 7, Sprint 9).
+    """
+
     def __init__(self, bus: VoodooEventBus | None = None):
-        self.bus = bus or LocalEventBus()
+        if bus is None:
+            from voodoo.adapters.registry import registry
+
+            self.bus = registry.get_events()
+        else:
+            self.bus = bus
+        self.node_id = str(uuid.uuid4())
+        self.peers: set[str] = set()
+        self.active_agents: dict[str, Any] = {}
         self.exposed_functions: dict[str, Callable] = {}
         self.event_handlers: dict[str, list[Callable]] = {}
         self.active_nodes: list[WebSocket] = []
+        self.subscriptions: set[str] = set()
 
     def expose(self, name: str | None = None):
         """Decorator to expose a function to the Mesh Network and MCP.

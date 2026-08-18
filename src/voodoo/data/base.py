@@ -29,26 +29,39 @@ USER_MODEL_BASELINE = Migration(
 
 
 async def init_db(db_path: str = None):
-    """Open (and migrate) the SQLite database backing the data layer.
+    """Initializes the database connection using the configured provider (Sprint 9).
 
-    The raw :class:`aiosqlite.Connection` remains the value of
-    ``_db_connection`` / ``get_db()`` so all existing callers keep working;
-    schema management now flows through the ``SQLiteDatabase`` adapter and
-    its migration ledger.
+    Uses the central :class:`~voodoo.adapters.registry.ProviderRegistry` to
+    resolve the active database adapter from ``config.database``, running
+    migrations and ensuring user model tables are created.
+
+    The connection is published as ``_db_connection`` / ``get_db()`` for
+    backward compatibility with the rest of the framework (models, hooks,
+    queue, …). ``database.migrate()`` runs the USER_MODEL_BASELINE (version
+    1, rerun=True) which creates every registered user table — meaning the
+    baseline must be registered with the adapter *before* ``migrate()`` is
+    called, otherwise ``_create_table`` → ``get_db`` would re-enter
+    ``init_db`` (there is no connection yet) and recurse forever.
     """
-    if db_path is None:
-        from voodoo.config import config
+    from voodoo.adapters.registry import registry
+    from voodoo.config import DatabaseConfig, get_config
 
-        db_path = config.db_path
+    cfg = get_config().database
+    if db_path:
+        cfg = DatabaseConfig(provider="sqlite", path=db_path, url="")
 
-    global _db_connection, _database
-    database = SQLiteDatabase(db_path, migrations=(USER_MODEL_BASELINE,))
+    database = registry.get_database(cfg, migrations=(USER_MODEL_BASELINE,))
     await database.connect()
-    _db_connection = database.connection
+    # Publish the connection *before* migrating so the rerunnable
+    # user-model baseline (and any other migration fn) can resolve the
+    # database via ``get_db()`` without recursing.
+    global _db_connection, _database
     _database = database
-    # Migrate after the connection is published so rerunnable migration
-    # functions can use ``get_db()``.
+    if hasattr(database, "connection"):
+        _db_connection = database.connection
     await database.migrate()
+    await _ensure_user_tables(database)
+    return database
 
 
 async def get_db():
@@ -67,7 +80,12 @@ async def close_db():
     global _db_connection, _database
     if _db_connection is not None:
         try:
-            await _db_connection.close()
+            # Close via the adapter so its internal ``_conn`` is also
+            # invalidated; the raw aiosqlite connection is the same object.
+            if _database is not None:
+                await _database.close()
+            else:
+                await _db_connection.close()
         finally:
             _db_connection = None
             _database = None

@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.11.0 — 2026-08-18
+
+### Runtime configuration (Sprint 9 — infrastructure by configuration, never code)
+
+- **Provider registry** (`voodoo.adapters.registry`) — a central
+  `ProviderRegistry` maps names → adapter factories for database, queue,
+  events, objects, and cache. Sprints 1–7 implementations are registered
+  (sqlite/memory queue, sqlite/local events, local/S3 objects, memory cache);
+  future adapters (Postgres, Redis, …) register their factories here (§31).
+- **`voodoo.yaml` provider blocks** — `database`, `queue`, `events`,
+  `objects`, `cache`, `models` are now first-class config blocks with typed
+  pydantic models. The default file is all-local and zero-config behavior is
+  identical to today.
+- **Env interpolation** — `${VAR}` and `${VAR:default}` are expanded
+  recursively across strings, dicts, and lists in both `voodoo.yaml` and
+  `voodoo.toml`.
+- **Precedence** — explicit file config > env vars (`VOODOO_QUEUE_PROVIDER`,
+  `VOODOO_DATABASE_PROVIDER`, …) > local defaults, verified by tests.
+- **Actionable validation** — unknown providers raise `ConfigurationError`
+  listing the available providers for that category.
+- **`voodoo doctor`** — now prints the resolved provider for queue, events,
+  objects, cache, and the default model alias.
+- **`init_db` is provider-driven** — the database connection is resolved
+  through the registry (with migrations passed explicitly), while
+  `get_db()`/`close_db()` remain backward compatible.
+- **`tests/test_config.py`** & **`tests/test_provider_switching.py`** — pin
+  interpolation, precedence, registry resolution/errors, and the sprint's
+  done-when: the same app runs against `queue: sqlite` then `queue: memory`
+  with zero application-code edits.
+
 ## 1.10.0 — 2026-08-18
 
 ### Adapter contracts & capability negotiation (Sprint 8 — never silently violate correctness)
