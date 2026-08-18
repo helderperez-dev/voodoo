@@ -268,6 +268,7 @@ class PostgresDatabase:
             row["version"]
             for row in await self.fetch_all(f"SELECT version FROM {LEDGER_TABLE}")
         }
+        # Re-merge each time so late-imported subsystem migrations are picked up.
         for migration in self._merge_migrations():
             if migration.version not in applied:
                 async with raw.transaction():
@@ -282,6 +283,13 @@ class PostgresDatabase:
                 self._version = migration.version
             elif migration.rerun and migration.fn is not None:
                 await migration.fn(self)
+
+        # This instance may be a fresh handle onto an already-migrated
+        # database (contract tests, reconnect, second process): derive the
+        # version from the ledger rather than only the migrations this call
+        # applied.
+        rows = await self.fetch_all(f"SELECT version FROM {LEDGER_TABLE}")
+        self._version = max((row["version"] for row in rows), default=0)
 
     def current_version(self) -> int:
         return self._version

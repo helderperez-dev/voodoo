@@ -45,6 +45,19 @@ class TestPostgresDatabase(DatabaseContractTests):
             migrations=(CONTRACT_MIGRATION_PG,),
         )
 
+    @pytest.fixture(autouse=True)
+    async def database(self, tmp_path):
+        # The base mixin gets a fresh SQLite file per test; the PG suite
+        # shares one database URL, so drop the tables up front to give
+        # each test the same clean slate (ledger + contract table).
+        db = self.make_database(tmp_path)
+        await db.connect()
+        await db.execute("DROP TABLE IF EXISTS contract_items")
+        await db.execute("DROP TABLE IF EXISTS schema_migrations")
+        await db.migrate()
+        yield db
+        await db.close()
+
     async def test_postgres_capabilities(self, database):
         caps = database.capabilities()
         assert caps.provider == "postgres"
