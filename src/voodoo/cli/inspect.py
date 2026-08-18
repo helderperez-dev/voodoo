@@ -52,13 +52,15 @@ def _load_app(app_str: str | None) -> Any:
     return getattr(mod, attr, None)
 
 
-
 def _is_json(json_mode: bool) -> bool:
     """JSON mode: explicit flag or global --json in argv."""
     return bool(json_mode) or terminal.is_json_mode()
 
+
 def _table(columns: list[str]) -> Table:
-    table = Table(show_header=True, header_style="dim", border_style="#262626", pad_edge=False)
+    table = Table(
+        show_header=True, header_style="dim", border_style="#262626", pad_edge=False
+    )
     for c in columns:
         table.add_column(c)
     return table
@@ -75,9 +77,13 @@ def _emit(data: Any, json_mode: bool = False) -> None:
 
 @inspect_app.command("run")
 def inspect_run(
-    execution_id: str = typer.Argument(None, help="Execution id (lists recent if omitted)"),
+    execution_id: str = typer.Argument(
+        None, help="Execution id (lists recent if omitted)"
+    ),
     app_str: str = typer.Option(None, "--app", help="App instance (e.g. main:app)"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
 ):
     """Show an execution — status, intent, capabilities, effects, cost."""
     from voodoo.runtime import engine
@@ -121,7 +127,10 @@ def inspect_run(
             ("intent", d["intent"] or "-"),
             ("actor", d["actor"]),
             ("cost", f"{d['cost']:.6f}"),
-            ("duration", f"{d['duration_seconds']:.3f}s" if d["duration_seconds"] else "-"),
+            (
+                "duration",
+                f"{d['duration_seconds']:.3f}s" if d["duration_seconds"] else "-",
+            ),
         ]
     )
     if d["capabilities"]:
@@ -136,8 +145,12 @@ def inspect_run(
 @inspect_app.command("agent")
 def inspect_agent(
     app_str: str = typer.Option(None, "--app"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
-    url: str = typer.Option(None, "--url", help="Live server URL (e.g. http://localhost:8000)"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
+    url: str = typer.Option(
+        None, "--url", help="Live server URL (e.g. http://localhost:8000)"
+    ),
     limit: int = typer.Option(10, "--limit"),
 ):
     """Recent agent runs: model, tokens, cost, tool calls, status."""
@@ -188,10 +201,16 @@ def inspect_agent(
 
 @inspect_app.command("plan")
 def inspect_plan(
-    intent_name: str = typer.Argument(..., help="Intent name to plan (e.g. 'notify.customer')"),
-    requires: str = typer.Option(None, "--requires", help="Comma-separated required capabilities"),
+    intent_name: str = typer.Argument(
+        ..., help="Intent name to plan (e.g. 'notify.customer')"
+    ),
+    requires: str = typer.Option(
+        None, "--requires", help="Comma-separated required capabilities"
+    ),
     app_str: str = typer.Option(None, "--app", help="App instance (e.g. main:app)"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
 ):
     """Plan an intent — show the planner's strategy + participant assignment."""
     from voodoo.primitives.intent import Intent
@@ -215,12 +234,14 @@ def inspect_plan(
         terminal.json_output(data)
         return
 
-    terminal.status_block([
-        ("intent", data["intent"]),
-        ("strategy", data["strategy"]),
-        ("steps", str(len(data["steps"]))),
-        ("unresolved", str(len(data["unresolved"]))),
-    ])
+    terminal.status_block(
+        [
+            ("intent", data["intent"]),
+            ("strategy", data["strategy"]),
+            ("steps", str(len(data["steps"]))),
+            ("unresolved", str(len(data["unresolved"]))),
+        ]
+    )
     if data["decisions"]:
         terminal.blank()
         for d in data["decisions"]:
@@ -234,7 +255,9 @@ def inspect_plan(
 @inspect_app.command("tool")
 def inspect_tool(
     app_str: str = typer.Option(None, "--app"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
     limit: int = typer.Option(15, "--limit"),
 ):
     """Recent tool calls: name, latency, error."""
@@ -263,7 +286,9 @@ def inspect_tool(
 @inspect_app.command("task")
 def inspect_task(
     app_str: str = typer.Option(None, "--app"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
     limit: int = typer.Option(20, "--limit"),
 ):
     """Executions whose actor is task/agent-driven (Task units)."""
@@ -294,7 +319,9 @@ def inspect_task(
 def inspect_workflow(
     trace_id: str = typer.Argument(None, help="Trace id (groups task executions)"),
     app_str: str = typer.Option(None, "--app"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
 ):
     """Executions grouped by trace — the observable workflow structure."""
     from voodoo.runtime import ExecutionGraph, engine
@@ -313,10 +340,15 @@ def inspect_workflow(
         terminal.muted("no executions recorded in this process")
     for root in described:
         terminal.heading(f"trace {root['trace_id'][:8]} · {root.get('intent') or '-'}")
-        terminal.tree([f"{root['intent'] or root['id'][:8]} [{root['status']}]", *[
-            f"  {c.get('intent') or c['id'][:8]} [{c['status']}] (actor: {c.get('actor')})"
-            for c in root.get("children", [])
-        ]])
+        terminal.tree(
+            [
+                f"{root['intent'] or root['id'][:8]} [{root['status']}]",
+                *[
+                    f"  {c.get('intent') or c['id'][:8]} [{c['status']}] (actor: {c.get('actor')})"
+                    for c in root.get("children", [])
+                ],
+            ]
+        )
         terminal.blank()
 
 
@@ -324,7 +356,9 @@ def inspect_workflow(
 def inspect_state(
     entity: str = typer.Argument(None, help="Entity kind (e.g. lead, order)"),
     app_str: str = typer.Option(None, "--app"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
 ):
     """Observable state changes recorded on executions."""
     from voodoo.runtime import engine
@@ -365,7 +399,9 @@ def inspect_state(
 @inspect_app.command("capabilities")
 def inspect_capabilities(
     app_str: str = typer.Option(None, "--app"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
 ):
     """Registered capability templates and tool permission requirements."""
     from voodoo.runtime import engine
@@ -387,10 +423,12 @@ def inspect_capabilities(
     if _is_json(json_mode):
         terminal.json_output({"capabilities": cap_data, "tool_permissions": tool_perms})
         return
-    terminal.status_block([
-        ("capabilities", str(len(cap_data["capabilities"]))),
-        ("approval req.", str(len(cap_data["approval_required"]))),
-    ])
+    terminal.status_block(
+        [
+            ("capabilities", str(len(cap_data["capabilities"]))),
+            ("approval req.", str(len(cap_data["approval_required"]))),
+        ]
+    )
     if cap_data["capabilities"]:
         terminal.label_value("names", ", ".join(cap_data["capabilities"]))
     if tool_perms:
@@ -405,7 +443,9 @@ def inspect_capabilities(
 @inspect_app.command("mesh")
 def inspect_mesh(
     app_str: str = typer.Option(None, "--app"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
 ):
     """Mesh surface: exposed functions, event handlers, active nodes."""
     from voodoo.mesh import mesh
@@ -420,11 +460,13 @@ def inspect_mesh(
     if _is_json(json_mode):
         terminal.json_output(data)
         return
-    terminal.status_block([
-        ("exposed", str(len(data["exposed"]))),
-        ("event types", str(len(data["handlers"]))),
-        ("active nodes", str(data["active_nodes"])),
-    ])
+    terminal.status_block(
+        [
+            ("exposed", str(len(data["exposed"]))),
+            ("event types", str(len(data["handlers"]))),
+            ("active nodes", str(data["active_nodes"])),
+        ]
+    )
     if data["handlers"]:
         terminal.blank()
         table = _table(["event", "handlers"])
@@ -436,9 +478,13 @@ def inspect_mesh(
 
 @inspect_app.command("approvals")
 def inspect_approvals(
-    pending_only: bool = typer.Option(False, "--pending", help="Only show pending approvals"),
+    pending_only: bool = typer.Option(
+        False, "--pending", help="Only show pending approvals"
+    ),
     app_str: str = typer.Option(None, "--app"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
 ):
     """Human approvals — pending and decided, with capability + requester."""
     from voodoo.runtime import engine

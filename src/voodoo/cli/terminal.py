@@ -151,7 +151,9 @@ def json_output(data: Any) -> None:
     """
     import json
 
-    console.print(json.dumps(data, indent=2, default=str), highlight=False, soft_wrap=True)
+    console.print(
+        json.dumps(data, indent=2, default=str), highlight=False, soft_wrap=True
+    )
 
 
 def is_json_mode() -> bool:

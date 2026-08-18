@@ -18,15 +18,21 @@ from voodoo.cli import terminal
 
 def recover(
     app_str: str = typer.Option(None, "--app", help="App instance (e.g. main:app)"),
-    store_path: str = typer.Option(None, "--store", help="Path to the JSONL execution store"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    store_path: str = typer.Option(
+        None, "--store", help="Path to the JSONL execution store"
+    ),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
 ):
     """Reload unfinished executions from the store into the engine."""
     from voodoo.runtime.engine import engine as runtime_engine
     from voodoo.runtime.persistence import JSONFileExecutionStore
 
     if store_path is None:
-        store_path = os.environ.get("VOODOO_EXECUTION_STORE", ".voodoo/executions.jsonl")
+        store_path = os.environ.get(
+            "VOODOO_EXECUTION_STORE", ".voodoo/executions.jsonl"
+        )
 
     if app_str is not None:
         # Import the app first: it may attach its own store / register
@@ -57,7 +63,9 @@ def recover(
     terminal.status_block([("store", store_path), ("recovered", str(len(recovered)))])
     from rich.table import Table
 
-    table = Table(show_header=True, header_style="dim", border_style="#262626", pad_edge=False)
+    table = Table(
+        show_header=True, header_style="dim", border_style="#262626", pad_edge=False
+    )
     for c in ("id", "intent", "status", "actor"):
         table.add_column(c)
     for ex in recovered:

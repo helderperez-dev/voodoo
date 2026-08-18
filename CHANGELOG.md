@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.4.0 — 2026-08-17
+
+### Durable Task Queue (Sprint 2 — tasks survive restarts)
+
+- **`VoodooQueue` protocol** (`voodoo.storage.queue`) — backend-neutral durable
+  task queue: `enqueue`, `claim`, `heartbeat`, `complete`, `fail`, `release`,
+  `release_expired`, `retry`, `list`, `stats` with declarative
+  `QueueCapabilities` (durability, delivery semantics, visibility timeout,
+  delayed delivery, priority, transactions).
+- **`SQLiteQueue`** — the default durable provider: `tasks` table (migration
+  0002) with atomic `UPDATE … RETURNING` claim (concurrent workers never claim
+  the same task), lease-based visibility timeout, exponential backoff retries,
+  priority ordering, delayed delivery, and `idempotency_key` deduplication for
+  at-least-once semantics. Reclaims expired leases from dead workers.
+- **`MemoryQueue`** — the ephemeral in-process provider, selected via
+  `VOODOO_QUEUE_PROVIDER=memory`. Preserves the legacy `asyncio.Queue` behavior
+  for non-critical work.
+- **Workers reworked** — `workers/queue.py` now polls/claims from the durable
+  queue instead of draining an `asyncio.Queue`; a background reaper reclaims
+  expired leases. `@task`/`@queue`/`enqueue`/`start_workers`/`stop_workers`
+  public API unchanged.
+- **`voodoo.tasks` CLI** — `voodoo tasks list` (with stats), `voodoo tasks
+  retry <id>`.
+- **Queue contract test suite** (`tests/contracts/test_queue.py`) —
+  `QueueContractTests` portability mixin (enqueue/claim/complete, fail/retry,
+  release, idempotency, priority, delayed delivery, heartbeat, lease expiry,
+  concurrent claims) run against both Memory and SQLite providers (43 tests).
+
 ## 1.3.0 — 2026-08-17
 
 ### Storage Core & Migrations (Sprint 1 — durable runtime foundation)

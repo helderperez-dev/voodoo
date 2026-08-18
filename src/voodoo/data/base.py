@@ -5,6 +5,7 @@ from typing import Any, get_type_hints
 from voodoo.storage.database import Migration, SQLiteDatabase, VoodooDatabase
 
 _db_connection = None
+_database: SQLiteDatabase | None = None
 _triggers: dict[str, dict[str, list[Callable]]] = {}
 _rls_policies: dict[str, Callable] = {}
 
@@ -40,10 +41,11 @@ async def init_db(db_path: str = None):
 
         db_path = config.db_path
 
-    global _db_connection
+    global _db_connection, _database
     database = SQLiteDatabase(db_path, migrations=(USER_MODEL_BASELINE,))
     await database.connect()
     _db_connection = database.connection
+    _database = database
     # Migrate after the connection is published so rerunnable migration
     # functions can use ``get_db()``.
     await database.migrate()
@@ -62,12 +64,13 @@ async def close_db():
     unclosed connection would keep the interpreter alive at shutdown.
     No-op when no connection is open (keeps startup lazy).
     """
-    global _db_connection
+    global _db_connection, _database
     if _db_connection is not None:
         try:
             await _db_connection.close()
         finally:
             _db_connection = None
+            _database = None
 
 
 def _get_table_name(cls_or_obj: Any) -> str:

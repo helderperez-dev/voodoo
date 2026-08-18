@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 import pytest
 import pytest_asyncio
@@ -7,6 +8,10 @@ from starlette.testclient import TestClient
 import voodoo.data
 import voodoo.queue
 from voodoo.core import create_app
+
+# Tests default to the in-memory queue provider for speed; durable-queue
+# tests override this per-test.
+os.environ.setdefault("VOODOO_QUEUE_PROVIDER", "memory")
 
 
 @pytest.fixture(autouse=True)
@@ -17,6 +22,28 @@ def _clean_page_registry():
     page_registry.clear()
     yield
     page_registry.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_queue_state():
+    """Reset queue provider and running worker tasks between tests.
+
+    The ``_workers`` handler registry is *not* cleared — handlers register
+    at import time via ``@queue``/``@task`` and must persist. Only the
+    provider (``_queue``) and asyncio tasks (``_worker_tasks``) are stateful.
+    """
+    from voodoo.workers import queue as worker_mod
+
+    worker_mod._queue = None
+    # Cancel any tasks left from a previous test
+    for t in worker_mod._worker_tasks:
+        t.cancel()
+    worker_mod._worker_tasks.clear()
+    yield
+    for t in worker_mod._worker_tasks:
+        t.cancel()
+    worker_mod._worker_tasks.clear()
+    worker_mod._queue = None
 
 
 @pytest.fixture(autouse=True)
@@ -39,6 +66,7 @@ def _close_db_after_test():
         except Exception:
             # Best-effort cleanup; never fail a test here
             base._db_connection = None
+            base._database = None
 
 
 @pytest.fixture

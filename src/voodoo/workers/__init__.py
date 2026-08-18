@@ -127,10 +127,7 @@ def _register_task_worker(
     backoff_base: float,
 ) -> None:
     """Register *func* as a background queue worker named *task_name*."""
-    from voodoo.queue import _queues, _workers
-
-    if task_name not in _queues:
-        _queues[task_name] = asyncio.Queue()
+    from voodoo.workers.queue import _workers
 
     async def worker(payload: Any) -> None:
         await _run_task(func, task_name, retries, timeout, backoff_base, (payload,), {})
@@ -139,7 +136,7 @@ def _register_task_worker(
 
 
 async def _enqueue_task(task_name: str, payload: Any) -> None:
-    """Enqueue *payload* onto the single-process queue for *task_name*."""
+    """Enqueue *payload* as a durable task of type *task_name*."""
     from voodoo.workers.queue import enqueue
 
     await enqueue(task_name, payload)

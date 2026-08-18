@@ -23,10 +23,30 @@ from voodoo.storage.database.interfaces import (
 
 LEDGER_TABLE = "schema_migrations"
 
-# Framework-owned schema changes. Version 1 is the user-model baseline
-# registered by ``voodoo.data``; the framework reserves 2+ (tasks table,
-# executions journal, schedules, … arrive in later sprints).
-FRAMEWORK_MIGRATIONS: tuple[Migration, ...] = ()
+# Framework-owned schema changes, dynamically registered by subsystems
+# (tasks, executions, schedules, …). Version 1 is the user-model baseline
+# registered by ``voodoo.data``; the framework reserves 2+. Migrations are
+# re-merged on every ``migrate()`` call so late-imported subsystems still
+# get their tables.
+_FRAMEWORK_MIGRATIONS: list[Migration] = []
+FRAMEWORK_MIGRATIONS = _FRAMEWORK_MIGRATIONS
+
+
+def register_framework_migration(migration: Migration) -> None:
+    """Register a framework-owned migration (called at import time).
+
+    Idempotent: re-registering the same version/name is a no-op so that
+    repeated imports (or test re-imports) don't blow up.
+    """
+    for existing in _FRAMEWORK_MIGRATIONS:
+        if existing.version == migration.version:
+            if existing.name == migration.name:
+                return
+            raise ValueError(
+                f"duplicate migration version {migration.version} "
+                f"({existing.name!r} vs {migration.name!r})"
+            )
+    _FRAMEWORK_MIGRATIONS.append(migration)
 
 
 class SQLiteDatabase:
@@ -37,13 +57,16 @@ class SQLiteDatabase:
     def __init__(self, path: str, migrations: Sequence[Migration] = ()) -> None:
         self.path = path
         self._extra_migrations = tuple(migrations)
-        self._migrations = self._merge_migrations()
         self._conn: aiosqlite.Connection | None = None
         self._version = 0
+        # Early validation: duplicates among explicitly-provided migrations
+        # are caught at construction. Framework migrations registered later
+        # are re-validated on each migrate() call.
+        self._merge_migrations()
 
     def _merge_migrations(self) -> tuple[Migration, ...]:
         by_version: dict[int, Migration] = {}
-        for migration in (*FRAMEWORK_MIGRATIONS, *self._extra_migrations):
+        for migration in (*_FRAMEWORK_MIGRATIONS, *self._extra_migrations):
             if migration.version in by_version:
                 raise ValueError(
                     f"duplicate migration version {migration.version} "
@@ -104,7 +127,8 @@ class SQLiteDatabase:
             row["version"]
             for row in await self.fetch_all(f"SELECT version FROM {LEDGER_TABLE}")
         }
-        for migration in self._migrations:
+        # Re-merge each time so late-imported subsystem migrations are picked up.
+        for migration in self._merge_migrations():
             if migration.version not in applied:
                 async with self.transaction():
                     for statement in migration.statements:

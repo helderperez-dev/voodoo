@@ -62,7 +62,7 @@ DONE  |  WIP  |  TODO
 | # | Sprint | Version | Delivers | Status |
 |---|--------|---------|----------|--------|
 | 1 | Storage core & migrations | 1.3.0 | VoodooDatabase + SQLite + migration runner | DONE |
-| 2 | Durable task queue | 1.4.0 | SQLite queue: claim/lease/retry — tasks survive restart | TODO |
+| 2 | Durable task queue | 1.4.0 | SQLite queue: claim/lease/retry — tasks survive restart | WIP |
 | 3 | Durable executions | 1.5.0 | SQLite ExecutionStore + execution event journal | TODO |
 | 4 | Checkpoints & resume | 1.6.0 | Resume waiting/unfinished executions after restart | TODO |
 | 5 | Durable scheduler | 1.7.0 | schedule.at/after/every/cron backed by SQLite | TODO |
@@ -113,30 +113,30 @@ Done when: `init_db` goes through the new layer, migrations run idempotently
 on fresh and existing DBs, contract tests green, full suite green.
 
 ## Sprint 2 — Durable task queue
-**Version 1.4.0 · Spec §12, §26, §37.7 · Status: TODO · Released as: —**
+**Version 1.4.0 · Spec §12, §26, §37.7 · Status: WIP · Released as: —**
 
 Goal: background tasks survive process restarts. Replaces `asyncio.Queue` as
 source of truth (§37.7).
 
 Scope:
-- [ ] `VoodooQueue` interface: `enqueue`, `claim`, `heartbeat`, `complete`,
+- [x] `VoodooQueue` interface: `enqueue`, `claim`, `heartbeat`, `complete`,
       `fail`, `release_expired`, `stats`; capability declaration
       (`at_least_once`, visibility/lease timeout, delayed delivery, priority).
-- [ ] `SQLiteQueue`: `tasks` table per §12 (id, type, payload, status,
+- [x] `SQLiteQueue`: `tasks` table per §12 (id, type, payload, status,
       priority, available_at, attempts, max_attempts, locked_by, locked_at,
       lease_until, last_error, idempotency_key) with **transactional atomic
       claim** and lease expiry reclaim.
-- [ ] Lifecycle: `PENDING → CLAIMED → RUNNING → COMPLETED | RETRYING | FAILED`
+- [x] Lifecycle: `PENDING → RUNNING → COMPLETED | RETRYING | FAILED`
       with exponential backoff via `available_at`.
-- [ ] Rework `workers/queue.py`: workers poll/claim from the durable queue;
+- [x] Rework `workers/queue.py`: workers poll/claim from the durable queue;
       keep in-memory queue available as explicit `provider: memory` choice.
-- [ ] `@task`/`.enqueue()` and `voodoo dev` lifespan wire the durable queue by
+- [x] `@task`/`.enqueue()` and `voodoo dev` lifespan wire the durable queue by
       default (`.voodoo/state/data.db`).
-- [ ] Failure-path tests: worker crash → lease expiry → reclaim by second
+- [x] Failure-path tests: worker crash → lease expiry → reclaim by second
       worker; duplicate delivery honors `idempotency_key`; retries respect
       `max_attempts`.
-- [ ] CLI: `voodoo tasks` (list + statuses), `voodoo tasks retry <id>`.
-- [ ] `tests/contracts/test_queue.py` — `QueueContractTests` mixin.
+- [x] CLI: `voodoo tasks` (list + statuses), `voodoo tasks retry <id>`.
+- [x] `tests/contracts/test_queue.py` — `QueueContractTests` mixin.
 
 Done when: kill -9 the worker mid-task, restart, task completes exactly-once
 *effect* with at-least-once delivery visible in tests.

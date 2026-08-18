@@ -9,8 +9,6 @@ All tests use the deterministic mock provider — no network calls.
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 from starlette.testclient import TestClient
 
@@ -537,11 +535,17 @@ async def test_correlation_id_propagates_to_tool_call_telemetry():
 
 @pytest.mark.asyncio
 async def test_correlation_id_propagates_to_queue():
-    """Enqueue captures the current trace_id and stores it in the queue envelope."""
+    """Enqueue captures the current trace_id and stores it on the task record."""
 
-    from voodoo.queue import _queues, enqueue
+    from voodoo.queue import enqueue
 
-    _queues["test_corr_queue"] = asyncio.Queue()
+    # Register a dummy worker so enqueue can find a handler
+    from voodoo.workers.queue import _get_queue, _workers
+
+    async def _handler(payload):
+        pass
+
+    _workers["test_corr_queue"] = _handler
 
     trace_id = "queue-trace-789"
     token = trace_id_var.set(trace_id)
@@ -550,12 +554,13 @@ async def test_correlation_id_propagates_to_queue():
     finally:
         trace_id_var.reset(token)
 
-    # Drain the queue — the item should carry the trace_id from the envelope
-    item = await _queues["test_corr_queue"].get()
-    _queues["test_corr_queue"].task_done()
-
-    assert item["trace_id"] == trace_id
-    assert item["payload"] == {"data": "hello"}
+    # The task record should carry the trace_id from the enqueue context
+    q = await _get_queue()
+    tasks = await q.list(task_type="test_corr_queue")
+    assert tasks
+    task = tasks[0]
+    assert task.trace_id == trace_id
+    assert task.payload == {"data": "hello"}
 
 
 @pytest.mark.asyncio

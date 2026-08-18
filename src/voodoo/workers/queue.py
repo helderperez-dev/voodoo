@@ -1,36 +1,72 @@
-"""Single-process async queue & worker runtime.
+"""Durable async queue & worker runtime.
 
-This module implements the in-process "broker" that ``@task``
-(:mod:`voodoo.workers`) enqueues onto.  The broker is an
-:class:`asyncio.Queue` and workers are :class:`asyncio.Task` objects —
-everything lives in one process.
+Workers poll a ``VoodooQueue`` provider (SQLite by default, memory optional)
+for claimable tasks. Each task is executed through the runtime engine; on
+success the task is completed, on failure it's retried with backoff until
+``max_attempts`` is exhausted.
 
-Distributed backend boundary
-----------------------------
-The functions ``enqueue``, ``start_workers`` and ``stop_workers`` together
-with the module-level ``_queues`` / ``_workers`` / ``_worker_tasks``
-structures form the seam a future distributed backend (Redis/RQ, Celery,
-Dramatiq, …) replaces.  The ``@queue`` decorator and ``@task`` stay the same;
-only the internals below swap.
+The ``@queue`` decorator and ``enqueue``/``start_workers``/``stop_workers``
+functions form the public API; swapping the provider (see
+``VOODOO_QUEUE_PROVIDER``) changes the backend without touching application
+code.
 """
+
+from __future__ import annotations
 
 import asyncio
 import inspect
 import logging
+import os
+import uuid
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-_queues: dict[str, asyncio.Queue] = {}
+if TYPE_CHECKING:
+    from voodoo.storage.queue import VoodooQueue
+
 _workers: dict[str, Callable] = {}
 _worker_tasks: list[asyncio.Task] = []
+_queue: VoodooQueue | None = None
 
 logger = logging.getLogger("voodoo.queue")
 
 
+def _get_provider() -> str:
+    return os.environ.get("VOODOO_QUEUE_PROVIDER", "sqlite").lower()
+
+
+async def _get_queue() -> VoodooQueue:
+    """Get or create the active queue provider."""
+    global _queue
+    if _queue is not None:
+        return _queue
+
+    provider = _get_provider()
+    if provider == "memory":
+        from voodoo.storage.queue import MemoryQueue
+
+        _queue = MemoryQueue()
+    else:
+        from voodoo.data.base import _database, get_db
+        from voodoo.storage.database import SQLiteDatabase
+        from voodoo.storage.queue import SQLiteQueue
+
+        # Ensure the data layer is initialized (shared DB file).
+        await get_db()
+        db = _database
+        if db is None:
+            # Fallback: create a standalone connection on the same path.
+            from voodoo.config import config
+
+            db = SQLiteDatabase(config.db_path)
+            await db.connect()
+        _queue = SQLiteQueue(db)
+    await _queue.setup()
+    return _queue
+
+
 def queue(name: str):
     def decorator(func: Callable):
-        if name not in _queues:
-            _queues[name] = asyncio.Queue()
         _workers[name] = func
         return func
 
@@ -38,55 +74,85 @@ def queue(name: str):
 
 
 async def enqueue(name: str, payload: Any):
-    if name not in _queues:
-        _queues[name] = asyncio.Queue()
+    """Enqueue *payload* as a durable task of type *name*."""
     from voodoo.telemetry import trace_id_var
 
-    trace_id = trace_id_var.get()
-    await _queues[name].put({"payload": payload, "trace_id": trace_id})
+    q = await _get_queue()
+    await q.enqueue(
+        name,
+        payload,
+        trace_id=trace_id_var.get(),
+        max_attempts=1,
+    )
 
 
-async def _run_worker(name: str):
-    q = _queues[name]
+async def _run_worker(name: str, worker_id: str):
+    """Poll the durable queue for tasks of type *name* and execute them."""
+    from voodoo.primitives.intent import Intent
+    from voodoo.runtime.engine import engine as runtime_engine
+    from voodoo.telemetry import trace_id_var
+
     func = _workers[name]
-    import uuid
-
-    from voodoo.telemetry import trace_id_var
+    is_async = inspect.iscoroutinefunction(func)
 
     while True:
         try:
-            item = await q.get()
-            payload = item.get("payload")
-            trace_id = item.get("trace_id") or str(uuid.uuid4())
-            token = trace_id_var.set(trace_id)
+            q = await _get_queue()
+            task = await q.claim(worker_id, types=(name,))
+            if task is None:
+                await asyncio.sleep(0.5)
+                continue
+
+            token = trace_id_var.set(task.trace_id or str(uuid.uuid4()))
             try:
-                from voodoo.primitives.intent import Intent
-                from voodoo.runtime.engine import engine as runtime_engine
+                intent = Intent(name=f"worker:{name}", params={"payload": task.payload})
 
-                intent = Intent(name=f"worker:{name}", params={"payload": payload})
-
-                async def compute(ctx, _func=func, _payload=payload):
-                    if inspect.iscoroutinefunction(_func):
+                async def compute(ctx, _func=func, _payload=task.payload):
+                    if is_async:
                         return await _func(_payload)
                     return _func(_payload)
 
                 await runtime_engine.execute(intent, compute, actor=f"worker:{name}")
-            except Exception as e:
-                logger.error(f"Error in worker {name}: {e}")
+                await q.complete(task.id, worker_id)
+            except Exception as exc:
+                logger.error("Error in worker %s task %d: %r", name, task.id, exc)
+                await q.fail(task.id, worker_id, str(exc))
             finally:
                 trace_id_var.reset(token)
-                q.task_done()
         except asyncio.CancelledError:
             break
+        except Exception as exc:
+            logger.error("Worker %s poll loop error: %r", name, exc)
+            await asyncio.sleep(1.0)
+
+
+async def _reaper():
+    """Background task that reclaims expired leases from dead workers."""
+    while True:
+        try:
+            q = await _get_queue()
+            reclaimed = await q.release_expired()
+            if reclaimed:
+                logger.info("reclaimed %d expired task(s)", reclaimed)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.error("reaper error: %r", exc)
+        await asyncio.sleep(5.0)
 
 
 async def start_workers():
-    for name in _workers.keys():
-        task = asyncio.create_task(_run_worker(name))
+    """Start one poller per registered worker type plus a lease reaper."""
+    for name in _workers:
+        worker_id = f"{name}:{os.getpid()}"
+        task = asyncio.create_task(_run_worker(name, worker_id))
         _worker_tasks.append(task)
+    if _workers:
+        _worker_tasks.append(asyncio.create_task(_reaper()))
 
 
 async def stop_workers():
+    """Cancel all worker tasks and reclaim any in-flight leases."""
     for task in _worker_tasks:
         task.cancel()
     if _worker_tasks:

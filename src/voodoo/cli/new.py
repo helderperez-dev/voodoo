@@ -9,7 +9,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from voodoo.cli import terminal
 
-
 # ---------------------------------------------------------------------------
 # Offline scaffold — used when no template repository is available.
 # Showcases Voodoo CSS (the default adapter), folder-based routing, and the

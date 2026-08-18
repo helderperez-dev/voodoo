@@ -15,6 +15,7 @@ from voodoo.storage.database.sqlite import (
     FRAMEWORK_MIGRATIONS,
     LEDGER_TABLE,
     SQLiteDatabase,
+    register_framework_migration,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "Migration",
     "SQLiteDatabase",
     "VoodooDatabase",
+    "register_framework_migration",
 ]
