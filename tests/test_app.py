@@ -184,8 +184,18 @@ def test_config_database_url(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///tmp/foo.db")
     assert _resolve_db_path() == "tmp/foo.db"
 
+    # PostgreSQL URLs pass through unchanged to the postgres provider
+    # (Sprint 10) rather than raising.
     monkeypatch.setenv("DATABASE_URL", "postgres://user:pw@host/db")
-    with pytest.raises(ConfigurationError, match="postgres"):
+    assert _resolve_db_path() == "postgres://user:pw@host/db"
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql://user:pw@host:5433/db?sslmode=require"
+    )
+    assert _resolve_db_path() == "postgresql://user:pw@host:5433/db?sslmode=require"
+
+    # Unsupported schemes still raise with an actionable message.
+    monkeypatch.setenv("DATABASE_URL", "mysql://user:pw@host/db")
+    with pytest.raises(ConfigurationError, match="mysql"):
         _resolve_db_path()
 
 

@@ -153,8 +153,13 @@ class User(BaseModel):
         db = await get_db()
         await cls._create_table()
 
-        query = "SELECT * FROM voodoo_users WHERE (email = ? OR username = ?) AND is_active = 1"
-        async with db.execute(query, [email_or_username, email_or_username]) as cursor:
+        query = (
+            "SELECT * FROM voodoo_users "
+            "WHERE (email = ? OR username = ?) AND is_active = ?"
+        )
+        async with db.execute(
+            query, [email_or_username, email_or_username, True]
+        ) as cursor:
             row = await cursor.fetchone()
             if not row:
                 return None
@@ -177,8 +182,8 @@ class User(BaseModel):
         await cls._create_table()
 
         key_hash = hash_api_key(api_key)
-        query = "SELECT * FROM voodoo_users WHERE api_key_hash = ? AND is_active = 1"
-        async with db.execute(query, [key_hash]) as cursor:
+        query = "SELECT * FROM voodoo_users WHERE api_key_hash = ? AND is_active = ?"
+        async with db.execute(query, [key_hash, True]) as cursor:
             row = await cursor.fetchone()
             if not row:
                 return None

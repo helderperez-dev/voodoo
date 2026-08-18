@@ -1,5 +1,6 @@
 import os
 import re
+from collections.abc import Callable
 from typing import Any, Literal
 
 import yaml
@@ -52,7 +53,13 @@ def _resolve_debug() -> bool:
 
 
 def _resolve_db_path() -> str:
-    """Database location: VOODOO_DB_PATH > DATABASE_URL (sqlite) > default."""
+    """Database location: VOODOO_DB_PATH > DATABASE_URL > default.
+
+    SQLite URLs are normalized to local paths; PostgreSQL URLs are passed
+    through unchanged for the ``postgres`` database provider (Sprint 10),
+    so ``VOODOO_DATABASE_URL``/``DATABASE_URL`` can point at a server
+    without a separate ``database.url`` in ``voodoo.yaml``.
+    """
     explicit = os.getenv("VOODOO_DB_PATH")
     if explicit:
         return explicit
@@ -63,10 +70,16 @@ def _resolve_db_path() -> str:
         if url.startswith("sqlite:///"):
             return url[len("sqlite:///") :] or ":memory:"
         scheme = url.split(":", 1)[0]
+        if scheme in ("postgres", "postgresql"):
+            # Pass through — consumed as ``database.url`` by the postgres
+            # provider factory (see ``adapters/registry.py``). Kept in
+            # ``db_path`` so ``get_config()`` still surfaces it.
+            return url
         raise ConfigurationError(
             f"DATABASE_URL scheme '{scheme}://' is not supported yet. "
-            "Use a sqlite:///... URL or VOODOO_DB_PATH. Additional backends "
-            "arrive as optional extras (e.g. voodoo[postgres]) in a later release."
+            "Use a sqlite:///... URL, a postgres://... URL (Sprint 10), "
+            "or VOODOO_DB_PATH. Additional backends arrive as optional "
+            "extras (e.g. voodoo[postgres]) in a later release."
         )
     return ".voodoo/state/data.db"
 
@@ -155,6 +168,18 @@ class RuntimeConfig(BaseModel):
     mode: str = "development"
 
 
+class ThemeConfig(BaseModel):
+    """Design-token overrides (``theme:`` block in voodoo.yaml).
+
+    Mirrors the configurable surface of ``voodoo.ui.styles.theme.Theme``.
+    Values are passed through to ``set_theme``/``create_theme`` at
+    runtime; arbitrary keys are allowed so sub-dictionaries forward.
+    """
+
+    mode: str = "dark"  # dark | light | system
+    model_config = {"extra": "allow"}
+
+
 class DatabaseConfig(BaseModel):
     """Database provider configuration."""
 
@@ -231,6 +256,7 @@ class VoodooConfig(BaseModel):
     seo: SEOConfig = Field(default_factory=SEOConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
+    theme: ThemeConfig = Field(default_factory=ThemeConfig)
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -267,9 +293,15 @@ def _build_database_config(file_data: dict[str, Any], db_path: str) -> DatabaseC
     db_provider = (
         db_data.get("provider") or os.getenv("VOODOO_DATABASE_PROVIDER") or "sqlite"
     )
+    # ``db_path`` may carry a provider URL (sqlite:///… or postgres://…).
+    # For server backends the URL is surfaced as ``database.url`` so the
+    # provider factory can connect (Sprint 10).
+    db_url = db_data.get("url") or ""
+    if not db_url and db_path.startswith(("postgres://", "postgresql://", "sqlite://")):
+        db_url = db_path
     return DatabaseConfig(
         provider=db_provider,
-        url=db_data.get("url", db_path if db_path.startswith("sqlite://") else ""),
+        url=db_url,
         path=db_data.get("path", db_path),
         extra={
             k: v for k, v in db_data.items() if k not in ("provider", "url", "path")
@@ -389,32 +421,35 @@ def _build_models_config(file_data: dict[str, Any]) -> ModelsConfig:
     )
 
 
+def _pick(
+    file_data: dict[str, Any],
+    key: str,
+    env: str,
+    convert_file: Callable[[Any], Any],
+    convert_env: Callable[[str], Any] | None = None,
+) -> tuple[str, Any] | None:
+    """First value wins: explicit file config > env var > None."""
+    if key in file_data:
+        return key, convert_file(file_data[key])
+    if env and env in os.environ:
+        return key, (convert_env or convert_file)(os.environ[env])
+    return None
+
+
 def _build_core_scalars(file_data: dict[str, Any]) -> dict[str, Any]:
     args: dict[str, Any] = {}
-    if "env" in file_data:
-        args["env"] = file_data["env"]
-    elif "VOODOO_ENV" in os.environ:
-        args["env"] = os.environ["VOODOO_ENV"]
-
-    if "debug" in file_data:
-        args["debug"] = bool(file_data["debug"])
-    elif "VOODOO_DEBUG" in os.environ:
-        args["debug"] = _resolve_debug()
-
-    if "port" in file_data:
-        args["port"] = int(file_data["port"])
-    elif "VOODOO_PORT" in os.environ:
-        args["port"] = int(os.environ["VOODOO_PORT"])
-
-    if "host" in file_data:
-        args["host"] = str(file_data["host"])
-    elif "VOODOO_HOST" in os.environ:
-        args["host"] = os.environ["VOODOO_HOST"]
-
-    if "storage_dir" in file_data:
-        args["storage_dir"] = str(file_data["storage_dir"])
-    elif "VOODOO_STORAGE_DIR" in os.environ:
-        args["storage_dir"] = os.environ["VOODOO_STORAGE_DIR"]
+    # ``debug``: file ``bool(...)``; env via _resolve_debug (1/true/yes/on).
+    scalars: list[tuple[str, str, Callable[[Any], Any], Callable[[str], Any]]] = [
+        ("env", "VOODOO_ENV", str, str),
+        ("debug", "VOODOO_DEBUG", bool, lambda _val: _resolve_debug()),
+        ("port", "VOODOO_PORT", int, int),
+        ("host", "VOODOO_HOST", str, str),
+        ("storage_dir", "VOODOO_STORAGE_DIR", str, str),
+    ]
+    for key, env, convert_file, convert_env in scalars:
+        picked = _pick(file_data, key, env, convert_file, convert_env)
+        if picked:
+            args[picked[0]] = picked[1]
     return args
 
 
@@ -503,6 +538,7 @@ def get_config(
         "seo",
         "auth",
         "security",
+        "theme",
         "extra",
     }
     config_args["extra"] = {k: v for k, v in file_data.items() if k not in known_keys}

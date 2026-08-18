@@ -20,6 +20,8 @@ def _print_capability_matrix() -> None:
 
     # Default local providers (Sprints 1–7). Declared statically so ``doctor``
     # stays side-effect free: it never opens a connection or creates files.
+    # PostgreSQL (Sprint 10) is an optional server backend behind the same
+    # VoodooDatabase protocol.
     providers = (
         DatabaseCapabilities(
             "sqlite",
@@ -27,6 +29,13 @@ def _print_capability_matrix() -> None:
             migrations=True,
             native_json=False,
             concurrent_writers=False,
+        ),
+        DatabaseCapabilities(
+            "postgres",
+            transactions=True,
+            migrations=True,
+            native_json=True,
+            concurrent_writers=True,
         ),
         QueueCapabilities(
             "sqlite",

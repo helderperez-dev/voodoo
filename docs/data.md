@@ -77,7 +77,44 @@ db = await get_db()
 
 ### Storage backend boundary
 
-The default backend is SQLite (via `aiosqlite`). Swapping to PostgreSQL requires replacing `init_db`/`get_db` and the DDL in `BaseModel._create_table`. The facade stays the same.
+The default backend is SQLite (via `aiosqlite`). Since Sprint 10, PostgreSQL
+sits behind the same `VoodooDatabase` protocol — the data layer detects the
+backend and adapts the small dialect differences (identity columns vs
+`AUTOINCREMENT`, `RETURNING id` vs `lastrowid`, `%s` vs `?` placeholders).
+The facade stays the same:
+
+```python
+# voodoo.yaml
+database:
+  provider: postgres
+  url: postgresql://user:pass@localhost:5432/voodoo
+
+# or environment
+#   VOODOO_DATABASE_PROVIDER=postgres
+#   VOODOO_DATABASE_URL=postgresql://user:pass@localhost:5432/voodoo
+```
+
+The `postgres` provider requires the optional extra:
+
+```bash
+pip install "voodoo-framework[postgres]"   # psycopg[binary]
+```
+
+**Pooling** (spec §4 / §49): the current adapter keeps one async `psycopg`
+connection per process, mirroring the SQLite adapter's single connection —
+introspection, migrations, and per-request queries share it, and the
+`transaction()` context gives atomic commit/rollback. A `psycopg_pool`
+`AsyncConnectionPool` (per-backend proxy) is the documented future option for
+multi-worker deployments; it is deliberately not introduced in Sprint 10 to
+keep the protocol and the in-process default stable. JSONB payload columns
+(spec §50) stay `TEXT` for parity with SQLite — revisit with the queue/events
+store rewire in a later sprint.
+
+The full provider contract (write/read roundtrip, migration ledger,
+idempotent migrations, transaction commit/rollback, reconnect durability)
+is enforced by `DatabaseContractTests` — run against SQLite always, and
+against a real PostgreSQL server in CI via a service container (or locally
+with `VOODOO_TEST_DATABASE_URL` set).
 
 ## API reference
 

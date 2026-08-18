@@ -242,8 +242,22 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
         # Startup — wire the durable execution store (Sprint 3).
+        from voodoo.core.errors import ConfigurationError
         from voodoo.runtime.engine import engine as runtime_engine
         from voodoo.storage.execution import SQLiteExecutionStore
+
+        if config.database.provider == "postgres":
+            # Sprint 10 ships the PostgreSQL database capability. The
+            # execution/schedule stores are still SQLite-bound until
+            # Sprint 11 wires them to the VoodooDatabase protocol — fail
+            # fast with an actionable message rather than writing mixed
+            # state (SQLite stores + PG adapter).
+            raise ConfigurationError(
+                "database.provider=postgres is not usable by the app "
+                "lifespan yet: the execution/schedule stores wire to the "
+                "VoodooDatabase protocol in Sprint 11. Use "
+                "database.provider=sqlite for now."
+            )
 
         store_path = config.db_path.replace(":memory:", ".voodoo/state/data.db")
         store = SQLiteExecutionStore(store_path)

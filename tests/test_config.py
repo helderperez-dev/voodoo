@@ -14,6 +14,8 @@ from voodoo.config import (
     EventsConfig,
     ObjectsConfig,
     QueueConfig,
+    ThemeConfig,
+    VoodooConfig,
     get_config,
     interpolate_env_vars,
 )
@@ -115,3 +117,27 @@ def test_provider_registry_and_errors():
     with pytest.raises(ConfigurationError) as exc_info:
         reg.get_database(DatabaseConfig(provider="nonexistent_db"))
     assert "Unknown database provider 'nonexistent_db'" in str(exc_info.value)
+
+
+def test_theme_block_parses_and_keeps_extra_keys():
+    # Sprint 9 regression: a ``theme:`` block in voodoo.yaml referenced an
+    # undefined ThemeConfig and would crash get_config() with a NameError.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yaml_path = Path(tmpdir) / "voodoo.yaml"
+        yaml_content = {
+            "theme": {"mode": "light", "colors": {"primary": "#ff0000"}},
+        }
+        with open(yaml_path, "w") as f:
+            yaml.dump(yaml_content, f)
+
+        cfg = get_config(str(yaml_path))
+        assert isinstance(cfg.theme, ThemeConfig)
+        assert cfg.theme.mode == "light"
+        # Unknown sub-blocks are preserved for the theme adapter.
+        assert cfg.theme.colors == {"primary": "#ff0000"}
+        # And it does not leak into ``extra``.
+        assert "theme" not in cfg.extra
+
+
+def test_voodoo_config_theme_default():
+    assert VoodooConfig().theme.mode == "dark"

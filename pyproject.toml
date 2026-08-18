@@ -40,6 +40,9 @@ dev = [
     "mypy",
     "pre-commit"
 ]
+postgres = [
+    "psycopg[binary]>=3.3.4",
+]
 
 [tool.setuptools.dynamic]
 version = { attr = "voodoo.__version__" }

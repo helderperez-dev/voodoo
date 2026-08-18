@@ -14,6 +14,28 @@ jobs:
       matrix:
         python-version: ["3.12"]
 
+    # PostgreSQL service container (Sprint 10): runs the database contract
+    # suite against a real server. The voodoo database provider itself talks
+    # to it over TCP on localhost:5432.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: voodoo_test
+          POSTGRES_USER: voodoo
+          POSTGRES_PASSWORD: voodoo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U voodoo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Makes tests/contracts/test_database_postgres.py run instead of skip.
+      VOODOO_TEST_DATABASE_URL: postgresql://voodoo:voodoo@localhost:5432/voodoo_test
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

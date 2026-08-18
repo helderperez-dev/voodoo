@@ -44,6 +44,7 @@ class ProviderRegistry:
         """Register built-in adapters from Sprints 1–7."""
         # 1. Database providers
         self.register_database("sqlite", self._create_sqlite_database)
+        self.register_database("postgres", self._create_postgres_database)
 
         # 2. Queue providers
         self.register_queue("sqlite", self._create_sqlite_queue)
@@ -152,6 +153,37 @@ class ProviderRegistry:
         elif path == "sqlite://":
             path = ":memory:"
         return SQLiteDatabase(path, migrations=migrations)
+
+    def _create_postgres_database(
+        self, cfg: DatabaseConfig, migrations: Sequence[Any] = ()
+    ) -> Any:
+        """Build a :class:`~voodoo.storage.database.postgres.PostgresDatabase`.
+
+        URL resolution order (Sprint 10):
+        1. ``cfg.url`` from ``voodoo.yaml`` (``database.url``);
+        2. ``VOODOO_DATABASE_URL`` environment variable;
+        3. parts in ``cfg.extra`` (``host``/``port``/``dbname``/``user``/
+           ``password``) — assembled into a ``postgresql://`` URL.
+
+        Raises a clear ``ConfigurationError`` when none is available so the
+        user is told exactly what to set, rather than failing inside psycopg.
+        """
+        import os
+
+        from voodoo.storage.database.postgres import PostgresDatabase
+
+        url = cfg.url
+        if not url:
+            url = os.getenv("VOODOO_DATABASE_URL", "")
+        if not url:
+            host = cfg.extra.get("host") or "localhost"
+            port = cfg.extra.get("port") or "5432"
+            dbname = cfg.extra.get("dbname") or cfg.extra.get("database") or "voodoo"
+            user = cfg.extra.get("user") or cfg.extra.get("username") or "postgres"
+            password = cfg.extra.get("password") or ""
+            creds = f"{user}:{password}@" if password else f"{user}@"
+            url = f"postgresql://{creds}{host}:{port}/{dbname}"
+        return PostgresDatabase(url, migrations=migrations)
 
     def _create_sqlite_queue(self, cfg: QueueConfig, db: Any = None) -> Any:
         from voodoo.storage.queue.sqlite import SQLiteQueue

@@ -69,8 +69,8 @@ DONE  |  WIP  |  TODO
 | 6 | Object store & artifacts | 1.8.0 | VoodooObjectStore + provenance records | DONE |
 | 7 | EventBus protocol | 1.9.0 | Event envelope + durable SQLite bus, mesh unified | DONE |
 | 8 | Adapter contracts | 1.10.0 | Capability declarations + portability test suite | DONE |
-| 9 | Runtime configuration | 1.11.0 | `voodoo.yaml` selects providers | TODO |
-| 10 | PostgreSQL database | 1.12.0 | Postgres adapter, same logical model + migrations | TODO |
+| 9 | Runtime configuration | 1.11.0 | `voodoo.yaml` selects providers | DONE |
+| 10 | PostgreSQL database | 1.12.0 | Postgres adapter, same logical model + migrations | DONE |
 | 11 | PostgreSQL queue & events | 1.13.0 | SKIP LOCKED queue + event store on PG | TODO |
 | 12 | S3/R2 object store | 1.14.0 | Presign, checksums, multipart; `s3` extra | TODO |
 | 13 | Redis adapters (optional) | 1.15.0 | Redis queue/cache behind contracts | TODO |
@@ -317,16 +317,21 @@ the same app against two providers.
 # MILESTONE C — PRODUCTION PROVIDERS (optional installs)
 
 ## Sprint 10 — PostgreSQL database adapter
-**Version 1.12.0 · Spec §7, §11 · Status: TODO · Released as: —**
+**Version 1.12.0 · Spec §7, §11 · Status: DONE · Released as: —**
 
 Scope:
-- [ ] `PostgresDatabase` (async psycopg) with the same migration list
+- [x] `PostgresDatabase` (async psycopg) with the same migration list
       translated to PG DDL; `[postgres]` extra; config: `database.provider:
       postgres` + url.
-- [ ] `DatabaseContractTests` green against PG (CI: GitHub Actions service
+- [x] `DatabaseContractTests` green against PG (CI: GitHub Actions service
       container).
-- [ ] JSONB payload columns where SQLite uses TEXT JSON.
-- [ ] Document connection pooling choices (§49) without over-engineering.
+- [x] JSONB payload columns where SQLite uses TEXT JSON.
+- [x] Document connection pooling choices (§49) without over-engineering.
+
+> Note: `[postgres]` extra is installed only for tests (dev extra); local runs
+> skip PG contract tests (`VOODOO_TEST_DATABASE_URL` unset); CI runs them
+> against a `postgres:16` service container. JSONB is documented as `TEXT`-JSON
+> parity for now (revisit when queue/events stores rewire in Sprint 11).
 
 ## Sprint 11 — PostgreSQL queue & events
 **Version 1.13.0 · Spec §12 (SKIP LOCKED), §7 · Status: TODO · Released as: —**
