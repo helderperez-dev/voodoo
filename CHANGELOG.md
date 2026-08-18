@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.13.0 — 2026-08-18
+
+### PostgreSQL queue, events & execution store (Sprint 11 — the durable runtime on PG)
+
+- **`PostgresQueue`** (`voodoo.storage.queue.postgres`) — a durable queue
+  provider behind the `VoodooQueue` protocol with the same semantics as
+  `SQLiteQueue`: transactional claims under a lease, retry with backoff,
+  priority, delayed delivery, and idempotent enqueue. Claims use
+  `FOR UPDATE SKIP LOCKED` so concurrent workers never claim the same task.
+  Provider: `postgres` (`VOODOO_QUEUE_PROVIDER=postgres`).
+- **`PostgresEventStore`** (`voodoo.storage.events.postgres`) — a durable
+  event bus provider behind the `VoodooEventBus` protocol (publish /
+  subscribe / replay) with the same schema as `SQLiteEventBus`. Provider:
+  `postgres` (`VOODOO_EVENTS_PROVIDER=postgres`).
+- **`PostgresExecutionStore`** (`voodoo.storage.execution.postgres`) — the
+  durable execution store (materialized `executions` + `execution_events`
+  journal, artifacts, approvals) on PostgreSQL, conforming to the sync
+  `ExecutionStore` protocol. The app lifespan now runs the execution store on
+  PG automatically when `database.provider: postgres` (the Sprint 10 guard is
+  removed); the scheduler remains SQLite-backed (documented).
+- **Shared translated migrations** — artifacts + approvals DDL is extracted
+  into the shared framework migration list (new versions 7/8), so PostgreSQL
+  creates the same TEXT/JSON schema as SQLite via the migration runner
+  (JSONB / TIMESTAMPTZ remain a future sprint). `SQLiteExecutionStore._migrate()`
+  now reuses the shared migrations instead of duplicated inline DDL.
+- **Registry & config wiring** — `postgres` queue/events factories registered
+  in `ProviderRegistry`; `voodoo doctor` capability matrix now lists the
+  postgres queue and event bus rows.
+- **Contract + failure-path tests against a real server** —
+  `tests/contracts/test_queue_postgres.py` (28 tests: contract, reconnect,
+  skip-locked, idempotency, lease expiry, concurrent claims),
+  `test_eventbus_postgres.py` (9 tests), and `test_execution_postgres.py`
+  (11 tests) run when `VOODOO_TEST_DATABASE_URL` is set; CI and the release
+  workflow provide a `postgres:16` service container. Local `pytest` skips
+  cleanly without a server.
+- **Defect fix** — `src/voodoo/schedule.py` registered its migration with
+  three positional args (crash); it now builds a `Migration` object and
+  registers it correctly.
+- **Docs** — `docs/architecture.md`, `docs/data.md`, `docs/workers.md`,
+  `docs/mesh.md`, and `docs/deployment.md` document the PG queue/events/
+  execution store and production PostgreSQL configuration.
+
 ## 1.12.0 — 2026-08-18
 
 ### PostgreSQL database adapter (Sprint 10 — server-backed storage, same protocol)

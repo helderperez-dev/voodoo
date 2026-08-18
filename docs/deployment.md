@@ -34,6 +34,25 @@ export VOODOO_PORT=8000
 export VOODOO_HOST=0.0.0.0
 ```
 
+### PostgreSQL in production (Sprint 11)
+
+For a server-backed deployment, point the database, queue, and event bus at
+PostgreSQL. Install the optional extra and set the provider + URL:
+
+```bash
+pip install "voodoo-framework[postgres]"
+
+export VOODOO_DATABASE_PROVIDER=postgres
+export VOODOO_DATABASE_URL="postgresql://voodoo:voodoo@db:5432/voodoo"
+export VOODOO_QUEUE_PROVIDER=postgres
+export VOODOO_EVENTS_PROVIDER=postgres
+```
+
+The queue and event bus reuse the same `VOODOO_DATABASE_URL` when their own
+URLs are unset. The app lifespan runs the durable execution store on
+PostgreSQL automatically when `database.provider: postgres`; the scheduler
+remains SQLite-backed (documented).
+
 ### Docker
 
 ```dockerfile

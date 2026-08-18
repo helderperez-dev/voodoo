@@ -262,7 +262,7 @@ models:
 
 - **Minimal scaffold** — `voodoo new` creates only `app/page.py`, `voodoo.toml`, `pyproject.toml`. No `main.py`, no `.env`, no placeholder directories.
 - **`voodoo dev` is canonical** — Auto-discovers the app (`main:app` if `main.py` exists, otherwise `voodoo.core:app`). No manual ASGI setup needed.
-- **Lazy database** — SQLite initializes on first `get_db()` call, not at startup. Default path: `.voodoo/state/data.db`. PostgreSQL (Sprint 10) follows the same lazy pattern: the `postgres://` URL is resolved at config time, the psycopg connection opens on first use, and the app lifespan refuses `provider: postgres` until the execution/schedule stores are database-protocol-bound (Sprint 11).
+- **Lazy database** — SQLite initializes on first `get_db()` call, not at startup. Default path: `.voodoo/state/data.db`. PostgreSQL (Sprint 10) follows the same lazy pattern: the `postgres://` URL is resolved at config time, the psycopg connection opens on first use. Since Sprint 11 the app lifespan runs the durable execution store on PostgreSQL (via the shared translated migrations) when `database.provider: postgres`; the scheduler remains SQLite-backed (documented).
 - **Lazy storage** — No storage directories created unless storage is used.
 - **Lazy workers** — Worker subsystem starts only if workers are registered.
 - **`voodoo.toml` preferred** — TOML config preferred for new projects; YAML compatibility preserved.

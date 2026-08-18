@@ -19,6 +19,28 @@ jobs:
   release:
     name: Build & Publish Release
     runs-on: ubuntu-latest
+
+    # PostgreSQL service container (Sprint 11): runs the queue/events/execution
+    # contract + failure-path suites against a real server at release time.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: voodoo_test
+          POSTGRES_USER: voodoo
+          POSTGRES_PASSWORD: voodoo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U voodoo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Makes the PostgreSQL contract + failure-path tests run instead of skip.
+      VOODOO_TEST_DATABASE_URL: postgresql://voodoo:voodoo@localhost:5432/voodoo_test
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

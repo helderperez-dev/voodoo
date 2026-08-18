@@ -9,32 +9,35 @@ from pathlib import Path
 from typing import Any
 
 from voodoo.primitives.time import TimeSpec
+from voodoo.storage.database.interfaces import Migration
 from voodoo.storage.database.sqlite import register_framework_migration
 from voodoo.storage.queue import VoodooQueue
 
 SCHEDULES_MIGRATION_VERSION = 5
 
-SCHEDULES_MIGRATION = (
-    """
-    CREATE TABLE IF NOT EXISTS schedules (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        kind TEXT NOT NULL,
-        spec TEXT NOT NULL,
-        next_run_at TEXT NOT NULL,
-        last_run_at TEXT,
-        task_type TEXT NOT NULL,
-        payload TEXT,
-        active INTEGER NOT NULL DEFAULT 1
-    )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules (next_run_at)",
-    "CREATE INDEX IF NOT EXISTS idx_schedules_active ON schedules (active)",
+SCHEDULES_MIGRATION = Migration(
+    version=SCHEDULES_MIGRATION_VERSION,
+    name="schedules",
+    statements=(
+        """
+        CREATE TABLE IF NOT EXISTS schedules (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            kind TEXT NOT NULL,
+            spec TEXT NOT NULL,
+            next_run_at TEXT NOT NULL,
+            last_run_at TEXT,
+            task_type TEXT NOT NULL,
+            payload TEXT,
+            active INTEGER NOT NULL DEFAULT 1
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules (next_run_at)",
+        "CREATE INDEX IF NOT EXISTS idx_schedules_active ON schedules (active)",
+    ),
 )
 
-register_framework_migration(
-    SCHEDULES_MIGRATION_VERSION, "schedules", SCHEDULES_MIGRATION
-)
+register_framework_migration(SCHEDULES_MIGRATION)
 
 
 class Scheduler:

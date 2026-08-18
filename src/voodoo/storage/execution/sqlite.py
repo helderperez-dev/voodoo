@@ -21,6 +21,10 @@ from typing import Any
 from voodoo.runtime.execution import Execution, ExecutionStatus
 from voodoo.storage.database.interfaces import Migration
 from voodoo.storage.database.sqlite import register_framework_migration
+from voodoo.storage.execution.migrations import (
+    EXECUTION_APPROVALS_MIGRATION,
+    EXECUTION_ARTIFACTS_MIGRATION,
+)
 
 __all__ = ["SQLiteExecutionStore", "EXECUTION_MIGRATION"]
 
@@ -149,48 +153,13 @@ class SQLiteExecutionStore:
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_exec_events_type ON execution_events (event_type)"
         )
-        # Artifacts + provenance (Sprint 6, spec §46).
-        self._conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS artifacts (
-                id TEXT PRIMARY KEY,
-                execution_id TEXT NOT NULL,
-                parent_artifact_id TEXT,
-                created_by TEXT,
-                tool TEXT,
-                model TEXT,
-                checksum TEXT,
-                metadata TEXT NOT NULL DEFAULT '{}',
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_artifacts_execution "
-            "ON artifacts (execution_id)"
-        )
-        # Approvals (Sprint 4) — pending human decisions survive restarts.
-        self._conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS approvals (
-                id TEXT PRIMARY KEY,
-                execution_id TEXT NOT NULL,
-                trace_id TEXT,
-                capability TEXT,
-                question TEXT,
-                requested_by TEXT,
-                status TEXT NOT NULL,
-                decided_by TEXT,
-                decided_at TEXT,
-                reason TEXT,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_approvals_execution "
-            "ON approvals (execution_id)"
-        )
+        # Artifacts + approvals are shared framework migrations (versions 7-8)
+        # so the server-backed stores create identical tables. Execute the
+        # same statements here — single source of truth.
+        for statement in EXECUTION_ARTIFACTS_MIGRATION.statements:
+            self._conn.execute(statement)
+        for statement in EXECUTION_APPROVALS_MIGRATION.statements:
+            self._conn.execute(statement)
         # Migration for existing databases created before Sprint 4:
         # add the checkpoint column if absent.
         columns = {

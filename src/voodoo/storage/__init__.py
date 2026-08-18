@@ -14,10 +14,13 @@ Two concerns live here:
 from voodoo.storage.events import (
     EventBusCapabilities,
     LocalEventBus,
+    PostgresEventStore,
     SQLiteEventBus,
     VoodooEventBus,
 )
+from voodoo.storage.execution import PostgresExecutionStore, SQLiteExecutionStore
 from voodoo.storage.manager import StorageManager, storage
+from voodoo.storage.queue import PostgresQueue, SQLiteQueue, VoodooQueue
 
 __all__ = [
     "StorageManager",
@@ -26,4 +29,10 @@ __all__ = [
     "VoodooEventBus",
     "LocalEventBus",
     "SQLiteEventBus",
+    "PostgresEventStore",
+    "SQLiteExecutionStore",
+    "PostgresExecutionStore",
+    "VoodooQueue",
+    "SQLiteQueue",
+    "PostgresQueue",
 ]

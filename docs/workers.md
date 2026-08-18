@@ -79,6 +79,21 @@ await process_file.enqueue("/data/input.csv")
 
 The broker is an `asyncio.Queue`; workers are `asyncio.Task` objects. The public surface (`@task`, `.enqueue`) is the seam for a future distributed backend (Redis, Celery, etc.) — only the internals would swap.
 
+### Durable broker (Sprint 11)
+
+Beyond the in-process broker, Voodoo ships durable queue providers behind the
+`VoodooQueue` protocol (spec §12):
+
+- **`SQLiteQueue`** (default) — tasks survive process restarts, are claimed
+  transactionally under a lease, and retry with backoff.
+- **`PostgresQueue`** — the same semantics on PostgreSQL, using
+  `FOR UPDATE SKIP LOCKED` for atomic claims so concurrent workers never
+  claim the same task. Enabled with `VOODOO_QUEUE_PROVIDER=postgres` (plus a
+  `postgres` database / `VOODOO_DATABASE_URL`).
+
+Both share the same `tasks` schema via the migration runner, so switching the
+provider changes only the backend, never application code.
+
 ### TaskError
 
 When a task exhausts its retries, `TaskError` is raised with structured context:

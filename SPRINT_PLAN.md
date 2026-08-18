@@ -71,7 +71,7 @@ DONE  |  WIP  |  TODO
 | 8 | Adapter contracts | 1.10.0 | Capability declarations + portability test suite | DONE |
 | 9 | Runtime configuration | 1.11.0 | `voodoo.yaml` selects providers | DONE |
 | 10 | PostgreSQL database | 1.12.0 | Postgres adapter, same logical model + migrations | DONE |
-| 11 | PostgreSQL queue & events | 1.13.0 | SKIP LOCKED queue + event store on PG | TODO |
+| 11 | PostgreSQL queue & events | 1.13.0 | SKIP LOCKED queue + event store on PG | DONE |
 | 12 | S3/R2 object store | 1.14.0 | Presign, checksums, multipart; `s3` extra | TODO |
 | 13 | Redis adapters (optional) | 1.15.0 | Redis queue/cache behind contracts | TODO |
 | 14 | ModelProvider protocol | 1.16.0 | Model descriptors + routing aliases + contract tests | TODO |
@@ -334,16 +334,16 @@ Scope:
 > parity for now (revisit when queue/events stores rewire in Sprint 11).
 
 ## Sprint 11 — PostgreSQL queue & events
-**Version 1.13.0 · Spec §12 (SKIP LOCKED), §7 · Status: TODO · Released as: —**
+**Version 1.13.0 · Spec §12 (SKIP LOCKED), §7 · Status: DONE · Released as: —**
 
 Scope:
-- [ ] `PostgresQueue` with `FOR UPDATE SKIP LOCKED` transactional claim +
+- [x] `PostgresQueue` with `FOR UPDATE SKIP LOCKED` transactional claim +
       leases (same semantics as SQLiteQueue).
-- [ ] `PostgresEventStore` (durable publish/replay).
-- [ ] `QueueContractTests` + `EventBusContractTests` green on PG.
-- [ ] Execution store on PG (executions/journal/artifacts tables via the
+- [x] `PostgresEventStore` (durable publish/replay).
+- [x] `QueueContractTests` + `EventBusContractTests` green on PG.
+- [x] Execution store on PG (executions/journal/artifacts tables via the
       migration runner).
-- [ ] Failure-path tests against PG in CI (lease expiry, duplicate claim).
+- [x] Failure-path tests against PG in CI (lease expiry, duplicate claim).
 - ⭐ After this sprint: moderate production = PostgreSQL only (+ objects).
 
 ## Sprint 12 — S3/R2 object store hardening

@@ -49,10 +49,12 @@ class ProviderRegistry:
         # 2. Queue providers
         self.register_queue("sqlite", self._create_sqlite_queue)
         self.register_queue("memory", self._create_memory_queue)
+        self.register_queue("postgres", self._create_postgres_queue)
 
         # 3. Events providers
         self.register_events("sqlite", self._create_sqlite_events)
         self.register_events("local", self._create_local_events)
+        self.register_events("postgres", self._create_postgres_events)
 
         # 4. Objects providers
         self.register_objects("local", self._create_local_objects)
@@ -102,9 +104,10 @@ class ProviderRegistry:
                 f"Unknown queue provider '{name}'. Available providers: {available}. "
                 "Check your voodoo.yaml or VOODOO_QUEUE_PROVIDER setting."
             )
-        # SQLiteQueue requires a database instance; allow passing one or create default
-        if name == "sqlite":
-            return self._create_sqlite_queue(cfg, db=db)
+        # Database-backed queues (SQLite/Postgres) require a database
+        # instance; allow passing one or create the default.
+        if name in ("sqlite", "postgres"):
+            return self._queue_providers[name](cfg, db=db)
         return self._queue_providers[name](cfg)
 
     def get_events(self, cfg: EventsConfig | None = None) -> Any:
@@ -192,6 +195,21 @@ class ProviderRegistry:
             db = self.get_database()
         return SQLiteQueue(db)
 
+    def _create_postgres_queue(self, cfg: QueueConfig, db: Any = None) -> Any:
+        from voodoo.storage.queue.postgres import PostgresQueue
+
+        if db is None:
+            db = self.get_database()
+        # The caller (app/worker) may hand us a Postgres database already
+        # connected; assert it so a mixed provider (memory queue over
+        # postgres db) still fails loudly at startup.
+        if not hasattr(db, "provider") or db.provider != "postgres":
+            raise ConfigurationError(
+                "The 'postgres' queue provider requires a postgres database; "
+                "set database.provider: postgres (or pass a PostgresDatabase)."
+            )
+        return PostgresQueue(db)
+
     def _create_memory_queue(self, cfg: QueueConfig) -> Any:
         from voodoo.storage.queue.memory import MemoryQueue
 
@@ -211,6 +229,23 @@ class ProviderRegistry:
         from voodoo.storage.events.local import LocalEventBus
 
         return LocalEventBus()
+
+    def _create_postgres_events(self, cfg: EventsConfig) -> Any:
+        import os
+
+        from voodoo.storage.events.postgres import PostgresEventStore
+
+        url = (
+            cfg.url
+            or os.getenv("VOODOO_EVENTS_URL")
+            or os.getenv("VOODOO_DATABASE_URL", "")
+        )
+        if not url:
+            raise ConfigurationError(
+                "The 'postgres' events provider requires a URL: set events.url "
+                "in voodoo.yaml, or export VOODOO_EVENTS_URL / VOODOO_DATABASE_URL."
+            )
+        return PostgresEventStore(url)
 
     def _create_local_objects(self, cfg: ObjectsConfig) -> Any:
         from voodoo.storage.objects.local import LocalObjectStore

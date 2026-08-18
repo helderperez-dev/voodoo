@@ -46,6 +46,14 @@ def _print_capability_matrix() -> None:
             transactions=True,
         ),
         QueueCapabilities(
+            "postgres",
+            durable=True,
+            visibility_timeout=True,
+            delayed_delivery=True,
+            priority=True,
+            transactions=True,
+        ),
+        QueueCapabilities(
             "memory",
             durable=False,
             visibility_timeout=True,
@@ -55,6 +63,12 @@ def _print_capability_matrix() -> None:
         ),
         EventBusCapabilities(
             "sqlite",
+            durable=True,
+            replay=True,
+            ordering=True,
+        ),
+        EventBusCapabilities(
+            "postgres",
             durable=True,
             replay=True,
             ordering=True,

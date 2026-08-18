@@ -107,14 +107,19 @@ introspection, migrations, and per-request queries share it, and the
 `AsyncConnectionPool` (per-backend proxy) is the documented future option for
 multi-worker deployments; it is deliberately not introduced in Sprint 10 to
 keep the protocol and the in-process default stable. JSONB payload columns
-(spec §50) stay `TEXT` for parity with SQLite — revisit with the queue/events
-store rewire in a later sprint.
+(spec §50) stay `TEXT` for parity with SQLite — the queue, event bus, and
+execution store (Sprint 11) reuse the same shared translated migrations, so
+PostgreSQL uses TEXT columns just like SQLite (JSONB / TIMESTAMPTZ remain a
+future sprint).
 
 The full provider contract (write/read roundtrip, migration ledger,
 idempotent migrations, transaction commit/rollback, reconnect durability)
 is enforced by `DatabaseContractTests` — run against SQLite always, and
 against a real PostgreSQL server in CI via a service container (or locally
-with `VOODOO_TEST_DATABASE_URL` set).
+with `VOODOO_TEST_DATABASE_URL` set). The queue, event bus, and execution
+store each have their own PostgreSQL contract + failure-path suites
+(`tests/contracts/test_queue_postgres.py`, `test_eventbus_postgres.py`,
+`test_execution_postgres.py`) that run against the same service container.
 
 ## API reference
 

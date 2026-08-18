@@ -241,35 +241,33 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        # Startup — wire the durable execution store (Sprint 3).
-        from voodoo.core.errors import ConfigurationError
+        # Startup — wire the durable execution store (Sprint 3 / Sprint 11).
         from voodoo.runtime.engine import engine as runtime_engine
-        from voodoo.storage.execution import SQLiteExecutionStore
 
-        if config.database.provider == "postgres":
-            # Sprint 10 ships the PostgreSQL database capability. The
-            # execution/schedule stores are still SQLite-bound until
-            # Sprint 11 wires them to the VoodooDatabase protocol — fail
-            # fast with an actionable message rather than writing mixed
-            # state (SQLite stores + PG adapter).
-            raise ConfigurationError(
-                "database.provider=postgres is not usable by the app "
-                "lifespan yet: the execution/schedule stores wire to the "
-                "VoodooDatabase protocol in Sprint 11. Use "
-                "database.provider=sqlite for now."
-            )
+        provider = config.database.provider.lower()
+        if provider == "postgres":
+            # Sprint 11: run the durable execution store on PostgreSQL via the
+            # shared translated migrations. The scheduler remains SQLite-backed
+            # (documented) so the lifespan boots cleanly with a server DB.
+            from voodoo.storage.execution import PostgresExecutionStore
 
-        store_path = config.db_path.replace(":memory:", ".voodoo/state/data.db")
-        store = SQLiteExecutionStore(store_path)
-        runtime_engine.use_store(store)
+            url = config.database.url or os.getenv("VOODOO_DATABASE_URL", "")
+            store = PostgresExecutionStore(url)
+            runtime_engine.use_store(store)
+            schedule_path = ".voodoo/state/schedules.db"
+        else:
+            from voodoo.storage.execution import SQLiteExecutionStore
+
+            store_path = config.db_path.replace(":memory:", ".voodoo/state/data.db")
+            store = SQLiteExecutionStore(store_path)
+            runtime_engine.use_store(store)
+            schedule_path = store_path.replace("data.db", "schedules.db")
 
         # Scheduler (Sprint 5)
         from voodoo.runtime.scheduler import ScheduleService
         from voodoo.storage.scheduler import SQLiteScheduleStore
 
-        schedule_store = SQLiteScheduleStore(
-            store_path.replace("data.db", "schedules.db")
-        )
+        schedule_store = SQLiteScheduleStore(schedule_path)
         scheduler = ScheduleService(schedule_store)
         await scheduler.start()
 

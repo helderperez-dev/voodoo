@@ -63,6 +63,19 @@ When the event fires, the task runs with retries, timeout, and a telemetry span.
 - **Remote boundary**: events are wrapped in a standard envelope (`id`, `ts`, `source`, `correlation_id`, `event`, `payload`) and sent to connected WebSocket nodes.
 - The `correlation_id` is automatically pulled from the telemetry `trace_id_var`.
 
+### Durable event bus (Sprint 11)
+
+Beyond the in-process `LocalEventBus`, Voodoo ships durable event bus
+providers behind the `VoodooEventBus` protocol (spec §7):
+
+- **`SQLiteEventBus`** (default) — events are persisted and replayable.
+- **`PostgresEventStore`** — the same durable publish/subscribe/replay
+  semantics on PostgreSQL, enabled with `VOODOO_EVENTS_PROVIDER=postgres`
+  (plus `VOODOO_EVENTS_URL` / `VOODOO_DATABASE_URL`).
+
+Both share the same `events` schema via the migration runner, so switching
+the provider changes only the backend, never application code.
+
 ## Advanced
 
 ### Event envelope
