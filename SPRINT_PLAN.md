@@ -334,7 +334,7 @@ Scope:
 > parity for now (revisit when queue/events stores rewire in Sprint 11).
 
 ## Sprint 11 — PostgreSQL queue & events
-**Version 1.13.0 · Spec §12 (SKIP LOCKED), §7 · Status: DONE · Released as: —**
+**Version 1.13.0 · Spec §12 (SKIP LOCKED), §7 · Status: DONE · Released as: 1.13.0**
 
 Scope:
 - [x] `PostgresQueue` with `FOR UPDATE SKIP LOCKED` transactional claim +
