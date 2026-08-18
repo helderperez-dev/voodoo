@@ -15,6 +15,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
+from voodoo.adapters.capabilities import QueueCapabilities
+
+__all__ = [
+    "ACTIVE_STATUSES",
+    "QueueCapabilities",
+    "QueueStats",
+    "TaskRecord",
+    "TaskStatus",
+    "VoodooQueue",
+]
+
 
 class TaskStatus(enum.StrEnum):
     """Durable task lifecycle.
@@ -37,20 +48,6 @@ class TaskStatus(enum.StrEnum):
 
 
 ACTIVE_STATUSES = (TaskStatus.PENDING, TaskStatus.RUNNING, TaskStatus.RETRYING)
-
-
-@dataclass(frozen=True)
-class QueueCapabilities:
-    """Declarative contract of what a queue adapter guarantees (spec §9)."""
-
-    provider: str
-    durable: bool = True
-    delivery: str = "at_least_once"
-    ordering: str = "best_effort"  # priority-weighted, not FIFO across workers
-    visibility_timeout: bool = True  # leases with expiry + reclaim
-    delayed_delivery: bool = True
-    priority: bool = True
-    transactions: bool = True
 
 
 @dataclass(frozen=True)

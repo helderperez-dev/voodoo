@@ -4,6 +4,73 @@ from pathlib import Path
 from voodoo.cli import terminal
 
 
+def _print_capability_matrix() -> None:
+    """Print active providers and their declared capability matrix (spec §9).
+
+    Renders one row per registered adapter implementation. This gives
+    ``voodoo doctor`` an honest, per-provider view of what the runtime
+    guarantees.
+    """
+    from voodoo.adapters.capabilities import (
+        DatabaseCapabilities,
+        EventBusCapabilities,
+        ObjectStoreCapabilities,
+        QueueCapabilities,
+    )
+
+    # Default local providers (Sprints 1–7). Declared statically so ``doctor``
+    # stays side-effect free: it never opens a connection or creates files.
+    providers = (
+        DatabaseCapabilities(
+            "sqlite",
+            transactions=True,
+            migrations=True,
+            native_json=False,
+            concurrent_writers=False,
+        ),
+        QueueCapabilities(
+            "sqlite",
+            durable=True,
+            visibility_timeout=True,
+            delayed_delivery=True,
+            priority=True,
+            transactions=True,
+        ),
+        QueueCapabilities(
+            "memory",
+            durable=False,
+            visibility_timeout=True,
+            delayed_delivery=False,
+            priority=True,
+            transactions=False,
+        ),
+        EventBusCapabilities(
+            "sqlite",
+            durable=True,
+            replay=True,
+            ordering=True,
+        ),
+        EventBusCapabilities(
+            "local",
+            durable=False,
+            replay=False,
+            ordering=True,
+        ),
+        ObjectStoreCapabilities(
+            "local",
+            presign_urls=False,
+            checksums=True,
+            metadata=True,
+            multipart=False,
+        ),
+    )
+
+    for caps in providers:
+        flag_str = "  ".join(f"{k}={v}" for k, v in caps.describe().items())
+        terminal.status(caps.provider, "active")
+        terminal.muted(f"  {flag_str}")
+
+
 def doctor():  # noqa: C901
     """
     Run environment and configuration diagnostics.
@@ -92,6 +159,13 @@ def doctor():  # noqa: C901
             terminal.status(label, "ready")
         except Exception:
             terminal.status(label, "not found")
+
+    # ── Providers & capability matrix ────────────────
+    terminal.heading("providers")
+    try:
+        _print_capability_matrix()
+    except Exception:  # noqa: BLE001 - diagnostics must never crash doctor
+        terminal.status("capability matrix", "unavailable")
 
     # ── AI Kit ──────────────────────────────────────
     terminal.heading("ai kit")

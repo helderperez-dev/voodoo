@@ -68,7 +68,7 @@ DONE  |  WIP  |  TODO
 | 5 | Durable scheduler | 1.7.0 | schedule.at/after/every/cron backed by SQLite | DONE |
 | 6 | Object store & artifacts | 1.8.0 | VoodooObjectStore + provenance records | DONE |
 | 7 | EventBus protocol | 1.9.0 | Event envelope + durable SQLite bus, mesh unified | DONE |
-| 8 | Adapter contracts | 1.10.0 | Capability declarations + portability test suite | TODO |
+| 8 | Adapter contracts | 1.10.0 | Capability declarations + portability test suite | DONE |
 | 9 | Runtime configuration | 1.11.0 | `voodoo.yaml` selects providers | TODO |
 | 10 | PostgreSQL database | 1.12.0 | Postgres adapter, same logical model + migrations | TODO |
 | 11 | PostgreSQL queue & events | 1.13.0 | SKIP LOCKED queue + event store on PG | TODO |
@@ -271,21 +271,21 @@ late subscriber; mesh tests unchanged (public behavior preserved).
 # MILESTONE B — PROTOCOL & CONFIGURATION
 
 ## Sprint 8 — Adapter contracts & capability negotiation
-**Version 1.10.0 · Spec §9, §10, §29 · Status: TODO · Released as: —**
+**Version 1.10.0 · Spec §9, §10, §29 · Status: DONE · Released as: —**
 
 Goal: providers declare what they guarantee; the runtime never silently
 violates correctness.
 
 Scope:
-- [ ] `AdapterCapabilities` model: durability, ordering, delivery, delayed,
+- [x] `AdapterCapabilities` model: durability, ordering, delivery, delayed,
       priority, transactions, visibility timeout, replay…
-- [ ] Every adapter from Sprints 1–7 declares capabilities via
+- [x] Every adapter from Sprints 1–7 declares capabilities via
       `.capabilities()`.
-- [ ] Runtime negotiation: emulate when safe / reject unsupported required
+- [x] Runtime negotiation: emulate when safe / reject unsupported required
       ops with explicit errors / degrade loudly (§10).
-- [ ] Consolidate `tests/contracts/` into the portability suite; CI runs the
+- [x] Consolidate `tests/contracts/` into the portability suite; CI runs the
       same mixins against every registered adapter.
-- [ ] `voodoo doctor` prints active providers + their capability matrix.
+- [x] `voodoo doctor` prints active providers + their capability matrix.
 
 Done when: asking the memory queue for delayed delivery raises an explicit
 "unsupported by provider" error, and the same contract suite passes for every

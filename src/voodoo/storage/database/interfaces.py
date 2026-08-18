@@ -16,16 +16,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from voodoo.adapters.capabilities import DatabaseCapabilities
 
-@dataclass(frozen=True)
-class DatabaseCapabilities:
-    """Declarative contract of what a database adapter guarantees (spec §9)."""
-
-    provider: str
-    transactions: bool = True
-    migrations: bool = True
-    native_json: bool = False
-    concurrent_writers: bool = False
+__all__ = ["DatabaseCapabilities", "Migration", "VoodooDatabase"]
 
 
 @dataclass(frozen=True)

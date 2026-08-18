@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from voodoo.adapters.capabilities import require
 from voodoo.storage.queue.interfaces import (
     QueueCapabilities,
     QueueStats,
@@ -51,6 +52,12 @@ class MemoryQueue:
         idempotency_key: str | None = None,
         trace_id: str | None = None,
     ) -> TaskRecord:
+        if delay > 0:
+            require(
+                self.capabilities(),
+                "delayed_delivery",
+                hint="use a durable queue provider (sqlite) for delayed tasks",
+            )
         async with self._lock:
             if idempotency_key is not None:
                 for rec in self._tasks.values():
@@ -320,7 +327,7 @@ class MemoryQueue:
             delivery="at_least_once",
             ordering="best_effort",
             visibility_timeout=True,
-            delayed_delivery=True,
+            delayed_delivery=False,
             priority=True,
             transactions=False,
         )

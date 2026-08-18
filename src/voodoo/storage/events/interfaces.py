@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any, Protocol
 
+from voodoo.adapters.capabilities import EventBusCapabilities
 
-@dataclass(frozen=True)
-class EventBusCapabilities:
-    provider: str
-    durable: bool = False
-    replay: bool = False
-    ordering: bool = True
-    delivery: str = "at_most_once"
+__all__ = ["EventBusCapabilities", "VoodooEventBus"]
 
 
 class VoodooEventBus(Protocol):

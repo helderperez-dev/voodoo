@@ -126,6 +126,15 @@ class QueueContractTests:
         assert task.priority == 1
 
     async def test_delayed_delivery(self, queue):
+        caps = queue.capabilities()
+        if caps.delayed_delivery is False:
+            # Providers without delayed delivery must reject loudly (spec §10).
+            from voodoo.adapters.capabilities import CapabilityError
+
+            with pytest.raises(CapabilityError) as exc:
+                await queue.enqueue("late", {}, delay=0.15)
+            assert exc.value.feature == "delayed_delivery"
+            return
         await queue.enqueue("late", {}, delay=0.15)
         # Not available yet
         task = await queue.claim("w1")

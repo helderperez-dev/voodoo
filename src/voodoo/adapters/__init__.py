@@ -6,7 +6,31 @@ The native Voodoo CSS adapter is the default; Tailwind is opt-in::
     set_style_adapter(TailwindAdapter())
 """
 
+from voodoo.adapters.capabilities import (
+    AdapterCapabilities,
+    CapabilityError,
+    DatabaseCapabilities,
+    EventBusCapabilities,
+    ObjectStoreCapabilities,
+    QueueCapabilities,
+    capability_matrix,
+    negotiate,
+    require,
+)
 from voodoo.adapters.tailwind import TailwindAdapter
 from voodoo.adapters.voodoo_css import VoodooCSSAdapter, generate_component_css
 
-__all__ = ["TailwindAdapter", "VoodooCSSAdapter", "generate_component_css"]
+__all__ = [
+    "TailwindAdapter",
+    "VoodooCSSAdapter",
+    "generate_component_css",
+    "AdapterCapabilities",
+    "CapabilityError",
+    "DatabaseCapabilities",
+    "EventBusCapabilities",
+    "ObjectStoreCapabilities",
+    "QueueCapabilities",
+    "capability_matrix",
+    "negotiate",
+    "require",
+]

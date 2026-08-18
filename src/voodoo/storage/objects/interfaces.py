@@ -2,19 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Protocol
 
+from voodoo.adapters.capabilities import ObjectStoreCapabilities
 
-@dataclass(frozen=True)
-class ObjectStoreCapabilities:
-    """Declarative contract of what an object store guarantees."""
-
-    provider: str
-    presign_urls: bool = False
-    checksums: bool = True
-    metadata: bool = True
-    multipart: bool = False
+__all__ = ["ObjectStoreCapabilities", "VoodooObjectStore"]
 
 
 class VoodooObjectStore(Protocol):

@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.10.0 — 2026-08-18
+
+### Adapter contracts & capability negotiation (Sprint 8 — never silently violate correctness)
+
+- **`voodoo.adapters.capabilities`** — a single capability model shared by
+  every adapter kind: `AdapterCapabilities` (provider + boolean feature
+  flags), `DatabaseCapabilities`, `QueueCapabilities`, `EventBusCapabilities`,
+  and `ObjectStoreCapabilities` (§9).
+- **Every adapter declares guarantees** via `.capabilities()` — SQLite and
+  memory queue, SQLite and local event bus, local and S3 object store, and
+  SQLite database each report their durability, ordering, delivery,
+  transaction, and visibility guarantees.
+- **Runtime negotiation** (§10) — `require()` rejects an unsupported required
+  operation with an explicit `CapabilityError` (kind/provider/feature/hint),
+  `negotiate()` proceeds when supported and emulates when a safe fallback is
+  supplied, and `capability_matrix()` renders a uniform provider matrix.
+- **Memory queue delayed delivery now fails loudly** — `enqueue(delay>0)`
+  raises `CapabilityError` ("queue provider 'memory' does not support
+  'delayed_delivery' — use a durable queue provider (sqlite)") instead of
+  silently enqueueing immediately.
+- **`voodoo doctor` capability matrix** — prints each active provider and its
+  declared feature flags.
+- **`tests/contracts/test_capabilities.py`** — pins `require`/`negotiate`/
+  `capability_matrix` rules; the queue contract's `test_delayed_delivery` is
+  now capability-aware (asserts loud rejection for memory, real delayed
+  delivery for SQLite).
+
 ## 1.9.0 — 2026-08-18
 
 ### EventBus protocol & mesh unification (Sprint 7 — events survive restarts)
