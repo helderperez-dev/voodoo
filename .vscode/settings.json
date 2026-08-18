@@ -13,6 +13,9 @@
     "**/.ruff_cache": true,
     "**/dist": true,
     "**/build": true,
-    "**/storage": true
+    "**/.data": true,
+    "**/.voodoo": true,
+    "/storage": true,
+    "**/storage/public": true
   }
 }

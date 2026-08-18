@@ -4,11 +4,20 @@ __pycache__/
 *.pyo
 *.pyd
 
+# macOS & editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
 # Type checker & linter caches
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 
 # Virtual environments & local env
