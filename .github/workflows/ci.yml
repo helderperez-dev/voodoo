@@ -19,6 +19,8 @@ jobs:
     # to it over TCP on localhost:5432.
     # MinIO service container (Sprint 12): runs the object store contract
     # suite against a real S3-compatible server.
+    # Redis service container (Sprint 13): runs the queue + cache contract
+    # suites against a real server.
     services:
       postgres:
         image: postgres:16
@@ -48,6 +50,15 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
       # Makes tests/contracts/test_database_postgres.py run instead of skip.
@@ -57,6 +68,9 @@ jobs:
       VOODOO_TEST_S3_BUCKET: voodoo-test
       VOODOO_TEST_S3_KEY: minioadmin
       VOODOO_TEST_S3_SECRET: minioadmin
+      # Makes tests/contracts/test_queue_redis.py + test_cache_redis.py run
+      # instead of skip.
+      VOODOO_TEST_REDIS_URL: redis://localhost:6379/0
 
     steps:
       - name: Checkout code

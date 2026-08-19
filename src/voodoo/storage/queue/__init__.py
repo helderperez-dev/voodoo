@@ -16,6 +16,7 @@ from voodoo.storage.queue.interfaces import (
 )
 from voodoo.storage.queue.memory import MemoryQueue
 from voodoo.storage.queue.postgres import PostgresQueue
+from voodoo.storage.queue.redis import RedisQueue
 from voodoo.storage.queue.sqlite import TASKS_MIGRATION, TASKS_TABLE, SQLiteQueue
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "PostgresQueue",
     "QueueCapabilities",
     "QueueStats",
+    "RedisQueue",
     "SQLiteQueue",
     "TASKS_MIGRATION",
     "TASKS_TABLE",

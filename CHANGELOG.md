@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.15.0 — 2026-08-18
+
+### Redis queue + cache (Sprint 13 — optional distributed backend)
+
+- **`[redis]` extra** — `pip install "voodoo-framework[redis]"` adds
+  `redis>=5.0`; redis remains an optional import, so nothing in the default
+  path imports it (explicitly optional per spec §8).
+- **`RedisQueue`** (`voodoo.storage.queue.redis`) — a durable, multi-process
+  queue provider behind the `VoodooQueue` protocol with the same semantics
+  as SQLite/Postgres: priority ordering, delayed delivery, idempotency keys,
+  lease-based claiming, per-status stats, and retry-with-backoff. Claims are
+  atomic Lua scripts over ZSETs + per-task hashes, so concurrent workers
+  never claim the same task. Capabilities are honest: `at_least_once`
+  delivery, `best_effort` ordering, `durable=True`.
+- **`RedisCache`** (`voodoo.storage.cache.redis`) — a TTL-capable, durable
+  cache provider behind the new `VoodooCache` protocol
+  (`CacheCapabilities.ttl=True`, `.durable=True`).
+- **Cache seam** — new `VoodooCache` protocol + `CacheCapabilities` +
+  `CacheContractTests`; `MemoryCache` moves out of the registry, gains
+  `capabilities()` (`ttl=False`, `durable=False`), and rejects `set(ttl=...)`
+  with a `CapabilityError` rather than silently dropping the TTL.
+- **Registry wiring** — `register_queue("redis", ...)` and
+  `register_cache("redis", ...)` factories with URL resolution
+  (`url` → `VOODOO_QUEUE_URL`/`VOODOO_CACHE_URL` → `VOODOO_REDIS_URL` →
+  `extra.host`/`port`/`db` → `redis://localhost:6379/0`).
+- **Contract suites vs real Redis** — new `tests/contracts/test_queue_redis.py`
+  and `tests/contracts/test_cache_redis.py` run the full `QueueContractTests`
+  / `CacheContractTests` mixins (plus reconnect + TTL-expiry extras) against a
+  live server when `VOODOO_TEST_REDIS_URL` is set.
+- **Redis parity for local dev + CI** — `just redis-up` / `just redis-down`
+  recipes, `.env.example` documentation, and a `redis:7` service container in
+  `ci.yml` and `release.yml` (mirroring the `postgres:16` / `minio` pattern)
+  so the Redis contract suites run in CI.
+
 ## 1.14.0 — 2026-08-18
 
 ### S3/R2 object store hardening (Sprint 12 — production object storage)

@@ -358,14 +358,14 @@ Scope:
       (MinIO container), local suite unaffected.
 
 ## Sprint 13 — Redis adapters (optional)
-**Version 1.15.0 · Spec §8, §34 · Status: TODO · Released as: —**
+**Version 1.15.0 · Spec §8, §34 · Status: DONE · Released as: 1.15.0**
 
 Scope:
-- [ ] `[redis]` extra; `RedisQueue` (streams + consumer groups or lists with
+- [x] `[redis]` extra; `RedisQueue` (streams + consumer groups or lists with
       LMOVE) and `RedisCache`.
-- [ ] Contract tests green; capability declaration honest (ordering,
+- [x] Contract tests green; capability declaration honest (ordering,
       redelivery semantics).
-- [ ] Explicitly optional: nothing in the default path imports redis.
+- [x] Explicitly optional: nothing in the default path imports redis.
 
 ---
 

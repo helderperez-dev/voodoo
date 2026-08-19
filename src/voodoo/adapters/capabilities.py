@@ -32,6 +32,7 @@ __all__ = [
     "QueueCapabilities",
     "EventBusCapabilities",
     "ObjectStoreCapabilities",
+    "CacheCapabilities",
     "require",
     "negotiate",
     "capability_matrix",
@@ -126,6 +127,14 @@ class ObjectStoreCapabilities(AdapterCapabilities):
     checksums: bool = True
     metadata: bool = True
     multipart: bool = False
+
+
+@dataclass(frozen=True)
+class CacheCapabilities(AdapterCapabilities):
+    """Declarative contract of what a cache adapter guarantees (Sprint 13)."""
+
+    ttl: bool = False  # supports per-key expiry (set(ttl=...))
+    durable: bool = False  # survives process restarts / is externally shared
 
 
 def require(

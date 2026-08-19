@@ -12,6 +12,7 @@ def _print_capability_matrix() -> None:
     guarantees.
     """
     from voodoo.adapters.capabilities import (
+        CacheCapabilities,
         DatabaseCapabilities,
         EventBusCapabilities,
         ObjectStoreCapabilities,
@@ -61,6 +62,14 @@ def _print_capability_matrix() -> None:
             priority=True,
             transactions=False,
         ),
+        QueueCapabilities(
+            "redis",
+            durable=True,
+            visibility_timeout=True,
+            delayed_delivery=True,
+            priority=True,
+            transactions=True,
+        ),
         EventBusCapabilities(
             "sqlite",
             durable=True,
@@ -85,6 +94,16 @@ def _print_capability_matrix() -> None:
             checksums=True,
             metadata=True,
             multipart=False,
+        ),
+        CacheCapabilities(
+            "memory",
+            ttl=False,
+            durable=False,
+        ),
+        CacheCapabilities(
+            "redis",
+            ttl=True,
+            durable=True,
         ),
     )
 

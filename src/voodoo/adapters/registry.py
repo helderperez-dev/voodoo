@@ -50,6 +50,7 @@ class ProviderRegistry:
         self.register_queue("sqlite", self._create_sqlite_queue)
         self.register_queue("memory", self._create_memory_queue)
         self.register_queue("postgres", self._create_postgres_queue)
+        self.register_queue("redis", self._create_redis_queue)
 
         # 3. Events providers
         self.register_events("sqlite", self._create_sqlite_events)
@@ -62,6 +63,7 @@ class ProviderRegistry:
 
         # 5. Cache providers
         self.register_cache("memory", self._create_memory_cache)
+        self.register_cache("redis", self._create_redis_cache)
 
     # --- Registration methods ---
 
@@ -215,6 +217,37 @@ class ProviderRegistry:
 
         return MemoryQueue()
 
+    def _create_redis_queue(self, cfg: QueueConfig) -> Any:
+        """Build a :class:`~voodoo.storage.queue.redis.RedisQueue`.
+
+        URL resolution order (Sprint 13):
+        1. ``cfg.url`` from ``voodoo.yaml`` (``queue.url``);
+        2. ``VOODOO_QUEUE_URL`` environment variable;
+        3. ``VOODOO_REDIS_URL`` environment variable;
+        4. parts in ``cfg.extra`` (``host``/``port``/``db``) — assembled into
+           a ``redis://`` URL;
+        5. ``redis://localhost:6379/0``.
+
+        Raises a clear ``ConfigurationError`` when the ``[redis]`` extra is
+        not installed (lazy import, mirrors the postgres factory).
+        """
+        import os
+
+        from voodoo.storage.queue.redis import RedisQueue
+
+        url = (
+            cfg.url
+            or os.getenv("VOODOO_QUEUE_URL")
+            or os.getenv("VOODOO_REDIS_URL")
+            or ""
+        )
+        if not url:
+            host = cfg.extra.get("host") or "localhost"
+            port = cfg.extra.get("port") or "6379"
+            db = cfg.extra.get("db") or "0"
+            url = f"redis://{host}:{port}/{db}"
+        return RedisQueue(url)
+
     def _create_sqlite_events(self, cfg: EventsConfig) -> Any:
         from voodoo.storage.events.sqlite import SQLiteEventBus
 
@@ -295,24 +328,39 @@ class ProviderRegistry:
         )
 
     def _create_memory_cache(self, cfg: CacheConfig) -> Any:
-        # Simple memory cache object
-        class MemoryCache:
-            def __init__(self) -> None:
-                self._data: dict[str, Any] = {}
-
-            def get(self, key: str, default: Any = None) -> Any:
-                return self._data.get(key, default)
-
-            def set(self, key: str, value: Any) -> None:
-                self._data[key] = value
-
-            def delete(self, key: str) -> None:
-                self._data.pop(key, None)
-
-            def clear(self) -> None:
-                self._data.clear()
+        from voodoo.storage.cache.memory import MemoryCache
 
         return MemoryCache()
+
+    def _create_redis_cache(self, cfg: CacheConfig) -> Any:
+        """Build a :class:`~voodoo.storage.cache.redis.RedisCache`.
+
+        URL resolution order (Sprint 13):
+        1. ``cfg.url`` from ``voodoo.yaml`` (``cache.url``);
+        2. ``VOODOO_CACHE_URL`` environment variable;
+        3. ``VOODOO_REDIS_URL`` environment variable;
+        4. parts in ``cfg.extra`` (``host``/``port``/``db``);
+        5. ``redis://localhost:6379/0``.
+
+        Raises a clear ``ConfigurationError`` when the ``[redis]`` extra is
+        not installed (lazy import, mirrors the postgres factory).
+        """
+        import os
+
+        from voodoo.storage.cache.redis import RedisCache
+
+        url = (
+            cfg.url
+            or os.getenv("VOODOO_CACHE_URL")
+            or os.getenv("VOODOO_REDIS_URL")
+            or ""
+        )
+        if not url:
+            host = cfg.extra.get("host") or "localhost"
+            port = cfg.extra.get("port") or "6379"
+            db = cfg.extra.get("db") or "0"
+            url = f"redis://{host}:{port}/{db}"
+        return RedisCache(url)
 
 
 # Global provider registry instance

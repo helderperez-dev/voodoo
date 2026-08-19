@@ -32,6 +32,17 @@ minio-down:
     docker rm -f voodoo-minio 2>/dev/null || true
     @echo "MinIO container removed"
 
+# Start a local Redis container for queue + cache contract tests
+redis-up:
+    docker rm -f voodoo-redis 2>/dev/null || true
+    docker run --name voodoo-redis -p 6379:6379 -d redis:7
+    @echo "Redis ready at redis://localhost:6379/0"
+
+# Stop and remove the local Redis container
+redis-down:
+    docker rm -f voodoo-redis 2>/dev/null || true
+    @echo "Redis container removed"
+
 # Clean up build artifacts and cache directories
 clean:
     rm -rf build/ dist/ *.egg-info/ .voodoo/ storage/ .mypy_cache/ .ruff_cache/

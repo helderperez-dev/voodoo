@@ -265,6 +265,20 @@ objects:
 
 Credentials come from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or `VOODOO_S3_KEY` / `VOODOO_S3_SECRET`), and the region from `AWS_DEFAULT_REGION`. Non-AWS endpoints (MinIO, R2) use path-style addressing automatically; AWS uses virtual-hosted style. The provider supports presigned GET/PUT URLs, checksum + content-type metadata, and multipart uploads for objects ≥ 8 MiB (`ObjectStoreCapabilities.multipart`).
 
+**Redis queue + cache (Sprint 13):** switch `queue.provider` and/or `cache.provider` to `redis` for a shared, durable, multi-process backend. Install the extra (`pip install "voodoo-framework[redis]"`) and point at a server:
+
+```yaml
+queue:
+  provider: redis
+  url: ${VOODOO_QUEUE_URL:redis://localhost:6379/0}
+
+cache:
+  provider: redis
+  url: ${VOODOO_CACHE_URL:redis://localhost:6379/0}
+```
+
+The URL resolves from `queue.url` / `cache.url` → `VOODOO_QUEUE_URL` / `VOODOO_CACHE_URL` → `VOODOO_REDIS_URL` → `extra.host`/`port`/`db` → `redis://localhost:6379/0`. `RedisQueue` implements the full `VoodooQueue` protocol (priority ordering, delayed delivery, idempotency keys, lease-based claiming, per-status stats) using atomic Lua scripts over ZSETs + per-task hashes; `RedisCache` implements `VoodooCache` with TTL + durability (`CacheCapabilities.ttl`, `.durable`). Both are honest about capabilities — `RedisQueue` declares `at_least_once` delivery and `best_effort` ordering, and `MemoryCache` rejects `set(ttl=...)` with a `CapabilityError` rather than silently dropping the TTL.
+
 **Precedence:** Explicit file configuration (`voodoo.yaml` / `voodoo.toml`) > Environment variables (`VOODOO_QUEUE_PROVIDER`, `DATABASE_URL`, etc.) > Local zero-infra defaults.
 
 **The "do not build" list** — no custom programming language, no JSX equivalent, no full React clone, no custom CSS/JS framework, no distributed database, no Kubernetes orchestration, no Celery replacement, no fully autonomous coding agent, no automatic production deployments, no self-modifying production code, no autonomous financial transactions, no vector database abstraction, no custom LLM training infrastructure.
@@ -281,5 +295,5 @@ Credentials come from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or `VOODOO_
 - **`voodoo.toml` preferred** — TOML config preferred for new projects; YAML compatibility preserved.
 - **`voodoo ai init`** — AI development context is opt-in, not generated during `voodoo new`.
 - **Starlette as ASGI base** — not reinventing the wheel.
-- **Single-process queue** — asyncio.Queue today; distributed backend (Redis) is a seam.
+- **Single-process queue** — asyncio.Queue today; distributed backend (Redis) is a seam. Since Sprint 13 the seam is real: `RedisQueue` provides a durable, multi-process backend behind the same `VoodooQueue` protocol.
 - **Lazy provider imports** — `voodoo[ai]` installs SDKs, but they're imported only when a provider is used.

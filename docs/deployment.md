@@ -89,6 +89,41 @@ export VOODOO_TEST_S3_SECRET=minioadmin
 uv run pytest tests/contracts/test_objectstore_s3.py -q
 ```
 
+### Redis queue + cache in production (Sprint 13)
+
+For a shared, durable, multi-process queue and a TTL-capable cache, point
+them at Redis. Install the optional extra and set the provider + URL:
+
+```bash
+pip install "voodoo-framework[redis]"
+
+export VOODOO_QUEUE_PROVIDER=redis
+export VOODOO_QUEUE_URL="redis://redis:6379/0"
+export VOODOO_CACHE_PROVIDER=redis
+export VOODOO_CACHE_URL="redis://redis:6379/0"
+```
+
+The URL resolves from the provider's own `url` → `VOODOO_QUEUE_URL` /
+`VOODOO_CACHE_URL` → `VOODOO_REDIS_URL` → `extra.host`/`port`/`db` →
+`redis://localhost:6379/0`. `RedisQueue` implements the full `VoodooQueue`
+protocol (priority, delayed delivery, idempotency keys, lease-based claiming,
+per-status stats) via atomic Lua scripts; `RedisCache` implements
+`VoodooCache` with TTL + durability.
+
+**Durability note:** Redis is an in-memory store — for production durability
+enable AOF persistence (`appendonly yes`) or run a managed service (Redis
+Enterprise, AWS ElastiCache, Upstash) with persistence enabled. `RedisQueue`
+declares `at_least_once` delivery and `best_effort` ordering honestly; if you
+need exactly-once or strict ordering, use the PostgreSQL queue instead.
+
+For local development parity, run Redis and point the contract tests at it:
+
+```bash
+just redis-up
+export VOODOO_TEST_REDIS_URL=redis://localhost:6379/0
+uv run pytest tests/contracts/test_queue_redis.py tests/contracts/test_cache_redis.py -q
+```
+
 ### Docker
 
 ```dockerfile

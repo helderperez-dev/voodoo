@@ -90,9 +90,15 @@ Beyond the in-process broker, Voodoo ships durable queue providers behind the
   `FOR UPDATE SKIP LOCKED` for atomic claims so concurrent workers never
   claim the same task. Enabled with `VOODOO_QUEUE_PROVIDER=postgres` (plus a
   `postgres` database / `VOODOO_DATABASE_URL`).
+- **`RedisQueue`** (Sprint 13) — the same semantics on Redis, using atomic
+  Lua scripts over ZSETs + per-task hashes so concurrent workers never claim
+  the same task. Supports priority ordering, delayed delivery, idempotency
+  keys, and per-status stats. Enabled with `VOODOO_QUEUE_PROVIDER=redis`
+  (plus a `VOODOO_QUEUE_URL` / `VOODOO_REDIS_URL`).
 
-Both share the same `tasks` schema via the migration runner, so switching the
-provider changes only the backend, never application code.
+SQLite and Postgres share the same `tasks` schema via the migration runner;
+Redis uses its own key layout. In every case switching the provider changes
+only the backend, never application code.
 
 ### TaskError
 

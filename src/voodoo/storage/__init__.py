@@ -11,6 +11,7 @@ Two concerns live here:
 - ``voodoo.storage.events`` — event bus capability (Sprint 7).
 """
 
+from voodoo.storage.cache import CacheCapabilities, MemoryCache, RedisCache, VoodooCache
 from voodoo.storage.events import (
     EventBusCapabilities,
     LocalEventBus,
@@ -20,7 +21,12 @@ from voodoo.storage.events import (
 )
 from voodoo.storage.execution import PostgresExecutionStore, SQLiteExecutionStore
 from voodoo.storage.manager import StorageManager, storage
-from voodoo.storage.queue import PostgresQueue, SQLiteQueue, VoodooQueue
+from voodoo.storage.queue import (
+    PostgresQueue,
+    RedisQueue,
+    SQLiteQueue,
+    VoodooQueue,
+)
 
 __all__ = [
     "StorageManager",
@@ -35,4 +41,9 @@ __all__ = [
     "VoodooQueue",
     "SQLiteQueue",
     "PostgresQueue",
+    "RedisQueue",
+    "CacheCapabilities",
+    "VoodooCache",
+    "MemoryCache",
+    "RedisCache",
 ]
