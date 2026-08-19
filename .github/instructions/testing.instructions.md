@@ -95,6 +95,7 @@ from __future__ import annotations
 
 import pytest
 
+
 class TestMyFeature:
     """Tests for MyFeature."""
 
@@ -122,6 +123,7 @@ Never share mutable state across tests. Use fixtures for isolation:
 def engine():
     """Fresh ExecutionEngine per test — never use the singleton."""
     return ExecutionEngine()
+
 
 async def test_execute(engine):
     result = await engine.execute(...)
@@ -189,6 +191,7 @@ psycopg = pytest.importorskip("psycopg")
 
 from .test_database import DatabaseContractTests
 
+
 @pytest.mark.skipif(
     not os.environ.get("VOODOO_TEST_DATABASE_URL"),
     reason="VOODOO_TEST_DATABASE_URL not set",
@@ -197,6 +200,7 @@ class TestPostgresDatabase(DatabaseContractTests):
     @pytest.fixture
     def db(self):
         from voodoo.storage.database.postgres import PostgresDatabase
+
         cfg = {"url": os.environ.get("VOODOO_TEST_DATABASE_URL")}
         db = PostgresDatabase(cfg)
         # setup...
@@ -333,6 +337,7 @@ This test verifies that all public exports in `voodoo.__all__` are importable an
 ```python
 def test_public_api_exports():
     import voodoo
+
     for name in voodoo.__all__:
         assert hasattr(voodoo, name), f"{name} in __all__ but not importable"
 ```

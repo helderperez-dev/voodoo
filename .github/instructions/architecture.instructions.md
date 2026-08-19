@@ -194,6 +194,7 @@ Used when a module is fully relocated:
 # voodoo/queue.py
 import sys
 from voodoo.workers.queue import *  # noqa: F401,F403
+
 sys.modules[__name__] = sys.modules["voodoo.workers.queue"]
 ```
 
@@ -204,6 +205,7 @@ Used for forwarding specific globals:
 def __getattr__(name: str) -> Any:
     if name == "SomeOldName":
         from voodoo.new_location import NewName
+
         return NewName
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 ```
@@ -213,6 +215,7 @@ Used for provider SDKs and circular dependency avoidance:
 ```python
 def get_provider(model: str) -> LLMProvider:
     import openai  # lazy import — only when needed
+
     ...
 ```
 

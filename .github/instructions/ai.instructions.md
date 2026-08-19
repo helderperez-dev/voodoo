@@ -12,8 +12,8 @@
 from voodoo import Agent
 
 agent = Agent(
-    model="openai:gpt-4o",        # provider:model format
-    tools=[search_web, send_email], # list of @tool-decorated functions
+    model="openai:gpt-4o",  # provider:model format
+    tools=[search_web, send_email],  # list of @tool-decorated functions
     system_prompt="You are a helpful assistant.",
     max_iterations=10,
     capabilities=["web.search", "email.send"],
@@ -185,6 +185,7 @@ except ImportError:
 ```python
 from voodoo.ai.tools.registry import tool
 
+
 @tool
 async def search_web(query: str, max_results: int = 10) -> dict:
     """Search the web for a query.
@@ -239,6 +240,7 @@ result = await default_registry.execute("search_web", query="python", max_result
 # voodoo/tools/registry.py
 import sys
 from voodoo.ai.tools.registry import *  # noqa: F401,F403
+
 sys.modules[__name__] = sys.modules["voodoo.ai.tools.registry"]
 ```
 
@@ -253,10 +255,12 @@ This ensures `voodoo.tools.registry` and `voodoo.ai.tools.registry` share the sa
 ```python
 from voodoo.mcp import mcp
 
+
 @mcp.tool()
 async def search_web(query: str) -> dict:
     """Search the web."""
     ...
+
 
 @mcp.resource("voodoo://status")
 async def get_status() -> str:
@@ -283,9 +287,9 @@ The `@mcp.tool()` decorator registers in both `MCPServer.tools` and `ToolRegistr
 ```python
 from voodoo.mesh import mesh
 
+
 @mesh.expose("search.web")
-async def search_web(query: str) -> dict:
-    ...
+async def search_web(query: str) -> dict: ...
 ```
 
 `mesh.expose()` auto-bridges the function to MCP, making it available as an MCP tool without double-registration.
@@ -299,10 +303,11 @@ async def search_web(query: str) -> dict:
 ```python
 from voodoo.mesh import mesh
 
+
 # Subscribe to namespaced events
 @mesh.on("agent.started")
-async def on_agent_started(envelope):
-    ...
+async def on_agent_started(envelope): ...
+
 
 # Broadcast/emit events
 await mesh.broadcast("agent.completed", {"run_id": "abc123"})
@@ -324,11 +329,11 @@ All events must use dotted namespaces:
 ```python
 @dataclass
 class Envelope:
-    event: str          # namespaced event name
+    event: str  # namespaced event name
     data: dict
-    trace_id: str       # correlation ID
+    trace_id: str  # correlation ID
     timestamp: str
-    source: str         # sender identifier
+    source: str  # sender identifier
 ```
 
 ---
@@ -360,6 +365,7 @@ async def test_agent_basic():
     run = await agent.run("Hello")
     assert run.output == "Hello! How can I help you?"
 
+
 async def test_agent_with_tool():
     provider = ToolThenTextProvider(
         tool_call={"name": "search", "args": {"q": "python"}},
@@ -376,6 +382,7 @@ async def test_agent_with_tool():
 ```python
 async def test_tool_registration():
     from voodoo.ai.tools.registry import ToolRegistry
+
     registry = ToolRegistry()  # fresh instance
 
     @tool

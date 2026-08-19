@@ -98,8 +98,9 @@ Registered via `register_framework_migration()` at import time:
 ```python
 # CORRECT — upsert parent first
 def save(self, execution: Execution) -> None:
-    self._upsert_execution(execution)      # parent row first
+    self._upsert_execution(execution)  # parent row first
     self._append_event(execution.execution_id, event)  # then journal
+
 
 # WRONG — will fail on PostgreSQL
 def save(self, execution: Execution) -> None:

@@ -58,13 +58,12 @@ class MyProviderDatabase(VoodooDatabase):
     def __init__(self, config: dict[str, Any]) -> None:
         # Lazy import the SDK
         import myprovider_sdk
+
         self._client = myprovider_sdk.connect(**config)
 
-    async def execute(self, query: str, params: list | None = None) -> None:
-        ...
+    async def execute(self, query: str, params: list | None = None) -> None: ...
 
-    async def fetchone(self, query: str, params: list | None = None) -> dict | None:
-        ...
+    async def fetchone(self, query: str, params: list | None = None) -> dict | None: ...
 
     # ... implement all Protocol methods
 ```
@@ -73,6 +72,7 @@ class MyProviderDatabase(VoodooDatabase):
 
 ```python
 from dataclasses import dataclass
+
 
 @dataclass(frozen=True)
 class MyProviderDatabaseCapabilities(DatabaseCapabilities):
@@ -114,6 +114,7 @@ myprovider_sdk = pytest.importorskip("myprovider_sdk")
 
 from .test_database import DatabaseContractTests
 
+
 @pytest.mark.skipif(
     not os.environ.get("VOODOO_TEST_MYSQL_URL"),
     reason="VOODOO_TEST_MYSQL_URL not set",
@@ -122,6 +123,7 @@ class TestMyProviderDatabase(DatabaseContractTests):
     @pytest.fixture
     def db(self):
         from voodoo.storage.database.myprovider import MyProviderDatabase
+
         cfg = {"url": os.environ.get("VOODOO_TEST_MYSQL_URL")}
         db = MyProviderDatabase(cfg)
         yield db
@@ -136,12 +138,12 @@ class TestMyProviderDatabase(DatabaseContractTests):
 # At module level — runs before skip markers
 myprovider_sdk = pytest.importorskip("myprovider_sdk")
 
+
 @pytest.mark.skipif(
     not os.environ.get("VOODOO_TEST_MYSQL_URL"),
     reason="VOODOO_TEST_MYSQL_URL not set",
 )
-class TestMyProviderDatabase(DatabaseContractTests):
-    ...
+class TestMyProviderDatabase(DatabaseContractTests): ...
 ```
 
 **Gotcha:** Use `os.environ.get(...)` not `os.environ[...]` at module level.

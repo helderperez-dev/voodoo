@@ -164,11 +164,13 @@ for step in plan.steps:
 ```python
 from voodoo.runtime.adaptive import AdaptiveSupervisor, SupervisorConfig
 
-supervisor = AdaptiveSupervisor(config=SupervisorConfig(
-    max_retries=3,
-    fallback_model="mock:default",
-    enable_delegation=True,
-))
+supervisor = AdaptiveSupervisor(
+    config=SupervisorConfig(
+        max_retries=3,
+        fallback_model="mock:default",
+        enable_delegation=True,
+    )
+)
 
 decision = supervisor.decide(execution, error)
 # SupervisorDecision: RETRY, FALLBACK, DELEGATE, STEER, CANCEL

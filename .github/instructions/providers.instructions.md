@@ -44,6 +44,7 @@ Each adapter declares a `*Capabilities` frozen dataclass with **boolean** flags:
 ```python
 from voodoo.adapters.capabilities import DatabaseCapabilities
 
+
 class MyDatabaseCapabilities(DatabaseCapabilities):
     provider: str = "mydb"
     transactions: bool = True
@@ -100,15 +101,18 @@ The `registry` singleton calls `_register_defaults()` at init, registering all b
    from __future__ import annotations
    from voodoo.storage.database.interfaces import VoodooDatabase, Migration
 
+
    class MyDatabase(VoodooDatabase):
        async def execute(self, sql: str, params: list[Any]) -> None: ...
        async def fetchone(self, sql: str, params: list[Any]) -> dict[str, Any] | None: ...
+
        # ... implement all Protocol methods
    ```
 
 2. **Create capabilities**
    ```python
    from voodoo.adapters.capabilities import DatabaseCapabilities
+
 
    class MyDatabaseCapabilities(DatabaseCapabilities):
        provider: str = "mydb"
@@ -123,7 +127,9 @@ The `registry` singleton calls `_register_defaults()` at init, registering all b
    # voodoo/adapters/registry.py → _register_defaults()
    def _register_mydb() -> VoodooDatabase:
        from voodoo.storage.database.mydb import MyDatabase
+
        return MyDatabase(config)
+
 
    registry.register_database("mydb", _register_mydb)
    ```
@@ -135,6 +141,7 @@ The `registry` singleton calls `_register_defaults()` at init, registering all b
    from .test_database import DatabaseContractTests
 
    psycopg = pytest.importorskip("mydb_sdk")
+
 
    @pytest.mark.skipif(
        not os.environ.get("VOODOO_TEST_MYDB_URL"),
@@ -196,15 +203,18 @@ provider = get_provider("openai:gpt-4o")
    from __future__ import annotations
    from voodoo.ai.providers.base import LLMProvider, ProviderResponse, ProviderEvent
 
+
    class MyLLMProvider(LLMProvider):
        name = "myllm"
 
        async def complete(self, messages, **kwargs) -> ProviderResponse:
            import myllm_sdk  # lazy import
+
            ...
 
        async def stream(self, messages, **kwargs) -> AsyncIterator[ProviderEvent]:
            import myllm_sdk  # lazy import
+
            ...
    ```
 

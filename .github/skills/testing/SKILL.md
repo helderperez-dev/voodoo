@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import pytest
 
+
 class TestMyFeature:
     """Tests for MyFeature."""
 
@@ -67,6 +68,7 @@ myprovider_sdk = pytest.importorskip("myprovider_sdk")
 
 from .test_database import DatabaseContractTests
 
+
 @pytest.mark.skipif(
     not os.environ.get("VOODOO_TEST_MYSQL_URL"),
     reason="VOODOO_TEST_MYSQL_URL not set",
@@ -75,6 +77,7 @@ class TestMyProviderDatabase(DatabaseContractTests):
     @pytest.fixture
     def db(self):
         from voodoo.storage.database.myprovider import MyProviderDatabase
+
         cfg = {"url": os.environ.get("VOODOO_TEST_MYSQL_URL")}
         db = MyProviderDatabase(cfg)
         yield db
