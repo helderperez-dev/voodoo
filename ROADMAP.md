@@ -1864,6 +1864,19 @@ flowchart TD
 
 > The repository is the implementation source of truth. This document is the architectural source of truth.
 
+**AI development workflow:** The repository includes a structured AI development workflow under `.github/`:
+
+| Directory | Purpose |
+|---|---|
+| `.github/copilot-instructions.md` | Entry point for GitHub Copilot and AI agents |
+| `.github/instructions/` | Domain-specific instruction files (architecture, runtime, providers, execution, ai, testing, **pull-request**) |
+| `.github/skills/` | Structured workflows (architecture-review, implement-sprint, add-provider, runtime-feature, testing, documentation, release) |
+| `.github/prompts/` | Structured prompts (audit-repository, plan-sprint, architecture-review) |
+| `AGENTS.md` | Root-level AI agent instructions (Claude Code, Cursor, etc.) |
+| `ARCHITECTURE.md` | Root-level architecture reference |
+
+See [`AGENTS.md`](AGENTS.md) for the full guide.
+
 ---
 
 ## Part VIII — Master Sprint Roadmap

@@ -15,6 +15,12 @@ existing automated workflow).
 
 Repeat for every sprint:
 
+> **AI coding agents:** Read [`AGENTS.md`](AGENTS.md) and
+> [`.github/copilot-instructions.md`](.github/copilot-instructions.md) first.
+> Use the [`implement-sprint`](.github/skills/implement-sprint/SKILL.md) skill
+> for structured sprint implementation. Read the relevant
+> [instruction files](.github/instructions/) before touching each domain.
+
 1. Find the **first sprint whose status is not `DONE`** in this file. That is
    the resume point after any interruption — no other context needed.
 2. Implement only the checked scope boxes for that sprint. Do not start the
