@@ -18,7 +18,7 @@ minor release line.
 If you discover a security vulnerability in Voodoo, please report it
 responsibly:
 
-1. **Email:** **helder@voodoo.dev** with the subject
+1. **Email:** **contact@helderperez.com** with the subject
    `[SECURITY] Voodoo — <brief description>`.
 2. **Include:**
    - A description of the vulnerability and its potential impact

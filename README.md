@@ -441,7 +441,7 @@ By participating, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md
 
 Voodoo includes security features on by default: CORS, CSRF protection, rate limiting, and security headers. For production deployments, review the hardening checklist in [SECURITY.md](SECURITY.md).
 
-To report a vulnerability, email **helder@voodoo.dev** — do not open a public issue. See the full [Security Policy](SECURITY.md) for response timelines.
+To report a vulnerability, email **contact@helderperez.com** — do not open a public issue. See the full [Security Policy](SECURITY.md) for response timelines.
 
 ## Testing
 
