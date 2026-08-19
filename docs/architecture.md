@@ -221,7 +221,7 @@ Infrastructure is selected by configuration, never by code changes. Standard app
 | **Database** | SQLite (`sqlite`) | PostgreSQL (`postgres`) | PostgreSQL / CockroachDB |
 | **Queue** | SQLite (`sqlite`) or Memory (`memory`) | PostgreSQL (`postgres`) / Redis (`redis`) | SQS / NATS / RabbitMQ |
 | **Events** | SQLite (`sqlite`) or In-Process (`local`) | PostgreSQL (`postgres`) | NATS / Kafka |
-| **Objects** | Local Filesystem (`local`) | S3 (`s3`) | Cloudflare R2 / GCS |
+| **Objects** | Local Filesystem (`local`) | S3 (`s3`) — AWS S3, MinIO, R2 | Cloudflare R2 / GCS |
 | **Cache** | In-Memory (`memory`) | Redis (`redis`) | Memcached / Dragonfly |
 | **Models** | Local / Mock (`mock:default`, `ollama:...`) | OpenAI / Anthropic / Gemini | Custom fine-tuned / Router |
 
@@ -251,6 +251,19 @@ cache:
 models:
   default: openai:gpt-4o
 ```
+
+**S3-compatible object storage (Sprint 12):** switch `objects.provider` to `s3` for AWS S3, MinIO, or Cloudflare R2. Install the extra (`pip install "voodoo-framework[s3]"`) and set credentials:
+
+```yaml
+objects:
+  provider: s3
+  bucket: ${VOODOO_BUCKET:my-bucket}
+  endpoint: ${VOODOO_OBJECTS_ENDPOINT:}
+  # extra:
+  #   root_prefix: ${VOODOO_OBJECTS_ROOT_PREFIX:}
+```
+
+Credentials come from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or `VOODOO_S3_KEY` / `VOODOO_S3_SECRET`), and the region from `AWS_DEFAULT_REGION`. Non-AWS endpoints (MinIO, R2) use path-style addressing automatically; AWS uses virtual-hosted style. The provider supports presigned GET/PUT URLs, checksum + content-type metadata, and multipart uploads for objects ≥ 8 MiB (`ObjectStoreCapabilities.multipart`).
 
 **Precedence:** Explicit file configuration (`voodoo.yaml` / `voodoo.toml`) > Environment variables (`VOODOO_QUEUE_PROVIDER`, `DATABASE_URL`, etc.) > Local zero-infra defaults.
 

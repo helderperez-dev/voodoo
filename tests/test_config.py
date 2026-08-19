@@ -104,6 +104,15 @@ def test_provider_registry_and_errors():
     )
     assert objects_local is not None
 
+    # Sprint 12 regression: the s3 factory previously passed access_key/
+    # secret_key/region kwargs that S3ObjectStore.__init__ rejected, so
+    # provider="s3" raised TypeError. The factory must construct the store
+    # (use_s3 False without credentials) without raising.
+    objects_s3 = reg.get_objects(ObjectsConfig(provider="s3", bucket="b"))
+    assert objects_s3 is not None
+    assert objects_s3.provider == "s3"
+    assert not objects_s3.use_s3
+
     cache_mem = reg.get_cache(CacheConfig(provider="memory"))
     assert cache_mem is not None
 

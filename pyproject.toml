@@ -43,6 +43,10 @@ dev = [
 postgres = [
     "psycopg[binary]>=3.3.4",
 ]
+s3 = [
+    "boto3>=1.34",
+    "botocore>=1.34",
+]
 
 [tool.setuptools.dynamic]
 version = { attr = "voodoo.__version__" }

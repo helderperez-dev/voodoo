@@ -350,11 +350,11 @@ Scope:
 **Version 1.14.0 · Spec §18 · Status: TODO · Released as: —**
 
 Scope:
-- [ ] Declare `boto3` under `[s3]` extra (currently an undeclared import).
-- [ ] Presigned GET/PUT, SHA-256 checksums, content-type, metadata.
-- [ ] Multipart upload above a size threshold; R2 endpoint compatibility
+- [x] Declare `boto3` under `[s3]` extra (currently an undeclared import).
+- [x] Presigned GET/PUT, SHA-256 checksums, content-type, metadata.
+- [x] Multipart upload above a size threshold; R2 endpoint compatibility
       tests (integration-gated).
-- [ ] `ObjectStoreContractTests` green against S3-compatible endpoint in CI
+- [x] `ObjectStoreContractTests` green against S3-compatible endpoint in CI
       (MinIO container), local suite unaffected.
 
 ## Sprint 13 — Redis adapters (optional)

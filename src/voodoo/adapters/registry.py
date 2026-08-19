@@ -261,22 +261,37 @@ class ProviderRegistry:
         bucket = (
             cfg.bucket
             or os.getenv("VOODOO_BUCKET")
-            or os.getenv("AWS_BUCKET", "voodoo-objects")
+            or os.getenv("AWS_BUCKET")
+            or os.getenv("VOODOO_S3_BUCKET")
+            or "voodoo-objects"
         )
         endpoint = (
             cfg.endpoint
             or os.getenv("VOODOO_OBJECTS_ENDPOINT")
             or os.getenv("AWS_ENDPOINT_URL")
+            or os.getenv("VOODOO_S3_ENDPOINT")
         )
-        access_key = os.getenv("AWS_ACCESS_KEY_ID", "")
-        secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-        region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        access_key = (
+            cfg.extra.get("key")
+            or os.getenv("AWS_ACCESS_KEY_ID")
+            or os.getenv("VOODOO_S3_KEY")
+            or ""
+        )
+        secret_key = (
+            cfg.extra.get("secret")
+            or os.getenv("AWS_SECRET_ACCESS_KEY")
+            or os.getenv("VOODOO_S3_SECRET")
+            or ""
+        )
+        region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION", "us-east-1")
+        root_prefix = cfg.extra.get("root_prefix") or ""
         return S3ObjectStore(
             bucket=bucket,
-            access_key=access_key,
-            secret_key=secret_key,
+            key=access_key,
+            secret=secret_key,
             region=region,
             endpoint=endpoint or None,
+            root_prefix=root_prefix,
         )
 
     def _create_memory_cache(self, cfg: CacheConfig) -> Any:

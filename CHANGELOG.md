@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.14.0 — 2026-08-18
+
+### S3/R2 object store hardening (Sprint 12 — production object storage)
+
+- **`[s3]` extra** — `pip install "voodoo-framework[s3]"` adds `boto3` /
+  `botocore`; boto3 remains an optional import, so the object store falls
+  back to `LocalObjectStore` when the extra is absent.
+- **`S3ObjectStore` hardening** (`voodoo.storage.objects.s3`):
+  - **Presigned PUT** — `presign_put(key, expires_in)` alongside GET, so
+    clients can upload objects directly to the bucket.
+  - **Multipart uploads** — objects ≥ 8 MiB (configurable via
+    `multipart_threshold`) upload via
+    `create_multipart_upload` / `upload_part` / `complete_multipart_upload`
+    with abort-on-failure; `ObjectStoreCapabilities.multipart` is now `True`.
+  - **R2 / MinIO path-style addressing** — non-AWS endpoints use path-style
+    URLs automatically (AWS keeps virtual-hosted style); `url()` reflects it.
+  - **`region` handling** — region from `AWS_REGION` / `AWS_DEFAULT_REGION`.
+  - **`close()` lifecycle** — releases the boto3 client's connection pool.
+- **Registry bug fix** — `_create_s3_objects` passed `access_key`/`secret_key`/
+  `region` kwargs that `S3ObjectStore.__init__` rejected (TypeError with
+  `objects.provider: s3`); it now constructs the store with matching
+  `key`/`secret`/`region` kwargs and reconciles the `VOODOO_S3_*` env vars.
+- **Object store contract suite vs real S3** — new
+  `tests/contracts/test_objectstore_s3.py` runs the full
+  `ObjectStoreContractTests` mixin (put/get/delete/stat/list/reopen) plus
+  presigned GET/PUT roundtrips, multipart upload, and path-style URL checks
+  against a live S3-compatible server when `VOODOO_TEST_S3_ENDPOINT` is set.
+- **MinIO parity for local dev + CI** — `just minio-up` / `just minio-down`
+  recipes, `.env.example` documentation, and a `minio` service container in
+  `ci.yml` and `release.yml` (mirroring the `postgres:16` pattern) so the
+  S3 contract suite runs in CI.
+
 ## 1.13.0 — 2026-08-18
 
 ### PostgreSQL queue, events & execution store (Sprint 11 — the durable runtime on PG)

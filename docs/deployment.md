@@ -53,6 +53,42 @@ URLs are unset. The app lifespan runs the durable execution store on
 PostgreSQL automatically when `database.provider: postgres`; the scheduler
 remains SQLite-backed (documented).
 
+### S3/R2 object storage in production (Sprint 12)
+
+For uploads and static objects at scale, point the object store at any
+S3-compatible endpoint — AWS S3, MinIO, or Cloudflare R2. Install the
+optional extra and set the provider + credentials:
+
+```bash
+pip install "voodoo-framework[s3]"
+
+export VOODOO_OBJECTS_PROVIDER=s3
+export VOODOO_BUCKET="my-bucket"
+# MinIO / R2 / local S3-compatible endpoints (AWS uses its default endpoint):
+export VOODOO_OBJECTS_ENDPOINT="https://<account>.r2.cloudflarestorage.com"
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
+export AWS_DEFAULT_REGION="auto"   # R2; omit for AWS default
+```
+
+The `s3` provider automatically selects path-style addressing for non-AWS
+endpoints (MinIO, R2) and virtual-hosted style for AWS. It supports
+presigned GET/PUT URLs, checksum + content-type metadata, and multipart
+uploads for objects ≥ 8 MiB. Without the extra installed (or without
+credentials), the object store falls back to the local filesystem provider
+(`VOODOO_OBJECTS_DIR`, default `.voodoo/objects`).
+
+For local development parity, run MinIO and point the contract tests at it:
+
+```bash
+just minio-up
+export VOODOO_TEST_S3_ENDPOINT=http://localhost:9000
+export VOODOO_TEST_S3_BUCKET=voodoo-test
+export VOODOO_TEST_S3_KEY=minioadmin
+export VOODOO_TEST_S3_SECRET=minioadmin
+uv run pytest tests/contracts/test_objectstore_s3.py -q
+```
+
 ### Docker
 
 ```dockerfile
