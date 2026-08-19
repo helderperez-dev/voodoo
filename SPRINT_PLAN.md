@@ -1,6 +1,7 @@
 # Voodoo — Runtime & Protocol Implementation Plan (Sprint Tracker)
 
-Source spec: `VOODOO_RUNTIME_PROTOCOL_ARCHITECTURE.txt` (2026-08-17).
+Source spec: [`ROADMAP.md`](ROADMAP.md) — the master architectural and
+engineering plan (formerly `VOODOO_RUNTIME_PROTOCOL_ARCHITECTURE.txt`).
 Historical record of the completed 1.2.0 milestone: `IMPLEMENTATION.md`.
 
 This file is the **single source of truth** for progress. Each sprint is a

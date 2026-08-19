@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.1 — 2026-08-19
+
+### Docs & metadata cleanup
+
+- **`ROADMAP.md`** — consolidated master architectural & engineering plan
+  (replaces the former `MASTER_ROADMAP.md` and
+  `VOODOO_RUNTIME_PROTOCOL_ARCHITECTURE.txt`); `SPRINT_PLAN.md` now sources
+  the roadmap from `ROADMAP.md`.
+- **`README.md`** — PyPI/Python/License/CI/download badges, table of
+  contents, and expanded feature/primitive documentation.
+- **`pyproject.toml`** — full project metadata: description, authors,
+  maintainers, keywords, classifiers, license, and `[project.urls]`
+  (homepage, docs, repository, changelog, roadmap).
+- **Community files** — `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`,
+  `LICENSE` (MIT), GitHub issue templates, and pull request template.
+- **Docs consolidation** — removed stale `docs/ai/*` scaffolding; added
+  `docs/adaptive.md`, `docs/hitl.md`, `docs/runtime.md`.
+- **`.env.example`** — refreshed configuration reference.
+
 ## 1.15.0 — 2026-08-18
 
 ### Redis queue + cache (Sprint 13 — optional distributed backend)

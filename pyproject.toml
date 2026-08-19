@@ -5,8 +5,43 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "voodoo-framework"
 dynamic = ["version"]
-description = "Voodoo Framework"
+description = "The AI-native application framework for Python — reactive UIs, APIs, agents, workers, realtime, MCP, and durable execution in one runtime."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+authors = [
+    { name = "Helder Perez", email = "helder@voodoo.dev" },
+]
+maintainers = [
+    { name = "Helder Perez", email = "helder@voodoo.dev" },
+]
+keywords = [
+    "ai",
+    "agent",
+    "application-framework",
+    "async",
+    "durable-execution",
+    "mcp",
+    "realtime",
+    "reactive",
+    "web-framework",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Software Development :: Frameworks",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
 dependencies = [
     "starlette",
     "uvicorn",
@@ -21,6 +56,15 @@ dependencies = [
     "openai",
     "aiofiles"
 ]
+
+[project.urls]
+Homepage = "https://github.com/helderperez-dev/voodoo"
+Documentation = "https://github.com/helderperez-dev/voodoo#documentation"
+Repository = "https://github.com/helderperez-dev/voodoo"
+Changelog = "https://github.com/helderperez-dev/voodoo/blob/main/CHANGELOG.md"
+Roadmap = "https://github.com/helderperez-dev/voodoo/blob/main/ROADMAP.md"
+Issues = "https://github.com/helderperez-dev/voodoo/issues"
+Discussions = "https://github.com/helderperez-dev/voodoo/discussions"
 
 [project.scripts]
 voodoo = "voodoo.cli:app"
