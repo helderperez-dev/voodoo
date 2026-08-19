@@ -40,6 +40,9 @@ jobs:
           --health-retries 5
       minio:
         image: minio/minio
+        # minio/minio:latest CMD is bare `minio` (prints help + exits), so the
+        # server must be started explicitly — same as `just minio-up`.
+        command: server /data
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
