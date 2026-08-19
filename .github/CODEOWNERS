@@ -1,0 +1,65 @@
+# CODEOWNERS — Voodoo
+# These owners are automatically requested for review on PRs touching
+# the given paths.  GitHub enforces required reviews via branch protection
+# (see repo Settings → Branches → main → "Require review from Code Owners").
+
+# ── Core runtime & public API ─────────────────────────────────────────
+/src/voodoo/__init__.py         @helderperez-dev
+/src/voodoo/core/               @helderperez-dev
+/src/voodoo/api.py              @helderperez-dev
+/src/voodoo/config.py           @helderperez-dev
+/src/voodoo/components.py        @helderperez-dev
+/src/voodoo/routing/            @helderperez-dev
+
+# ── Primitives (architectural atoms) ─────────────────────────────────
+/src/voodoo/primitives/         @helderperez-dev
+
+# ── Data, storage & adapters ─────────────────────────────────────────
+/src/voodoo/data/               @helderperez-dev
+/src/voodoo/storage/            @helderperez-dev
+/src/voodoo/adapters/           @helderperez-dev
+
+# ── AI, agents, tools & MCP ──────────────────────────────────────────
+/src/voodoo/ai/                 @helderperez-dev
+/src/voodoo/agent.py            @helderperez-dev
+/src/voodoo/tools/              @helderperez-dev
+/src/voodoo/mcp/                @helderperez-dev
+
+# ── Mesh, workers, queue & schedule ──────────────────────────────────
+/src/voodoo/mesh/               @helderperez-dev
+/src/voodoo/workers/            @helderperez-dev
+/src/voodoo/queue.py            @helderperez-dev
+/src/voodoo/schedule.py         @helderperez-dev
+
+# ── Auth, security & telemetry ───────────────────────────────────────
+/src/voodoo/auth/               @helderperez-dev
+/src/voodoo/security/           @helderperez-dev
+/src/voodoo/telemetry/          @helderperez-dev
+
+# ── UI, theme, i18n, SEO ─────────────────────────────────────────────
+/src/voodoo/ui/                 @helderperez-dev
+/src/voodoo/theme.py            @helderperez-dev
+/src/voodoo/i18n.py             @helderperez-dev
+/src/voodoo/seo.py              @helderperez-dev
+
+# ── CLI ──────────────────────────────────────────────────────────────
+/src/voodoo/cli/                @helderperez-dev
+
+# ── Tests ────────────────────────────────────────────────────────────
+/tests/                         @helderperez-dev
+
+# ── CI/CD & repo config ──────────────────────────────────────────────
+/.github/                       @helderperez-dev
+/justfile                        @helderperez-dev
+/pyproject.toml                  @helderperez-dev
+/install.sh                      @helderperez-dev
+
+# ── Docs ─────────────────────────────────────────────────────────────
+/docs/                          @helderperez-dev
+/ROADMAP.md                     @helderperez-dev
+/SPRINT_PLAN.md                 @helderperez-dev
+/CHANGELOG.md                   @helderperez-dev
+/README.md                      @helderperez-dev
+
+# ── Catch-all (default owner) ───────────────────────────────────────
+*                               @helderperez-dev

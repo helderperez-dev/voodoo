@@ -1,0 +1,112 @@
+# Labeler configuration — maps file paths to labels on PRs.
+# Used by .github/workflows/labeler.yml (actions/labeler@v5).
+
+# ── Type labels ───────────────────────────────────────────────────────
+"type: bug":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "tests/**"
+      - all-globs-to-changed-file:
+          - "src/voodoo/**/*.py"
+
+"type: feature":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/**/*.py"
+          - "examples/**/*.py"
+
+"type: docs":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "docs/**"
+          - "*.md"
+          - "ROADMAP.md"
+          - "SPRINT_PLAN.md"
+          - "CHANGELOG.md"
+          - "README.md"
+
+"type: ci":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - ".github/**"
+          - "justfile"
+
+"type: refactor":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/**/*.py"
+
+# ── Area labels ───────────────────────────────────────────────────────
+"area: core":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/core/**"
+          - "src/voodoo/__init__.py"
+          - "src/voodoo/config.py"
+          - "src/voodoo/api.py"
+
+"area: ui":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/ui/**"
+          - "src/voodoo/components.py"
+          - "src/voodoo/theme.py"
+
+"area: data":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/data/**"
+          - "src/voodoo/storage/**"
+
+"area: ai":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/ai/**"
+          - "src/voodoo/agent.py"
+          - "src/voodoo/tools/**"
+          - "src/voodoo/mcp/**"
+
+"area: mesh":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/mesh/**"
+
+"area: workers":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/workers/**"
+          - "src/voodoo/queue.py"
+          - "src/voodoo/schedule.py"
+
+"area: auth":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/auth/**"
+          - "src/voodoo/security/**"
+
+"area: telemetry":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/telemetry/**"
+
+"area: cli":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "src/voodoo/cli/**"
+
+"area: tests":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "tests/**"
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "docs/**"
+          - "*.md"
+
+# ── Dependency labels ─────────────────────────────────────────────────
+"dependencies":
+  - changed-files:
+      - any-glob-to-changed-file:
+          - "pyproject.toml"

@@ -5,14 +5,57 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Allow manual runs from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Test & Lint (Python ${{ matrix.python-version }})
+  # ─────────────────────────────────────────────────────────────────────
+  # Lint — fast feedback on code style & formatting
+  # ─────────────────────────────────────────────────────────────────────
+  lint:
+    name: 🧹 Lint & Format Check
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: 📦 Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: 🧹 Ruff format check
+        run: uv run ruff format --check .
+
+      - name: 🔍 Ruff lint
+        run: uv run ruff check .
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Test — full pytest suite with service containers
+  # ─────────────────────────────────────────────────────────────────────
+  test:
+    name: 🧪 Test Suite (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.12", "3.13"]
 
     # PostgreSQL service container (Sprint 10): runs the database contract
     # suite against a real server. The voodoo database provider itself talks
@@ -73,25 +116,30 @@ jobs:
       VOODOO_TEST_REDIS_URL: redis://localhost:6379/0
 
     steps:
-      - name: Checkout code
+      - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: 🐍 Install uv
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
           version: "latest"
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Lint with ruff
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
+      - name: 🧪 Run pytest suite
+        run: uv run pytest --tb=short
 
-      - name: Run Pytest suite
-        run: uv run pytest
+      - name: 📊 Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: |
+            .test-results/
+            .pytest_cache/
+          retention-days: 7

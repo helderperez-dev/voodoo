@@ -17,8 +17,9 @@ concurrency:
 
 jobs:
   release:
-    name: Build & Publish Release
+    name: 📦 Build & Publish Release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     # PostgreSQL service container (Sprint 11): runs the queue/events/execution
     # contract + failure-path suites against a real server at release time.
@@ -77,18 +78,18 @@ jobs:
       VOODOO_TEST_REDIS_URL: redis://localhost:6379/0
 
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure git identity
+      - name: ⚙️ Configure git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Determine version
+      - name: 🔢 Determine version
         id: get_version
         env:
           INPUT_VERSION: ${{ inputs.version }}
@@ -102,22 +103,22 @@ jobs:
           echo "TAG=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Release version: $VERSION"
 
-      - name: Install uv
+      - name: 🐍 Install uv
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
           version: "latest"
 
-      - name: Set up Python 3.12
+      - name: 🐍 Set up Python 3.12
         run: uv python install 3.12
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Run test suite
+      - name: 🧪 Run test suite
         run: uv run pytest
 
-      - name: Bump version in source files
+      - name: 📝 Bump version in source files
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
@@ -126,7 +127,7 @@ jobs:
           echo "Bumped to $VERSION"
           grep '__version__' src/voodoo/__init__.py
 
-      - name: Commit, tag and push
+      - name: 🏷️ Commit, tag and push
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
           TAG: ${{ steps.get_version.outputs.TAG }}
@@ -137,12 +138,12 @@ jobs:
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
 
-      - name: Build distribution packages
+      - name: 🔨 Build distribution packages
         run: |
           rm -rf dist/
           uv build
 
-      - name: Calculate SHA256
+      - name: 🔐 Calculate SHA256
         id: sha
         run: |
           TAR_FILE=$(ls dist/*.tar.gz | head -n 1)
@@ -150,12 +151,12 @@ jobs:
           echo "SHA256=$SHA256" >> "$GITHUB_OUTPUT"
           echo "SHA256: $SHA256"
 
-      - name: Publish to PyPI
+      - name: 📤 Publish to PyPI
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_PASSWORD }}
         run: uv publish
 
-      - name: Update Homebrew Formula
+      - name: 🍺 Update Homebrew Formula
         if: env.HOMEBREW_TAP_TOKEN != ''
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -228,7 +229,7 @@ jobs:
           gh api "${ARGS[@]}"
           echo "✓ Homebrew formula updated"
 
-      - name: Create GitHub Release
+      - name: 🚀 Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.get_version.outputs.TAG }}
