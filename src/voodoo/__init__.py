@@ -77,7 +77,7 @@ from .ui.styles import (
 from .ui.styles.theme import Theme, ThemeColors, create_theme
 from .workers import task
 
-__version__ = "1.16.1"
+__version__ = "1.17.0"
 
 __all__ = [
     # Core runtime
