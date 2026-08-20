@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **Labeler config** — replaced the invalid `any-glob-to-changed-file` key
+  with `any-glob-to-any-file` in `.github/labeler.yml` (`area: docs` and
+  `dependencies` rules). The auto-label PR workflow was failing on every PR
+  because labeler v5 only accepts `any-glob-to-any-file`,
+  `all-globs-to-any-file`, `any-glob-to-all-files`, and
+  `all-globs-to-all-files`.
+
 ## 1.15.1 — 2026-08-19
 
 ### Docs & metadata cleanup
