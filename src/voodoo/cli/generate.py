@@ -18,7 +18,7 @@ def generate(
     """
     AI-powered generation of Voodoo components using LLMs.
     """
-    from openai import AsyncOpenAI
+    from voodoo.ai.providers import get_provider
 
     # Check for API keys (support OpenRouter or OpenAI)
     api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -33,8 +33,12 @@ def generate(
         )
         raise typer.Exit(1)
 
-    client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-    model = "openai/gpt-4o" if base_url else "gpt-4o"
+    # Resolve through the provider abstraction (no direct SDK use). For
+    # OpenRouter the model id keeps the provider's ``vendor/model`` slug.
+    model = os.getenv("VOODOO_MODELS_DEFAULT")
+    if not model:
+        model = "openai:openai/gpt-4o" if base_url else "openai:gpt-4o"
+    provider = get_provider(model, api_key=api_key, base_url=base_url)
 
     terminal.wordmark()
     terminal.blank()
@@ -62,14 +66,11 @@ def generate(
             """
 
             try:
-                response = await client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.2,
+                response = await provider.complete(
+                    [{"role": "user", "content": prompt}], temperature=0.2
                 )
 
-                raw_content = response.choices[0].message.content
-                code = (raw_content or "").strip()
+                code = (response.content or "").strip()
                 if code.startswith("```python"):
                     code = code[9:]
                 if code.startswith("```"):

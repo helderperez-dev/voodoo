@@ -5,7 +5,14 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-from voodoo.ai.providers import LLMProvider, Message, ProviderEvent, ProviderResponse
+from voodoo.ai.providers import (
+    EmbeddingResponse,
+    LLMProvider,
+    Message,
+    ModelDescriptor,
+    ProviderEvent,
+    ProviderResponse,
+)
 from voodoo.core.errors import ConfigurationError
 
 __all__ = ["OpenAIProvider"]
@@ -43,7 +50,10 @@ class OpenAIProvider(LLMProvider):
     def __init__(self, model: str = "gpt-4o-mini", **kwargs: Any) -> None:
         super().__init__(model, **kwargs)
         openai = _require_openai()
-        self._client = openai.AsyncOpenAI(api_key=kwargs.get("api_key"))
+        # ``base_url`` enables OpenAI-compatible endpoints (e.g. OpenRouter).
+        self._client = openai.AsyncOpenAI(
+            api_key=kwargs.get("api_key"), base_url=kwargs.get("base_url")
+        )
 
     async def complete(
         self, messages: list[Message], **kwargs: Any
@@ -84,4 +94,37 @@ class OpenAIProvider(LLMProvider):
         yield ProviderEvent(
             type="done",
             data={"model": self.model, "finish_reason": "stop"},
+        )
+
+    async def embed(self, texts: list[str], **kwargs: Any) -> EmbeddingResponse:
+        """Produce embeddings via the OpenAI embeddings API."""
+        resp = await self._client.embeddings.create(
+            model=kwargs.pop("embedding_model", "text-embedding-3-small"),
+            input=texts,
+            **kwargs,
+        )
+        usage = getattr(resp, "usage", None)
+        tokens_in = getattr(usage, "prompt_tokens", 0) if usage else 0
+        return EmbeddingResponse(
+            embeddings=[d.embedding for d in resp.data],
+            model=self.model,
+            tokens_in=tokens_in,
+            cost=0.0,
+        )
+
+    def describe(self) -> ModelDescriptor:
+        """Advertise the OpenAI capability matrix for this model."""
+        gpt4o = "gpt-4o" in self.model or "gpt-4.1" in self.model
+        return ModelDescriptor(
+            provider=self.name,
+            model=self.model,
+            modalities=["text"],
+            context_window=128000 if gpt4o else 0,
+            tool_use=True,
+            structured_output=True,
+            streaming=True,
+            reasoning="o1" in self.model or "o3" in self.model,
+            vision=gpt4o or "gpt-4.5" in self.model,
+            audio=gpt4o,
+            embeddings=True,
         )

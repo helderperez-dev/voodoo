@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-from voodoo.ai.providers import LLMProvider, Message, ProviderEvent, ProviderResponse
+from voodoo.ai.providers import (
+    LLMProvider,
+    Message,
+    ModelDescriptor,
+    ProviderEvent,
+    ProviderResponse,
+)
 from voodoo.core.errors import ConfigurationError
 
 __all__ = ["AnthropicProvider"]
@@ -79,4 +85,21 @@ class AnthropicProvider(LLMProvider):
         yield ProviderEvent(
             type="done",
             data={"model": self.model, "finish_reason": "stop"},
+        )
+
+    def describe(self) -> ModelDescriptor:
+        """Advertise the Anthropic capability matrix for this model."""
+        claude3 = self.model.startswith("claude-3")
+        return ModelDescriptor(
+            provider=self.name,
+            model=self.model,
+            modalities=["text"],
+            context_window=200000 if claude3 else 0,
+            tool_use=True,
+            structured_output=True,
+            streaming=True,
+            reasoning="opus" in self.model or "sonnet" in self.model,
+            vision=claude3,
+            audio=False,
+            embeddings=False,
         )

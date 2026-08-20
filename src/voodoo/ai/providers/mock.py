@@ -7,10 +7,18 @@ cost is always zero.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import AsyncIterator
 from typing import Any
 
-from voodoo.ai.providers import LLMProvider, Message, ProviderEvent, ProviderResponse
+from voodoo.ai.providers import (
+    EmbeddingResponse,
+    LLMProvider,
+    Message,
+    ModelDescriptor,
+    ProviderEvent,
+    ProviderResponse,
+)
 
 __all__ = ["MockProvider"]
 
@@ -76,4 +84,33 @@ class MockProvider(LLMProvider):
                 "cost": 0.0,
                 "finish_reason": _FINISH,
             },
+        )
+
+    async def embed(self, texts: list[str], **kwargs: Any) -> EmbeddingResponse:
+        """Deterministic mock embeddings (hash-derived, no network)."""
+        embeddings: list[list[float]] = []
+        for text in texts:
+            digest = hashlib.sha256(text.encode("utf-8")).digest()
+            embeddings.append([float(b) / 255.0 for b in digest[:8]])
+        return EmbeddingResponse(
+            embeddings=embeddings,
+            model=self.model,
+            tokens_in=sum(_word_count(t) for t in texts),
+            cost=0.0,
+        )
+
+    def describe(self) -> ModelDescriptor:
+        """Mock provider advertises streaming + embeddings for test coverage."""
+        return ModelDescriptor(
+            provider=self.name,
+            model=self.model,
+            modalities=["text"],
+            context_window=8192,
+            tool_use=False,
+            structured_output=False,
+            streaming=True,
+            reasoning=False,
+            vision=False,
+            audio=False,
+            embeddings=True,
         )

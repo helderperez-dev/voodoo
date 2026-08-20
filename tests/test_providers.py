@@ -8,9 +8,16 @@ import sys
 import pytest
 
 from voodoo import LLMProvider
-from voodoo.ai import get_provider, resolve_model
-from voodoo.ai.providers import LLMProvider as LLMProviderBase
-from voodoo.ai.providers import ProviderEvent, ProviderResponse
+from voodoo.ai import describe_model, get_provider, register_provider, resolve_model
+from voodoo.ai.providers import (
+    EmbeddingResponse,
+    ModelDescriptor,
+    ProviderEvent,
+    ProviderResponse,
+)
+from voodoo.ai.providers import (
+    LLMProvider as LLMProviderBase,
+)
 from voodoo.ai.providers.mock import MockProvider
 from voodoo.core.errors import ConfigurationError
 
@@ -31,7 +38,8 @@ def test_resolve_model_mock():
     assert model_id == "test"
 
 
-def test_resolve_model_missing_colon_raises_configuration_error():
+def test_resolve_model_unknown_bare_reference_raises_configuration_error():
+    # A bare name with no colon and no matching alias is rejected.
     with pytest.raises(ConfigurationError, match="provider:model"):
         resolve_model("gpt-4")
 
@@ -46,15 +54,67 @@ def test_resolve_model_missing_model_id_raises_configuration_error():
         resolve_model("openai:")
 
 
+def test_resolve_model_builtin_alias():
+    provider, model_id = resolve_model("best")
+    assert provider == "openai"
+    assert model_id == "gpt-4o"
+
+
+def test_resolve_model_caller_alias_overrides_builtin():
+    provider, model_id = resolve_model("best", aliases={"best": "mock:test"})
+    assert provider == "mock"
+    assert model_id == "test"
+
+
+def test_resolve_model_unknown_alias_raises_configuration_error():
+    with pytest.raises(ConfigurationError, match="Unknown model reference"):
+        resolve_model("nonexistent-alias")
+
+
 def test_get_provider_returns_mock_instance():
     provider = get_provider("mock:test")
     assert isinstance(provider, MockProvider)
     assert provider.model == "test"
 
 
+def test_get_provider_resolves_alias():
+    # ``best`` maps to OpenAI by default, which requires the SDK — so use a
+    # caller alias to keep this test network/SDK-free.
+    import voodoo.ai.providers as providers_mod
+
+    original = dict(providers_mod.DEFAULT_ALIASES)
+    try:
+        providers_mod.DEFAULT_ALIASES["best"] = "mock:test"
+        provider = get_provider("best")
+        assert isinstance(provider, MockProvider)
+    finally:
+        providers_mod.DEFAULT_ALIASES.clear()
+        providers_mod.DEFAULT_ALIASES.update(original)
+
+
 def test_get_provider_unknown_raises_configuration_error():
     with pytest.raises(ConfigurationError):
         get_provider("acme:foo")
+
+
+def test_register_provider_and_resolve():
+    register_provider("mocktest", "voodoo.ai.providers.mock.MockProvider")
+    try:
+        provider = get_provider("mocktest:abc")
+        assert isinstance(provider, MockProvider)
+        assert provider.model == "abc"
+    finally:
+        import voodoo.ai.providers as providers_mod
+
+        providers_mod._PROVIDER_CLASSES.pop("mocktest", None)
+
+
+def test_describe_model_returns_descriptor():
+    desc = describe_model("mock:test")
+    assert isinstance(desc, ModelDescriptor)
+    assert desc.provider == "mock"
+    assert desc.model == "test"
+    assert desc.qualified_name == "mock:test"
 
 
 def test_llmprovider_is_abstract_base():
@@ -158,6 +218,31 @@ async def test_mock_stream_deterministic():
     b = [e async for e in provider.stream(messages)]
     assert len(a) == len(b)
     assert [e.data for e in a] == [e.data for e in b]
+
+
+# ---------------------------------------------------------------------------
+# MockProvider — embed() / describe()
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mock_embed_returns_embedding_response():
+    provider = MockProvider(model="test")
+    resp = await provider.embed(["hello world", "second text"])
+    assert isinstance(resp, EmbeddingResponse)
+    assert len(resp.embeddings) == 2
+    assert all(isinstance(v, float) for e in resp.embeddings for v in e)
+    assert resp.model == "test"
+
+
+def test_mock_describe_returns_descriptor():
+    provider = MockProvider(model="test")
+    desc = provider.describe()
+    assert isinstance(desc, ModelDescriptor)
+    assert desc.provider == "mock"
+    assert desc.model == "test"
+    assert desc.streaming is True
+    assert desc.embeddings is True
 
 
 # ---------------------------------------------------------------------------

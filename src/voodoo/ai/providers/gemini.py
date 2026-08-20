@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-from voodoo.ai.providers import LLMProvider, Message, ProviderEvent, ProviderResponse
+from voodoo.ai.providers import (
+    LLMProvider,
+    Message,
+    ModelDescriptor,
+    ProviderEvent,
+    ProviderResponse,
+)
 from voodoo.core.errors import ConfigurationError
 
 __all__ = ["GeminiProvider"]
@@ -67,4 +73,20 @@ class GeminiProvider(LLMProvider):
         yield ProviderEvent(
             type="done",
             data={"model": self.model, "finish_reason": "stop"},
+        )
+
+    def describe(self) -> ModelDescriptor:
+        """Advertise the Gemini capability matrix for this model."""
+        return ModelDescriptor(
+            provider=self.name,
+            model=self.model,
+            modalities=["text"],
+            context_window=1000000,
+            tool_use=True,
+            structured_output=True,
+            streaming=True,
+            reasoning="thinking" in self.model or "pro" in self.model,
+            vision=True,
+            audio=False,
+            embeddings=False,
         )

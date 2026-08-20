@@ -35,6 +35,8 @@ EXPECTED_EXPORTS = {
     "ToolSpec",
     "ToolRegistry",
     "LLMProvider",
+    "VoodooModelProvider",
+    "ModelDescriptor",
     # Data
     "BaseModel",
     "Model",

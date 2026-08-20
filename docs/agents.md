@@ -96,6 +96,69 @@ Model strings follow the `provider:model` pattern:
 - `ollama:llama3`
 - `mock:test` (deterministic, no network)
 
+### Routing aliases
+
+Instead of a hard-coded model, reference a capability alias resolved from
+configuration + model descriptors:
+
+- `best`, `fast`, `cheap`, `vision`, `reasoning`
+
+```python
+from voodoo.ai import get_provider, resolve_model
+
+resolve_model("best")  # ("openai", "gpt-4o")
+provider = get_provider("best")  # OpenAIProvider(model="gpt-4o")
+```
+
+Aliases resolve through the `models.aliases` block in `voodoo.yaml` first,
+then built-in defaults:
+
+```yaml
+models:
+  default: "openai:gpt-4o"
+  aliases:
+    best: "anthropic:claude-3-opus"
+    cheap: "openai:gpt-4o-mini"
+```
+
+### The `VoodooModelProvider` interface
+
+Every model provider conforms to a normalized interface (spec gap #7):
+
+```python
+from voodoo.ai.providers import VoodooModelProvider
+
+# generate() -> ProviderResponse        (alias of complete)
+# stream()  -> AsyncIterator[ProviderEvent]
+# embed(texts) -> EmbeddingResponse     (embedding-capable providers only)
+# count_tokens(messages) -> int         (optional; word-count default)
+# describe() -> ModelDescriptor         (capability matrix)
+```
+
+`describe()` returns a `ModelDescriptor` — provider, model, modalities,
+context window, tool use, structured output, streaming, reasoning, vision,
+audio, embeddings, and pricing metadata:
+
+```python
+from voodoo.ai import describe_model
+
+desc = describe_model("mock:test")
+desc.provider  # "mock"
+desc.streaming  # True
+desc.embeddings  # True
+desc.qualified_name  # "mock:test"
+```
+
+### `voodoo generate`
+
+```bash
+voodoo generate agent "A lead-scoring agent"
+```
+
+Resolves the model through the provider abstraction (no direct SDK use). Set
+`VOODOO_MODELS_DEFAULT` to pick a different model, or `OPENAI_API_KEY` /
+`OPENROUTER_API_KEY` to authenticate.
+
 ## API reference
 
 - `Agent(model="mock:test", tools=None, system_prompt=None, registry=None, max_iterations=10)` — create an agent.
@@ -103,3 +166,6 @@ Model strings follow the `provider:model` pattern:
 - `Agent.stream(prompt, context=None) -> AsyncIterator[AgentEvent]` — stream events.
 - `AgentRun` — full run record with token/cost accounting.
 - `AgentEvent` — streaming event (`type`, `data`).
+- `VoodooModelProvider` — normalized model provider Protocol.
+- `ModelDescriptor` — static model capability descriptor.
+- `get_provider(model)`, `resolve_model(model)`, `describe_model(model)` — model resolution helpers.
