@@ -3,6 +3,38 @@
 ## [Unreleased]
 
 ### Added
+
+#### Sprint 14 — ModelProvider protocol
+
+- **`VoodooModelProvider` Protocol** — normalized model provider interface
+  (`generate`, `stream`, `embed`, `count_tokens`, `describe`, `name`) in
+  `voodoo.ai.providers`. `LLMProvider` now provides default implementations
+  for `generate()` (delegates to `complete()`), `embed()` (raises
+  `NotImplementedError`), `count_tokens()` (word-count heuristic), and
+  `describe()` (conservative capability defaults).
+- **`ModelDescriptor`** — static model capability descriptor (provider,
+  model, modalities, context window, tool use, structured output, streaming,
+  reasoning, vision, audio, embeddings, pricing) with a `qualified_name`
+  property. Added `describe_model(model)` helper.
+- **`EmbeddingResponse`** — embedding result dataclass (`embeddings`,
+  `model`, `tokens_in`, `cost`).
+- **Routing aliases** — capability aliases (`best`, `fast`, `cheap`,
+  `vision`, `reasoning`) resolved from config `models.aliases` over built-in
+  defaults; `resolve_model()` now accepts caller-supplied aliases.
+- **`register_provider(name, class_path)`** — pluggable provider factory
+  registration.
+- **Provider capabilities** — `mock` (deterministic `embed()` + `describe()`),
+  `openai` (`embed()` via `embeddings.create`, `base_url` support, `describe()`),
+  `anthropic`/`gemini`/`ollama` (`describe()`) now conform to the interface.
+- **Agent model journaling** — `model.called` and `model.completed` events
+  (with `tokens_in`/`tokens_out`/`cost`) broadcast in both `Agent.run()` and
+  `Agent.stream()`.
+- **`voodoo generate`** — refactored to resolve models through
+  `get_provider()` (no direct SDK use); `VOODOO_MODELS_DEFAULT`,
+  `OPENAI_API_KEY`/`OPENROUTER_API_KEY` honored.
+- **Contract tests** — `ModelProviderContractTests` mixin +
+  `TestMockProviderContract` in `tests/contracts/test_model_provider.py`.
+
 - **AI development workflow** — structured guidance for AI coding agents
   (Claude Code, Cursor, GitHub Copilot, etc.):
   - `AGENTS.md` — root-level AI agent instructions; the entry point for any

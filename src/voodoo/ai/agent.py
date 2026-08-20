@@ -263,8 +263,27 @@ class Agent:
         try:
             while iterations <= self.max_iterations:
                 self.state = AgentState.running
+                await self._broadcast(
+                    "model.called",
+                    {
+                        "run_id": run_id,
+                        "provider": self.provider.name,
+                        "model": self.model,
+                    },
+                )
                 response = await self.provider.complete(
                     messages, tools=self._tools_for_provider()
+                )
+                await self._broadcast(
+                    "model.completed",
+                    {
+                        "run_id": run_id,
+                        "provider": self.provider.name,
+                        "model": self.model,
+                        "tokens_in": response.tokens_in,
+                        "tokens_out": response.tokens_out,
+                        "cost": response.cost,
+                    },
                 )
                 tokens_in += response.tokens_in
                 tokens_out += response.tokens_out
@@ -400,6 +419,14 @@ class Agent:
             while iterations <= self.max_iterations:
                 self.state = AgentState.running
                 accumulated_text = ""
+                await self._broadcast(
+                    "model.called",
+                    {
+                        "run_id": run_id,
+                        "provider": self.provider.name,
+                        "model": self.model,
+                    },
+                )
                 async for event in self.provider.stream(
                     messages, tools=self._tools_for_provider()
                 ):
@@ -412,6 +439,17 @@ class Agent:
                         cost += event.data.get("cost", 0.0)
                     elif event.type == "error":
                         raise Exception(event.data.get("error", "Provider error"))
+                await self._broadcast(
+                    "model.completed",
+                    {
+                        "run_id": run_id,
+                        "provider": self.provider.name,
+                        "model": self.model,
+                        "tokens_in": tokens_in,
+                        "tokens_out": tokens_out,
+                        "cost": cost,
+                    },
+                )
 
                 # Check if a tool call is needed (mock doesn't emit tool_call,
                 # so we check based on the accumulated text for a special marker).

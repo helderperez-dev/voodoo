@@ -11,21 +11,65 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from voodoo.core.errors import ConfigurationError
 
 __all__ = [
     "LLMProvider",
+    "VoodooModelProvider",
     "ProviderResponse",
     "ProviderEvent",
     "Message",
+    "EmbeddingResponse",
+    "ModelDescriptor",
     "get_provider",
     "resolve_model",
+    "register_provider",
+    "describe_model",
 ]
 
 # A chat message: ``{"role": "system"|"user"|"assistant"|"tool", "content": str}``
 Message = dict[str, Any]
+
+
+@dataclass
+class EmbeddingResponse:
+    """Normalized embedding result with token/cost accounting."""
+
+    embeddings: list[list[float]]
+    model: str
+    tokens_in: int = 0
+    cost: float = 0.0
+
+
+@dataclass
+class ModelDescriptor:
+    """Static capability description of a model behind a provider.
+
+    Exposes a model's capability matrix (modalities, context window, tool
+    use, structured output, streaming, reasoning, vision, audio, embeddings,
+    pricing) without making a network call. Used for routing-alias resolution
+    and runtime introspection (ROADMAP §64, §47).
+    """
+
+    provider: str
+    model: str
+    modalities: list[str] = field(default_factory=lambda: ["text"])
+    context_window: int = 0
+    tool_use: bool = False
+    structured_output: bool = False
+    streaming: bool = True
+    reasoning: bool = False
+    vision: bool = False
+    audio: bool = False
+    embeddings: bool = False
+    pricing: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def qualified_name(self) -> str:
+        """The ``"provider:model"`` string identifying this model."""
+        return f"{self.provider}:{self.model}"
 
 
 @dataclass
@@ -53,12 +97,51 @@ class ProviderEvent:
     data: dict[str, Any] = field(default_factory=dict)
 
 
+class VoodooModelProvider(Protocol):
+    """Normalized model surface every model provider must satisfy (spec gap #7).
+
+    Concrete providers subclass :class:`LLMProvider` (which supplies default
+    :meth:`generate`, :meth:`embed`, :meth:`count_tokens`, and
+    :meth:`describe` implementations), but any object satisfying this
+    structural Protocol is a valid model provider.
+    """
+
+    name: str
+
+    async def generate(
+        self, messages: list[Message], **kwargs: Any
+    ) -> ProviderResponse:
+        """Produce a completion (alias of :meth:`LLMProvider.complete`)."""
+        ...
+
+    def stream(
+        self, messages: list[Message], **kwargs: Any
+    ) -> AsyncIterator[ProviderEvent]:
+        """Yield normalized streaming events."""
+        ...
+
+    async def embed(self, texts: list[str], **kwargs: Any) -> EmbeddingResponse:
+        """Produce vector embeddings for ``texts`` (not all providers)."""
+        ...
+
+    async def count_tokens(self, messages: list[Message], **kwargs: Any) -> int:
+        """Estimate the token count of ``messages`` (optional)."""
+        ...
+
+    def describe(self) -> ModelDescriptor:
+        """Return the model's static capability descriptor."""
+        ...
+
+
 class LLMProvider(ABC):
     """Abstract base for LLM providers.
 
     Subclasses implement :meth:`complete` (non-streaming) and :meth:`stream`
     (normalized streaming events). Both return provider-agnostic objects so
-    the Agent never sees provider-native formats.
+    the Agent never sees provider-native formats. The base also supplies
+    default :meth:`generate`, :meth:`embed`, :meth:`count_tokens`, and
+    :meth:`describe` so every provider conforms to
+    :class:`VoodooModelProvider`.
     """
 
     #: Provider name used in ``model="provider:model"`` resolution.
@@ -84,6 +167,39 @@ class LLMProvider(ABC):
         # pragma: no cover - abstract generator marker
         yield  # type: ignore[unreachable]  # noqa: B018
 
+    async def generate(
+        self, messages: list[Message], **kwargs: Any
+    ) -> ProviderResponse:
+        """Normalized completion — defaults to delegating to :meth:`complete`."""
+        return await self.complete(messages, **kwargs)
+
+    async def embed(self, texts: list[str], **kwargs: Any) -> EmbeddingResponse:
+        """Return embeddings for ``texts``.
+
+        Not every provider supports embeddings; the default raises
+        :class:`NotImplementedError`. Embedding-capable providers override
+        this method.
+        """
+        raise NotImplementedError(f"provider {self.name!r} does not support embeddings")
+
+    async def count_tokens(self, messages: list[Message], **kwargs: Any) -> int:
+        """Estimate token usage (word-count heuristic by default)."""
+        total = 0
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                total += len(content.split())
+            elif isinstance(content, list):
+                total += sum(len(str(p).split()) for p in content)
+        return total
+
+    def describe(self) -> ModelDescriptor:
+        """Return a conservative capability descriptor.
+
+        Providers override this to advertise accurate capabilities.
+        """
+        return ModelDescriptor(provider=self.name, model=self.model)
+
 
 # ---------------------------------------------------------------------------
 # Provider registry & factory
@@ -98,19 +214,68 @@ _PROVIDER_CLASSES: dict[str, str] = {
     "mock": "voodoo.ai.providers.mock.MockProvider",
 }
 
+#: Built-in routing aliases resolved when no explicit config alias exists.
+#: The ``models.aliases`` block in ``voodoo.yaml`` overrides these (ROADMAP §47).
+DEFAULT_ALIASES: dict[str, str] = {
+    "best": "openai:gpt-4o",
+    "fast": "openai:gpt-4o-mini",
+    "cheap": "openai:gpt-4o-mini",
+    "vision": "openai:gpt-4o",
+    "reasoning": "openai:o1-mini",
+}
 
-def resolve_model(model: str) -> tuple[str, str]:
-    """Split a ``"provider:model"`` string into ``(provider_name, model_id)``.
 
-    Raises :class:`ConfigurationError` if the format is invalid or the
-    provider is unknown.
-    """
-    if ":" not in model:
+def register_provider(name: str, class_path: str) -> None:
+    """Register a provider class path under ``name`` for lazy resolution."""
+    if not name or ":" in name:
         raise ConfigurationError(
-            f"model must be in 'provider:model' format (got {model!r}). "
-            f"Example: 'openai:gpt-4', 'anthropic:claude-3', 'mock:test'."
+            f"provider name must be a bare identifier (got {name!r})"
         )
-    provider_name, _, model_id = model.partition(":")
+    _PROVIDER_CLASSES[name] = class_path
+
+
+def _routing_aliases(aliases: dict[str, str] | None) -> dict[str, str]:
+    """Merge config-provided aliases over the built-in defaults.
+
+    Config aliases come from ``models.aliases`` in ``voodoo.yaml`` (surfaced
+    via :data:`voodoo.config.config.models.aliases`); explicit caller-provided
+    ``aliases`` win over both.
+    """
+    merged = dict(DEFAULT_ALIASES)
+    try:
+        from voodoo.config import config
+
+        merged.update(config.models.aliases or {})
+    except Exception:  # noqa: BLE001 — config resolution is best-effort here
+        pass
+    if aliases:
+        merged.update(aliases)
+    return merged
+
+
+def resolve_model(model: str, aliases: dict[str, str] | None = None) -> tuple[str, str]:
+    """Resolve a model reference to ``(provider_name, model_id)``.
+
+    Accepts either ``"provider:model"`` (e.g. ``"openai:gpt-4"``) or a
+    routing alias (``best``, ``fast``, ``cheap``, ``vision``, ``reasoning``,
+    or any alias defined in ``models.aliases``). Aliases resolve through
+    config-provided mappings first, then built-in defaults.
+
+    Raises :class:`ConfigurationError` if the format is invalid, the alias is
+    unknown, or the provider is unknown.
+    """
+    target = model
+    if ":" not in model:
+        routing = _routing_aliases(aliases)
+        if model not in routing:
+            raise ConfigurationError(
+                f"Unknown model reference {model!r}. Use 'provider:model' "
+                f"(e.g. 'openai:gpt-4', 'mock:test') or a known alias: "
+                f"{', '.join(sorted(routing))}."
+            )
+        target = routing[model]
+
+    provider_name, _, model_id = target.partition(":")
     if provider_name not in _PROVIDER_CLASSES:
         raise ConfigurationError(
             f"Unknown provider {provider_name!r}. "
@@ -118,13 +283,13 @@ def resolve_model(model: str) -> tuple[str, str]:
         )
     if not model_id:
         raise ConfigurationError(
-            f"model id missing in {model!r} (expected 'provider:model')."
+            f"model id missing in {target!r} (expected 'provider:model')."
         )
     return provider_name, model_id
 
 
 def get_provider(model: str, **kwargs: Any) -> LLMProvider:
-    """Resolve ``"provider:model"`` into a ready :class:`LLMProvider` instance.
+    """Resolve ``"provider:model"`` (or a routing alias) into a provider instance.
 
     Provider modules are imported lazily; a missing optional SDK raises an
     actionable :class:`ConfigurationError`.
@@ -137,3 +302,12 @@ def get_provider(model: str, **kwargs: Any) -> LLMProvider:
     module = importlib.import_module(module_path)
     provider_cls: type[LLMProvider] = getattr(module, class_name)
     return provider_cls(model=model_id, **kwargs)
+
+
+def describe_model(model: str) -> ModelDescriptor:
+    """Return the capability descriptor for ``model`` (no network calls).
+
+    Instantiates the provider (which, for non-mock providers, requires its
+    optional SDK) and returns :meth:`LLMProvider.describe`.
+    """
+    return get_provider(model).describe()

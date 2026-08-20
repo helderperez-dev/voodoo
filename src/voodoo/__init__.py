@@ -19,7 +19,7 @@ import warnings
 from typing import Any
 
 from .adapters import TailwindAdapter, VoodooCSSAdapter
-from .ai import LLMProvider
+from .ai import LLMProvider, ModelDescriptor, VoodooModelProvider
 from .ai.agent import Agent, AgentRun
 from .ai.tools import ToolRegistry, ToolSpec, tool
 from .config import config
@@ -102,6 +102,8 @@ __all__ = [
     "ToolSpec",
     "ToolRegistry",
     "LLMProvider",
+    "VoodooModelProvider",
+    "ModelDescriptor",
     # Data
     "BaseModel",
     "Model",

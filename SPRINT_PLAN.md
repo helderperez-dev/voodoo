@@ -22,9 +22,9 @@ existing automated workflow).
 
 | | |
 |---|---|
-| **Latest release** | `1.15.1` (`src/voodoo/__init__.py` → `__version__`) |
-| **Sprints 1–13** | ✅ All DONE + released (v1.3.0 → v1.15.1) |
-| **Next sprint** | **Sprint 14 — ModelProvider protocol → `1.16.0`** |
+| **Latest release** | `1.16.0` (`src/voodoo/__init__.py` → `__version__`) |
+| **Sprints 1–14** | ✅ All DONE + released (v1.3.0 → v1.16.0) |
+| **Next sprint** | **Sprint 15 — Memory capability → `1.17.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
@@ -124,7 +124,7 @@ DONE  |  WIP  |  TODO
 | 11 | PostgreSQL queue & events | 1.13.0 | SKIP LOCKED queue + event store on PG | DONE |
 | 12 | S3/R2 object store | 1.14.0 | Presign, checksums, multipart; `s3` extra | DONE |
 | 13 | Redis adapters (optional) | 1.15.0 | Redis queue/cache behind contracts | DONE |
-| 14 | ModelProvider protocol | 1.16.0 | Model descriptors + routing aliases + contract tests | TODO |
+| 14 | ModelProvider protocol | 1.16.0 | Model descriptors + routing aliases + contract tests | DONE |
 | 15 | Memory capability | 1.17.0 | Layered memory: search/read/write, SQLite default | TODO |
 | 16 | Agents as durable entities | 1.18.0 | Agent registry; runs are executions; CLI | TODO |
 | 17 | Durable human-in-the-loop | 1.19.0 | WAITING_FOR_HUMAN survives restart, no live worker | TODO |
@@ -422,24 +422,24 @@ Scope:
 # MILESTONE D — AI RUNTIME
 
 ## Sprint 14 — ModelProvider protocol
-**Version 1.16.0 · ROADMAP §64, §47 · Status: TODO · Released as: —**
+**Version 1.16.0 · ROADMAP §64, §47 · Status: DONE · Released as: 1.16.0**
 
 Goal: models are providers behind one normalized interface (spec gap #7).
 
 Scope:
-- [ ] `VoodooModelProvider` interface: `generate`, `stream`, `embed`,
+- [x] `VoodooModelProvider` interface: `generate`, `stream`, `embed`,
       `count_tokens` (optional), `describe()`.
-- [ ] Model descriptors: provider, model, modalities, context_window,
+- [x] Model descriptors: provider, model, modalities, context_window,
       tool_use, structured_output, streaming, reasoning, vision, audio,
       embeddings, pricing metadata.
-- [ ] Routing aliases `best|fast|cheap|vision|reasoning` resolved by the
+- [x] Routing aliases `best|fast|cheap|vision|reasoning` resolved by the
       runtime from config + descriptors.
-- [ ] Existing OpenAI/Anthropic/Gemini/Ollama/Mock providers conform; agent
+- [x] Existing OpenAI/Anthropic/Gemini/Ollama/Mock providers conform; agent
       `model="provider:model"` resolution goes through the registry.
-- [ ] `voodoo generate` stops bypassing the abstraction (known debt).
-- [ ] `tests/contracts/test_model_provider.py` — `ModelProviderContractTests`
+- [x] `voodoo generate` stops bypassing the abstraction (known debt).
+- [x] `tests/contracts/test_model_provider.py` — `ModelProviderContractTests`
       (Mock provider in default suite; live providers integration-gated).
-- [ ] Model calls journaled (`model.called`/`model.completed`) for Sprint 4
+- [x] Model calls journaled (`model.called`/`model.completed`) for Sprint 4
       checkpoints.
 
 ## Sprint 15 — Memory capability
