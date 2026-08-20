@@ -6,11 +6,56 @@
 
 ## What it is
 
-Voodoo is an AI-native application framework for Python. It combines reactive UIs, APIs, agents, background workers, realtime systems, MCP tools, and data-driven applications in one Python runtime.
+Voodoo is a **programmable runtime for adaptive applications and operational
+systems**. Web applications, APIs, agents, background workers, realtime
+systems, MCP tools, data-driven applications, human workflows, distributed
+systems, and physical systems are different manifestations of the same runtime
+— they converge on one execution model.
 
 **Built on:** Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python `asyncio`.
 
 **Zero-config by default** (SQLite + local filesystem). **Production-ready by configuration** (PostgreSQL, Redis, S3, OpenAI/Anthropic).
+
+---
+
+## The Convergence Model
+
+Every subsystem — UI, API, Agent, Worker, Tool, MCP, Human, Device, Robot —
+flows through the same conceptual model. There is no independent execution
+model per subsystem.
+
+```text
+                    ENTITY
+                       │
+                       ▼
+                     STATE
+                       │
+                       ▼
+                    INTENT
+                       │
+                       ▼
+                 CAPABILITY
+                       │
+                       ▼
+                  EXECUTION
+                       │
+          ┌────────────┼────────────┐
+          │            │            │
+       COMPUTE       TIME      CONSTRAINT
+          │            │            │
+          └────────────┼────────────┘
+                       │
+                    EFFECT
+                       │
+                       ▼
+                     STATE
+```
+
+An **Entity** with **State** pursues an **Intent**, which resolves to a
+**Capability**, which is performed as an **Execution**. The execution is
+governed by **Compute** (how), **Time** (when / how long), **Resource** (what
+is consumed), and **Constraint** (what must hold). The execution produces an
+**Effect**, which changes **State**.
 
 ---
 
@@ -19,34 +64,51 @@ Voodoo is an AI-native application framework for Python. It combines reactive UI
 1. **Progressive complexity** — Start with the smallest executable application. Add capabilities when needed.
 2. **Minimal scaffold** — `voodoo new` produces only `app/page.py`. No empty directories, no placeholder files.
 3. **Lazy capabilities** — Database, storage, and workers initialize only when actually used.
-4. **AI as Compute** — AI is not a separate subsystem. It is one class of Compute within the architectural primitives model.
+4. **AI as one Compute** — AI is not a separate subsystem; it is one class of Compute, never a fundamental primitive.
 5. **Capability-based security** — Explicit, composable, revocable permissions rather than implicit role-based access.
 6. **Observability everywhere** — Correlation IDs + telemetry as the sensory system.
 7. **Zero-config runtime** — `voodoo new` → `voodoo dev` → working app.
 
 ---
 
-## Architectural Primitives
+## The Computational Model
 
-Voodoo is built on eight fundamental computational primitives:
+Voodoo's concepts live at different semantic levels (see
+[`docs/primitives.md`](docs/primitives.md)):
 
-| Primitive | Purpose |
+### Core Ontology
+
+| Concept | Purpose |
 |---|---|
-| **State** | Durable system truth |
-| **Capability** | Explicit permission to act |
-| **Intent** | What the system is trying to accomplish |
-| **Effect** | A change caused outside pure computation |
-| **Time** | First-class temporal concept |
-| **Compute** | The act of performing computation |
-| **Resource** | Something consumed or depended upon |
-| **Constraint** | What the system must or must not do |
+| **Entity** | Something with identity that participates in the system |
+| **State** | Current operational truth of an entity or system |
+| **Intent** | The desired outcome to achieve |
+| **Capability** | Ability + authorization to produce an effect under conditions |
+| **Effect** | A change produced by an execution |
+
+### Runtime
+
+| Concept | Purpose |
+|---|---|
+| **Execution** | The central runtime mechanism — every operation is one |
+
+### Execution Dimensions
+
+| Concept | Purpose |
+|---|---|
+| **Compute** | How the execution is performed (AI is one class) |
+| **Time** | Lifecycle and validity (deadline, timeout, schedule, retry) |
+| **Resource** | What is consumed (CPU, GPU, memory, tokens, energy) |
+| **Constraint** | Conditions that must hold |
+
+### Cross-Cutting Concepts
+
+**Event**, **Identity**, **Telemetry**, **Relationship**.
 
 ### Execution Model
 
-```
-STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE
-TIME + CONSTRAINTS surround the entire lifecycle.
-RESOURCE determines how execution should be performed.
+```text
+Entity → State → Intent → Capability → Execution → Effect → State
 ```
 
 ```python
@@ -61,8 +123,8 @@ from voodoo.primitives import TimeSpec, ComputeSpec, Resource, Constraint
 ```
 ┌─────────────────────────────────────────────┐
 │              Primitives Layer                 │
-│  State, Capability, Intent, Effect, Time,    │
-│  Compute, Resource, Constraint               │
+│  Entity, State, Intent, Capability, Effect   │
+│  Compute, Time, Resource, Constraint          │
 ├─────────────────────────────────────────────┤
 │              Runtime Engine Layer             │
 │  ExecutionEngine (execute, delegate, recover) │
@@ -178,7 +240,7 @@ created → planned → authorized → running → waiting → completed
                   failed        timed_out  cancelled
 ```
 
-### Intent → Capability → Compute → Effect → State
+### Intent → Capability → Execution → Effect → State
 
 ```python
 from voodoo.runtime import Intent, execute, Task, Workflow
@@ -233,7 +295,7 @@ Every infrastructure adapter implements a Protocol and declares boolean capabili
 src/voodoo/
 ├── __init__.py          # Public API, __version__, deprecation shims
 ├── core/               # App facade, routing, errors, events, state
-├── primitives/         # 8 architectural primitives
+├── primitives/         # Core ontology + execution dimensions
 ├── runtime/            # ExecutionEngine, context, planner, adaptive, human, persistence
 ├── ai/                 # Agent, LLM providers, tool registry
 ├── adapters/           # Provider registry, capability system, style adapters

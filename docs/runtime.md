@@ -3,7 +3,7 @@
 > **Status:** Implemented (Sprints 1–7). Durable by default since v1.5.0.
 
 The Voodoo Runtime Engine is the unified execution model that makes the
-eight architectural primitives operational. Every meaningful operation —
+computational model operational. Every meaningful operation —
 HTTP request, agent run, task, workflow step, tool invocation, MCP call,
 worker job, human approval, event handler — is represented as an
 **Execution** produced by a single `ExecutionEngine`.
@@ -122,7 +122,7 @@ All defaults are local-first and require zero external infrastructure.
 
 ## See Also
 
-- [Architectural Primitives](primitives.md)
+- [Computational Model](primitives.md)
 - [Human-in-the-Loop](hitl.md)
 - [Planner & Adaptive Runtime](adaptive.md)
 - [Architecture](architecture.md)

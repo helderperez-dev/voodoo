@@ -5,7 +5,7 @@
 
 # Voodoo
 
-**The AI-native application framework for Python.**
+**The programmable runtime for adaptive applications and operational systems.**
 
 [![PyPI version](https://img.shields.io/pypi/v/voodoo-framework.svg)](https://pypi.org/project/voodoo-framework/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
@@ -13,7 +13,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/helderperez-dev/voodoo/ci.yml?branch=main&label=CI)](https://github.com/helderperez-dev/voodoo/actions/workflows/ci.yml)
 [![PyPI downloads](https://img.shields.io/pypi/dm/voodoo-framework.svg)](https://pypi.org/project/voodoo-framework/)
 
-Build reactive UIs, APIs, agents, background workers, realtime systems, MCP tools, and data-driven applications in **one Python runtime**. Built for the future of adaptive applications.
+One runtime for **Web, APIs, Agents, Workers, Human workflows, Distributed systems, and Physical systems**. Built for the future of adaptive applications and operational systems.
 
 > Voodoo favors composition over configuration, Python over DSLs, adapters over
 > lock-in, events over tightly coupled systems, and explicit capabilities over
@@ -27,7 +27,7 @@ Build reactive UIs, APIs, agents, background workers, realtime systems, MCP tool
 - [Quick Start](#quick-start)
 - [The AI SaaS App](#the-ai-saas-app)
 - [What Makes Voodoo Different](#what-makes-voodoo-different)
-- [Architectural Primitives](#architectural-primitives)
+- [The Computational Model](#the-computational-model)
 - [Features](#features)
 - [Installation](#installation)
 - [Configuration](#configuration)
@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
 | Differentiator | What it means |
 |---|---|
-| **AI-native by design** | Agents, tools, and MCP are first-class primitives — not add-ons bolted on later |
+| **AI is one form of Compute** | AI, agents, tools, and MCP are capabilities within one runtime — not a separate subsystem or a mandatory primitive |
 | **Agents as application primitives** | `Agent()` sits next to `Button()` and `Card()` in your code |
 | **Voodoo Mesh** | Unified event layer connecting UI, workers, agents, and applications |
 | **One tool, many consumers** | A single `@tool` definition serves Python calls, agents, MCP, and mesh |
@@ -168,38 +168,33 @@ if __name__ == "__main__":
 | **Zero-config runtime** | `voodoo new` → `voodoo dev` → working app. No build step. Add `voodoo.toml` when you need configuration |
 | **Local-first, cloud-capable** | SQLite by default; PostgreSQL, Redis, and S3/R2 are optional adapters behind the same contracts |
 
-## Architectural Primitives
+## The Computational Model
 
-Voodoo is built on eight fundamental computational primitives from which all higher-level capabilities emerge:
+The runtime is built on a small set of explicit concepts — not a pile of features:
 
-```mermaid
-flowchart LR
-    subgraph Primitives
-        State
-        Capability
-        Intent
-        Effect
-        Time
-        Compute
-        Resource
-        Constraint
-    end
-
-    Intent -->|requires| Capability
-    Capability -->|resolved by| Compute
-    Compute -->|produces| Effect
-    Effect -->|updates| State
-    State -->|observed| Intent
-    Time --> Constraint
-    Constraint --> Compute
-    Resource --> Compute
+```text
+Entity → State → Intent → Capability → Execution → Effect → State
 ```
+
+```text
+Intent       — the desired outcome to achieve
+Capability   — ability + authorization to produce an effect
+Execution    — the central runtime mechanism (every operation is one)
+Effect       — the change produced by an execution
+State        — the operational truth of an entity or system
+```
+
+**Compute**, **Time**, **Resource**, and **Constraint** govern how an
+Execution happens — and **AI is one form of Compute**, never a fundamental
+primitive.
 
 ```python
 from voodoo.primitives import State, Capability, Intent, Effect
 ```
 
-See [docs/primitives.md](docs/primitives.md) for the full model.
+See [`docs/primitives.md`](docs/primitives.md) for the computational model,
+[`docs/execution-model.md`](docs/execution-model.md) for runtime semantics,
+and [`ARCHITECTURE.md`](ARCHITECTURE.md) for the implementation model.
 
 ## Features
 
@@ -340,7 +335,7 @@ voodoo auth secret-key
 - [Installation](docs/installation.md)
 - [Hello World](docs/hello_world.md)
 - [Architecture](docs/architecture.md)
-- [Architectural Primitives](docs/primitives.md)
+- [Computational Model](docs/primitives.md)
 
 ### Building Apps
 - [Components](docs/components.md)
@@ -395,7 +390,7 @@ voodoo auth secret-key
 
 ## Project Status & Roadmap
 
-Voodoo is in active development (v1.15.1, Beta). The core runtime, UI system, AI agents, MCP, durable execution, and adaptive runtime are production-ready. PostgreSQL, S3/R2, and Redis adapters are shipped behind optional extras; the AI runtime (model-provider protocol, memory, durable agents, and durable human-in-the-loop) is the current focus.
+Voodoo is in active development (v1.16.0, Beta). The core runtime, UI system, AI agents, MCP, durable execution, and adaptive runtime are production-ready. PostgreSQL, S3/R2, and Redis adapters are shipped behind optional extras; the AI runtime (model-provider protocol, memory, durable agents, and durable human-in-the-loop) is the current focus.
 
 ```mermaid
 timeline

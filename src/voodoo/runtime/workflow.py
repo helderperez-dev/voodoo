@@ -2,7 +2,7 @@
 
 A :class:`Workflow` coordinates Tasks (and other compute participants)
 under the Voodoo runtime. It is *not* a separate execution engine: every
-strategy compiles into the same Intent → Capability → Compute → Effect →
+strategy compiles into the same Intent → Capability → Execution → Effect →
 State pipeline via :class:`~voodoo.runtime.task.Task`.
 
 Supported strategies (implemented incrementally, per the spec order):

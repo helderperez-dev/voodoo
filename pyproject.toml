@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "voodoo-framework"
 dynamic = ["version"]
-description = "The AI-native application framework for Python — reactive UIs, APIs, agents, workers, realtime, MCP, and durable execution in one runtime."
+description = "The programmable runtime for adaptive applications and operational systems — web, APIs, agents, workers, human workflows, distributed systems, and physical systems in one runtime."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

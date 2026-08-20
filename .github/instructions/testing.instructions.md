@@ -273,7 +273,7 @@ provider = ToolThenTextProvider(
 tests/
 ├── conftest.py                    # Autouse fixtures, shared fixtures
 ├── test_contract_api.py            # Public API contract (exports)
-├── test_primitives.py              # 8 architectural primitives
+├── test_primitives.py              # Core ontology + execution dimensions
 ├── test_runtime.py                 # ExecutionEngine, context, etc.
 ├── test_agent.py                   # Agent class
 ├── test_agent_runtime.py           # Agent through ExecutionEngine

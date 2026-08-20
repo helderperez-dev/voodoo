@@ -63,7 +63,7 @@ class Task:
     depends_on:
         Other tasks that must complete before this one starts.
     tools / capabilities / constraints / resources / timeout / retries:
-        Compile onto the runtime primitives.
+        Compile onto the computational model.
     output:
         Optional structured-output type for validation.
     """

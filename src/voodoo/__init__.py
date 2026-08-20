@@ -1,17 +1,18 @@
-"""Voodoo — the AI-native application framework for Python.
+"""Voodoo — the programmable runtime for adaptive applications and
+operational systems.
 
 The public API is intentionally small (~40 names). Everything else lives in
 its defining submodule (e.g. ``voodoo.auth``, ``voodoo.seo``) and legacy
 top-level imports resolve through a deprecation shim (PEP 562).
 
-Architectural primitives — the fundamental computational model from which
-all higher-level capabilities emerge — live in ``voodoo.primitives``:
+The computational model — the fundamental ontology from which all
+higher-level capabilities emerge — lives in ``voodoo.primitives``:
 
     from voodoo.primitives import State, Capability, Intent, Effect
     from voodoo.primitives import TimeSpec, ComputeSpec, Resource, Constraint
 
-    STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE
-    TIME + CONSTRAINTS surround the entire lifecycle.
+    ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE
+    TIME + CONSTRAINT surround the entire lifecycle.
 """
 
 import importlib

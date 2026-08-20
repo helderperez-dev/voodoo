@@ -159,6 +159,6 @@ enforcer = ConstraintEnforcer(
 ## See Also
 
 - [Runtime Engine](runtime.md)
-- [Architectural Primitives](primitives.md)
+- [Computational Model](primitives.md)
 - [Agents](agents.md)
 - [ROADMAP.md §51–52 — Planner & Adaptive Runtime](../ROADMAP.md)

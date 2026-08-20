@@ -22,9 +22,24 @@
 
 ## Project Identity
 
-Voodoo is an **AI-native application framework for Python** that unifies reactive UIs, APIs, agents, background workers, realtime systems, MCP tools, and durable execution in one runtime. It is built on Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python `asyncio`. The framework is **zero-config by default** (SQLite + local filesystem) and **production-ready by configuration** (PostgreSQL, Redis, S3, OpenAI/Anthropic).
+Voodoo is a **programmable runtime for adaptive applications and operational systems** — not merely a web framework. Web applications, APIs, agents, background workers, realtime systems, MCP tools, human workflows, distributed systems, and physical systems are different manifestations of one runtime that converge on **Execution**. It is built on Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python `asyncio`. The runtime is **zero-config by default** (SQLite + local filesystem) and **production-ready by configuration** (PostgreSQL, Redis, S3, OpenAI/Anthropic).
 
 **Current version:** See `src/voodoo/__init__.py` → `__version__`.
+
+---
+
+## Runtime Model
+
+- **Voodoo is a programmable runtime, not merely a web framework.** Web is one manifestation of the runtime.
+- **AI is one form of Compute** — never a fundamental primitive. Do not make AI mandatory.
+- **Agents are entities** capable of holding capabilities and executing intents.
+- **Converge on Execution** — workers, tasks, tools, MCP operations, HTTP operations, humans, and physical devices should be represented as Executions whenever semantically appropriate. Do not create duplicate execution models.
+- **Prefer existing primitives** over introducing new abstractions.
+- **Keep the public API minimal.** Prefer explicit semantics over framework magic.
+- **Local-first** — prefer local-first implementations; do not make cloud infrastructure, a specific database, or any vendor (OpenAI, Anthropic, AWS, GCP, Azure, Redis, Postgres) mandatory.
+- **Preserve composability, inspectability, and deterministic behavior** where possible.
+
+> **Architectural test:** Before introducing a new abstraction, determine whether the behavior can already be expressed through Entity, State, Intent, Capability, Execution, Effect, Compute, Time, Resource, or Constraint.
 
 ---
 

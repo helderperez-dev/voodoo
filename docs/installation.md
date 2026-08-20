@@ -2,7 +2,7 @@
 
 ## What it is
 
-Voodoo is an AI-native application framework for Python. It installs as a single package with optional extras for AI providers and MCP integration.
+Voodoo is a programmable runtime for adaptive applications and operational systems. It installs as a single package with optional extras for AI providers and MCP integration.
 
 ## Quick install
 

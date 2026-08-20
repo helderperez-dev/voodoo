@@ -1,21 +1,20 @@
-"""Voodoo architectural primitives.
+"""Voodoo computational model.
 
-The fundamental computational model from which all higher-level
-framework capabilities emerge:
+The fundamental ontology from which all higher-level capabilities emerge:
 
+    Entity      — anything that holds state (conceptual; represented via State)
     State       — durable system truth
-    Capability  — explicit permission to act
-    Intent      — what the system is trying to accomplish
+    Intent      — what the system is trying to accomplish (an outcome)
+    Capability  — explicit permission to produce an effect
     Effect      — a change caused outside pure computation
-    Time        — first-class temporal concept
-    Compute     — the act of performing computation
-    Resource    — something consumed or depended upon
-    Constraint  — what the system must or must not do
 
-These are architectural primitives, not application features.
+The runtime mechanism is Execution; its dimensions are Compute, Time,
+Resource, and Constraint. AI is one form of Compute.
 
-    STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE
-    TIME + CONSTRAINTS surround the entire lifecycle.
+These are computational concepts, not application features.
+
+    ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE
+    TIME + CONSTRAINT surround the entire lifecycle.
     RESOURCE determines how execution should be performed.
 
 The sophistication should be in the model, not in the API surface.

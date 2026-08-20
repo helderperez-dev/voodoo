@@ -1,12 +1,12 @@
 """Voodoo runtime — the unified execution model.
 
-This package makes the eight architectural primitives *operational*.
+This package makes the computational model *operational*.
 Every meaningful operation (HTTP request, Agent run, Task, Workflow task,
 Tool invocation, MCP call, Worker job, Human approval, Event handler) is
 represented as an :class:`~voodoo.runtime.execution.Execution` produced by
 a single :class:`~voodoo.runtime.engine.ExecutionEngine` walking:
 
-    Intent → Capability → Compute → Effect → State → Mesh
+    Intent → Capability → Execution → Effect → State → Mesh
 
 The developer surface stays small:
 

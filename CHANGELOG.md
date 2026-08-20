@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+#### Sprint 14b — Runtime vision alignment
+
+- Aligned code docstrings, flow diagrams, and package metadata with the
+  "programmable runtime" vision: `AI-native application framework` →
+  `programmable runtime`; `STATE → INTENT → CAPABILITY → COMPUTE → EFFECT →
+  STATE` → `ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE`;
+  `eight architectural primitives` → `computational model`; `AI is one class
+  of Compute` → `AI is one form of Compute`. `pyproject.toml` description and
+  `release.yml` Homebrew `desc` updated to match. No behavior change.
+
 ### Added
 
 #### Sprint 14 — ModelProvider protocol
