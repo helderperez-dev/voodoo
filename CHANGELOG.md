@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`voodoo dev` no longer shadows the project's voodoo with the CLI's own
+  install.** Removed `PYTHONPATH = os.pathsep.join(sys.path)` from
+  `cli/dev.py`; when the CLI runs from a bundled install (Homebrew, `uv tool`)
+  its site-packages contain a different voodoo version than the project's
+  `.venv`, and prepending them to `PYTHONPATH` caused `uvicorn` to import stale
+  framework code (e.g. the pre-design-system renderer). `python -m uvicorn`
+  already places the cwd on `sys.path`, so local `main.py`/`app.py` modules
+  still resolve without any manual `PYTHONPATH`.
+- **Homebrew formula pins the exact release.** `release.yml` now generates
+  `uv tool install "voodoo-framework==#{version}"` instead of an unpinned
+  `voodoo-framework`, so `brew install voodoo` can no longer pull a newer/later
+  PyPI build that disagrees with the formula's `url`/`sha256`.
+
 ### Changed
 
 #### Sprint 14b — Runtime vision alignment
