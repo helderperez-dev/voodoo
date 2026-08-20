@@ -313,3 +313,25 @@ def test_cli_dev_missing_dotted_module():
     assert result.exit_code == 1
     assert "could not find" in result.output.lower()
     assert "Traceback" not in result.output
+
+
+def test_cli_dev_does_not_leak_pythonpath(tmp_path: Path, monkeypatch):
+    """dev must not inject the CLI's own sys.path into the uvicorn subprocess.
+
+    Regression: `env["PYTHONPATH"] = os.pathsep.join(sys.path)` leaked the CLI's
+    bundled site-packages (Homebrew/uv tool) into the subprocess, shadowing the
+    project venv's voodoo and serving stale framework code.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+
+    captured: dict[str, str] = {}
+
+    def fake_run(args: list[str], env: dict[str, str], **kwargs: object) -> None:
+        captured.update(env)
+
+    with patch("voodoo.cli.dev.subprocess.run", side_effect=fake_run):
+        result = runner.invoke(app, ["dev", "voodoo.core:app"])
+
+    assert result.exit_code == 0
+    assert "PYTHONPATH" not in captured

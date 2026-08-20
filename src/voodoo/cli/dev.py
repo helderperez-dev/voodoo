@@ -86,7 +86,12 @@ def dev(
     terminal.blank()
 
     env = os.environ.copy()
-    env["PYTHONPATH"] = os.pathsep.join(sys.path)
+    # NOTE: do NOT inject the CLI's own `sys.path` into PYTHONPATH. When the CLI
+    # runs from a bundled install (Homebrew, uv tool) its site-packages contain a
+    # DIFFERENT voodoo version than the project's `.venv`; prepending those paths
+    # shadows the project's installed voodoo and serves stale code. `python -m
+    # uvicorn` already places the cwd on sys.path, so local `main.py`/`app.py`
+    # modules resolve without any PYTHONPATH manipulation.
     env["WEBSOCKETS_MAX_LINE_LENGTH"] = "8388608"
     env["WEBSOCKETS_MAX_NUM_HEADERS"] = "256"
 
