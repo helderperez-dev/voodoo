@@ -36,9 +36,9 @@ Before starting a release:
 
 | Release Type | Version Bump | Example |
 |---|---|---|
-| Sprint completion | Minor | `0.5.0` → `0.6.0` |
-| Bug fix | Patch | `0.6.0` → `0.6.1` |
-| Breaking change | Major | `0.6.1` → `1.0.0` |
+| Sprint completion | Minor | `1.16.0` → `1.17.0` |
+| Bug fix | Patch | `1.16.0` → `1.16.1` |
+| Breaking change | Major | `1.19.0` → `2.0.0` (Sprint 18 only) |
 
 Check the current version:
 
@@ -57,7 +57,7 @@ Move `[Unreleased]` entries to a new version section:
 ```markdown
 ## [Unreleased]
 
-## [0.6.0] - 2025-01-15
+## [1.16.0] - YYYY-MM-DD
 
 ### Added
 - ExecutionEngine with full lifecycle management
@@ -76,17 +76,15 @@ Move `[Unreleased]` entries to a new version section:
 In `SPRINT_PLAN.md`:
 
 ```markdown
-## Sprint 5: Runtime & Persistence
-**Status:** DONE  # was IN_PROGRESS
+## Sprint 14: ModelProvider protocol
+**Status:** DONE  # was TODO
 ```
 
-### Step 3: Update Version
+### Step 3: Do NOT bump the version manually
 
-In `src/voodoo/__init__.py`:
-
-```python
-__version__ = "0.6.0"  # was "0.5.0"
-```
+`release.yml` bumps `src/voodoo/__init__.py` → `__version__` automatically
+(via `sed`) at release time, then commits + tags + pushes. Leave `__version__`
+at its current value — CI sets it.
 
 ### Step 4: Commit the Release Prep
 
@@ -94,19 +92,25 @@ __version__ = "0.6.0"  # was "0.5.0"
 git add -A
 git commit -m "chore(release): prepare v0.6.0
 
+- Finalize CHANGELOG.md1.16.0
+
 - Finalize CHANGELOG.md
-- Mark Sprint 5 as DONE
-- Bump version to 0.6.0"
+- Mark Sprint 14 as DONE"
+git push origin main
 ```
 
-### Step 5: Run the Release Command
-
-```bash
-just release 0.6.0
+> The version bump itself happens in CI — do **not** edit `__version__` here. Step 5: Run the Release Command
+1.16.0
 ```
 
-This command:
-1. Creates a git tag `v0.6.0`.
+This runs `gh workflow run release.yml --ref main -f version=1.16.0`.
+The GitHub Actions workflow then (fully automated):
+1. Validates semver and runs the full test suite (`pytest`).
+2. Bumps `__version__` in `src/voodoo/__init__.py`.
+3. Commits + tags `v1.16.0` and pushes to `main` + the tag.
+4. Builds distributions and publishes to PyPI.
+5. Updates the Homebrew formula.
+6. Creates the GitHub Release
 2. Pushes the tag to GitHub.
 3. Triggers the GitHub Actions release workflow.
 
@@ -125,7 +129,7 @@ This command:
 gh run list --workflow=release.yml --limit 1
 
 # Check the release
-gh release view v0.6.0
+gh release view v1.16.0
 
 # Verify on PyPI
 pip index versions voodoo-framework
@@ -139,7 +143,7 @@ pip index versions voodoo-framework
 ```markdown
 ## [Unreleased]
 
-## [0.6.0] - 2025-01-15
+## [1.16.0] - YYYY-MM-DD
 ...
 ```
 
@@ -147,7 +151,7 @@ pip index versions voodoo-framework
 
 ```bash
 git add -A
-git commit -m "docs(release): post-release updates for v0.6.0"
+git commit -m "docs(release): post-release updates for v1.16.0"
 git push origin main
 ```
 
@@ -165,7 +169,7 @@ If the release workflow fails or the release has a critical bug:
 
 ```bash
 # Prevent new installs, but keep existing installs working
-pip run twine upload --repository pypi dist/voodoo_framework-0.6.0* --verbose
+pip run twine upload --repository pypi dist/voodoo_framework-1.16.0* --verbose
 # Then yank:
 # Go to https://pypi.org/manage/project/voodoo-framework/releases/
 ```
@@ -173,16 +177,16 @@ pip run twine upload --repository pypi dist/voodoo_framework-0.6.0* --verbose
 ### Option B: Fast Patch Release
 
 1. Fix the bug on `main`.
-2. Bump patch version: `0.6.0` → `0.6.1`.
-3. Add `CHANGELOG.md` entry under `[Unreleased]` → move to `[0.6.1]`.
-4. Release: `just release 0.6.1`.
+2. Bump patch version: `1.16.0` → `1.16.1`.
+3. Add `CHANGELOG.md` entry under `[Unreleased]` → move to `[1.16.1]`.
+4. Release: `just release 1.16.1`.
 
 ### Option C: Revert and Re-release
 
 1. Revert the problematic commit: `git revert <commit>`.
-2. Delete the tag: `git tag -d v0.6.0 && git push origin :refs/tags/v0.6.0`.
+2. Delete the tag: `git tag -d v1.16.0 && git push origin :refs/tags/v1.16.0`.
 3. Fix the issue.
-4. Re-run: `just release 0.6.0`.
+4. Re-run: `just release 1.16.0`.
 
 ---
 
@@ -193,7 +197,7 @@ pip run twine upload --repository pypi dist/voodoo_framework-0.6.0* --verbose
 - [ ] Type check passes.
 - [ ] `CHANGELOG.md` finalized.
 - [ ] `SPRINT_PLAN.md` sprint marked `DONE`.
-- [ ] Version bumped in `src/voodoo/__init__.py`.
+- [ ] Version auto-bumped by `release.yml` (verified on PyPI).
 - [ ] Release prep committed.
 - [ ] `just release X.Y.Z` run.
 - [ ] GitHub Actions release workflow succeeded.

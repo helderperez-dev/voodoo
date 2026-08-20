@@ -140,11 +140,13 @@ gh pr create --title "feat(scope): Sprint N — <sprint name>" --body "$(cat .gi
 
 ### Step 9: CI and Review
 
-**Branch protection on `main`** (enforced, no `--admin` bypass):
+**Branch protection on `main`:**
 - 1 approval required (Code Owner review enforced).
 - Required status check: `CI` (lint + test on Python 3.12 + 3.13).
 - Linear history required (squash merge only).
 - Conversation resolution required (all comments resolved).
+- `enforce_admins` is **false** (sole-owner repo): the owner merges their own
+  PR with `gh pr merge N --squash --delete-branch --admin` once CI is green.
 
 **CI jobs:**
 | Job | What | Timeout |
@@ -163,12 +165,14 @@ gh pr create --title "feat(scope): Sprint N — <sprint name>" --body "$(cat .gi
 
 ```bash
 # After PR approved, CI green, all conversations resolved
-gh pr merge --squash --delete-branch
+gh pr merge N --squash --delete-branch --admin
 
-# Release (if sprint is complete)
+# Release (if sprint is complete) — release.yml auto-bumps __version__,
+# tags vX.Y.Z, pushes, builds, and publishes PyPI + Homebrew + GitHub Release.
 just release X.Y.Z
-# Minor bump per sprint (e.g., 0.5.0 → 0.6.0)
-# Patch for fixes (e.g., 0.6.0 → 0.6.1)
+# Minor bump per sprint (e.g., 1.16.0 → 1.17.0)
+# Patch for fixes (e.g., 1.16.0 → 1.16.1)
+# Major only at Sprint 18 (1.19.0 → 2.0.0)
 ```
 
 **Merge strategy:** Squash merge only (linear history required). The `--delete-branch` flag cleans up the remote branch automatically.
