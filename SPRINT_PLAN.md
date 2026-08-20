@@ -9,6 +9,32 @@ small, complete, releasable feature. Work sprints strictly in order. Each sprint
 ends with a pushed commit and a released version (PyPI + Homebrew + uv via the
 existing automated workflow).
 
+> **Spec references.** Sprint headings cite `Spec §NN` from the *original*
+> runtime protocol spec. That spec was consolidated into
+> [`ROADMAP.md`](ROADMAP.md), which renumbers sections (§0–§78). Sprints 14+
+> cite `ROADMAP §NN` explicitly. The pre-consolidation `Spec §NN` references
+> on Sprints 1–13 and in the Rules/Backlog/Appendix sections are historical
+> only — resolve them against `ROADMAP.md` when implementing.
+
+---
+
+## Current Position
+
+| | |
+|---|---|
+| **Latest release** | `1.15.1` (`src/voodoo/__init__.py` → `__version__`) |
+| **Sprints 1–13** | ✅ All DONE + released (v1.3.0 → v1.15.1) |
+| **Next sprint** | **Sprint 14 — ModelProvider protocol → `1.16.0`** |
+
+**Release cadence (one version per sprint, minor bump each):**
+
+| Sprint | Version | Sprint | Version |
+|--------|---------|--------|---------|
+| 14 — ModelProvider protocol | 1.16.0 | 18 — Capability security & secrets | 2.0.0 |
+| 15 — Memory capability | 1.17.0 | 19 — Observability | 2.1.0 |
+| 16 — Agents as durable entities | 1.18.0 | 20 — Protocol schemas & versioning | 2.2.0 |
+| 17 — Durable HITL | 1.19.0 | 21 — Local runtime DX | 2.3.0 |
+
 ---
 
 ## HOW TO WORK (Sprint Protocol)
@@ -21,26 +47,43 @@ Repeat for every sprint:
 > for structured sprint implementation. Read the relevant
 > [instruction files](.github/instructions/) before touching each domain.
 
-1. Find the **first sprint whose status is not `DONE`** in this file. That is
-   the resume point after any interruption — no other context needed.
-2. Implement only the checked scope boxes for that sprint. Do not start the
-   next sprint's scope.
-3. Quality gate (must be green before release):
+1. **Resume.** Find the **first sprint whose status is not `DONE`** in this file.
+   That is the resume point after any interruption — no other context needed.
+2. **Branch.** `git checkout main && git pull && git checkout -b feat/sprint-N`.
+3. **Implement only the checked scope boxes** for that sprint. Do not start the
+   next sprint's scope. Follow the sprint's "Files" + "Tests" bullets.
+4. **Quality gate** (must be green before anything else):
    ```bash
    just format && just lint && just test
+   uv run mypy src/voodoo          # type check (not in `just lint`, still required)
    ```
-4. If public exports change, update `tests/test_contract_api.py` deliberately
-   (breaking `__all__` without a major version bump is not allowed).
-5. Update this file: tick scope boxes, set `Status`, fill `Released as`.
-6. Add the release entry to `CHANGELOG.md` (move "Unreleased" → version).
-7. Commit + push to `main`.
-8. Release:
+5. **Public API.** If exports change, update `tests/test_contract_api.py`
+   deliberately (breaking `__all__` without a major bump is not allowed).
+6. **Docs** (mandatory, see `.github/instructions/pull-request.instructions.md`):
+   tick scope boxes + set `Status` + fill `Released as` here; add the release
+   entry to `CHANGELOG.md`; update `docs/*.md`, `README.md`, `ROADMAP.md`,
+   `ARCHITECTURE.md` per the source-path-to-doc mapping.
+7. **Commit + push + PR** (Conventional Commits):
    ```bash
-   just release X.Y.Z        # triggers .github/workflows/release.yml
-   gh run watch --workflow=release.yml   # verify PyPI + Homebrew + GH Release
+   git add -A && git commit -m "feat(scope): Sprint N — <name>"
+   git push -u origin feat/sprint-N
+   gh pr create --title "feat(scope): Sprint N — <name>" --body "$(cat .github/PULL_REQUEST_TEMPLATE.md)"
    ```
-9. Only after the workflow is green, mark the sprint `DONE` in this file,
-   commit/push the tracker update, and move to the next sprint.
+8. **Merge.** Wait for CI green, then squash-merge. `enforce_admins` is `false`
+   (sole owner), so the owner merges their own PR with `--admin`:
+   ```bash
+   gh pr merge N --squash --delete-branch --admin
+   ```
+9. **Release** (workflow auto-bumps `__version__`, tags `vX.Y.Z`, publishes
+   PyPI + Homebrew + GitHub Release — do NOT edit `__version__` manually):
+   ```bash
+   just release X.Y.Z                        # → gh workflow run release.yml
+   gh run watch --workflow=release.yml
+   ```
+10. **Verify.** Confirm PyPI (`pip index versions voodoo-framework`), Homebrew
+    formula, and the GitHub Release `vX.Y.Z` all show the new version.
+11. **Close out.** Mark the sprint `DONE` in this file, `git commit -m "docs(sprint):
+    mark Sprint N as DONE"`, push, then move to the next sprint.
 
 ### Rules
 
@@ -50,7 +93,7 @@ Repeat for every sprint:
 - **No giant rewrites.** Preserve existing primitives (engine, mesh, MCP,
   agents, auth, UI). Refactor incrementally behind interfaces.
 - **Every durability claim needs a failure-path test** (worker crash, restart,
-  lease expiry, duplicate delivery — spec §50).
+  lease expiry, duplicate delivery — ROADMAP §53).
 - **Local dev stays zero-infra** (SQLite + local FS). No new required
   dependencies in the default install. Provider SDKs live in optional extras.
 - Versioning: minor bump per feature sprint; patch for follow-up fixes;
@@ -79,8 +122,8 @@ DONE  |  WIP  |  TODO
 | 9 | Runtime configuration | 1.11.0 | `voodoo.yaml` selects providers | DONE |
 | 10 | PostgreSQL database | 1.12.0 | Postgres adapter, same logical model + migrations | DONE |
 | 11 | PostgreSQL queue & events | 1.13.0 | SKIP LOCKED queue + event store on PG | DONE |
-| 12 | S3/R2 object store | 1.14.0 | Presign, checksums, multipart; `s3` extra | TODO |
-| 13 | Redis adapters (optional) | 1.15.0 | Redis queue/cache behind contracts | TODO |
+| 12 | S3/R2 object store | 1.14.0 | Presign, checksums, multipart; `s3` extra | DONE |
+| 13 | Redis adapters (optional) | 1.15.0 | Redis queue/cache behind contracts | DONE |
 | 14 | ModelProvider protocol | 1.16.0 | Model descriptors + routing aliases + contract tests | TODO |
 | 15 | Memory capability | 1.17.0 | Layered memory: search/read/write, SQLite default | TODO |
 | 16 | Agents as durable entities | 1.18.0 | Agent registry; runs are executions; CLI | TODO |
@@ -278,7 +321,7 @@ late subscriber; mesh tests unchanged (public behavior preserved).
 # MILESTONE B — PROTOCOL & CONFIGURATION
 
 ## Sprint 8 — Adapter contracts & capability negotiation
-**Version 1.10.0 · Spec §9, §10, §29 · Status: DONE · Released as: —**
+**Version 1.10.0 · Spec §9, §10, §29 · Status: DONE · Released as: 1.10.0**
 
 Goal: providers declare what they guarantee; the runtime never silently
 violates correctness.
@@ -299,7 +342,7 @@ Done when: asking the memory queue for delayed delivery raises an explicit
 adapter.
 
 ## Sprint 9 — Runtime configuration
-**Version 1.11.0 · Spec §31, §28 · Status: DONE · Released as: —**
+**Version 1.11.0 · Spec §31, §28 · Status: DONE · Released as: 1.11.0**
 
 Goal: infrastructure is selected by configuration, never by code changes.
 
@@ -324,7 +367,7 @@ the same app against two providers.
 # MILESTONE C — PRODUCTION PROVIDERS (optional installs)
 
 ## Sprint 10 — PostgreSQL database adapter
-**Version 1.12.0 · Spec §7, §11 · Status: DONE · Released as: —**
+**Version 1.12.0 · Spec §7, §11 · Status: DONE · Released as: 1.12.0**
 
 Scope:
 - [x] `PostgresDatabase` (async psycopg) with the same migration list
@@ -354,7 +397,7 @@ Scope:
 - ⭐ After this sprint: moderate production = PostgreSQL only (+ objects).
 
 ## Sprint 12 — S3/R2 object store hardening
-**Version 1.14.0 · Spec §18 · Status: TODO · Released as: —**
+**Version 1.14.0 · Spec §18 · Status: DONE · Released as: 1.14.0**
 
 Scope:
 - [x] Declare `boto3` under `[s3]` extra (currently an undeclared import).
@@ -379,7 +422,7 @@ Scope:
 # MILESTONE D — AI RUNTIME
 
 ## Sprint 14 — ModelProvider protocol
-**Version 1.16.0 · Spec §20 · Status: TODO · Released as: —**
+**Version 1.16.0 · ROADMAP §64, §47 · Status: TODO · Released as: —**
 
 Goal: models are providers behind one normalized interface (spec gap #7).
 
@@ -400,7 +443,7 @@ Scope:
       checkpoints.
 
 ## Sprint 15 — Memory capability
-**Version 1.17.0 · Spec §19, §37.10 · Status: TODO · Released as: —**
+**Version 1.17.0 · ROADMAP §28, §26 · Status: TODO · Released as: —**
 
 Goal: memory semantics without a vector-database mandate.
 
@@ -414,7 +457,7 @@ Scope:
 - [ ] pgvector/external backends listed as future adapters only (not built).
 
 ## Sprint 16 — Agents as durable runtime entities
-**Version 1.18.0 · Spec §21, §43 · Status: TODO · Released as: —**
+**Version 1.18.0 · ROADMAP §47 · Status: TODO · Released as: —**
 
 Scope:
 - [ ] `agents` registry table: identity, capabilities, model policy, tools,
@@ -422,14 +465,14 @@ Scope:
 - [ ] An agent run always creates an Execution (already true) **and** persists
       agent state/history links (execution history queryable per agent).
 - [ ] Multi-agent interaction via existing primitives only (events/tasks/
-      executions) — no bespoke agent RPC (§43); parent/child executions keep
-      trace relationships.
+      executions) — no bespoke agent RPC (ROADMAP §47); parent/child executions
+      keep trace relationships.
 - [ ] CLI: `voodoo agents`, `voodoo agent <id>` (history, state, runs).
 - [ ] Tests: agent survives restart (registry + state), two agents
       collaborating via events produce linked executions.
 
 ## Sprint 17 — Durable human-in-the-loop
-**Version 1.19.0 · Spec §44 · Status: TODO · Released as: —**
+**Version 1.19.0 · ROADMAP §50 · Status: TODO · Released as: —**
 
 Goal: approvals work without the original worker process alive (today:
 approvals recover as decidable-but-not-rerunnable).
@@ -445,7 +488,7 @@ Scope:
       completes with correct result.
 
 ## Sprint 18 — Capability security & secrets
-**Version 2.0.0 · Spec §23, §24, §51.18 · Status: TODO · Released as: —**
+**Version 2.0.0 · ROADMAP §55, §70 · Status: TODO · Released as: —**
 
 Major bump: authority defaults change (agents lose ambient authority).
 
@@ -453,9 +496,9 @@ Scope:
 - [ ] `secrets.get(name)` interface: env/local-default backend; encrypted
       local store option; provider managers are future adapters.
 - [ ] Redaction guard: secrets never persisted into events/journal/telemetry
-      (§24) — enforced centrally.
+      (ROADMAP §55) — enforced centrally.
 - [ ] Effect authorization context: actor, principal, capability, resource,
-      scope recorded on every effect (§23).
+      scope recorded on every effect (ROADMAP §55).
 - [ ] Sensitive capabilities (`filesystem.write`, `network.request`,
       `shell.execute`, `secrets.read`, `payment.execute`, `email.send`)
       require explicit grants — no ambient authority by default.
@@ -467,7 +510,7 @@ Scope:
 # MILESTONE E — PROTOCOL STABILITY & DX
 
 ## Sprint 19 — Observability
-**Version 2.1.0 · Spec §27 · Status: TODO · Released as: —**
+**Version 2.1.0 · ROADMAP §54 · Status: TODO · Released as: —**
 
 Scope:
 - [ ] Trace/correlation identity on: execution, task, worker, model call,
@@ -480,7 +523,7 @@ Scope:
       restart.
 
 ## Sprint 20 — Protocol schemas & versioning
-**Version 2.2.0 · Spec §3, §33, §32 · Status: TODO · Released as: —**
+**Version 2.2.0 · ROADMAP §56, §57 · Status: TODO · Released as: —**
 
 Scope:
 - [ ] `voodoo.protocol` package: canonical entity schemas (identity,
@@ -496,7 +539,7 @@ Scope:
       for every entity.
 
 ## Sprint 21 — Local runtime DX ("WAMP for autonomous software")
-**Version 2.3.0 · Spec §6, §35 · Status: TODO · Released as: —**
+**Version 2.3.0 · ROADMAP §63, §62 · Status: TODO · Released as: —**
 
 Scope:
 - [ ] `voodoo create <app>` (evolve `voodoo new`) scaffolds an app wired for
@@ -506,7 +549,7 @@ Scope:
       active, queue depth, schedules, object store path, agent runtime,
       MCP endpoint.
 - [ ] First-run experience: install → `voodoo create` → `voodoo dev` →
-      working autonomous app with **zero external infrastructure** (§35).
+      working autonomous app with **zero external infrastructure** (ROADMAP §63).
 - [ ] Template includes a crash/restart demo task proving durability.
 
 ---

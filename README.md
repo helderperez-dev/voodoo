@@ -395,33 +395,37 @@ voodoo auth secret-key
 
 ## Project Status & Roadmap
 
-Voodoo is in active development (v1.15.0, Beta). The core runtime, UI system, AI agents, MCP, durable execution, and adaptive runtime are production-ready. PostgreSQL, Redis, and S3 adapters are functional and hardening.
+Voodoo is in active development (v1.15.1, Beta). The core runtime, UI system, AI agents, MCP, durable execution, and adaptive runtime are production-ready. PostgreSQL, S3/R2, and Redis adapters are shipped behind optional extras; the AI runtime (model-provider protocol, memory, durable agents, and durable human-in-the-loop) is the current focus.
 
 ```mermaid
 timeline
     title Voodoo Roadmap
-    section Shipped (v1.3–v1.15)
-        Core Runtime & UI : ExecutionEngine : Components : Routing
-        AI & Agents : Providers : Tools : MCP Server
-        Durable Execution : SQLite Store : Checkpoints : Recovery CLI
-        Adaptive Runtime : Planner : Supervisor : Constraints
-    section In Progress (v1.16–v2.0)
-        HITL Resumability : Cross-worker checkpointing
-        Mesh Federation : Remote event bus : Multi-node
-        Production Hardening : PostgreSQL GA : Redis GA
-    section Future (v2.1+)
-        Multi-region : Edge runtime : Visual builder
+    section Shipped (v1.0–v1.15.1)
+        Core Runtime & UI : Routing : Components : Reactive state
+        AI & Agents : Providers : Tools : MCP : Human-in-the-Loop
+        Unified Runtime : ExecutionEngine : Planner : Adaptive supervisor
+        Durable Local Runtime : SQLite queue : Executions : Scheduler : Objects : Events
+        Production Providers : PostgreSQL : S3/R2 : Redis
+    section In Progress (v1.16–v1.19)
+        ModelProvider protocol : Model descriptors : Routing aliases
+        Memory capability : Layered memory : SQLite + FTS5
+        Durable Agents & HITL : Agent registry : Resumable approvals
+    section Planned (v2.0+)
+        Capability Security & Secrets : v2.0
+        Observability & Protocol : v2.1–v2.2
+        Local Runtime DX : v2.3
 ```
 
 | Milestone | Version | Status |
 |-----------|---------|--------|
-| Core Runtime + UI + Routing | v1.3–v1.8 | ✅ Shipped |
-| AI Agents + Tools + MCP | v1.9–v1.11 | ✅ Shipped |
-| Durable Execution + Recovery | v1.12–v1.13 | ✅ Shipped |
-| Adaptive Runtime + Planner | v1.14–v1.15 | ✅ Shipped |
-| HITL Resumability + Mesh Federation | v1.16–v1.18 | 🚧 In Progress |
-| Production GA (PostgreSQL, Redis, S3) | v2.0 | 🚧 In Progress |
-| Edge Runtime + Multi-region | v2.1+ | 📋 Planned |
+| Core framework — runtime, UI, routing, reactive state | v1.0–v1.1 | ✅ Shipped |
+| AI & unified runtime — agents, tools, MCP, HITL, ExecutionEngine, planner, adaptive runtime | v1.2 | ✅ Shipped |
+| Durable local runtime (zero-infra) — SQLite storage, queue, executions, scheduler, objects, events | v1.3–v1.9 | ✅ Shipped |
+| Adapter contracts & runtime configuration | v1.10–v1.11 | ✅ Shipped |
+| Production providers (optional) — PostgreSQL, S3/R2, Redis | v1.12–v1.15 | ✅ Shipped |
+| AI runtime — model-provider protocol, memory, durable agents, durable HITL | v1.16–v1.19 | 🚧 In Progress |
+| Capability security & secrets | v2.0 | 📋 Planned |
+| Protocol stability & DX — observability, schemas, local runtime | v2.1–v2.3 | 📋 Planned |
 
 See the [master roadmap](ROADMAP.md) and [sprint plan](SPRINT_PLAN.md) for details.
 

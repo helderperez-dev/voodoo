@@ -1887,6 +1887,11 @@ See [`AGENTS.md`](AGENTS.md) for the full guide.
 
 The roadmap is divided into phases.
 
+> **Implementation tracking:** concrete, releasable work is tracked in
+> [`SPRINT_PLAN.md`](SPRINT_PLAN.md) (Sprints 1–21 → releases v1.3.0 → v2.3.0).
+> The `S0`–`S22` headings below are the high-level phase view; the sprint
+> tracker is the single source of truth for current status.
+
 ---
 
 #### Phase 0 — Baseline
@@ -1967,7 +1972,7 @@ The roadmap is divided into phases.
 
 | Field     | Value     |
 | --------- | --------- |
-| **Status** | 🔄 ACTIVE |
+| **Status** | ✅ DONE |
 
 **Scope:**
 
@@ -1995,7 +2000,7 @@ flowchart LR
 
 | Field     | Value    |
 | --------- | -------- |
-| **Status** | ⏭️ NEXT |
+| **Status** | ✅ DONE |
 
 **Scope:**
 
@@ -2573,6 +2578,10 @@ Voodoo should ultimately allow a developer to build a system where:
 ### 77. Immediate Execution Priority
 
 The immediate priority is not to implement everything. The priority is to **protect the architecture**.
+
+> **Current status** lives in [`SPRINT_PLAN.md`](SPRINT_PLAN.md) — Sprints 1–13
+> are shipped (v1.3.0 → v1.15.1); the next sprint is Sprint 14 (ModelProvider
+> protocol). The table below records the original phase ordering.
 
 | Priority | Sprint                          |
 | -------- | ------------------------------- |
