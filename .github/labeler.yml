@@ -102,12 +102,12 @@
 
 "area: docs":
   - changed-files:
-      - any-glob-to-changed-file:
+      - any-glob-to-any-file:
           - "docs/**"
           - "*.md"
 
 # ── Dependency labels ─────────────────────────────────────────────────
 "dependencies":
   - changed-files:
-      - any-glob-to-changed-file:
+      - any-glob-to-any-file:
           - "pyproject.toml"
