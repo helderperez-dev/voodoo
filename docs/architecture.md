@@ -2,35 +2,45 @@
 
 ## What it is
 
-Voodoo is an AI-native application framework for Python. It combines reactive UIs, APIs, agents, background workers, realtime systems, MCP tools, and data-driven applications in one Python runtime.
+Voodoo is a programmable runtime for adaptive applications and operational systems. Web applications, APIs, agents, background workers, realtime systems, MCP tools, human workflows, distributed systems, and physical systems are different manifestations of one runtime that converge on Execution.
 
 ## Design principles
 
 1. **Progressive complexity** — Start with the smallest executable application. Add capabilities when needed. Voodoo manages implementation details.
 2. **Minimal scaffold** — `voodoo new` produces only `app/page.py`. No empty directories, no placeholder files, no infrastructure boilerplate.
 3. **Lazy capabilities** — Database, storage, and workers initialize only when actually used. A project that doesn't use persistence doesn't create a database.
-4. **AI as Compute** — AI is not a separate subsystem. It is one class of Compute within the architectural primitives model.
+4. **AI as Compute** — AI is not a separate subsystem. It is one form of Compute within the computational model.
 5. **Capability-based security** — Explicit, composable, revocable permissions rather than implicit role-based access.
 6. **Observability everywhere** — Correlation IDs + telemetry as the sensory system.
 7. **Zero-config runtime** — `voodoo new` → `voodoo dev` → working app.
 
-## Architectural primitives
+## Computational model
 
-Voodoo is built on eight fundamental computational primitives that remain valid regardless of how computation evolves:
+Voodoo is a **programmable runtime** built on a small, stable ontology — not a pile of features:
 
-    State       — durable system truth
-    Capability  — explicit permission to act
-    Intent      — what the system is trying to accomplish
+**Core ontology**
+
+    Entity      — anything that can be identified and hold state (user, agent, order, device, …)
+    State       — the operational truth of an entity or system
+    Intent      — what the system is trying to accomplish (an outcome, not a command)
+    Capability  — ability + authorization to produce an effect
     Effect      — a change caused outside pure computation
-    Time        — first-class temporal concept
-    Compute     — the act of performing computation
-    Resource    — something consumed or depended upon
+
+**The runtime**
+
+    Execution   — the central mechanism; every operation (HTTP, agent, tool, MCP, worker, human, device) is one
+
+**Execution dimensions**
+
+    Compute     — the act of performing computation (AI is one form of Compute)
+    Time        — deadlines, expiration, retry, scheduling
+    Resource    — cost, latency, energy, tokens — something consumed or depended upon
     Constraint  — what the system must or must not do
 
-They form a coherent execution model:
+They form one coherent loop:
 
-    STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE
-    TIME + CONSTRAINTS surround the entire lifecycle.
+    ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE
+    TIME + CONSTRAINT surround the entire lifecycle.
     RESOURCE determines how execution should be performed.
 
 ```python
@@ -44,9 +54,9 @@ The sophistication is in the model, not in the API surface. Voodoo should feel a
 
 ```
 ┌─────────────────────────────────────────────┐
-│              Primitives Layer                 │
-│  State, Capability, Intent, Effect, Time,    │
-│  Compute, Resource, Constraint               │
+│         Ontology / Primitives Layer         │
+│  Entity, State, Capability, Intent, Effect, │
+│  Compute, Time, Resource, Constraint        │
 ├─────────────────────────────────────────────┤
 │              Runtime Engine Layer             │
 │  ExecutionEngine (execute, delegate, recover) │
@@ -139,7 +149,7 @@ The `ExecutionEngine` is the unified execution model. Every meaningful operation
 - `cost` / `duration_seconds` — resource accounting
 - `error` — structured error with execution context
 
-### Intent → Capability → Compute → Effect → State
+### Intent → Capability → Execution → Effect → State
 
 ```python
 from voodoo.runtime import Intent, execute, Task, Workflow

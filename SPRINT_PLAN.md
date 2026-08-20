@@ -9,6 +9,13 @@ small, complete, releasable feature. Work sprints strictly in order. Each sprint
 ends with a pushed commit and a released version (PyPI + Homebrew + uv via the
 existing automated workflow).
 
+**Voodoo is a programmable runtime for adaptive applications and operational
+systems.** Web, APIs, agents, workers, human workflows, distributed systems,
+and physical systems are manifestations of one runtime that converge on
+**Execution**. Every sprint below advances that convergence — a sprint is done
+only when it moves the runtime closer to one coherent model, not when it adds
+another disconnected feature.
+
 > **Spec references.** Sprint headings cite `Spec §NN` from the *original*
 > runtime protocol spec. That spec was consolidated into
 > [`ROADMAP.md`](ROADMAP.md), which renumbers sections (§0–§78). Sprints 14+
@@ -24,16 +31,33 @@ existing automated workflow).
 |---|---|
 | **Latest release** | `1.16.0` (`src/voodoo/__init__.py` → `__version__`) |
 | **Sprints 1–14** | ✅ All DONE + released (v1.3.0 → v1.16.0) |
-| **Next sprint** | **Sprint 15 — Memory capability → `1.17.0`** |
+| **Next sprint** | **Sprint 14b — Runtime vision alignment → `1.16.1`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
 | Sprint | Version | Sprint | Version |
 |--------|---------|--------|---------|
+| 14b — Runtime vision alignment | 1.16.1 | — | — |
 | 14 — ModelProvider protocol | 1.16.0 | 18 — Capability security & secrets | 2.0.0 |
 | 15 — Memory capability | 1.17.0 | 19 — Observability | 2.1.0 |
 | 16 — Agents as durable entities | 1.18.0 | 20 — Protocol schemas & versioning | 2.2.0 |
 | 17 — Durable HITL | 1.19.0 | 21 — Local runtime DX | 2.3.0 |
+
+### Runtime convergence map
+
+Each upcoming sprint advances one convergent runtime, mapped to the
+conceptual model in [`docs/primitives.md`](docs/primitives.md):
+
+| Sprint | Advances | Ontology concept |
+|---|---|---|
+| 14b — Vision alignment | Code, docs & metadata speak one vocabulary | Convergence (naming) |
+| 15 — Memory | Durable, queryable entity recall | State (+ Entity) |
+| 16 — Agents as durable entities | Identity + state + history for agents | Entity, Identity |
+| 17 — Durable HITL | Human approval survives restart | Execution, Constraint |
+| 18 — Capability security | No ambient authority; secrets never leak | Capability, Effect, Constraint |
+| 19 — Observability | One trace identity end-to-end | Telemetry |
+| 20 — Protocol schemas | Stable semantic boundary for all entities | Identity, Event, Relationship |
+| 21 — Local runtime DX | The whole runtime boots as one thing | Convergence (all) |
 
 ---
 
@@ -442,68 +466,145 @@ Scope:
 - [x] Model calls journaled (`model.called`/`model.completed`) for Sprint 4
       checkpoints.
 
-## Sprint 15 — Memory capability
+## Sprint 14b — Runtime vision alignment
+**Version 1.16.1 · ROADMAP §67 · Status: TODO · Released as: —**
+
+- **Goal:** Align code docstrings, flow diagrams, and package metadata with the
+  "programmable runtime" vision already established in the docs.
+- **Why:** The docs were reframed around one ontology
+  (Entity → State → Intent → Capability → Execution → Effect → State), but code
+  docstrings and package metadata still read "AI-native framework" and depict the
+  pre-Execution flow (`COMPUTE → EFFECT`). Code and docs must speak one language.
+- **Current State:** README, ROADMAP, ARCHITECTURE, `docs/primitives.md`, and
+  `docs/execution-model.md` use the new ontology; code docstrings/flow diagrams
+  and `pyproject.toml` / `release.yml` still use the old framing.
+- **Changes:**
+  - [ ] Replace `STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE` with
+        `ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE` in
+        `src/voodoo/__init__.py`, `src/voodoo/primitives/__init__.py`,
+        `src/voodoo/runtime/__init__.py`, `src/voodoo/runtime/workflow.py`,
+        and `tests/test_primitives.py`.
+  - [ ] Rewrite "eight architectural primitives" → "computational model" in
+        `src/voodoo/runtime/__init__.py`; "AI-native application framework" →
+        "programmable runtime" in `src/voodoo/__init__.py`.
+  - [ ] Align `src/voodoo/runtime/task.py` ("runtime primitives" → "computational
+        model") and `src/voodoo/primitives/compute.py` ("one class of Compute" →
+        "one form of Compute").
+  - [ ] Update `pyproject.toml` `description` and `release.yml` Homebrew `desc`
+        to the programmable-runtime framing.
+- **Dependencies:** None (documentation/metadata only).
+- **Acceptance Criteria:** No `AI-native framework`, `COMPUTE → EFFECT`, or
+  `eight primitives` wording remains in code docstrings or package metadata;
+  zero behavior change (full test suite unchanged).
+- **Tests:** `tests/test_primitives.py` docstring only (no logic change).
+- **Documentation:** `CHANGELOG.md` under `[Unreleased]`.
+- **Definition of Done:** quality gate green + released `1.16.1`.
+
+## Sprint 15 — Memory as entity state
 **Version 1.17.0 · ROADMAP §28, §26 · Status: TODO · Released as: —**
 
-Goal: memory semantics without a vector-database mandate.
+- **Goal:** Give entities durable, queryable memory so their state survives and
+  can be recalled — working, episodic, and semantic.
+- **Why:** An entity with only one-shot state cannot reason over its own
+  history; operational systems need recall derived from what actually happened.
+- **Current State:** The execution journal already records what happened
+  (Sprint 3); `State` is versionable, but there is no memory surface.
+- **Changes:**
+  - [ ] Layered interfaces: working / execution / durable / semantic / episodic
+        memory with `memory.search() | read() | write()`.
+  - [ ] Default backend: SQLite (+ FTS5 for semantic search — no new deps).
+  - [ ] Execution memory: journal-derived episodic records (what the execution
+        observed/did) written automatically.
+  - [ ] Agent API: `agent.memory` wired; context ≠ memory distinction kept.
+  - [ ] pgvector/external backends listed as future adapters only (not built).
+- **Dependencies:** Sprint 3 (execution journal), Sprint 14 (model provider,
+  optional for embeddings).
+- **Acceptance Criteria:** memory reads/writes/search work; execution memory is
+  written automatically; no vector-database mandate in the default path.
+- **Tests:** memory CRUD contract; episodic records derived from journal;
+  memory survives restart.
+- **Documentation:** `docs/data.md`, `docs/agents.md`, `CHANGELOG.md`.
+- **Definition of Done:** quality gate green + released `1.17.0`.
 
-Scope:
-- [ ] Layered interfaces: working / execution / durable / semantic / episodic
-      memory with `memory.search() | read() | write()`.
-- [ ] Default backend: SQLite (+ FTS5 for semantic search — no new deps).
-- [ ] Execution memory: journal-derived episodic records (what the execution
-      observed/did) written automatically.
-- [ ] Agent API: `agent.memory` wired; context ≠ memory distinction kept.
-- [ ] pgvector/external backends listed as future adapters only (not built).
-
-## Sprint 16 — Agents as durable runtime entities
+## Sprint 16 — Agents as durable entities
 **Version 1.18.0 · ROADMAP §47 · Status: TODO · Released as: —**
 
-Scope:
-- [ ] `agents` registry table: identity, capabilities, model policy, tools,
-      permissions, configuration, state.
-- [ ] An agent run always creates an Execution (already true) **and** persists
-      agent state/history links (execution history queryable per agent).
-- [ ] Multi-agent interaction via existing primitives only (events/tasks/
-      executions) — no bespoke agent RPC (ROADMAP §47); parent/child executions
-      keep trace relationships.
-- [ ] CLI: `voodoo agents`, `voodoo agent <id>` (history, state, runs).
-- [ ] Tests: agent survives restart (registry + state), two agents
-      collaborating via events produce linked executions.
+- **Goal:** Agents become durable entities — stable identity, capabilities,
+  state, and queryable execution history.
+- **Why:** Agents are the canonical entity. Without a registry they exist only
+  in process memory, which violates the entity model.
+- **Current State:** An agent run already creates an Execution, but there is no
+  agent registry, identity, or persisted state.
+- **Changes:**
+  - [ ] `agents` registry table: identity, capabilities, model policy, tools,
+        permissions, configuration, state.
+  - [ ] An agent run always creates an Execution (already true) **and** persists
+        agent state/history links (execution history queryable per agent).
+  - [ ] Multi-agent interaction via existing primitives only (events/tasks/
+        executions) — no bespoke agent RPC (ROADMAP §47); parent/child executions
+        keep trace relationships.
+  - [ ] CLI: `voodoo agents`, `voodoo agent <id>` (history, state, runs).
+- **Dependencies:** Sprint 3 (executions), Sprint 14 (model provider).
+- **Acceptance Criteria:** an agent survives restart with identity, state, and
+  history intact; two agents collaborating via events produce linked executions.
+- **Tests:** restart survival (registry + state); multi-agent collaboration
+  produces linked, parented executions.
+- **Documentation:** `docs/agents.md`, `docs/execution-model.md`, `CHANGELOG.md`.
+- **Definition of Done:** quality gate green + released `1.18.0`.
 
 ## Sprint 17 — Durable human-in-the-loop
 **Version 1.19.0 · ROADMAP §50 · Status: TODO · Released as: —**
 
-Goal: approvals work without the original worker process alive (today:
-approvals recover as decidable-but-not-rerunnable).
-
-Scope:
-- [ ] `WAITING_FOR_HUMAN` executions persist resumable intent/compute
-      (registered participants serialized durably — leverages Sprint 4).
-- [ ] Approval decision → event → execution resumes on any worker.
-- [ ] `approvals` durable registry; journal events
-      `approval.requested/granted/denied`.
-- [ ] CLI: `voodoo approvals` list, `voodoo approvals approve/deny <id>`.
-- [ ] Tests: request approval → kill process → decide via CLI → resume
-      completes with correct result.
+- **Goal:** Human approval is an execution state that survives process death;
+  a decision resumes the execution on any worker.
+- **Why:** Human intervention is not a live callback — it is a waiting
+  Execution. Today approvals recover as decidable-but-not-rerunnable.
+- **Current State:** Approvals persist but cannot resume the original work
+  after the worker process dies.
+- **Changes:**
+  - [ ] `WAITING_FOR_HUMAN` executions persist resumable intent/compute
+        (registered participants serialized durably — leverages Sprint 4).
+  - [ ] Approval decision → event → execution resumes on any worker.
+  - [ ] `approvals` durable registry; journal events
+        `approval.requested/granted/denied`.
+  - [ ] CLI: `voodoo approvals` list, `voodoo approvals approve/deny <id>`.
+- **Dependencies:** Sprints 3–4 (executions + checkpoints), Sprint 11 (optional
+  PG).
+- **Acceptance Criteria:** request approval → kill process → decide via CLI →
+  execution resumes and completes with the correct result.
+- **Tests:** crash/restart human-in-the-loop path; decisions recorded as
+  durable events.
+- **Documentation:** `docs/hitl.md`, `docs/execution-model.md`, `CHANGELOG.md`.
+- **Definition of Done:** quality gate green + released `1.19.0`.
 
 ## Sprint 18 — Capability security & secrets
 **Version 2.0.0 · ROADMAP §55, §70 · Status: TODO · Released as: —**
 
-Major bump: authority defaults change (agents lose ambient authority).
-
-Scope:
-- [ ] `secrets.get(name)` interface: env/local-default backend; encrypted
-      local store option; provider managers are future adapters.
-- [ ] Redaction guard: secrets never persisted into events/journal/telemetry
-      (ROADMAP §55) — enforced centrally.
-- [ ] Effect authorization context: actor, principal, capability, resource,
-      scope recorded on every effect (ROADMAP §55).
-- [ ] Sensitive capabilities (`filesystem.write`, `network.request`,
-      `shell.execute`, `secrets.read`, `payment.execute`, `email.send`)
-      require explicit grants — no ambient authority by default.
-- [ ] Migration note + upgrade guide for existing agents (CHANGELOG + docs).
-- [ ] Tests: denied-by-default matrix; redaction of known secret patterns.
+- **Goal:** No ambient authority. Capabilities gate effects; secrets never
+  leak into observability.
+- **Why:** Capabilities must be explicit, revocable, and enforced; the major
+  bump reflects the authority behavior shift.
+- **Current State:** Capabilities exist but authority is implicit; secrets have
+  no central redaction.
+- **Changes:**
+  - [ ] `secrets.get(name)` interface: env/local-default backend; encrypted
+        local store option; provider managers are future adapters.
+  - [ ] Redaction guard: secrets never persisted into events/journal/telemetry
+        (ROADMAP §55) — enforced centrally.
+  - [ ] Effect authorization context: actor, principal, capability, resource,
+        scope recorded on every effect (ROADMAP §55).
+  - [ ] Sensitive capabilities (`filesystem.write`, `network.request`,
+        `shell.execute`, `secrets.read`, `payment.execute`, `email.send`)
+        require explicit grants — no ambient authority by default.
+  - [ ] Migration note + upgrade guide for existing agents (CHANGELOG + docs).
+- **Dependencies:** Sprint 8 (capability negotiation), Sprint 16 (agent
+  entities).
+- **Acceptance Criteria:** denied-by-default matrix holds; secrets are redacted
+  from events/journal/telemetry.
+- **Tests:** denied-by-default matrix; redaction of known secret patterns.
+- **Documentation:** `docs/auth.md`, `docs/security`, upgrade guide,
+  `CHANGELOG.md`.
+- **Definition of Done:** quality gate green + released `2.0.0`.
 
 ---
 
@@ -512,45 +613,79 @@ Scope:
 ## Sprint 19 — Observability
 **Version 2.1.0 · ROADMAP §54 · Status: TODO · Released as: —**
 
-Scope:
-- [ ] Trace/correlation identity on: execution, task, worker, model call,
-      tool call, event, object op (single contextvar chain, today: two).
-- [ ] OpenTelemetry-compatible span model; optional OTLP export behind
-      `[otel]` extra (in-memory store remains default).
-- [ ] CLI: `voodoo status`, `voodoo workers`, upgraded `voodoo doctor`
-      (providers, capabilities, migrations, queue depth, schedule health).
-- [ ] Telemetry summaries persisted (rolling) so `voodoo status` works after
-      restart.
+- **Goal:** One trace identity propagates through execution, task, worker,
+  model, tool, event, and object operation.
+- **Why:** Telemetry is the sensory system of the runtime; today there are two
+  contextvar chains instead of one.
+- **Current State:** Correlation IDs exist but are split across subsystems.
+- **Changes:**
+  - [ ] Trace/correlation identity on: execution, task, worker, model call,
+        tool call, event, object op (single contextvar chain, today: two).
+  - [ ] OpenTelemetry-compatible span model; optional OTLP export behind
+        `[otel]` extra (in-memory store remains default).
+  - [ ] CLI: `voodoo status`, `voodoo workers`, upgraded `voodoo doctor`
+        (providers, capabilities, migrations, queue depth, schedule health).
+  - [ ] Telemetry summaries persisted (rolling) so `voodoo status` works after
+        restart.
+- **Dependencies:** Sprint 3 (executions), Sprint 16 (entities).
+- **Acceptance Criteria:** `trace_id` propagates end-to-end; `voodoo status`
+  works after restart.
+- **Tests:** trace propagation across the full chain; status persistence.
+- **Documentation:** `docs/telemetry.md`, `CHANGELOG.md`.
+- **Definition of Done:** quality gate green + released `2.1.0`.
 
 ## Sprint 20 — Protocol schemas & versioning
 **Version 2.2.0 · ROADMAP §56, §57 · Status: TODO · Released as: —**
 
-Scope:
-- [ ] `voodoo.protocol` package: canonical entity schemas (identity,
-      capabilities, intents, executions, tasks, events, objects, errors)
-      as the stable semantic boundary.
-- [ ] `schema_version` on every persisted record + envelope; versioned event
-      types (`execution.completed.v1` or `schema_version: 1`).
-- [ ] JSON Schema export command (`voodoo protocol export`) for other
-      languages/SDKs.
-- [ ] Compatibility policy documented (additive within major; migrations for
-      stored data).
-- [ ] Protocol conformance tests asserting round-trip serialize/deserialize
-      for every entity.
+- **Goal:** Canonical entity schemas form the stable semantic boundary for
+  other languages and SDKs.
+- **Why:** A programmable runtime needs a stable protocol boundary so
+  Identity, Event, and Relationship survive across processes and languages.
+- **Current State:** Entity schemas are implicit in code, not declared.
+- **Changes:**
+  - [ ] `voodoo.protocol` package: canonical entity schemas (identity,
+        capabilities, intents, executions, tasks, events, objects, errors)
+        as the stable semantic boundary.
+  - [ ] `schema_version` on every persisted record + envelope; versioned event
+        types (`execution.completed.v1` or `schema_version: 1`).
+  - [ ] JSON Schema export command (`voodoo protocol export`) for other
+        languages/SDKs.
+  - [ ] Compatibility policy documented (additive within major; migrations for
+        stored data).
+- **Dependencies:** Sprint 3 (executions), Sprint 8 (contracts), Sprint 16
+  (entities).
+- **Acceptance Criteria:** every entity round-trips serialize/deserialize; the
+  export command emits valid schemas.
+- **Tests:** protocol conformance round-trips for every entity.
+- **Documentation:** `docs/mcp.md` (or a new `docs/protocol.md`),
+  `CHANGELOG.md`.
+- **Definition of Done:** quality gate green + released `2.2.0`.
 
 ## Sprint 21 — Local runtime DX ("WAMP for autonomous software")
 **Version 2.3.0 · ROADMAP §63, §62 · Status: TODO · Released as: —**
 
-Scope:
-- [ ] `voodoo create <app>` (evolve `voodoo new`) scaffolds an app wired for
-      the full local runtime (durable tasks, scheduler, events, objects,
-      agent runtime) with a working example of each.
-- [ ] `voodoo dev` boots everything and prints a runtime banner: providers
-      active, queue depth, schedules, object store path, agent runtime,
-      MCP endpoint.
-- [ ] First-run experience: install → `voodoo create` → `voodoo dev` →
-      working autonomous app with **zero external infrastructure** (ROADMAP §63).
-- [ ] Template includes a crash/restart demo task proving durability.
+- **Goal:** `install → create → dev` boots the whole runtime as one thing, with
+  zero external infrastructure.
+- **Why:** The runtime must feel like one coherent system from the first
+  command; convergence must be visible, not theoretical.
+- **Current State:** `voodoo new` + `voodoo dev` exist but do not boot the full
+  local runtime.
+- **Changes:**
+  - [ ] `voodoo create <app>` (evolve `voodoo new`) scaffolds an app wired for
+        the full local runtime (durable tasks, scheduler, events, objects,
+        agent runtime) with a working example of each.
+  - [ ] `voodoo dev` boots everything and prints a runtime banner: providers
+        active, queue depth, schedules, object store path, agent runtime,
+        MCP endpoint.
+  - [ ] First-run experience: install → `voodoo create` → `voodoo dev` →
+        working autonomous app with **zero external infrastructure** (ROADMAP §63).
+  - [ ] Template includes a crash/restart demo task proving durability.
+- **Dependencies:** Sprints 2–7 (the local runtime pieces).
+- **Acceptance Criteria:** first-run works with zero infrastructure; the
+  crash/restart demo proves durability.
+- **Tests:** first-run end-to-end; durability demo.
+- **Documentation:** `docs/installation.md`, `README.md`, `CHANGELOG.md`.
+- **Definition of Done:** quality gate green + released `2.3.0`.
 
 ---
 

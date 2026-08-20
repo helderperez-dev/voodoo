@@ -242,7 +242,7 @@ run = await workflow.run(params)
 
 ## When Adding Runtime Features
 
-1. **Identify the primitive** — Does your feature touch State, Capability, Intent, Effect, Time, Compute, Resource, or Constraint?
+1. **Identify the concept** — Does your feature touch Entity, State, Intent, Capability, Execution, Effect, Compute, Time, Resource, or Constraint?
 2. **Extend the engine** — New compute kinds, new constraint types, new adaptive strategies go in the appropriate module.
 3. **Update the planner** — If your feature introduces a new participant type, register it in the planner.
 4. **Add persistence** — If your feature produces durable state, extend the `ExecutionStore` Protocol and implementations.

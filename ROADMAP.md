@@ -111,7 +111,53 @@
 
 ### 0. Executive Summary
 
-Voodoo is an attempt to rethink what an application framework becomes when we stop treating modern software as a collection of disconnected subsystems.
+> **Voodoo is a programmable runtime for adaptive applications and operational systems.**
+
+Web applications, APIs, AI agents, workers, human workflows, distributed
+systems, IoT, robotics, and physical systems are not separate products. They
+are different manifestations of the same runtime, converging on one execution
+model.
+
+This document answers nine questions that define the project:
+
+1. **What is Voodoo?** A small, explicit, programmable runtime whose
+   fundamental model represents software, AI, distributed systems, human
+   workflows, and physical systems as **entities with state**, pursuing
+   **intents** through **capabilities** and **executions** that produce
+   observable **effects**.
+
+2. **Why does Voodoo exist?** Modern software fragments a single business
+   problem across frontend, backend, database, queue, worker, storage, AI,
+   observability, and deployment — each with its own lifecycle and failure
+   model. Voodoo moves those boundaries into the runtime.
+
+3. **What fundamental problem does it solve?** It replaces a collection of
+   disconnected subsystems with one coherent architecture, so complexity is
+   given a shape instead of being hidden.
+
+4. **What is its computational model?** The core ontology — **Entity, State,
+   Intent, Capability, Effect** — organized around the runtime center of
+   **Execution**, governed by the execution dimensions **Compute, Time,
+   Resource, Constraint**, with cross-cutting **Event, Identity, Telemetry,
+   and Relationship**. See [`docs/primitives.md`](docs/primitives.md).
+
+5. **What are its architectural invariants?** See
+   [§70 — Architectural Invariants](#70-architectural-invariants).
+
+6. **What is the runtime architecture?** See
+   [Part V — Core Execution Model](#part-v--core-execution-model) and
+   [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+7. **How does the system evolve?** One small, complete, releasable sprint at a
+   time, tracked in [`SPRINT_PLAN.md`](SPRINT_PLAN.md).
+
+8. **What should be built?** The runtime and its primitives; adapters and
+   optional capabilities behind them (see
+   [Part VIII](#part-viii--master-sprint-roadmap)).
+
+9. **What should deliberately not be built?** Anything that is a feature
+   rather than a primitive, or that duplicates an execution model (see
+   [§65](#65-what-voodoo-must-not-become)).
 
 Today, building a sophisticated application often means assembling:
 
@@ -932,20 +978,45 @@ graph TB
 
 ### 27. The Voodoo Universal Primitives
 
-The foundational model is:
+The concepts are not eight equal primitives. They live at different semantic
+levels (see [`docs/primitives.md`](docs/primitives.md)).
 
-| Primitive     | Description                              |
+**Core Ontology** — what the system can represent and pursue:
+
+| Concept        | Description                              |
+| -------------- | ---------------------------------------- |
+| **Entity**     | Something with identity that participates in the system |
+| **State**      | Current operational truth of an entity or system |
+| **Intent**     | The desired outcome to achieve            |
+| **Capability** | Ability + authorization to produce an effect under conditions |
+| **Effect**     | A change produced by an execution         |
+
+**Runtime** — how work happens:
+
+| Concept       | Description                              |
 | ------------- | ---------------------------------------- |
-| **State**     | What the system currently knows          |
-| **Capability**| What the system is allowed and able to do |
-| **Intent**    | What someone or something wants to achieve |
-| **Effect**    | An actual mutation of the world          |
-| **Time**      | Temporal ordering, scheduling, deadlines  |
-| **Compute**   | Anything capable of performing work      |
-| **Resource**  | Things consumed or referenced             |
-| **Constraint**| Limits on what an execution can do       |
+| **Execution** | The central runtime mechanism — every operation is one |
 
-These are the conceptual atoms of the runtime.
+**Execution Dimensions** — the conditions under which work happens:
+
+| Concept        | Description                              |
+| -------------- | ---------------------------------------- |
+| **Compute**    | How the execution is performed (AI is one class) |
+| **Time**       | Lifecycle and validity (deadline, timeout, schedule, retry) |
+| **Resource**   | What is consumed (CPU, GPU, memory, tokens, energy) |
+| **Constraint** | Conditions that must hold                |
+
+**Cross-Cutting Concepts** — across every level:
+
+```text
+Event   Identity   Telemetry   Relationship
+```
+
+The conceptual model:
+
+```text
+Entity → State → Intent → Capability → Execution → Effect → State
+```
 
 ---
 
@@ -1095,22 +1166,32 @@ An **effect** represents an actual mutation of the world.
 
 ### 36. The Core Voodoo Execution Model
 
-The conceptual center of Voodoo is:
+The conceptual center of Voodoo is **Execution**. The full model:
 
 ```mermaid
 flowchart TD
+    ENTITY --> STATE
+    STATE --> INTENT
     INTENT --> CAPABILITY
-    CAPABILITY --> CONSTRAINT
-    CONSTRAINT --> PLANNER
-    PLANNER --> COMPUTE
+    CAPABILITY --> EXECUTION
+
     COMPUTE --> EXECUTION
+    TIME --> EXECUTION
+    RESOURCE --> EXECUTION
+    CONSTRAINT --> EXECUTION
+
     EXECUTION --> EFFECT
-    EFFECT --> EVENT
-    EVENT --> STATE
+    EFFECT --> STATE
     STATE --> OBSERVATION
     OBSERVATION --> ADAPT
     ADAPT -.-> INTENT
 ```
+
+An **Entity** with **State** pursues an **Intent**, which resolves to a
+**Capability**, which is performed as an **Execution**. The execution is
+governed by **Compute**, **Time**, **Resource**, and **Constraint**. It
+produces an **Effect**, which changes **State** — and the feedback loop
+adapts future intents.
 
 ---
 
@@ -1137,16 +1218,28 @@ Every meaningful operation should eventually become an **Execution**.
 ```python
 Execution(
     id=...,
-    kind="agent",
-    actor=...,
-    capability=...,
+    parent_execution=...,
+    entity=...,
     intent=...,
-    parent_id=...,
+    capabilities=[...],
+    compute=...,
+    constraints=[...],
+    resources=[...],
+    time=...,
+    effects=[...],
+    events=[...],
+    state=...,
+    telemetry=...,
+    checkpoint=...,
     status=...,
-    started_at=...,
-    finished_at=...,
+    outcome=...,
+    error=...,
+    recovery=...,
 )
 ```
+
+Not every field is materialized today — the semantics come first. See
+[`docs/execution-model.md`](docs/execution-model.md).
 
 This enables:
 
@@ -1769,7 +1862,7 @@ flowchart TD
 | **A React clone**         | UI is only one dimension.                   |
 | **A Python-only prison**  | Python is the primary language, not the protocol boundary. |
 | **A Kubernetes wrapper**  | Infrastructure should be simplified, not exposed. |
-| **An AI-only framework**  | AI is a compute primitive.                  |
+| **An AI-only framework**  | AI is one form of compute, not a primitive. |
 | **An MCP framework**      | MCP is interoperability.                    |
 | **A giant standard library** | Only stable primitives belong in the core. |
 | **A magic framework**     | Important system behavior must remain observable. |
@@ -1832,7 +1925,8 @@ flowchart TD
 
 **Repository:** `helderperez-dev/voodoo`
 
-**Current positioning:** The AI-native application framework for Python.
+**Current positioning:** A programmable runtime for adaptive applications and
+operational systems.
 
 **Current architecture includes concepts such as:**
 
@@ -1851,18 +1945,23 @@ flowchart TD
 - Planner
 - Adaptive runtime
 
-**Current primitives:**
+**Conceptual model:**
 
-- State
-- Capability
-- Intent
-- Effect
-- Time
-- Compute
-- Resource
-- Constraint
+- Core ontology: Entity, State, Intent, Capability, Effect
+- Runtime: Execution
+- Execution dimensions: Compute, Time, Resource, Constraint
+- Cross-cutting: Event, Identity, Telemetry, Relationship
 
 > The repository is the implementation source of truth. This document is the architectural source of truth.
+
+**Implementation gaps (documented here, not fixed in this task):**
+
+- `Entity` is an ontological concept with no dedicated `Entity` type in code
+  yet — it is represented today through `State` (`id` + `kind`) and Identity.
+- `pyproject.toml` description, `src/voodoo/__init__.py` docstring, and the
+  release workflow description still read "AI-native application framework" /
+  "Python Web Framework". These are code/metadata and are recorded as gaps,
+  not changed in this documentation task.
 
 **AI development workflow:** The repository includes a structured AI development workflow under `.github/`:
 
@@ -2571,7 +2670,7 @@ Voodoo should ultimately allow a developer to build a system where:
 
 ### 76. The One-Sentence Definition
 
-> Voodoo is a minimal, AI-native application runtime that turns state, capabilities, intent, constraints, compute, resources, effects, and events into one observable execution system — capable of evolving from web applications into adaptive digital and physical systems.
+> Voodoo is a programmable runtime for adaptive applications and operational systems — a small, explicit runtime that represents software, AI, distributed systems, human workflows, and physical systems as entities with state, pursuing intents through capabilities and executions that produce observable effects.
 
 ---
 

@@ -423,8 +423,8 @@ class TestResource:
 class TestComposition:
     """Test that primitives compose naturally, matching the architecture doc:
 
-    STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE
-    TIME + CONSTRAINTS surround the entire lifecycle.
+    ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE
+    TIME + CONSTRAINT surround the entire lifecycle.
     RESOURCE determines how execution should be performed.
     """
 

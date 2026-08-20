@@ -19,9 +19,10 @@
 │  Runtime Engine  — ExecutionEngine, Planner,        │
 │                    Adaptive, Human, Persistence      │
 ├─────────────────────────────────────────────────────┤
-│  Primitives      — State, Capability, Intent,        │
-│                    Effect, Time, Compute, Resource,  │
-│                    Constraint                         │
+│  Computational   — Entity, State, Intent,           │
+│  Model             Capability, Effect, Execution,   │
+│                    Compute, Time, Resource,         │
+│                    Constraint                        │
 ├─────────────────────────────────────────────────────┤
 │  Data Layer      — Model/BaseModel, SQLite/PG        │
 ├─────────────────────────────────────────────────────┤
@@ -33,22 +34,24 @@
 
 ---
 
-## The Eight Primitives (`voodoo.primitives`)
+## The Computational Model (`voodoo.primitives`)
 
-Every meaningful operation in Voodoo can be described with these primitives. When adding a new feature, identify which primitives it touches:
+Every meaningful operation in Voodoo can be described with these concepts. When adding a new feature, identify which ones it touches — and whether the behavior is already expressible before introducing a new abstraction.
 
-| Primitive | Purpose | Key Type |
+| Concept | Purpose | Key Type |
 |---|---|---|
+| **Entity** | Ontological identity — anything that holds state (conceptual; no code type) | — |
 | **State** | Durable, versioned system truth | `State(kind, data, version)` |
-| **Capability** | Explicit, revocable permission | `Capability(name, scope)` |
 | **Intent** | Outcome-oriented goal with lifecycle | `Intent(name, params)` |
+| **Capability** | Explicit, revocable permission to produce an effect | `Capability(name, scope)` |
 | **Effect** | Traceable side effect (reversible/irreversible) | `Effect(name, intent_id)` |
+| **Execution** | The central runtime mechanism (produced by the runtime engine) | `Execution` |
+| **Compute** | The act of computation (AI is one form) | `ComputeSpec` |
 | **Time** | Deadlines, expiration, retry, scheduling | `TimeSpec` |
-| **Compute** | The act of computation (AI is one class) | `ComputeSpec` |
 | **Resource** | Cost, latency, energy, tokens consumed | `Resource` |
 | **Constraint** | What the system must/must not do | `Constraint` |
 
-**Execution model:** `STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE`, with `TIME + CONSTRAINTS` surrounding the lifecycle and `RESOURCE` determining execution mode.
+**Execution model:** `ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE`, with `TIME + CONSTRAINT` surrounding the lifecycle and `RESOURCE` determining execution mode.
 
 ---
 
@@ -64,7 +67,7 @@ Every meaningful operation in Voodoo can be described with these primitives. Whe
 - Never import from `runtime/`, `ai/`, `ui/`, or `storage/` here.
 
 ### `runtime/` — Unified execution engine
-- `ExecutionEngine` is a singleton (`engine`) that walks `Intent → Capability → Compute → Effect → State → Mesh`.
+- `ExecutionEngine` is a singleton (`engine`) that walks `Intent → Capability → Execution → Effect → State → Mesh`.
 - Every operation (HTTP, agent, tool, worker, MCP) produces an `Execution` record.
 - `ExecutionContext` carries `trace_id`, `parent_execution_id`, `actor`, `capabilities`, `deadline`.
 - Never bypass the engine for operations that should be durable/observable.

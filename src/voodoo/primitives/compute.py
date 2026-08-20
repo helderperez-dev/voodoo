@@ -8,7 +8,7 @@ A Compute operation may execute:
     reasoning, inference, simulation, search, optimization,
     symbolic computation, human-assisted computation
 
-AI is simply one class of Compute. This is one of the most important
+AI is simply one form of Compute. This is one of the most important
 architectural decisions in Voodoo. Do not create an "AI framework" —
 create Compute. AI becomes a capability of Compute.
 

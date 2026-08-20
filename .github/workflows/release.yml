@@ -168,7 +168,7 @@ jobs:
         run: |
           FORMULA_CONTENT=$(cat <<EOF
           class Voodoo < Formula
-            desc "Fast, Animated, AI-Powered Python Web Framework"
+            desc "Programmable runtime for adaptive applications and operational systems"
             homepage "https://github.com/helderperez-dev/voodoo"
             url "https://files.pythonhosted.org/packages/source/v/voodoo-framework/voodoo_framework-${VERSION}.tar.gz"
             sha256 "${SHA256}"
