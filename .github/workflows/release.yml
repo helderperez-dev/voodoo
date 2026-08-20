@@ -182,7 +182,10 @@ jobs:
               # (avoids pip's truststore bug and Homebrew's broken platform.mac_ver()
               # on macOS Tahoe 26.x). After install, rewrite shebangs to use Homebrew's Python.
               ENV["UV_TOOL_DIR"] = libexec.to_s
-              system "uv", "tool", "install", "voodoo-framework", "--python", "3.12"
+              # Pin the exact version — an unpinned `uv tool install` would pull
+              # whatever is latest on PyPI at `brew install` time and ignore the
+              # url/sha256 above, shipping stale framework code.
+              system "uv", "tool", "install", "voodoo-framework==#{version}", "--python", "3.12"
 
               tool_bin = libexec/"voodoo-framework/bin"
               brew_python = Formula["python@3.12"].bin/"python3.12"
