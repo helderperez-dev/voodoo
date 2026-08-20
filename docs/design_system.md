@@ -1,11 +1,13 @@
-Sim. Eu acho que essa é a próxima grande peça que vale desenhar antes de continuar adicionando features ao Voodoo.
+# Design System
 
-E eu faria uma distinção importante: não criaria “um CSS framework Voodoo” no sentido Tailwind. Criaria um Design System + Theme Engine + Styling Adapter, e faria os componentes dependerem disso.
+Voodoo ships a complete design system out of the box: design tokens, a theme
+engine, a default semantic CSS adapter, and a library of polished components.
+New apps look professional with **zero configuration** — no CSS files, no
+utility classes, no build step.
 
-O que você está descrevendo é mais próximo da filosofia do MUI: componentes excelentes por padrão, tokens centralizados, variantes, overrides e possibilidade de uma empresa transformar aquilo na sua própria linguagem visual. O próprio MUI estrutura o tema em elementos como palette, typography, spacing, breakpoints, transitions e componentes, e permite customizar defaults, variantes e estilos por componente.  
+## Architecture
 
-Eu desenharia o Voodoo assim
-
+```
                     VOODOO DESIGN SYSTEM
                              │
                 ┌────────────┴────────────┐
@@ -23,988 +25,134 @@ Eu desenharia o Voodoo assim
               ┌──────────────┼──────────────┐
               │              │              │
           Voodoo CSS      Tailwind       Custom CSS
+```
 
-A diferença fundamental:
+The key principle: **components do not know that Tailwind exists.** Components
+declare *semantic* intent (`variant`, `size`, `tone`, `level`), and a style
+adapter resolves that intent to concrete class names.
 
-Componentes não sabem que Tailwind existe.
+## Design tokens
 
-E isso é importantíssimo.
+Every value is expressed as a `--vd-*` CSS custom property. Changing a token
+re-styles every component instantly, at runtime, without re-rendering HTML.
 
-⸻
+| Group | Prefix | Examples |
+|---|---|---|
+| Color | `--vd-color-*` | `primary`, `secondary`, `background`, `surface`, `text`, `text-muted`, `border`, `success`, `warning`, `danger` |
+| Spacing | `--vd-space-*` | `xs`, `sm`, `md`, `lg`, `xl`, `xxl`, `xxxl` |
+| Radius | `--vd-radius-*` | `sm`, `md`, `lg`, `xl` |
+| Shadow | `--vd-shadow-*` | `sm`, `md`, `lg` |
+| Motion | `--vd-motion-*` | `fast`, `normal`, `slow` |
+| Typography | `--vd-text-*`, `--vd-leading-*`, `--vd-weight-*`, `--vd-font-*` | size scale, line heights, weights, font families |
 
-1. O Voodoo deveria ter um “default design system”
+### Theming your app
 
-Eu faria o Voodoo vir com um tema próprio.
+Use `create_theme` for simple overrides, or build a full `Theme` model:
 
-Não Material Design.
-
-Não Bootstrap.
-
-Não Tailwind visual.
-
-Voodoo.
-
-Algo contemporâneo, minimalista e um pouco “Apple × Linear × Vercel × Raycast”.
-
-Características:
-
-* muito espaço em branco
-* tipografia limpa
-* bordas sutis
-* radius moderado
-* sombras extremamente discretas
-* estados de hover suaves
-* animações rápidas
-* contraste excelente
-* dark mode excelente
-* componentes relativamente compactos
-* nada de gradientes exagerados
-* nada de “dashboard template” genérico
-
-Por exemplo:
-
-Button("Create Agent")
-
-deveria já parecer profissional.
-
-Não:
-
-┌────────────────────────────┐
-│       CREATE AGENT         │
-└────────────────────────────┘
-
-com 15px de sombra e border-radius 14px.
-
-Mas algo mais:
-
-┌─────────────────────┐
-│  Create Agent   →   │
-└─────────────────────┘
-
-sutil, preciso e moderno.
-
-⸻
-
-2. Tokens antes de componentes
-
-Essa é uma decisão arquitetural que eu considero fundamental.
-
-Não faça:
-
-Button:
-    background = "#6366f1"
-    padding = "8px 16px"
-    radius = "8px"
-
-Faça:
-
-Button
-   ↓
-color.primary
-spacing.button.md
-radius.md
-typography.label
-shadow.sm
-
-Ou internamente:
-
---vd-color-primary
---vd-color-primary-hover
---vd-color-background
---vd-color-surface
---vd-color-border
---vd-color-text
---vd-color-muted
---vd-radius-sm
---vd-radius-md
---vd-radius-lg
---vd-space-1
---vd-space-2
---vd-space-3
-...
-
-Isso cria o DNA visual do framework.
-
-MUI faz algo parecido ao centralizar aspectos como palette, typography, spacing, shape, shadows e outros tokens no tema.  
-
-⸻
-
-3. Eu criaria um Theme
-
-Algo extremamente simples:
-
-from voodoo import Theme
-theme = Theme(
-    colors={
-        "primary": "#18181B",
-        "background": "#FFFFFF",
-        "surface": "#FAFAFA",
-        "border": "#E4E4E7",
-        "text": "#18181B",
-        "muted": "#71717A",
-    },
-)
-
-Mas eu não obrigaria o usuário a fazer isso.
-
-Por padrão:
-
-app = App()
-
-já possui:
-
-Voodoo Default Theme
-
-⸻
-
-4. E depois:
+```python
+from voodoo import App, create_theme
 
 app = App(
-    theme=theme
-)
-
-Pronto.
-
-Sem ThemeProvider.
-
-Como Voodoo é Python-first, não precisamos copiar a arquitetura React.
-
-⸻
-
-5. Mas eu iria além do MUI
-
-O tema deveria ter quatro níveis.
-
-Theme
-│
-├── Tokens
-│
-├── Typography
-│
-├── Components
-│
-└── CSS
-
-Por exemplo:
-
-Theme(
-    colors=...,
-    typography=...,
-    spacing=...,
-    radius=...,
-    shadows=...,
-    motion=...,
-    components=...,
-)
-
-E:
-
-theme.components.Button
-theme.components.Card
-theme.components.Input
-
-⸻
-
-6. Componentes devem possuir variantes
-
-Isso é extremamente importante.
-
-Por exemplo:
-
-Button(
-    "Save",
-    variant="primary",
-)
-Button(
-    "Cancel",
-    variant="secondary",
-)
-Button(
-    "Delete",
-    variant="danger",
-)
-Button(
-    "Learn more",
-    variant="ghost",
-)
-
-E tamanho:
-
-Button(
-    "Save",
-    size="sm",
-)
-Button(
-    "Save",
-    size="md",
-)
-Button(
-    "Save",
-    size="lg",
-)
-
-Mas não faça 30 propriedades.
-
-O componente precisa ter opinião.
-
-⸻
-
-7. O conceito de “slots” é excelente
-
-Aqui eu copiaria uma ideia muito boa do MUI.
-
-Um componente pode ter partes internas:
-
-Card
-│
-├── root
-├── header
-├── title
-├── content
-└── footer
-
-Então uma empresa poderia customizar:
-
-theme.components.Card = {
-    "root": ...,
-    "header": ...,
-    "title": ...,
-}
-
-MUI usa justamente a ideia de slots para permitir customização de partes individuais dos componentes.  
-
-Isso torna o sistema muito mais poderoso do que simplesmente:
-
-class_="..."
-
-⸻
-
-8. E precisamos de três níveis de customização
-
-Eu faria exatamente esta hierarquia:
-
-Level 1 — instância
-
-Button(
-    "Save",
-    variant="primary",
-    class_="my-button",
-)
-
-Level 2 — componente
-
-class MyButton(Button):
-    ...
-
-Level 3 — tema
-
-theme.components.Button = ...
-
-Isso cria:
-
-instance customization
-        ↓
-component customization
-        ↓
-global design system
-
-Essa mesma separação é uma das forças do modelo de customização do MUI.  
-
-⸻
-
-9. Eu criaria css também
-
-Mas não como API principal.
-
-Algo como:
-
-Button(
-    "Save",
-    css={
-        "margin_top": "2rem",
-    },
-)
-
-Ou:
-
-Button(
-    "Save",
-    style={
-        "margin-top": "2rem",
-    },
-)
-
-Eu pessoalmente prefiro:
-
-css={
-    "margin_top": "2rem"
-}
-
-porque deixa explícito que é uma camada de styling.
-
-Mas isso deve ser escape hatch.
-
-Não o caminho normal.
-
-⸻
-
-10. E o Tailwind?
-
-Aqui eu acho que você acertou em cheio na preocupação anterior.
-
-Não faça Voodoo depender de Tailwind.
-
-Mas ofereça:
-
-Voodoo Styling
-      │
-      ├── Voodoo CSS   ← default
-      │
-      ├── Tailwind     ← adapter
-      │
-      └── Custom       ← adapter/API
-
-Assim:
-
-app = App(
-    styling="voodoo"
-)
-
-ou:
-
-app = App(
-    styling="tailwind"
-)
-
-E, idealmente, o componente continua:
-
-Button(
-    "Create",
-    variant="primary",
-)
-
-O componente não muda.
-
-⸻
-
-11. Na verdade, eu evitaria até expor styling="..."
-
-Talvez:
-
-app = App()
-
-use o sistema nativo.
-
-E:
-
-app = App(
-    style_adapter=Tailwind()
-)
-
-para quem quiser.
-
-Isso deixa claro que é uma arquitetura extensível.
-
-⸻
-
-12. O CSS nativo do Voodoo não precisa ser um “framework CSS”
-
-Isso é uma distinção importante.
-
-Eu não tentaria competir com Tailwind.
-
-O Voodoo precisa apenas gerar:
-
-:root {
-    --vd-primary: ...;
-    --vd-background: ...;
-    --vd-border: ...;
-}
-
-e componentes utilizam esses tokens.
-
-Por exemplo:
-
-.vd-button {
-    background: var(--vd-color-primary);
-    border-radius: var(--vd-radius-md);
-}
-
-Isso é suficiente.
-
-⸻
-
-13. CSS Variables são provavelmente o coração da solução
-
-Eu usaria CSS custom properties como a ponte entre:
-
-Python Theme
-      ↓
-Design Tokens
-      ↓
-CSS Variables
-      ↓
-Components
-
-Isso também permite mudar tema em runtime.
-
-Por exemplo:
-
-app.set_theme("dark")
-
-ou futuramente:
-
-theme = user.preferences.theme
-
-sem precisar reconstruir toda a aplicação.
-
-MUI também utiliza CSS theme variables para fazer os componentes consumirem valores do tema em vez de valores fixos.  
-
-⸻
-
-14. Dark mode deve nascer junto
-
-Não faça depois.
-
-O default deveria ser:
-
-Light
-Dark
-System
-
-E:
-
-app = App(
-    theme=VoodooTheme()
-)
-
-automaticamente entende:
-
-prefers-color-scheme
-
-⸻
-
-15. Design Tokens
-
-Eu faria uma estrutura mais ou menos assim:
-
-Theme(
-    colors={
-        "primary": ...,
-        "secondary": ...,
-        "background": ...,
-        "surface": ...,
-        "surface_raised": ...,
-        "text": ...,
-        "text_muted": ...,
-        "border": ...,
-        "success": ...,
-        "warning": ...,
-        "danger": ...,
-        "info": ...,
-    },
-    typography={
-        "font_family": ...,
-        "font_size": ...,
-        "line_height": ...,
-        "weights": ...,
-    },
-    spacing={
-        "xs": ...,
-        "sm": ...,
-        "md": ...,
-        "lg": ...,
-        "xl": ...,
-    },
-    radius={
-        "sm": ...,
-        "md": ...,
-        "lg": ...,
-        "full": ...,
-    },
-    shadows={
-        "sm": ...,
-        "md": ...,
-        "lg": ...,
-    },
-    motion={
-        "fast": ...,
-        "normal": ...,
-        "slow": ...,
-    },
-)
-
-⸻
-
-16. Mas não deixe o desenvolvedor precisar conhecer tokens
-
-Isso é essencial.
-
-Ele escreve:
-
-Card(
-    Text("Revenue")
-)
-
-Não:
-
-Card(
-    padding="var(--vd-space-4)",
-    radius="var(--vd-radius-md)",
-    background="var(--vd-surface)",
-)
-
-A segunda coisa é implementação.
-
-A primeira é Voodoo.
-
-⸻
-
-17. Componentes iniciais
-
-Eu não faria 100 componentes.
-
-Começaria com um conjunto extremamente sólido.
-
-Foundation
-
-Box
-Stack
-Grid
-Container
-Divider
-Spacer
-
-Typography
-
-Text
-Heading
-Label
-Link
-
-Actions
-
-Button
-IconButton
-ButtonGroup
-
-Forms
-
-Input
-Textarea
-Select
-Checkbox
-Radio
-Switch
-Slider
-Form
-
-Surfaces
-
-Card
-Panel
-Dialog
-Drawer
-Popover
-Tooltip
-
-Navigation
-
-Nav
-Tabs
-Breadcrumbs
-Pagination
-Menu
-
-Feedback
-
-Alert
-Badge
-Toast
-Spinner
-Progress
-Skeleton
-
-Data
-
-Table
-List
-Avatar
-
-Isso já é uma biblioteca bastante poderosa.
-
-⸻
-
-18. Mas tem uma coisa que eu faria diferente do MUI
-
-Não tentaria implementar cada componente possível.
-
-A própria documentação do MUI fala em fornecer building blocks para criar interfaces, em vez de necessariamente suportar todas as variantes possíveis de cada componente.  
-
-Essa é uma filosofia excelente para Voodoo:
-
-Primitives over endless components.
-
-⸻
-
-19. Box pode ser muito poderoso
-
-Por exemplo:
-
-Box(
-    Text("Hello"),
-    padding="lg",
-)
-
-Mas talvez até isso seja demais.
-
-Eu preferiria:
-
-Stack(
-    Text("Hello"),
-    Button("Continue"),
-    gap="md",
-)
-
-E:
-
-Grid(
-    Card(...),
-    Card(...),
-    columns=3,
-)
-
-São abstrações semânticas.
-
-⸻
-
-20. Layout não deveria depender de Tailwind
-
-Isso é importante.
-
-Se o desenvolvedor escreve:
-
-Stack(
-    ...
-    gap="md",
-)
-
-isso deve funcionar:
-
-Voodoo CSS
-Tailwind
-Custom CSS
-
-O adapter traduz.
-
-⸻
-
-21. O resultado
-
-Você conseguiria criar:
-
-@page("/")
-def home():
-    return Container(
-        Stack(
-            Heading(
-                "Build with Voodoo",
-                size="xl",
-            ),
-            Text(
-                "The modern Python runtime for AI applications.",
-                tone="muted",
-            ),
-            Button(
-                "Get started",
-                variant="primary",
-            ),
-            gap="lg",
-        )
+    theme=create_theme(
+        primary="#635BFF",
+        secondary="#00D4AA",
+        font="Inter",
+        radius="lg",
+        mode="dark",  # dark | light | system
     )
-
-E isso já produziria uma interface bonita sem CSS.
-
-Essa é a experiência que eu quero para Voodoo.
-
-⸻
-
-22. E empresas poderiam criar seu próprio design system
-
-Esse é o ponto que realmente pode tornar a arquitetura madura.
-
-Uma empresa poderia fazer:
-
-from voodoo import Theme
-company_theme = Theme(
-    colors={
-        "primary": "#635BFF",
-        ...
-    },
-    typography={
-        ...
-    },
 )
+```
 
-E:
+The default theme is minimalist and modern (Apple × Linear × Vercel × Raycast
+aesthetic): generous whitespace, clean typography, subtle borders, moderate
+radius, discreet shadows, and excellent dark mode.
 
-app = App(
-    theme=company_theme
+## Style adapters
+
+| Adapter | Class names | When to use |
+|---|---|---|
+| `VoodooCSSAdapter` | Semantic `vd-*` (e.g. `vd-button--primary`) | **Default.** Zero-config, no external CDN. |
+| `TailwindAdapter` | Tailwind utility classes | Opt-in, when you already use Tailwind. |
+| `NoopAdapter` | Bare element names | Minimal output, custom CSS only. |
+
+```python
+from voodoo import set_style_adapter, TailwindAdapter
+
+set_style_adapter(TailwindAdapter())
+```
+
+`VoodooCSSAdapter` generates its stylesheet automatically via
+`generate_component_css(theme)` and injects it into every page — you never
+write CSS for built-in components.
+
+## Layout primitives
+
+Layout is first-class. Components express structure without utility classes:
+
+| Component | Props | Output |
+|---|---|---|
+| `Flex` | `direction`, `justify`, `items`, `wrap`, `gap` | `vd-flex--col`, `vd-flex--justify-center`, … |
+| `Grid` | `cols`, `gap` | `vd-grid--cols-3`, `vd-grid--gap-md` |
+| `Container` | `size`, `centered` | `vd-container--xl`, `vd-container--centered` |
+| `Page` | `size`, `pad` | `vd-page--lg`, `vd-page--pad` |
+| `Stack` | `gap` | Vertical flex (`vd-flex--col`) with semantic gap |
+
+```python
+from voodoo import Page, Stack, Grid, Card, Badge, Heading
+
+ui = Page(
+    Stack(
+        Heading("Features", level=1),
+        Grid(
+            Card(Stack(Badge("A"), Heading("One", level=3), gap="sm")),
+            Card(Stack(Badge("B"), Heading("Two", level=3), gap="sm")),
+            Card(Stack(Badge("C"), Heading("Three", level=3), gap="sm")),
+            cols="3",
+            gap="md",
+        ),
+        gap="lg",
+    )
 )
+```
 
-Pronto.
+### Gap scale
 
-Agora todos os componentes:
+Named gaps (`xs`…`xxxl`) resolve through the spacing tokens. Numeric gaps
+(`gap="4"`) use a 4px base (`calc(0.25rem * 4)`), matching Tailwind's scale:
 
-Button()
-Card()
-Input()
-Dialog()
-Table()
+```python
+Stack(gap="md")  # var(--vd-space-md)
+Flex(gap="4")  # calc(0.25rem * 4) = 16px
+Grid(cols="2", gap="6")  # calc(0.25rem * 6) = 24px
+```
 
-passam a ter a identidade da empresa.
+## Theme mode (dark / light / system)
 
-Isso é exatamente o tipo de extensibilidade que fez o modelo de theming do MUI tão útil para empresas criarem seus próprios sistemas sobre a biblioteca. O MUI inclusive documenta explicitamente a criação de componentes customizados que participam do tema como se fossem componentes nativos.  
+`Theme.mode` accepts `"dark"`, `"light"`, or `"system"` (default `"dark"`).
+The resolved mode is applied to the `<html class="...">` element, and an inline
+script runs *before* the stylesheet to prevent a flash of the wrong theme:
 
-⸻
+1. Read the persisted `voodoo_theme` cookie (if any).
+2. Fall back to `Theme.mode`.
+3. Resolve `"system"` via `prefers-color-scheme`.
+4. Toggle the `.dark` class on `<html>`.
 
-23. E eu adicionaria create_theme()
+The client runtime exposes `voodoo.setTheme(mode)` to switch themes at runtime
+and persist the choice in the `voodoo_theme` cookie:
 
-Para ficar extremamente elegante:
+```javascript
+voodoo.setTheme("light");
+```
 
-from voodoo import create_theme
-theme = create_theme(
-    primary="#635BFF",
-    font="Inter",
-    radius="md",
-)
+`to_css_variables()` emits `:root` (light values) and `.dark` (dark values), so
+toggling `.dark` re-themes every component without a re-render.
 
-Então:
+## Custom CSS
 
-app = App(theme=theme)
+Drop a `styles.css` file in your project root to layer custom CSS on top of the
+theme (loaded by convention, next to the app directory). Use `css={}` for
+inline overrides on individual components:
 
-É muito mais acessível do que exigir um objeto gigantesco.
-
-⸻
-
-24. Themes poderiam ser pacotes
-
-Futuramente:
-
-pip install voodoo-theme-linear
-from voodoo_theme_linear import theme
-app = App(theme=theme)
-
-Ou:
-
-pip install voodoo-theme-minimal
-pip install voodoo-theme-enterprise
-pip install voodoo-theme-brutalist
-
-Isso começa a criar ecossistema.
-
-⸻
-
-25. E isso abre uma possibilidade MUITO interessante
-
-O Voodoo poderia ter:
-
-Voodoo Minimal
-
-O default.
-
-Linear
-Vercel
-Raycast
-Apple
-
-sensação.
-
-Voodoo Enterprise
-
-Mais denso.
-
-tables
-forms
-dashboards
-administrative apps
-
-Voodoo Soft
-
-Mais arredondado.
-
-Voodoo Dark
-
-Dark-first.
-
-Voodoo Glass
-
-Mais visual.
-
-Mas todos utilizam os mesmos componentes.
-
-Só mudam:
-
-tokens
-+
-component defaults
-+
-variants
-
-⸻
-
-26. Eu colocaria isso no roadmap
-
-Voodoo Design System
-                Core
-                 │
-        ┌────────┴────────┐
-        │                 │
-     Tokens          Components
-        │                 │
-        └────────┬────────┘
-                 │
-             Theme Engine
-                 │
-       ┌─────────┼─────────┐
-       │         │         │
-    Minimal   Enterprise  Custom
-
-Depois:
-
-Voodoo Theme Marketplace
-
-Mas não agora.
-
-⸻
-
-27. O que eu implementaria agora
-
-Como você já está trabalhando na implementação do Voodoo, eu faria esta sequência:
-
-Fase 1 — Foundation
-
-Theme
-Design Tokens
-CSS Variables
-Typography
-Colors
-Spacing
-Radius
-Shadows
-Motion
-Breakpoints
-
-Fase 2 — Component contract
-
-Definir:
-
-props
-variants
-sizes
-states
-slots
-theme overrides
-class_
-css
-
-Fase 3 — Core components
-
-Começar com:
-
-Text
-Heading
-Button
-Input
-Card
-Stack
-Grid
-Container
-Link
-Divider
-Badge
-
-Fase 4 — Styling adapter
-
-Voodoo CSS
-
-primeiro.
-
-Depois:
-
-Tailwind adapter
-
-Fase 5 — Theme customization
-
-theme = create_theme(...)
-
-Fase 6 — Documentation
-
-Uma página:
-
-Design System
-
-com todos os componentes interativos.
-
-⸻
-
-28. E tem uma regra que eu considero fundamental
-
-O componente nunca deve depender de uma classe visual específica.
-
-Evitar:
-
-class Button:
-    classes = "bg-blue-600 rounded-md px-4..."
-
-Preferir:
-
-Button
- ↓
-variant="primary"
- ↓
-Theme
- ↓
-Button.primary
- ↓
-tokens
- ↓
-CSS
-
-Isso é o que permitirá que Voodoo seja realmente um framework para criar design systems, e não simplesmente mais uma biblioteca de componentes.
-
-⸻
-
-Minha visão final
-
-Eu acho que o Voodoo deveria ter uma identidade visual muito forte sem ser visualmente limitante.
-
-A experiência ideal seria:
-
-Button("Create Agent")
-
-já é bonito.
-
-Mas uma empresa pode transformar isso completamente:
-
-Button("Create Agent")
-
-e continuar usando exatamente a mesma API.
-
-Só muda:
-
-Theme
-   ↓
-Tokens
-   ↓
-Components
-
-Essa é a maturidade que eu buscaria.
-
-E eu acho que essa arquitetura é muito mais interessante do que tentar fazer um “Voodoo Tailwind”. Tailwind é uma ferramenta de composição de CSS; Voodoo deveria oferecer uma linguagem de componentes + design system que pode inclusive ser renderizada usando Tailwind.
-
-O resultado seria uma camada muito mais estratégica:
-
-Voodoo Components are semantic. Voodoo Themes define identity. Styling engines define implementation.
-
-Isso deixa Voodoo bonito por padrão, extremamente customizável e sem lock-in visual — exatamente a combinação que você está buscando.  
+```python
+Div(Text("Centered"), css={"text_align": "center", "margin_top": "20px"})
+```

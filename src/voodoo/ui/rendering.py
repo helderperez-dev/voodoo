@@ -100,15 +100,6 @@ def render_page(component: Any, seo: Any = None) -> str:
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
             tailwind.config = {tailwind_config};
-
-            // Prevent flash of incorrect theme
-            if (document.cookie.includes('voodoo_theme=light')) {{
-                document.documentElement.classList.remove('dark');
-                document.documentElement.classList.add('light');
-            }} else if (document.cookie.includes('voodoo_theme=dark')) {{
-                document.documentElement.classList.remove('light');
-                document.documentElement.classList.add('dark');
-            }}
         </script>
         """
         body_classes = (
@@ -117,11 +108,25 @@ def render_page(component: Any, seo: Any = None) -> str:
             "selection:bg-[var(--vd-color-secondary)] selection:text-white"
         )
 
-    html_class = (
-        f"dark {default_theme.mode}"
-        if default_theme.mode == "dark"
-        else default_theme.mode
-    )
+    # Resolve light/dark/system once. The persisted cookie override and the
+    # prefers-color-scheme fallback are applied by an inline script that runs
+    # before the stylesheet, avoiding a flash of the wrong theme.
+    mode = default_theme.mode or "dark"
+    if mode not in ("dark", "light", "system"):
+        mode = "dark"
+    html_class = mode
+    theme_init_script = f"""<script>
+(function () {{
+    var mode = "{mode}";
+    var m = document.cookie.match(/(?:^|;\\s*)voodoo_theme=([^;]+)/);
+    var resolved = m ? m[1] : mode;
+    if (resolved === "system") {{
+        resolved = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark" : "light";
+    }}
+    document.documentElement.classList.toggle("dark", resolved === "dark");
+}})();
+</script>"""
 
     # --- SEO: Build <head> content ---
     page_lang = seo.lang or seo_config.default_lang or "en"
@@ -158,6 +163,7 @@ def render_page(component: Any, seo: Any = None) -> str:
         {generator_tag}
         {structured_data}
         {head_scripts}
+        {theme_init_script}
         <style>
             {css_vars}
             body {{

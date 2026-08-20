@@ -22,7 +22,7 @@ Voodoo CSS is the default style adapter: components emit semantic `vd-*`
 classes (e.g. `vd-button vd-button--primary`) resolved by theme tokens, so
 prefer semantic props (`variant`, `size`, `tone`) over utility classes.
 """
-from voodoo import A, Button, Card, Flex, Heading, Page, Stack, Text
+from voodoo import A, Badge, Button, Card, Flex, Grid, Heading, Page, Stack, Text
 from voodoo.seo import SEO
 
 
@@ -49,13 +49,43 @@ def page(request):
                 direction="row",
                 gap="sm",
             ),
-            Card(
-                Heading("Folder-based routing", level=3),
-                Text("This page lives at app/page.py and maps to /."),
-                Text(
-                    "Add app/about/page.py to create /about — no extra wiring.",
-                    tone="muted",
+            Grid(
+                Card(
+                    Stack(
+                        Badge("Routing", variant="secondary"),
+                        Heading("Folder-based routing", level=3),
+                        Text("app/page.py → /", tone="muted"),
+                        Text(
+                            "Add app/about/page.py to create /about — no wiring.",
+                            tone="muted",
+                        ),
+                        gap="sm",
+                    ),
                 ),
+                Card(
+                    Stack(
+                        Badge("Theming", variant="secondary"),
+                        Heading("Theme tokens", level=3),
+                        Text(
+                            "Components read --vd-* tokens; swap them to restyle everything.",
+                            tone="muted",
+                        ),
+                        gap="sm",
+                    ),
+                ),
+                Card(
+                    Stack(
+                        Badge("Layout", variant="secondary"),
+                        Heading("Semantic layout", level=3),
+                        Text(
+                            "Stack, Flex, Grid and Page express layout — no utility classes.",
+                            tone="muted",
+                        ),
+                        gap="sm",
+                    ),
+                ),
+                cols="3",
+                gap="md",
             ),
             gap="lg",
         )
@@ -64,7 +94,7 @@ def page(request):
 '''
 
 _ABOUT_PAGE = '''"""About route — app/about/page.py maps to /about."""
-from voodoo import Container, Heading, Page, Text
+from voodoo import Container, Heading, Page, Stack, Text
 from voodoo.seo import SEO
 
 
@@ -72,12 +102,15 @@ def page(request):
     seo = SEO(title="About — My Voodoo App", description="About this project.")
     ui = Page(
         Container(
-            Heading("About", level=1, size="xl"),
-            Text("This route is defined by app/about/page.py.", tone="muted"),
-            Text(
-                "Folder structure drives routing: app/about/page.py → /about.",
-                tone="muted",
-            ),
+            Stack(
+                Heading("About", level=1, size="xl"),
+                Text("This route is defined by app/about/page.py.", tone="muted"),
+                Text(
+                    "Folder structure drives routing: app/about/page.py → /about.",
+                    tone="muted",
+                ),
+                gap="md",
+            )
         )
     )
     return seo, ui
@@ -88,7 +121,7 @@ _USER_PAGE = '''"""User route — app/users/[id]/page.py maps to /users/{id}.
 Bracket folders create dynamic segments; the `id: int` annotation coerces
 the path segment to the declared type.
 """
-from voodoo import Card, Heading, Page, Text
+from voodoo import Card, Heading, Page, Stack, Text
 from voodoo.seo import SEO
 
 
@@ -96,16 +129,19 @@ def page(request, id: int):
     seo = SEO(title=f"User {id} — My Voodoo App")
     ui = Page(
         Card(
-            Heading(f"User #{id}", level=2),
-            Text(
-                "Dynamic segments use bracket folders: "
-                "app/users/[id]/page.py → /users/{id}.",
-                tone="muted",
-            ),
-            Text(
-                "The int annotation coerces the segment: '42' → 42.",
-                tone="muted",
-            ),
+            Stack(
+                Heading(f"User #{id}", level=2),
+                Text(
+                    "Dynamic segments use bracket folders: "
+                    "app/users/[id]/page.py → /users/{id}.",
+                    tone="muted",
+                ),
+                Text(
+                    "The int annotation coerces the segment: '42' → 42.",
+                    tone="muted",
+                ),
+                gap="md",
+            )
         )
     )
     return seo, ui

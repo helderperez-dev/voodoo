@@ -32,7 +32,18 @@ const voodoo = {
             }));
         }
     },
-    
+
+    setTheme: function(mode) {
+        // mode: 'dark' | 'light' | 'system'
+        var resolved = mode;
+        if (resolved === 'system') {
+            resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark' : 'light';
+        }
+        document.documentElement.classList.toggle('dark', resolved === 'dark');
+        document.cookie = 'voodoo_theme=' + encodeURIComponent(mode) + '; path=/; max-age=31536000';
+    },
+
     handleMessage: function(event) {
         const msg = JSON.parse(event.data);
         if (msg.type === 'patch') {

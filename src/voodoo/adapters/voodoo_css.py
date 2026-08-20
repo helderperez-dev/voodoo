@@ -32,16 +32,97 @@ class VoodooCSSAdapter:
         if variant:
             classes.append(f"vd-{base}--{variant}")
 
-        size = props.get("size")
-        if size and size != "md":
-            classes.append(f"vd-{base}--{size}")
-
         # Heading level
         level = props.get("level")
         if level and component == "heading":
             classes.append(f"vd-{base}--h{level}")
 
+        # Size — button/input use it directly
+        if component in ("button", "input"):
+            size = props.get("size")
+            if size and size != "md":
+                classes.append(f"vd-{base}--{size}")
+
+        classes.extend(self._layout_classes(component, props))
         return " ".join(classes)
+
+    def _layout_classes(self, component: str, props: dict[str, Any]) -> list[str]:
+        """Layout modifier classes (Flex/Grid/Container/Page/List)."""
+        classes: list[str] = []
+
+        if component == "flex":
+            classes.extend(self._flex_classes(props))
+
+        if component == "grid":
+            classes.append(f"vd-grid--cols-{props.get('cols', '1')}")
+            classes.append(f"vd-grid--gap-{props.get('gap', '4')}")
+
+        if component == "container":
+            classes.append(f"vd-container--{props.get('size', 'xl')}")
+            if props.get("centered", True):
+                classes.append("vd-container--centered")
+
+        if component == "page":
+            classes.append(f"vd-page--{props.get('size', 'lg')}")
+            if props.get("pad", True):
+                classes.append("vd-page--pad")
+
+        if component == "list":
+            classes.extend(self._list_classes(props))
+
+        return classes
+
+    @staticmethod
+    def _flex_classes(props: dict[str, Any]) -> list[str]:
+        direction = props.get("direction", "row")
+        justify = props.get("justify", "start")
+        items = props.get("items", "stretch")
+        wrap = props.get("wrap", "nowrap")
+        return [
+            _FLEX_DIRECTIONS.get(direction, "vd-flex--row"),
+            f"vd-flex--justify-{justify if justify in _FLEX_JUSTIFY else 'start'}",
+            f"vd-flex--items-{items if items in _FLEX_ITEMS else 'stretch'}",
+            f"vd-flex--{wrap if wrap in _FLEX_WRAP else 'nowrap'}",
+            f"vd-flex--gap-{props.get('gap', '0')}",
+        ]
+
+    @staticmethod
+    def _list_classes(props: dict[str, Any]) -> list[str]:
+        if props.get("unstyled"):
+            return ["vd-list--unstyled"]
+        if props.get("ordered"):
+            return ["vd-list--ordered"]
+        return []
+
+
+# Layout modifier vocabularies shared by the adapter and the generated CSS
+_FLEX_DIRECTIONS = {
+    "row": "vd-flex--row",
+    "col": "vd-flex--col",
+    "row-reverse": "vd-flex--row-reverse",
+    "col-reverse": "vd-flex--col-reverse",
+}
+_FLEX_JUSTIFY = {"start", "end", "center", "between", "around", "evenly"}
+_FLEX_ITEMS = {"start", "end", "center", "baseline", "stretch"}
+_FLEX_WRAP = {"nowrap", "wrap", "wrap-reverse"}
+_GAP_SCALE = [
+    "0",
+    "xs",
+    "sm",
+    "md",
+    "lg",
+    "xl",
+    "xxl",
+    "xxxl",
+] + [str(i) for i in range(1, 13)]
+_CONTAINER_SIZES = {
+    "sm": "40rem",
+    "md": "48rem",
+    "lg": "64rem",
+    "xl": "80rem",
+    "2xl": "96rem",
+    "full": "100%",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +134,8 @@ def generate_component_css(theme: Theme) -> str:
     """Generate CSS for all ``vd-*`` component classes.
 
     Uses ``--vd-*`` tokens exclusively so theme changes propagate instantly.
+    Includes a base reset, a type scale, full component coverage, and layout
+    modifier classes matching :class:`VoodooCSSAdapter`.
     """
     r = "var(--vd-radius-"
     s = "var(--vd-space-"
@@ -63,19 +146,48 @@ def generate_component_css(theme: Theme) -> str:
     return f"""
 /* ── Voodoo Component CSS (generated) ─────────────────────────────── */
 
+/* Base reset */
+*, *::before, *::after {{
+    box-sizing: border-box; margin: 0; padding: 0;
+}}
+html {{ -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }}
+body {{
+    font-family: var(--vd-font-sans); font-size: {t}md);
+    line-height: var(--vd-leading-normal); color: var(--vd-color-text);
+    background: var(--vd-color-background); min-height: 100vh;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}}
+img, svg, video, canvas {{ display: block; max-width: 100%; }}
+button, input, select, textarea {{ font: inherit; color: inherit; }}
+:focus-visible {{ outline: 2px solid var(--vd-color-primary); outline-offset: 2px; }}
+
+/* Typography */
+.vd-paragraph {{
+    font-size: {t}md); line-height: var(--vd-leading-normal);
+    color: var(--vd-color-text-muted); max-width: 65ch;
+}}
+.vd-text {{ color: var(--vd-color-text); }}
+.vd-text--muted {{ color: var(--vd-color-text-muted); }}
+.vd-text--primary {{ color: var(--vd-color-primary); }}
+.vd-text--success {{ color: var(--vd-color-success); }}
+.vd-text--warning {{ color: var(--vd-color-warning); }}
+.vd-text--danger {{ color: var(--vd-color-danger); }}
+
 /* Button */
 .vd-button {{
     display: inline-flex; align-items: center; justify-content: center;
     gap: {s}sm); white-space: nowrap;
     border-radius: {r}md); font-size: {t}sm); font-weight: var(--vd-weight-medium);
-    transition: background {m}normal), color {m}normal), border-color {m}normal);
-    border: none; cursor: pointer; outline: none;
+    transition: background {m}normal), color {m}normal), border-color {m}normal),
+        box-shadow {m}normal), opacity {m}normal);
+    border: 1px solid transparent; cursor: pointer; outline: none;
     height: 2.25rem; padding: 0 1rem;
 }}
 .vd-button:focus-visible {{ box-shadow: 0 0 0 2px var(--vd-color-primary); }}
 .vd-button:disabled {{ pointer-events: none; opacity: 0.5; }}
 .vd-button--primary {{
-    background: var(--vd-color-primary); color: #fff;
+    background: var(--vd-color-primary); color: var(--vd-color-surface);
 }}
 .vd-button--primary:hover {{ background: var(--vd-color-primary-hover); }}
 .vd-button--secondary {{
@@ -105,6 +217,15 @@ def generate_component_css(theme: Theme) -> str:
     background: var(--vd-color-surface); border: 1px solid var(--vd-color-border);
     border-radius: {r}xl); padding: {s}xl);
     box-shadow: {sh}sm);
+}}
+
+/* Form */
+.vd-form {{ display: flex; flex-direction: column; gap: {s}md); }}
+
+/* Label */
+.vd-label {{
+    display: block; font-size: {t}sm); font-weight: var(--vd-weight-medium);
+    line-height: 1; color: var(--vd-color-text);
 }}
 
 /* Input */
@@ -146,12 +267,7 @@ def generate_component_css(theme: Theme) -> str:
     cursor: pointer;
 }}
 .vd-select:focus {{ outline: none; border-color: var(--vd-color-primary); }}
-
-/* Label */
-.vd-label {{
-    display: block; font-size: {t}sm); font-weight: var(--vd-weight-medium);
-    line-height: 1; color: var(--vd-color-text);
-}}
+.vd-option {{ color: var(--vd-color-text); background: var(--vd-color-surface); }}
 
 /* Checkbox */
 .vd-checkbox {{
@@ -168,12 +284,14 @@ def generate_component_css(theme: Theme) -> str:
 /* Heading */
 .vd-heading {{
     color: var(--vd-color-text); font-weight: var(--vd-weight-bold);
-    line-height: var(--vd-leading-tight);
+    line-height: var(--vd-leading-tight); letter-spacing: -0.02em;
 }}
 .vd-heading--h1 {{ font-size: {t}xxxl); font-weight: var(--vd-weight-bold); }}
 .vd-heading--h2 {{ font-size: {t}xxl); font-weight: var(--vd-weight-semibold); }}
 .vd-heading--h3 {{ font-size: {t}xl); font-weight: var(--vd-weight-semibold); }}
 .vd-heading--h4 {{ font-size: {t}lg); font-weight: var(--vd-weight-semibold); }}
+.vd-heading--h5 {{ font-size: {t}md); font-weight: var(--vd-weight-medium); }}
+.vd-heading--h6 {{ font-size: {t}sm); font-weight: var(--vd-weight-medium); }}
 
 /* Badge */
 .vd-badge {{
@@ -195,12 +313,13 @@ def generate_component_css(theme: Theme) -> str:
 .vd-avatar {{
     position: relative; display: flex; height: 2.5rem; width: 2.5rem;
     overflow: hidden; border-radius: {r}full); flex-shrink: 0;
+    background: var(--vd-color-surface); border: 1px solid var(--vd-color-border);
 }}
 .vd-avatar-img {{ height: 100%; width: 100%; object-fit: cover; }}
 .vd-avatar-fallback {{
     display: flex; height: 100%; width: 100%; align-items: center;
     justify-content: center; border-radius: {r}full);
-    background: var(--vd-color-surface); border: 1px solid var(--vd-color-border);
+    background: var(--vd-color-surface);
     color: var(--vd-color-text); font-size: {t}sm); font-weight: var(--vd-weight-medium);
 }}
 
@@ -213,7 +332,7 @@ def generate_component_css(theme: Theme) -> str:
 /* Dialog */
 .vd-dialog {{
     border: 1px solid var(--vd-color-border); background: var(--vd-color-surface);
-    border-radius: {r}xl); box-shadow: {sh}lg);
+    border-radius: {r}xl); box-shadow: {sh}lg); color: var(--vd-color-text);
 }}
 .vd-dialog::backdrop {{ background: rgb(0 0 0 / 0.5); }}
 
@@ -236,9 +355,10 @@ def generate_component_css(theme: Theme) -> str:
 .vd-link:hover {{ text-decoration: underline; }}
 
 /* List */
-.vd-list {{ list-style: disc; padding-left: 1.5rem; }}
-.vd-list--ordered {{ list-style: decimal; }}
+.vd-list {{ list-style: none; padding-left: 0; margin: 0; }}
+.vd-list--ordered {{ list-style: decimal; padding-left: 1.5rem; }}
 .vd-list--unstyled {{ list-style: none; padding-left: 0; }}
+.vd-list-item {{ padding: {s}xs) 0; color: var(--vd-color-text); }}
 
 /* ChatBox */
 .vd-chatbox {{
@@ -246,26 +366,36 @@ def generate_component_css(theme: Theme) -> str:
     overflow-y: auto;
 }}
 
-/* Flex */
-.vd-flex {{ display: flex; }}
-.vd-flex--row {{ flex-direction: row; }}
-.vd-flex--col {{ flex-direction: column; }}
-.vd-flex--row-reverse {{ flex-direction: row-reverse; }}
-.vd-flex--col-reverse {{ flex-direction: column-reverse; }}
-
-/* Grid */
-.vd-grid {{ display: grid; gap: {s}md); }}
-
-/* Container */
-.vd-container {{ max-width: 80rem; margin-left: auto; margin-right: auto; }}
-
-/* Page */
-.vd-page {{
-    max-width: 64rem; margin-left: auto; margin-right: auto;
-    width: 100%; flex: 1; padding: {s}xl) {s}md);
+/* Semantic structure */
+.vd-nav {{
+    display: flex; align-items: center; gap: {s}md);
+    padding: {s}md) {s}lg); border-bottom: 1px solid var(--vd-color-border);
+    background: var(--vd-color-background);
 }}
+.vd-header {{
+    display: flex; align-items: center; justify-content: space-between;
+    padding: {s}md) {s}lg); border-bottom: 1px solid var(--vd-color-border);
+    background: var(--vd-color-background);
+}}
+.vd-footer {{
+    padding: {s}lg); border-top: 1px solid var(--vd-color-border);
+    color: var(--vd-color-text-muted); font-size: {t}sm);
+    background: var(--vd-color-background);
+}}
+.vd-main {{ flex: 1; }}
+.vd-section {{ padding: {s}xl) 0; }}
+.vd-article {{ max-width: 65ch; }}
+.vd-aside {{ color: var(--vd-color-text-muted); font-size: {t}sm); }}
+.vd-figure {{ margin: 0; }}
+.vd-figcaption {{
+    font-size: {t}sm); color: var(--vd-color-text-muted); margin-top: {s}sm);
+}}
+.vd-address {{ font-style: normal; color: var(--vd-color-text-muted); }}
+.vd-time {{ color: var(--vd-color-text-muted); font-size: {t}sm); }}
+.vd-img {{ border-radius: {r}md); }}
 
 /* Table */
+.vd-table {{ width: 100%; border-collapse: collapse; color: var(--vd-color-text); }}
 .vd-table-head {{
     background: var(--vd-color-surface); border-bottom: 1px solid var(--vd-color-border);
 }}
@@ -284,4 +414,102 @@ def generate_component_css(theme: Theme) -> str:
     padding: 0.875rem 1.5rem; white-space: nowrap;
     font-size: {t}sm); color: var(--vd-color-text);
 }}
-"""
+
+/* User badge */
+.vd-user-badge {{
+    display: inline-flex; align-items: center; gap: {s}sm);
+    background: var(--vd-color-surface); border: 1px solid var(--vd-color-border);
+    border-radius: {r}full); padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+    color: var(--vd-color-text); font-size: {t}sm); font-weight: var(--vd-weight-medium);
+}}
+.vd-user-badge-avatar {{
+    display: flex; height: 1.75rem; width: 1.75rem; align-items: center;
+    justify-content: center; border-radius: {r}full);
+    background: var(--vd-color-primary); color: var(--vd-color-surface);
+    font-size: {t}xs); font-weight: var(--vd-weight-semibold);
+    text-transform: uppercase;
+}}
+.vd-user-badge-name {{ line-height: 1; font-size: {t}sm); }}
+.vd-user-badge-meta {{ font-size: {t}xs); color: var(--vd-color-text-muted); }}
+
+/* Auth guard */
+.vd-auth-guard {{
+    padding: {s}md); text-align: center; font-size: {t}sm);
+    color: var(--vd-color-text-muted);
+}}
+.vd-auth-guard--error {{ color: var(--vd-color-danger); font-weight: var(--vd-weight-medium); }}
+""" + _layout_css()
+
+
+def _layout_css() -> str:
+    """Generate the flex/grid/container/page modifier rules."""
+    css: list[str] = []
+
+    # Flex
+    css.append("/* Flex */")
+    css.append(".vd-flex { display: flex; }")
+    css.append(".vd-flex--row { flex-direction: row; }")
+    css.append(".vd-flex--col { flex-direction: column; }")
+    css.append(".vd-flex--row-reverse { flex-direction: row-reverse; }")
+    css.append(".vd-flex--col-reverse { flex-direction: column-reverse; }")
+    justify = {
+        "start": "flex-start",
+        "end": "flex-end",
+        "center": "center",
+        "between": "space-between",
+        "around": "space-around",
+        "evenly": "space-evenly",
+    }
+    for name, value in justify.items():
+        css.append(f".vd-flex--justify-{name} {{ justify-content: {value}; }}")
+    items = {
+        "start": "flex-start",
+        "end": "flex-end",
+        "center": "center",
+        "baseline": "baseline",
+        "stretch": "stretch",
+    }
+    for name, value in items.items():
+        css.append(f".vd-flex--items-{name} {{ align-items: {value}; }}")
+    css.append(".vd-flex--nowrap { flex-wrap: nowrap; }")
+    css.append(".vd-flex--wrap { flex-wrap: wrap; }")
+    css.append(".vd-flex--wrap-reverse { flex-wrap: wrap-reverse; }")
+
+    # Grid
+    css.append("/* Grid */")
+    css.append(".vd-grid { display: grid; }")
+    for n in range(1, 13):
+        css.append(
+            f".vd-grid--cols-{n} {{ grid-template-columns: repeat({n}, minmax(0, 1fr)); }}"
+        )
+
+    # Gap utilities (shared by flex + grid)
+    css.append("/* Gap */")
+    for g in _GAP_SCALE:
+        if g == "0":
+            value = "0"
+        elif g.isdigit():
+            # Numeric gaps follow Tailwind's 4px base: gap-4 == 1rem.
+            value = f"calc(0.25rem * {g})"
+        else:
+            value = f"var(--vd-space-{g})"
+        css.append(f".vd-flex--gap-{g} {{ gap: {value}; }}")
+        css.append(f".vd-grid--gap-{g} {{ gap: {value}; }}")
+
+    # Container
+    css.append("/* Container */")
+    css.append(".vd-container { width: 100%; margin-left: auto; margin-right: auto; }")
+    css.append(".vd-container--centered { margin-left: auto; margin-right: auto; }")
+    for name, value in _CONTAINER_SIZES.items():
+        css.append(f".vd-container--{name} {{ max-width: {value}; }}")
+
+    # Page
+    css.append("/* Page */")
+    css.append(
+        ".vd-page { width: 100%; flex: 1; margin-left: auto; margin-right: auto; }"
+    )
+    css.append(".vd-page--pad { padding: var(--vd-space-xl) var(--vd-space-md); }")
+    for name, value in _CONTAINER_SIZES.items():
+        css.append(f".vd-page--{name} {{ max-width: {value}; }}")
+
+    return "\n".join(css) + "\n"

@@ -14,7 +14,36 @@
   of Compute` → `AI is one form of Compute`. `pyproject.toml` description and
   `release.yml` Homebrew `desc` updated to match. No behavior change.
 
+#### Sprint 15 — Design system & theme engine
+
+- **Voodoo CSS is now the polished default** — `VoodooCSSAdapter` gained full
+  component coverage via `generate_component_css()`: base reset, typography
+  scale, and styled `button`, `card`, `form`, `input`, `textarea`, `select`,
+  `badge`, `avatar`, `divider`, `list`, `heading`, `link`, and layout classes.
+- **Layout parity** — `Flex` (`direction`/`justify`/`items`/`wrap`/`gap`),
+  `Grid` (`cols`/`gap`), `Container` (`size`/`centered`), and `Page`
+  (`size`/`pad`) emit semantic `vd-*` classes in the default adapter. Numeric
+  gaps use a 4px base (`calc(0.25rem * 4)`); named gaps use spacing tokens.
+- **Theme mode plumbing** — `render_page` now emits `class="{mode}"`
+  (dark/light/system, no duplicated `dark dark`) plus an inline
+  `theme_init_script` that resolves the `voodoo_theme` cookie → `Theme.mode`
+  → `prefers-color-scheme` before paint (no flash).
+- **No hardcoded Tailwind** — auth forms and library components dropped raw
+  `space-y-*`/`text-center` utilities in favor of semantic `Stack`/`Form`
+  composition; `Form` now uses `style="form"` resolved by every adapter.
+
 ### Added
+
+#### Sprint 15 — Design system & theme engine
+
+- **`voodoo.setTheme(mode)`** — client runtime API to toggle light/dark/system
+  and persist the choice in the `voodoo_theme` cookie.
+- **`Form.style = "form"`** — `_form` resolvers added to both `VoodooCSSAdapter`
+  and `TailwindAdapter`.
+- **`tests/test_design_system.py`** — layout parity, stylesheet coverage, and
+  theme-mode plumbing tests.
+- **`docs/design_system.md`** — rewritten with the token, theme, adapter, and
+  layout reference; `docs/components.md` documents layout props.
 
 #### Sprint 14 — ModelProvider protocol
 
