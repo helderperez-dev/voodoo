@@ -30,18 +30,19 @@ another disconnected feature.
 | | |
 |---|---|
 | **Latest release** | `1.16.0` (`src/voodoo/__init__.py` → `__version__`) |
-| **Sprints 1–14** | ✅ All DONE + released (v1.3.0 → v1.16.0) |
-| **Next sprint** | **Sprint 14b — Runtime vision alignment → `1.16.1`** |
+| **Sprints 1–15** | ✅ All DONE (Sprint 15 v1.17.0 pending release) |
+| **Next sprint** | **Sprint 16 — Memory as entity state → `1.18.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
 | Sprint | Version | Sprint | Version |
 |--------|---------|--------|---------|
-| 14b — Runtime vision alignment | 1.16.1 | — | — |
-| 14 — ModelProvider protocol | 1.16.0 | 18 — Capability security & secrets | 2.0.0 |
-| 15 — Memory capability | 1.17.0 | 19 — Observability | 2.1.0 |
-| 16 — Agents as durable entities | 1.18.0 | 20 — Protocol schemas & versioning | 2.2.0 |
-| 17 — Durable HITL | 1.19.0 | 21 — Local runtime DX | 2.3.0 |
+| 14b — Runtime vision alignment | 1.16.1 | 19 — Capability security & secrets | 2.0.0 |
+| 14 — ModelProvider protocol | 1.16.0 | 20 — Observability | 2.1.0 |
+| 15 — Voodoo Design System & CSS | 1.17.0 | 21 — Protocol schemas & versioning | 2.2.0 |
+| 16 — Memory capability | 1.18.0 | 22 — Local runtime DX | 2.3.0 |
+| 17 — Agents as durable entities | 1.19.0 | — | — |
+| 18 — Durable HITL | 1.20.0 | — | — |
 
 ### Runtime convergence map
 
@@ -51,13 +52,14 @@ conceptual model in [`docs/primitives.md`](docs/primitives.md):
 | Sprint | Advances | Ontology concept |
 |---|---|---|
 | 14b — Vision alignment | Code, docs & metadata speak one vocabulary | Convergence (naming) |
-| 15 — Memory | Durable, queryable entity recall | State (+ Entity) |
-| 16 — Agents as durable entities | Identity + state + history for agents | Entity, Identity |
-| 17 — Durable HITL | Human approval survives restart | Execution, Constraint |
-| 18 — Capability security | No ambient authority; secrets never leak | Capability, Effect, Constraint |
-| 19 — Observability | One trace identity end-to-end | Telemetry |
-| 20 — Protocol schemas | Stable semantic boundary for all entities | Identity, Event, Relationship |
-| 21 — Local runtime DX | The whole runtime boots as one thing | Convergence (all) |
+| 15 — Design System & CSS | Semantic UI is token-driven, polished, professional by default | Convergence (presentation) |
+| 16 — Memory | Durable, queryable entity recall | State (+ Entity) |
+| 17 — Agents as durable entities | Identity + state + history for agents | Entity, Identity |
+| 18 — Durable HITL | Human approval survives restart | Execution, Constraint |
+| 19 — Capability security | No ambient authority; secrets never leak | Capability, Effect, Constraint |
+| 20 — Observability | One trace identity end-to-end | Telemetry |
+| 21 — Protocol schemas | Stable semantic boundary for all entities | Identity, Event, Relationship |
+| 22 — Local runtime DX | The whole runtime boots as one thing | Convergence (all) |
 
 ---
 
@@ -149,13 +151,14 @@ DONE  |  WIP  |  TODO
 | 12 | S3/R2 object store | 1.14.0 | Presign, checksums, multipart; `s3` extra | DONE |
 | 13 | Redis adapters (optional) | 1.15.0 | Redis queue/cache behind contracts | DONE |
 | 14 | ModelProvider protocol | 1.16.0 | Model descriptors + routing aliases + contract tests | DONE |
-| 15 | Memory capability | 1.17.0 | Layered memory: search/read/write, SQLite default | TODO |
-| 16 | Agents as durable entities | 1.18.0 | Agent registry; runs are executions; CLI | TODO |
-| 17 | Durable human-in-the-loop | 1.19.0 | WAITING_FOR_HUMAN survives restart, no live worker | TODO |
-| 18 | Capability security & secrets | 2.0.0 | secrets.get, redaction, no ambient authority | TODO |
-| 19 | Observability | 2.1.0 | Execution-aware tracing, `voodoo status/workers` | TODO |
-| 20 | Protocol schemas & versioning | 2.2.0 | `voodoo.protocol`, schema_version everywhere | TODO |
-| 21 | Local runtime DX | 2.3.0 | `voodoo create` + `voodoo dev` boot the full local runtime | TODO |
+| 15 | Voodoo Design System & CSS | 1.17.0 | Polished default: layout parity, base reset, full component CSS, light/dark/system | TODO |
+| 16 | Memory capability | 1.18.0 | Layered memory: search/read/write, SQLite default | TODO |
+| 17 | Agents as durable entities | 1.19.0 | Agent registry; runs are executions; CLI | TODO |
+| 18 | Durable human-in-the-loop | 1.20.0 | WAITING_FOR_HUMAN survives restart, no live worker | TODO |
+| 19 | Capability security & secrets | 2.0.0 | secrets.get, redaction, no ambient authority | TODO |
+| 20 | Observability | 2.1.0 | Execution-aware tracing, `voodoo status/workers` | TODO |
+| 21 | Protocol schemas & versioning | 2.2.0 | `voodoo.protocol`, schema_version everywhere | TODO |
+| 22 | Local runtime DX | 2.3.0 | `voodoo create` + `voodoo dev` boot the full local runtime | TODO |
 
 Spec §52 "Definition of Done — Durable Runtime" is achieved after Sprint 6.
 "Moderate production = PostgreSQL + S3/R2" (§7) is achieved after Sprint 12.
@@ -500,8 +503,76 @@ Scope:
 - **Documentation:** `CHANGELOG.md` under `[Unreleased]`.
 - **Definition of Done:** quality gate green + released `1.16.1`.
 
-## Sprint 15 — Memory as entity state
-**Version 1.17.0 · ROADMAP §28, §26 · Status: TODO · Released as: —**
+## Sprint 15 — Voodoo Design System & CSS
+**Version 1.17.0 · ROADMAP §45, §46 · Status: DONE · Released as: —**
+
+> **Cross-cutting presentation sprint.** Ships before the remaining AI-runtime
+> work so every new surface (agents, HITL, observability) renders on a polished
+> default UI instead of the current unpolished CSS.
+
+- **Goal:** Make the default Voodoo CSS path produce polished, professional
+  interfaces out of the box — every semantic layout and component prop renders,
+  backed by a base reset, full component CSS coverage, and light/dark/system
+  theming.
+- **Why:** `voodoo new` currently scaffolds apps that render broken layouts and
+  unpolished components. The default `VoodooCSSAdapter` drops layout props
+  (`gap`, `direction`, `justify`, `items`, `wrap`, `cols`, container/page
+  sizes), `generate_component_css()` covers only a subset of the library, and
+  there is no base reset — so the "terrible default" is structural, not a
+  matter of taste.
+- **Current State:** The component model (Sprints S2/DS) declares semantic props
+  but the default adapter ignores them; only the Tailwind adapter maps them
+  (and it is the only tested path). `docs/design_system.md` holds a strong
+  MUI-inspired vision (tokens → CSS variables → semantic components → adapters)
+  that is only partially implemented.
+- **Changes:**
+  - [x] **Layout parity** — map `direction`, `gap`, `justify`, `items`, `wrap`,
+        `cols`, `size`, `pad`, `centered` to `vd-*` modifier classes in
+        `VoodooCSSAdapter.component_classes()` and add matching rules in
+        `generate_component_css()`. `Stack` must render a vertical layout with
+        its declared `gap` by default; `Grid(cols=…)` must emit real columns.
+  - [x] **Base reset & typography** — ship a minimal reset (`box-sizing:
+        border-box`, `margin: 0` on `body`/headings/paragraphs, body
+        `line-height`, antialiasing, `img { display: block; max-width: 100% }`)
+        and apply the `--vd-*` type scale to `Text`/`Heading`/`Paragraph` so
+        browser defaults stop leaking through.
+  - [x] **Full component CSS coverage** — complete `generate_component_css` for
+        every library component (Paragraph, Form, Nav, Header, Footer, Main,
+        Section, Article, Aside, Figure, FigCaption, Address, Time, Img,
+        ListItem, Option, Table base, Dialog/Modal backdrop) with consistent
+        tokens, focus-visible rings, hover/active/disabled states, and motion
+        tokens.
+  - [x] **Remove hardcoded Tailwind classes** — `_auth_field`, `LoginForm`, and
+        `RegisterForm` must use semantic components/tokens; `space-y-*`,
+        `text-center mb-*` are no-ops under the default adapter.
+  - [x] **Light/dark/system modes** — honor `theme.mode` via `:root`/`.dark`/
+        `prefers-color-scheme`; drop the forced `class="dark dark"`; expose a
+        runtime toggle (`voodoo.set_theme` / `data-theme` attribute).
+  - [x] **Interactive polish** — consistent focus-visible rings, hover/active/
+        disabled transitions, and spacing/typography rhythm across Button,
+        Input, Select, Checkbox, Radio, Link, Badge, Card, Dialog, Modal.
+  - [x] **Scaffold showcase** — update the `voodoo new` offline scaffold
+        (`cli/new.py`) and `examples/hello_world` to demonstrate the polished
+        default using semantic props only.
+- **Dependencies:** None (presentation layer only; no runtime/storage impact).
+- **Acceptance Criteria:** a freshly scaffolded `voodoo new` app renders a
+  clean, professional page with correct gap/direction/columns and no browser
+  default leakage; every semantic prop maps to a class *and* a generated CSS
+  rule; no Tailwind utility classes remain inside `src/voodoo/ui/library.py`;
+  `theme.mode` light/dark/system all render correctly.
+- **Tests:** golden render tests for the `VoodooCSSAdapter` path (layout
+  classes emitted); a parity test asserting each semantic prop produces a class
+  with a matching generated CSS rule; a test asserting no `space-y-*`/Tailwind
+  utilities in the library; `to_css_variables()`/`generate_component_css()`
+  contain the reset + all component rules; mode variants. Update
+  `tests/test_ui.py`, add `tests/test_design_system.py`.
+- **Documentation:** rewrite `docs/design_system.md` (brainstorm → reference);
+  update `docs/components.md` and `docs/routing.md` (scaffold example) if
+  affected; `CHANGELOG.md`.
+- **Definition of Done:** quality gate green + released `1.17.0`.
+
+## Sprint 16 — Memory as entity state
+**Version 1.18.0 · ROADMAP §28, §26 · Status: TODO · Released as: —**
 
 - **Goal:** Give entities durable, queryable memory so their state survives and
   can be recalled — working, episodic, and semantic.
@@ -526,8 +597,8 @@ Scope:
 - **Documentation:** `docs/data.md`, `docs/agents.md`, `CHANGELOG.md`.
 - **Definition of Done:** quality gate green + released `1.17.0`.
 
-## Sprint 16 — Agents as durable entities
-**Version 1.18.0 · ROADMAP §47 · Status: TODO · Released as: —**
+## Sprint 17 — Agents as durable entities
+**Version 1.19.0 · ROADMAP §47 · Status: TODO · Released as: —**
 
 - **Goal:** Agents become durable entities — stable identity, capabilities,
   state, and queryable execution history.
@@ -552,8 +623,8 @@ Scope:
 - **Documentation:** `docs/agents.md`, `docs/execution-model.md`, `CHANGELOG.md`.
 - **Definition of Done:** quality gate green + released `1.18.0`.
 
-## Sprint 17 — Durable human-in-the-loop
-**Version 1.19.0 · ROADMAP §50 · Status: TODO · Released as: —**
+## Sprint 18 — Durable human-in-the-loop
+**Version 1.20.0 · ROADMAP §50 · Status: TODO · Released as: —**
 
 - **Goal:** Human approval is an execution state that survives process death;
   a decision resumes the execution on any worker.
@@ -577,7 +648,7 @@ Scope:
 - **Documentation:** `docs/hitl.md`, `docs/execution-model.md`, `CHANGELOG.md`.
 - **Definition of Done:** quality gate green + released `1.19.0`.
 
-## Sprint 18 — Capability security & secrets
+## Sprint 19 — Capability security & secrets
 **Version 2.0.0 · ROADMAP §55, §70 · Status: TODO · Released as: —**
 
 - **Goal:** No ambient authority. Capabilities gate effects; secrets never
@@ -597,7 +668,7 @@ Scope:
         `shell.execute`, `secrets.read`, `payment.execute`, `email.send`)
         require explicit grants — no ambient authority by default.
   - [ ] Migration note + upgrade guide for existing agents (CHANGELOG + docs).
-- **Dependencies:** Sprint 8 (capability negotiation), Sprint 16 (agent
+- **Dependencies:** Sprint 8 (capability negotiation), Sprint 17 (agent
   entities).
 - **Acceptance Criteria:** denied-by-default matrix holds; secrets are redacted
   from events/journal/telemetry.
@@ -610,7 +681,7 @@ Scope:
 
 # MILESTONE E — PROTOCOL STABILITY & DX
 
-## Sprint 19 — Observability
+## Sprint 20 — Observability
 **Version 2.1.0 · ROADMAP §54 · Status: TODO · Released as: —**
 
 - **Goal:** One trace identity propagates through execution, task, worker,
@@ -627,14 +698,14 @@ Scope:
         (providers, capabilities, migrations, queue depth, schedule health).
   - [ ] Telemetry summaries persisted (rolling) so `voodoo status` works after
         restart.
-- **Dependencies:** Sprint 3 (executions), Sprint 16 (entities).
+- **Dependencies:** Sprint 3 (executions), Sprint 17 (entities).
 - **Acceptance Criteria:** `trace_id` propagates end-to-end; `voodoo status`
   works after restart.
 - **Tests:** trace propagation across the full chain; status persistence.
 - **Documentation:** `docs/telemetry.md`, `CHANGELOG.md`.
 - **Definition of Done:** quality gate green + released `2.1.0`.
 
-## Sprint 20 — Protocol schemas & versioning
+## Sprint 21 — Protocol schemas & versioning
 **Version 2.2.0 · ROADMAP §56, §57 · Status: TODO · Released as: —**
 
 - **Goal:** Canonical entity schemas form the stable semantic boundary for
@@ -652,7 +723,7 @@ Scope:
         languages/SDKs.
   - [ ] Compatibility policy documented (additive within major; migrations for
         stored data).
-- **Dependencies:** Sprint 3 (executions), Sprint 8 (contracts), Sprint 16
+- **Dependencies:** Sprint 3 (executions), Sprint 8 (contracts), Sprint 17
   (entities).
 - **Acceptance Criteria:** every entity round-trips serialize/deserialize; the
   export command emits valid schemas.
@@ -661,7 +732,7 @@ Scope:
   `CHANGELOG.md`.
 - **Definition of Done:** quality gate green + released `2.2.0`.
 
-## Sprint 21 — Local runtime DX ("WAMP for autonomous software")
+## Sprint 22 — Local runtime DX ("WAMP for autonomous software")
 **Version 2.3.0 · ROADMAP §63, §62 · Status: TODO · Released as: —**
 
 - **Goal:** `install → create → dev` boots the whole runtime as one thing, with

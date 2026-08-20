@@ -27,6 +27,31 @@ layout = Container(
 )
 ```
 
+Layout is expressed through semantic props, not utility classes:
+
+| Component | Props |
+|---|---|
+| `Flex` | `direction`, `justify`, `items`, `wrap`, `gap` |
+| `Grid` | `cols`, `gap` |
+| `Container` | `size`, `centered` |
+| `Page` | `size`, `pad` |
+| `Stack` | `gap` (vertical `Flex`) |
+
+```python
+from voodoo import Flex, Grid, Page, Stack
+
+ui = Page(
+    Stack(
+        Grid("a", "b", "c", cols="3", gap="md"),
+        Flex("left", "right", direction="row", justify="between", gap="sm"),
+        gap="lg",
+    )
+)
+```
+
+See [Design System](./design_system.md) for the full token, theme, and adapter
+reference.
+
 ### Cards and content
 
 ```python

@@ -353,6 +353,7 @@ class ChatBox(Component):
 
 class Form(Component):
     tag = "form"
+    style = "form"
 
     def __init__(
         self, *children: Any, on_submit: str | None = None, **kwargs: Any
@@ -592,7 +593,7 @@ class Img(Component):
 
 
 def _auth_field(label: str, control: Component) -> Component:
-    return Div(Label(label), control, class_="space-y-2")
+    return Stack(Label(label), control, gap="sm")
 
 
 class LoginForm(Component):
@@ -644,14 +645,14 @@ class LoginForm(Component):
             Button(submit_text, type="submit", variant="primary"),
             action=action,
             method=method,
-            class_="space-y-5",
         )
-        header = Div(
+        header = Stack(
             Heading(title, level=2),
             Text(subtitle),
-            class_="text-center mb-6",
+            gap="xs",
+            items="center",
         )
-        super().__init__(header, form, **kwargs)
+        super().__init__(Stack(header, form, gap="lg"), **kwargs)
 
 
 class RegisterForm(Component):
@@ -710,14 +711,14 @@ class RegisterForm(Component):
             Button(submit_text, type="submit", variant="primary"),
             action=action,
             method=method,
-            class_="space-y-5",
         )
-        header = Div(
+        header = Stack(
             Heading(title, level=2),
             Text(subtitle),
-            class_="text-center mb-6",
+            gap="xs",
+            items="center",
         )
-        super().__init__(header, form, **kwargs)
+        super().__init__(Stack(header, form, gap="lg"), **kwargs)
 
 
 class UserBadge(Component):

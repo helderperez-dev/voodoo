@@ -349,6 +349,10 @@ def _page(props: dict[str, Any], theme: Theme) -> str:
     return f"{size} mx-auto flex-1 w-full{padding}"
 
 
+def _form(props: dict[str, Any], theme: Theme) -> str:
+    return "flex flex-col gap-md"
+
+
 def _table_head(props: dict[str, Any], theme: Theme) -> str:
     return _TABLE_HEAD
 
@@ -398,6 +402,7 @@ _STYLES: dict[str, Callable[[dict[str, Any], Theme], str]] = {
     "grid": _grid,
     "container": _container,
     "page": _page,
+    "form": _form,
     "link": _link,
     "table.head": _table_head,
     "table.row": _table_row,
