@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+### Added
+- **AI development workflow** — structured guidance for AI coding agents
+  (Claude Code, Cursor, GitHub Copilot, etc.):
+  - `AGENTS.md` — root-level AI agent instructions; the entry point for any
+    agent working in the repository.
+  - `.github/copilot-instructions.md` — GitHub Copilot entry point with the
+    architectural invariants, code style, testing standards, and sprint
+    protocol.
+  - `.github/instructions/` — domain-specific instruction files
+    (architecture, runtime, providers, execution, ai, testing,
+    pull-request).
+  - `.github/skills/` — structured workflows (implement-sprint,
+    add-provider, runtime-feature, testing, documentation,
+    architecture-review, release).
+  - `.github/prompts/` — structured prompts (audit-repository, plan-sprint,
+    architecture-review).
+- `ARCHITECTURE.md` — root-level architecture reference (layers,
+  primitives, execution model).
+- `README.md` — "AI Development Workflow" section linking the agent
+  instructions, skills, and prompts.
+- `ROADMAP.md` — "AI development workflow" section describing the `.github/`
+  structure.
+- `SPRINT_PLAN.md` — AI agent workflow note at the top of the sprint
+  protocol.
+
+### Changed
+- `.github/PULL_REQUEST_TEMPLATE.md` — expanded documentation-sync checklist:
+  `CHANGELOG.md` under `[Unreleased]`, `docs/*.md` per the source-path
+  mapping, `README.md`, `SPRINT_PLAN.md`, `ROADMAP.md`, `ARCHITECTURE.md`,
+  and `test_contract_api.py`.
+
 ### Fixed
 - **Labeler config** — replaced the invalid `any-glob-to-changed-file` key
   with `any-glob-to-any-file` in `.github/labeler.yml` (`area: docs` and

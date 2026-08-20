@@ -374,6 +374,14 @@ voodoo auth secret-key
 - [Changelog](CHANGELOG.md)
 - [Master Roadmap](ROADMAP.md)
 - [Sprint Plan](SPRINT_PLAN.md)
+- [Architecture Reference](ARCHITECTURE.md)
+
+### AI Development Workflow
+- [AI Agent Instructions](AGENTS.md)
+- [Copilot Instructions](.github/copilot-instructions.md)
+- [Instruction Files](.github/instructions/) — Domain-specific guidance for AI agents
+- [Skills](.github/skills/) — Structured workflows for common tasks
+- [Prompts](.github/prompts/) — Structured prompts for audits, planning, and reviews
 
 ## Examples
 
@@ -420,6 +428,8 @@ See the [master roadmap](ROADMAP.md) and [sprint plan](SPRINT_PLAN.md) for detai
 ## Contributing
 
 Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) before opening a pull request.
+
+> **AI coding agents:** Read [`AGENTS.md`](AGENTS.md) and [`.github/copilot-instructions.md`](.github/copilot-instructions.md) before making any changes. These define the architectural invariants, code style, testing standards, and sprint protocol that must be followed.
 
 Quick start for contributors:
 
