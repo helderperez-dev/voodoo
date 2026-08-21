@@ -41,7 +41,7 @@ _BTN_SIZES = {
 
 _BTN_VARIANTS = {
     "primary": (
-        "bg-[var(--vd-color-primary)] text-white "
+        "bg-[var(--vd-color-primary)] text-[var(--vd-color-surface)] "
         "hover:bg-[var(--vd-color-primary-hover)] cursor-pointer"
     ),
     "secondary": (

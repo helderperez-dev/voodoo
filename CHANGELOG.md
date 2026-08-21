@@ -4,18 +4,20 @@
 
 ### Fixed
 
-- **`voodoo dev` no longer shadows the project's voodoo with the CLI's own
-  install.** Removed `PYTHONPATH = os.pathsep.join(sys.path)` from
-  `cli/dev.py`; when the CLI runs from a bundled install (Homebrew, `uv tool`)
-  its site-packages contain a different voodoo version than the project's
-  `.venv`, and prepending them to `PYTHONPATH` caused `uvicorn` to import stale
-  framework code (e.g. the pre-design-system renderer). `python -m uvicorn`
-  already places the cwd on `sys.path`, so local `main.py`/`app.py` modules
-  still resolve without any manual `PYTHONPATH`.
-- **Homebrew formula pins the exact release.** `release.yml` now generates
-  `uv tool install "voodoo-framework==#{version}"` instead of an unpinned
-  `voodoo-framework`, so `brew install voodoo` can no longer pull a newer/later
-  PyPI build that disagrees with the formula's `url`/`sha256`.
+- **Dark-mode primary action color was invisible.** The `primary` token was
+  near-black (`#18181B`) in *both* light and dark modes, which made primary
+  buttons, links, and focus rings invisible on dark surfaces (the default
+  mode). `primary` now inverts per mode — near-white (`#FAFAFA`) in dark mode,
+  near-black (`#18181B`) in light mode — via new `light_primary` /
+  `light_primary_hover` tokens that `light_overrides()` swaps in.
+- **Links, focus rings, and form accents are consistently visible** in every
+  mode: the indigo `secondary` token now drives `:focus-visible` rings,
+  `::selection`, links, checkbox/radio accent colors, and the user-badge avatar
+  (previously the now-inverted `primary`, which vanished in dark mode).
+- **Default `.vd-button` now has a visible surface + border** (previously
+  transparent), plus hover/active feedback so it reads as interactive in both
+  modes. The Tailwind `primary` variant uses the `surface` token for its text
+  color so it stays legible on the near-white dark-mode fill.
 
 ### Changed
 

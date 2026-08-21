@@ -21,9 +21,9 @@ from pydantic import BaseModel, Field
 class ThemeColors(BaseModel):
     """Semantic color palette."""
 
-    primary: str = "#18181B"  # Near-black (Linear/Vercel aesthetic)
-    primary_hover: str = "#27272A"  # Darkened primary
-    secondary: str = "#6366F1"  # Indigo accent
+    primary: str = "#FAFAFA"  # Dark-mode action fill (near-white; Linear/Vercel)
+    primary_hover: str = "#E4E4E7"  # Dark-mode hover (Zinc-200)
+    secondary: str = "#6366F1"  # Indigo accent (links, focus, emphasis)
 
     # Status
     success: str = "#22C55E"
@@ -36,7 +36,7 @@ class ThemeColors(BaseModel):
     surface: str = "#18181B"  # Zinc-900
     surface_raised: str = "#27272A"  # Zinc-800
     text: str = "#FAFAFA"
-    text_muted: str = "#71717A"  # Zinc-500
+    text_muted: str = "#A1A1AA"  # Zinc-400 (readable on Zinc-950)
     border: str = "#27272A"  # Zinc-800
 
     # Surfaces — light mode
@@ -46,6 +46,10 @@ class ThemeColors(BaseModel):
     light_text: str = "#18181B"
     light_text_muted: str = "#71717A"
     light_border: str = "#E4E4E7"
+
+    # Action fill — light mode (primary inverts: near-black light, near-white dark)
+    light_primary: str = "#18181B"  # Zinc-900
+    light_primary_hover: str = "#27272A"  # Zinc-800
 
     # Allow extra colors
     extra: dict[str, str] = Field(default_factory=dict)
@@ -65,6 +69,8 @@ class ThemeColors(BaseModel):
                 "light_text",
                 "light_text_muted",
                 "light_border",
+                "light_primary",
+                "light_primary_hover",
             }
         )
         hyphenated = {k.replace("_", "-"): v for k, v in named.items()}
@@ -78,6 +84,8 @@ class ThemeColors(BaseModel):
             "text": self.light_text,
             "text-muted": self.light_text_muted,
             "border": self.light_border,
+            "primary": self.light_primary,
+            "primary-hover": self.light_primary_hover,
         }
 
 
@@ -347,6 +355,7 @@ def create_theme(
     colors = ThemeColors()
     if primary:
         colors.primary = primary
+        colors.light_primary = primary
     if secondary:
         colors.secondary = secondary
     if background:

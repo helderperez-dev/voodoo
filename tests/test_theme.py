@@ -11,7 +11,7 @@ from voodoo.theme import (
 
 def test_default_theme():
     assert default_theme.mode == "dark"
-    assert default_theme.colors.primary == "#18181B"
+    assert default_theme.colors.primary == "#FAFAFA"
 
 
 def test_custom_theme():

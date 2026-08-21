@@ -3,7 +3,19 @@
 Run: python main.py  or  voodoo dev
 """
 
-from voodoo import App, Badge, Button, Card, Grid, Heading, Page, Stack, Text, page
+from voodoo import (
+    App,
+    Badge,
+    Button,
+    Card,
+    Grid,
+    Heading,
+    Link,
+    Page,
+    Stack,
+    Text,
+    page,
+)
 
 app = App()
 
@@ -18,7 +30,12 @@ def home():
                 "and polished dark mode out of the box.",
                 tone="muted",
             ),
-            Button("Get started", variant="primary"),
+            Stack(
+                Button("Get started", variant="primary"),
+                Button("Learn more", variant="secondary"),
+                Link("Read the docs", href="https://voodoo.dev"),
+                gap="md",
+            ),
             Grid(
                 Card(Stack(Badge("Tokens"), Heading("--vd-*", level=3), gap="sm")),
                 Card(

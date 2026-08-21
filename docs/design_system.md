@@ -65,7 +65,10 @@ app = App(
 
 The default theme is minimalist and modern (Apple × Linear × Vercel × Raycast
 aesthetic): generous whitespace, clean typography, subtle borders, moderate
-radius, discreet shadows, and excellent dark mode.
+radius, discreet shadows, and excellent dark mode. The `primary` action color
+inverts per mode — near-black in light mode, near-white in dark mode — while the
+indigo `secondary` token drives links, focus rings, and accents so interactive
+elements stay visible in every theme.
 
 ## Style adapters
 

@@ -164,7 +164,7 @@ def test_button_variant_primary(tailwind_adapter):
     btn = Button("Save", variant="primary")
     rendered = btn.render()
     assert "bg-[var(--vd-color-primary)]" in rendered
-    assert "text-white" in rendered
+    assert "text-[var(--vd-color-surface)]" in rendered
     assert "hover:bg-[var(--vd-color-primary-hover)]" in rendered
     assert "cursor-pointer" in rendered
 
@@ -459,7 +459,7 @@ def test_theme_has_semantic_tokens():
     from voodoo.theme import ThemeColors
 
     colors = ThemeColors()
-    assert colors.primary_hover == "#27272A"
+    assert colors.primary_hover == "#E4E4E7"
     assert colors.success == "#22C55E"
     assert colors.warning == "#F59E0B"
     assert colors.danger == "#EF4444"

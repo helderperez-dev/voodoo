@@ -160,7 +160,8 @@ body {{
 }}
 img, svg, video, canvas {{ display: block; max-width: 100%; }}
 button, input, select, textarea {{ font: inherit; color: inherit; }}
-:focus-visible {{ outline: 2px solid var(--vd-color-primary); outline-offset: 2px; }}
+:focus-visible {{ outline: 2px solid var(--vd-color-secondary); outline-offset: 2px; }}
+::selection {{ background: var(--vd-color-secondary); color: #fff; }}
 
 /* Typography */
 .vd-paragraph {{
@@ -180,11 +181,14 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     gap: {s}sm); white-space: nowrap;
     border-radius: {r}md); font-size: {t}sm); font-weight: var(--vd-weight-medium);
     transition: background {m}normal), color {m}normal), border-color {m}normal),
-        box-shadow {m}normal), opacity {m}normal);
-    border: 1px solid transparent; cursor: pointer; outline: none;
+        box-shadow {m}normal), opacity {m}normal), transform {m}fast);
+    border: 1px solid var(--vd-color-border); cursor: pointer; outline: none;
+    background: var(--vd-color-surface); color: var(--vd-color-text);
     height: 2.25rem; padding: 0 1rem;
 }}
-.vd-button:focus-visible {{ box-shadow: 0 0 0 2px var(--vd-color-primary); }}
+.vd-button:hover {{ background: var(--vd-color-surface-raised); }}
+.vd-button:active {{ transform: translateY(1px); }}
+.vd-button:focus-visible {{ box-shadow: 0 0 0 2px var(--vd-color-secondary); }}
 .vd-button:disabled {{ pointer-events: none; opacity: 0.5; }}
 .vd-button--primary {{
     background: var(--vd-color-primary); color: var(--vd-color-surface);
@@ -238,8 +242,8 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
 }}
 .vd-input::placeholder {{ color: var(--vd-color-text-muted); }}
 .vd-input:focus-visible {{
-    outline: none; border-color: var(--vd-color-primary);
-    box-shadow: 0 0 0 1px var(--vd-color-primary);
+    outline: none; border-color: var(--vd-color-secondary);
+    box-shadow: 0 0 0 1px var(--vd-color-secondary);
 }}
 .vd-input:disabled {{ opacity: 0.5; cursor: not-allowed; }}
 .vd-input--sm {{ height: 2rem; padding: 0.25rem 0.625rem; }}
@@ -254,8 +258,8 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     transition: border-color {m}normal);
 }}
 .vd-textarea:focus-visible {{
-    outline: none; border-color: var(--vd-color-primary);
-    box-shadow: 0 0 0 1px var(--vd-color-primary);
+    outline: none; border-color: var(--vd-color-secondary);
+    box-shadow: 0 0 0 1px var(--vd-color-secondary);
 }}
 
 /* Select */
@@ -266,25 +270,26 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     font-size: {t}sm); color: var(--vd-color-text);
     cursor: pointer;
 }}
-.vd-select:focus {{ outline: none; border-color: var(--vd-color-primary); }}
+.vd-select:focus {{ outline: none; border-color: var(--vd-color-secondary); }}
 .vd-option {{ color: var(--vd-color-text); background: var(--vd-color-surface); }}
 
 /* Checkbox */
 .vd-checkbox {{
     width: 1rem; height: 1rem; border: 1px solid var(--vd-color-border);
-    border-radius: {r}sm); cursor: pointer; accent-color: var(--vd-color-primary);
+    border-radius: {r}sm); cursor: pointer; accent-color: var(--vd-color-secondary);
 }}
 
 /* Radio */
 .vd-radio {{
     width: 1rem; height: 1rem; border: 1px solid var(--vd-color-border);
-    border-radius: {r}full); cursor: pointer; accent-color: var(--vd-color-primary);
+    border-radius: {r}full); cursor: pointer; accent-color: var(--vd-color-secondary);
 }}
 
 /* Heading */
 .vd-heading {{
     color: var(--vd-color-text); font-weight: var(--vd-weight-bold);
-    line-height: var(--vd-leading-tight); letter-spacing: -0.02em;
+    line-height: var(--vd-leading-tight); letter-spacing: -0.025em;
+    text-wrap: balance;
 }}
 .vd-heading--h1 {{ font-size: {t}xxxl); font-weight: var(--vd-weight-bold); }}
 .vd-heading--h2 {{ font-size: {t}xxl); font-weight: var(--vd-weight-semibold); }}
@@ -348,7 +353,7 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
 
 /* Link */
 .vd-link {{
-    color: var(--vd-color-primary); text-decoration: none;
+    color: var(--vd-color-secondary); text-decoration: none;
     text-underline-offset: 4px; cursor: pointer;
     transition: color {m}normal);
 }}
@@ -425,7 +430,7 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
 .vd-user-badge-avatar {{
     display: flex; height: 1.75rem; width: 1.75rem; align-items: center;
     justify-content: center; border-radius: {r}full);
-    background: var(--vd-color-primary); color: var(--vd-color-surface);
+    background: var(--vd-color-secondary); color: #fff;
     font-size: {t}xs); font-weight: var(--vd-weight-semibold);
     text-transform: uppercase;
 }}
