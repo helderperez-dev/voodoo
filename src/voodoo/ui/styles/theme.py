@@ -51,6 +51,17 @@ class ThemeColors(BaseModel):
     light_primary: str = "#18181B"  # Zinc-900
     light_primary_hover: str = "#27272A"  # Zinc-800
 
+    # Accent fill — light mode. Defaults to the same indigo as dark mode so the
+    # stock theme is unchanged; themes may darken it for contrast on white.
+    light_secondary: str = "#6366F1"
+
+    # On-color contrast — text/icons placed on top of a solid fill.
+    # Kept explicit (not derived) so themes can force legible contrast.
+    on_primary: str = "#09090B"  # near-black on the near-white dark-mode fill
+    on_secondary: str = "#FFFFFF"  # white on the saturated accent
+    light_on_primary: str = "#FFFFFF"  # white on the near-black light-mode fill
+    light_on_secondary: str = "#FFFFFF"  # white on the (default) light accent
+
     # Allow extra colors
     extra: dict[str, str] = Field(default_factory=dict)
 
@@ -71,6 +82,9 @@ class ThemeColors(BaseModel):
                 "light_border",
                 "light_primary",
                 "light_primary_hover",
+                "light_secondary",
+                "light_on_primary",
+                "light_on_secondary",
             }
         )
         hyphenated = {k.replace("_", "-"): v for k, v in named.items()}
@@ -86,6 +100,9 @@ class ThemeColors(BaseModel):
             "border": self.light_border,
             "primary": self.light_primary,
             "primary-hover": self.light_primary_hover,
+            "secondary": self.light_secondary,
+            "on-primary": self.light_on_primary,
+            "on-secondary": self.light_on_secondary,
         }
 
 
@@ -108,6 +125,7 @@ class ThemeRadius(BaseModel):
     md: str = "0.5rem"
     lg: str = "0.75rem"
     xl: str = "1rem"
+    xxl: str = "1.5rem"
     full: str = "9999px"
 
 
@@ -127,6 +145,30 @@ class ThemeMotion(BaseModel):
     slow: str = "300ms"
 
 
+class ThemeBreakpoints(BaseModel):
+    """Responsive breakpoints (mobile-first)."""
+
+    sm: str = "640px"
+    md: str = "768px"
+    lg: str = "1024px"
+    xl: str = "1280px"
+
+
+class ThemeCode(BaseModel):
+    """Syntax/terminal palette for ``CodeBlock`` — fixed-dark by default so the
+    terminal reads as a window in both light and dark themes."""
+
+    background: str = "#0F0D0B"
+    surface: str = "#171412"
+    border: str = "#26211D"
+    text: str = "#D8CFC3"
+    comment: str = "#6E645A"
+    keyword: str = "#E8A33D"
+    function: str = "#8AB4E8"
+    string: str = "#A8C98A"
+    live: str = "#46A758"
+
+
 class ThemeTypography(BaseModel):
     """Typography settings."""
 
@@ -138,6 +180,9 @@ class ThemeTypography(BaseModel):
         "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "
         '"Liberation Mono", "Courier New", monospace'
     )
+    # Optional display/serif face for large headings. Empty = fall back to
+    # ``font_family`` (the default theme is intentionally sans-serif throughout).
+    display_family: str = ""
     # Font size scale
     xs: str = "0.75rem"  # 12px
     sm: str = "0.875rem"  # 14px
@@ -210,7 +255,12 @@ class Theme(BaseModel):
     shadows: ThemeShadows = Field(default_factory=ThemeShadows)
     motion: ThemeMotion = Field(default_factory=ThemeMotion)
     typography: ThemeTypography = Field(default_factory=ThemeTypography)
+    breakpoints: ThemeBreakpoints = Field(default_factory=ThemeBreakpoints)
+    code: ThemeCode = Field(default_factory=ThemeCode)
     components: ComponentOverrides = Field(default_factory=ComponentOverrides)
+    # Arbitrary extra tokens (``--vd-<name>: <value>``) for theme-specific
+    # chrome that the core token set does not model (e.g. a custom glow).
+    extra_tokens: dict[str, str] = Field(default_factory=dict)
 
     # -- CSS output ----------------------------------------------------------
 
@@ -246,6 +296,7 @@ class Theme(BaseModel):
         typo_vars = [
             f"--vd-font-sans: {self.typography.font_family};",
             f"--vd-font-mono: {self.typography.mono_family};",
+            f"--vd-font-display: {self.typography.display_family or self.typography.font_family};",
             f"--vd-text-xs: {self.typography.xs};",
             f"--vd-text-sm: {self.typography.sm};",
             f"--vd-text-md: {self.typography.md};",
@@ -262,29 +313,49 @@ class Theme(BaseModel):
             f"--vd-weight-semibold: {self.typography.semibold_weight};",
             f"--vd-weight-bold: {self.typography.bold_weight};",
         ]
-
-        all_vars = (
-            light_color_vars
-            + spacing_vars
+        breakpoint_vars = [
+            f"--vd-breakpoint-{name}: {value};"
+            for name, value in self.breakpoints.model_dump().items()
+        ]
+        code_vars = [
+            f"--vd-code-{name}: {value};"
+            for name, value in self.code.model_dump().items()
+        ]
+        # Derived accent tokens resolve against the *current* ``--vd-color-*``
+        # value, so they track light/dark automatically (color-mix computes at
+        # use time). Emitted once in ``:root`` and inherited by ``.dark``.
+        derived_vars = [
+            "--vd-color-secondary-soft: "
+            "color-mix(in srgb, var(--vd-color-secondary) 12%, transparent);",
+            "--vd-color-secondary-line: "
+            "color-mix(in srgb, var(--vd-color-secondary) 32%, transparent);",
+            "--vd-color-secondary-glow: "
+            "color-mix(in srgb, var(--vd-color-secondary) 22%, transparent);",
+            "--vd-color-border-soft: "
+            "color-mix(in srgb, var(--vd-color-border) 80%, transparent);",
+        ]
+        extra_token_vars = [
+            f"--vd-{name}: {value};" for name, value in self.extra_tokens.items()
+        ]
+        # Mode-independent tokens shared by ``:root`` and ``.dark``.
+        shared_vars = (
+            spacing_vars
             + radius_vars
             + shadow_vars
             + motion_vars
             + typo_vars
+            + breakpoint_vars
+            + code_vars
+            + derived_vars
+            + extra_token_vars
         )
 
         return (
             ":root {\n    "
-            + "\n    ".join(all_vars)
+            + "\n    ".join(light_color_vars + shared_vars)
             + "\n}\n"
             + ".dark {\n    "
-            + "\n    ".join(
-                dark_color_vars
-                + spacing_vars
-                + radius_vars
-                + shadow_vars
-                + motion_vars
-                + typo_vars
-            )
+            + "\n    ".join(dark_color_vars + shared_vars)
             + "\n}"
         )
 
@@ -301,6 +372,7 @@ class Theme(BaseModel):
                         "md": "var(--vd-radius-md)",
                         "lg": "var(--vd-radius-lg)",
                         "xl": "var(--vd-radius-xl)",
+                        "xxl": "var(--vd-radius-xxl)",
                         "full": "var(--vd-radius-full)",
                     },
                     "spacing": {
@@ -315,6 +387,7 @@ class Theme(BaseModel):
                     "fontFamily": {
                         "sans": ["var(--vd-font-sans)"],
                         "mono": ["var(--vd-font-mono)"],
+                        "display": ["var(--vd-font-display)"],
                     },
                     "transitionDuration": {
                         "fast": "var(--vd-motion-fast)",
@@ -341,6 +414,7 @@ def create_theme(
     text: str | None = None,
     border: str | None = None,
     font: str | None = None,
+    display_font: str | None = None,
     radius: str | None = None,
     mode: str = "dark",
     **extra_colors: str,
@@ -372,6 +446,8 @@ def create_theme(
     typography = ThemeTypography()
     if font:
         typography.font_family = font
+    if display_font:
+        typography.display_family = display_font
 
     radius_obj = ThemeRadius()
     # radius="md" is already the default; this is for future token-mapped sizes
@@ -392,3 +468,20 @@ def set_theme(theme: Theme) -> None:
     """Set the global default theme."""
     global default_theme
     default_theme = theme
+
+
+__all__ = [
+    "ComponentOverrides",
+    "Theme",
+    "ThemeBreakpoints",
+    "ThemeCode",
+    "ThemeColors",
+    "ThemeMotion",
+    "ThemeRadius",
+    "ThemeShadows",
+    "ThemeSpacing",
+    "ThemeTypography",
+    "create_theme",
+    "default_theme",
+    "set_theme",
+]

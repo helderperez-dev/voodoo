@@ -2,15 +2,14 @@
 
 Sitemap/robots generation lives in ``voodoo.core.sitemap`` (SEO concern, not
 rendering). This module owns the HTML document shell, the client runtime
-(``voodoo/static/client.js``), and the project ``styles.css`` convention.
+(``voodoo/static/client.js``), and the active theme's ``custom.css``.
 """
 
 import os
 from typing import Any
 
-# In-memory cache for client.js and styles.css to prevent disk I/O on every request
+# In-memory cache for client.js to prevent disk I/O on every request
 _client_js_cache: str | None = None
-_styles_css_cache: str | None = None
 
 
 def _read_optional(path: str) -> str:
@@ -33,16 +32,15 @@ def _get_client_js() -> str:
 
 
 def _get_project_styles() -> str:
-    """Load a project-level ``styles.css`` (next to the app dir) by convention.
+    """Return the active theme's custom CSS (``.voodoo/theme/custom.css``).
 
-    Apps can drop a ``styles.css`` file in their root to add custom CSS beyond
-    the theme. The file is read once and cached.
+    The theme preset resolver caches this on activation; render_page injects
+    it after the framework CSS so themes can add chrome the token set does not
+    model.
     """
-    global _styles_css_cache
-    if _styles_css_cache is None:
-        candidate = os.path.join(os.getcwd(), "styles.css")
-        _styles_css_cache = _read_optional(candidate)
-    return _styles_css_cache
+    from voodoo.ui.styles.presets import get_active_custom_css
+
+    return get_active_custom_css()
 
 
 def render_page(component: Any, seo: Any = None) -> str:
@@ -179,7 +177,7 @@ def render_page(component: Any, seo: Any = None) -> str:
             /* Voodoo component CSS (when using VoodooCSS adapter) */
             {component_css}
 
-            /* Project custom styles (styles.css by convention) */
+            /* Theme custom CSS (.voodoo/theme/custom.css) */
             {project_styles}
         </style>
     </head>

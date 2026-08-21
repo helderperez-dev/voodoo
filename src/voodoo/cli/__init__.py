@@ -12,6 +12,7 @@ from voodoo.cli import (
     routes,
     schedules,
     tasks,
+    theme,
     version,
 )
 from voodoo.cli.auth import auth_app
@@ -35,6 +36,7 @@ app.add_typer(tasks.tasks_app, name="tasks")
 app.add_typer(schedules.schedules_app, name="schedules")
 app.add_typer(executions.executions_app, name="executions")
 app.add_typer(objects.objects_app, name="objects")
+app.add_typer(theme.theme_app, name="theme")
 # Top-level aliases per the Sprint 3 CLI surface: `voodoo execution <id>`
 # (timeline from the journal) and `voodoo events` (recent journal events).
 app.command("execution")(executions.show_execution)

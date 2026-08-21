@@ -348,31 +348,31 @@ class TestRenderPage:
 class TestSemanticComponents:
     def test_nav(self):
         nav = Nav("Links", id="nav-1")
-        assert nav.render() == '<nav id="nav-1">Links</nav>'
+        assert nav.render() == '<nav id="nav-1" class="vd-nav">Links</nav>'
 
     def test_header(self):
         hdr = Header("Title", id="hdr-1")
-        assert hdr.render() == '<header id="hdr-1">Title</header>'
+        assert hdr.render() == '<header id="hdr-1" class="vd-header">Title</header>'
 
     def test_footer(self):
         ftr = Footer("Copyright", id="ftr-1")
-        assert ftr.render() == '<footer id="ftr-1">Copyright</footer>'
+        assert ftr.render() == '<footer id="ftr-1" class="vd-footer">Copyright</footer>'
 
     def test_main(self):
         m = Main("Content", id="main-1")
-        assert m.render() == '<main id="main-1">Content</main>'
+        assert m.render() == '<main id="main-1" class="vd-main">Content</main>'
 
     def test_section(self):
         s = Section("Block", id="sec-1")
-        assert s.render() == '<section id="sec-1">Block</section>'
+        assert s.render() == '<section id="sec-1" class="vd-section">Block</section>'
 
     def test_article(self):
         a = Article("Post", id="art-1")
-        assert a.render() == '<article id="art-1">Post</article>'
+        assert a.render() == '<article id="art-1" class="vd-article">Post</article>'
 
     def test_aside(self):
         a = Aside("Sidebar", id="side-1")
-        assert a.render() == '<aside id="side-1">Sidebar</aside>'
+        assert a.render() == '<aside id="side-1" class="vd-aside">Sidebar</aside>'
 
     def test_figure_and_figcaption(self):
         fig = Figure(
@@ -381,22 +381,31 @@ class TestSemanticComponents:
             id="fig-1",
         )
         html = fig.render()
-        assert html.startswith('<figure id="fig-1">')
+        assert html.startswith('<figure id="fig-1" class="vd-figure">')
         assert "<img" in html
-        assert '<figcaption id="cap-1">A beautiful photo</figcaption>' in html
+        assert (
+            '<figcaption id="cap-1" class="vd-figcaption">A beautiful photo</figcaption>'
+            in html
+        )
 
     def test_time_with_datetime(self):
         t = Time("August 15", datetime="2026-08-15", id="time-1")
         html = t.render()
-        assert '<time id="time-1" datetime="2026-08-15">August 15</time>' == html
+        assert (
+            '<time id="time-1" datetime="2026-08-15" class="vd-time">August 15</time>'
+            == html
+        )
 
     def test_time_without_datetime(self):
         t = Time("Today", id="time-2")
-        assert t.render() == '<time id="time-2">Today</time>'
+        assert t.render() == '<time id="time-2" class="vd-time">Today</time>'
 
     def test_address(self):
         a = Address("123 Main St", id="addr-1")
-        assert a.render() == '<address id="addr-1">123 Main St</address>'
+        assert (
+            a.render()
+            == '<address id="addr-1" class="vd-address">123 Main St</address>'
+        )
 
     def test_img_with_alt(self):
         img = Img(src="/photo.jpg", alt="A photo", id="img-1")
@@ -419,7 +428,7 @@ class TestSemanticComponents:
 
     def test_paragraph(self):
         p = Paragraph("Some text", id="p-1")
-        assert p.render() == '<p id="p-1">Some text</p>'
+        assert p.render() == '<p id="p-1" class="vd-paragraph">Some text</p>'
 
 
 # ==============================================================================

@@ -12,6 +12,8 @@ from voodoo.ui.styles import theme
 from voodoo.ui.styles.theme import (  # noqa: F401
     ComponentOverrides,
     Theme,
+    ThemeBreakpoints,
+    ThemeCode,
     ThemeColors,
     ThemeMotion,
     ThemeRadius,

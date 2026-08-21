@@ -93,6 +93,22 @@ EXPECTED_EXPORTS = {
     "Main",
     "Section",
     "Article",
+    # UI — chrome
+    "Navbar",
+    "NavLink",
+    "Brand",
+    "ThemeToggle",
+    "Hero",
+    "PageHero",
+    "Eyebrow",
+    "Chip",
+    "CodeBlock",
+    "Stats",
+    "Stat",
+    "CTABand",
+    "BackLink",
+    "FeatureCard",
+    "LinkArrow",
 }
 
 

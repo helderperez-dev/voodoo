@@ -51,6 +51,40 @@
 
 ### Added
 
+#### Theme presets, chrome components & shareable themes
+
+- **Themes are now portable modules.** A theme is a JSON-only `theme.json`
+  document (the exact shape `Theme.model_dump()` produces) plus an optional
+  sibling `custom.css`. Presets resolve in order: explicit path/URL → project
+  `.voodoo/theme/theme.json` → built-in (`default`, `ember-paper`) →
+  `~/.voodoo/themes/<name>/` → PyPI `voodoo-theme-<name>`.
+- **New theme CLI** — `voodoo theme list`, `voodoo theme use <name|path|url>`,
+  `voodoo theme init`, and `voodoo theme install <name>` snapshot, switch, and
+  install presets into `.voodoo/theme/` (custom CSS lives next to the JSON,
+  never embedded in it).
+- **`[theme]` config** — `voodoo.toml` gains `theme.preset = "<name|path|url>"`
+  and honors `theme.mode`. `create_app()` activates the preset at startup.
+- **`ember-paper` built-in preset** — warm paper surfaces, an ember accent
+  (`#E8A33D` dark / `#B45309` light), and editorial typography (Fraunces
+  display, Schibsted Grotesk body, IBM Plex Mono) with a soft `--vd-glow`
+  halo token.
+- **Light/dark accent tokens** — `ThemeColors` gained `light_secondary` /
+  `light_on_secondary` so the accent (and its on-color) invert per mode; the
+  stock indigo default is unchanged.
+- **Chrome component tier** — `Navbar`, `NavLink`, `Brand`, `ThemeToggle`,
+  `Hero`, `PageHero`, `Eyebrow`, `Chip`, `CodeBlock`, `Stats`, `Stat`,
+  `CTABand`, `BackLink`, `FeatureCard`, and `LinkArrow` (exported from
+  `voodoo` and `voodoo.ui`), each backed by generated `vd-*` CSS.
+- **Dead semantic CSS is now wired** — `Nav`, `Header`, `Footer`, `Main`,
+  `Section`, `Article`, `Aside`, `Figure`, `FigCaption`, `Address`,
+  `Paragraph`, `Time`, and `Img` now emit their `vd-*` classes, so their
+  existing stylesheet rules actually apply.
+- **Motion & code tokens** — `@keyframes vd-fade-up/vd-fade-in/vd-pulse` with a
+  `prefers-reduced-motion` guard, and a `--vd-code-*` syntax palette consumed
+  by `CodeBlock`.
+- **`tests/test_theme_presets.py` + `tests/test_chrome.py`** — preset
+  resolution/round-trip and chrome rendering/CSS coverage.
+
 #### Sprint 15 — Design system & theme engine
 
 - **`voodoo.setTheme(mode)`** — client runtime API to toggle light/dark/system
