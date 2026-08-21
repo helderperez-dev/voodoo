@@ -171,11 +171,15 @@ class RuntimeConfig(BaseModel):
 class ThemeConfig(BaseModel):
     """Design-token overrides (``theme:`` block in voodoo.yaml).
 
-    Mirrors the configurable surface of ``voodoo.ui.styles.theme.Theme``.
-    Values are passed through to ``set_theme``/``create_theme`` at
-    runtime; arbitrary keys are allowed so sub-dictionaries forward.
+    ``preset`` names a theme preset (built-in name, path, or URL) resolved by
+    ``voodoo.ui.styles.presets``; when omitted, the project
+    ``.voodoo/theme/theme.json`` is used, falling back to the built-in default.
+    ``mode`` is a top-level override applied only to the built-in default
+    (presets are self-describing, including their mode). Arbitrary keys are
+    allowed so sub-dictionaries forward.
     """
 
+    preset: str | None = None  # name | path | URL of a theme preset
     mode: str = "dark"  # dark | light | system
     model_config = {"extra": "allow"}
 

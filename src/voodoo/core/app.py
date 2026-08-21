@@ -64,9 +64,15 @@ class App:
         self._starlette: Starlette | None = None
         self._plugins: list[Callable[[App], Any]] = []
         if theme is not None:
-            from voodoo.ui.styles.theme import set_theme
+            if isinstance(theme, str):
+                # A preset name/path/URL — resolve and install it.
+                from voodoo.ui.styles.presets import activate_theme
 
-            set_theme(theme)
+                activate_theme(theme)
+            else:
+                from voodoo.ui.styles.theme import set_theme
+
+                set_theme(theme)
 
     # -- ASGI ----------------------------------------------------------------
 
@@ -149,6 +155,13 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         cwd = os.getcwd()
     except FileNotFoundError:
         cwd = "."
+
+    # Resolve the active theme once up front (preset → project .voodoo/theme/
+    # → built-in default) so rendering, adapters, and tone resolution share it.
+    from voodoo.ui.styles.presets import activate_theme
+
+    activate_theme(config.theme.preset, project_root=cwd, mode=config.theme.mode)
+
     from voodoo.mesh import mesh
 
     routes: list[BaseRoute] = [

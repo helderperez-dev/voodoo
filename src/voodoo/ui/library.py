@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from voodoo.ui.component import Component, tone_to_color_var
+from voodoo.ui.component import Component, escape, tone_to_color_var
 
 # ---------------------------------------------------------------------------
 # Layout
@@ -373,7 +373,7 @@ class Label(Component):
 
 class Input(Component):
     tag = "input"
-    style = "input"
+    style: str | None = "input"
 
     def __init__(
         self,
@@ -505,50 +505,62 @@ class Table(Component):
 
 class Nav(Component):
     tag = "nav"
+    style = "nav"
 
 
 class Header(Component):
     tag = "header"
+    style = "header"
 
 
 class Footer(Component):
     tag = "footer"
+    style = "footer"
 
 
 class Main(Component):
     tag = "main"
+    style = "main"
 
 
 class Section(Component):
     tag = "section"
+    style = "section"
 
 
 class Article(Component):
     tag = "article"
+    style = "article"
 
 
 class Aside(Component):
     tag = "aside"
+    style = "aside"
 
 
 class Figure(Component):
     tag = "figure"
+    style = "figure"
 
 
 class FigCaption(Component):
     tag = "figcaption"
+    style = "figcaption"
 
 
 class Address(Component):
     tag = "address"
+    style = "address"
 
 
 class Paragraph(Component):
     tag = "p"
+    style = "paragraph"
 
 
 class Time(Component):
     tag = "time"
+    style = "time"
 
     def __init__(
         self, *children: Any, datetime: str | None = None, **kwargs: Any
@@ -560,6 +572,7 @@ class Time(Component):
 
 class Img(Component):
     tag = "img"
+    style = "img"
 
     def __init__(
         self,
@@ -585,6 +598,200 @@ class Img(Component):
             self.attrs["crossorigin"] = crossorigin
         if loading is not None:
             self.attrs["loading"] = loading
+
+
+# ---------------------------------------------------------------------------
+# Chrome — page-level composite primitives (nav, hero, code, stats, CTA)
+# ---------------------------------------------------------------------------
+
+
+class Navbar(Component):
+    """Top navigation bar — a sticky, backdrop-blurred ``<nav>``."""
+
+    tag = "nav"
+    style = "navbar"
+
+    def __init__(self, *children: Any, sticky: bool = True, **kwargs: Any) -> None:
+        super().__init__(*children, **kwargs)
+        self.props = {"sticky": sticky}
+
+
+class NavLink(Component):
+    """Navigation link with an ``active`` state."""
+
+    tag = "a"
+    style = "nav-link"
+
+    def __init__(
+        self,
+        *children: Any,
+        href: str = "#",
+        active: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*children, **kwargs)
+        self.attrs["href"] = href
+        self.props = {"active": active}
+
+
+class Brand(Component):
+    """Wordmark / logo link rendered in the display typeface."""
+
+    tag = "a"
+    style = "brand"
+
+    def __init__(self, *children: Any, href: str = "/", **kwargs: Any) -> None:
+        super().__init__(*children, **kwargs)
+        self.attrs["href"] = href
+
+
+class ThemeToggle(Component):
+    """Button that flips the ``.dark`` class and persists the choice in a cookie."""
+
+    tag = "button"
+    style = "theme-toggle"
+
+    def __init__(self, label: str = "Toggle theme", **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.attrs["type"] = "button"
+        self.attrs["aria-label"] = label
+        self.attrs["onclick"] = (
+            "var r=document.documentElement;"
+            "var d=r.classList.toggle('dark');"
+            "document.cookie='voodoo_theme='+(d?'dark':'light')"
+            "+';path=/;max-age=31536000';"
+        )
+        self.children = (
+            Text("☀", class_="vd-theme-toggle-sun"),
+            Text("☾", class_="vd-theme-toggle-moon"),
+        )
+
+
+class Hero(Component):
+    """Full-width hero section for landing pages."""
+
+    tag = "section"
+    style = "hero"
+
+
+class PageHero(Component):
+    """Compact hero for interior pages (title + subtitle band)."""
+
+    tag = "section"
+    style = "page-hero"
+
+
+class Eyebrow(Component):
+    """Small uppercase accent label that introduces a heading."""
+
+    tag = "span"
+    style = "eyebrow"
+
+
+class Chip(Component):
+    """Compact pill for tags, status, or meta information."""
+
+    tag = "span"
+    style = "chip"
+
+
+class CodeBlock(Component):
+    """Syntax-aware code block (plain text, escapes HTML).
+
+    ::
+
+        CodeBlock("print('hello')", language="python")
+    """
+
+    tag = "pre"
+    style = "code-block"
+
+    def __init__(
+        self, *children: Any, language: str | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(*children, **kwargs)
+        self.language = language
+
+    def render(self) -> str:
+        attrs = self._render_attrs()
+        inner = self._render_children()
+        lang = f' data-language="{escape(self.language)}"' if self.language else ""
+        return f"<pre{attrs}><code{lang}>{inner}</code></pre>"
+
+
+class _StatValue(Component):
+    tag = "div"
+    style = "stat.value"
+    auto_id = False
+
+
+class _StatLabel(Component):
+    tag = "div"
+    style = "stat.label"
+    auto_id = False
+
+
+class Stats(Component):
+    """Responsive row of :class:`Stat` cells."""
+
+    tag = "div"
+    style = "stats"
+
+    def __init__(self, *children: Any, cols: int = 3, **kwargs: Any) -> None:
+        super().__init__(*children, **kwargs)
+        self.props = {"cols": cols}
+
+
+class Stat(Component):
+    """Single metric — big display value with a muted label.
+
+    ::
+
+        Stat("99.99%", "Uptime")
+    """
+
+    tag = "div"
+    style = "stat"
+
+    def __init__(self, value: str = "", label: str = "", **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.children = (_StatValue(value), _StatLabel(label))
+
+
+class CTABand(Component):
+    """Full-width call-to-action band."""
+
+    tag = "section"
+    style = "cta-band"
+
+
+class BackLink(Component):
+    """Muted link with a leading arrow, used to return to a parent page."""
+
+    tag = "a"
+    style = "back-link"
+
+    def __init__(self, *children: Any, href: str = "/", **kwargs: Any) -> None:
+        super().__init__(*children, **kwargs)
+        self.attrs["href"] = href
+
+
+class FeatureCard(Component):
+    """Elevated card that lifts and highlights on hover."""
+
+    tag = "div"
+    style = "feature-card"
+
+
+class LinkArrow(Component):
+    """Accent link with an animated trailing arrow."""
+
+    tag = "a"
+    style = "link-arrow"
+
+    def __init__(self, *children: Any, href: str = "#", **kwargs: Any) -> None:
+        super().__init__(*children, **kwargs)
+        self.attrs["href"] = href
 
 
 # ---------------------------------------------------------------------------

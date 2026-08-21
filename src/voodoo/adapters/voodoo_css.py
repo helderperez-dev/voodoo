@@ -70,7 +70,19 @@ class VoodooCSSAdapter:
         if component == "list":
             classes.extend(self._list_classes(props))
 
+        classes.extend(self._chrome_classes(component, props))
         return classes
+
+    @staticmethod
+    def _chrome_classes(component: str, props: dict[str, Any]) -> list[str]:
+        """Modifier classes for page-level chrome components."""
+        if component == "navbar" and props.get("sticky", True):
+            return ["vd-navbar--sticky"]
+        if component == "nav-link" and props.get("active"):
+            return ["vd-nav-link--active"]
+        if component == "stats":
+            return [f"vd-stats--cols-{props.get('cols', '3')}"]
+        return []
 
     @staticmethod
     def _flex_classes(props: dict[str, Any]) -> list[str]:
@@ -161,7 +173,7 @@ body {{
 img, svg, video, canvas {{ display: block; max-width: 100%; }}
 button, input, select, textarea {{ font: inherit; color: inherit; }}
 :focus-visible {{ outline: 2px solid var(--vd-color-secondary); outline-offset: 2px; }}
-::selection {{ background: var(--vd-color-secondary); color: #fff; }}
+::selection {{ background: var(--vd-color-secondary); color: var(--vd-color-on-secondary); }}
 
 /* Typography */
 .vd-paragraph {{
@@ -191,11 +203,11 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
 .vd-button:focus-visible {{ box-shadow: 0 0 0 2px var(--vd-color-secondary); }}
 .vd-button:disabled {{ pointer-events: none; opacity: 0.5; }}
 .vd-button--primary {{
-    background: var(--vd-color-primary); color: var(--vd-color-surface);
+    background: var(--vd-color-primary); color: var(--vd-color-on-primary);
 }}
 .vd-button--primary:hover {{ background: var(--vd-color-primary-hover); }}
 .vd-button--secondary {{
-    background: var(--vd-color-secondary); color: #fff;
+    background: var(--vd-color-secondary); color: var(--vd-color-on-secondary);
 }}
 .vd-button--secondary:hover {{ opacity: 0.9; }}
 .vd-button--outline {{
@@ -443,6 +455,178 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     color: var(--vd-color-text-muted);
 }}
 .vd-auth-guard--error {{ color: var(--vd-color-danger); font-weight: var(--vd-weight-medium); }}
+
+/* Chrome — navbar */
+.vd-navbar {{
+    position: sticky; top: 0; z-index: 40;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: {s}sm) {s}md);
+    padding: {s}md) {s}lg);
+    background: color-mix(in srgb, var(--vd-color-background) 82%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--vd-color-border-soft);
+}}
+.vd-navbar--sticky {{ position: sticky; top: 0; }}
+
+/* Chrome — nav link */
+.vd-nav-link {{
+    color: var(--vd-color-text-muted); text-decoration: none;
+    font-size: {t}sm); font-weight: var(--vd-weight-medium);
+    padding: 0.375rem 0.625rem; border-radius: {r}md);
+    transition: color {m}normal), background {m}normal);
+}}
+.vd-nav-link:hover {{ color: var(--vd-color-text); background: var(--vd-color-surface); }}
+.vd-nav-link--active {{ color: var(--vd-color-primary); }}
+
+/* Chrome — brand */
+.vd-brand {{
+    font-family: var(--vd-font-display);
+    font-size: {t}lg); font-weight: var(--vd-weight-bold);
+    color: var(--vd-color-text); text-decoration: none; letter-spacing: -0.02em;
+}}
+
+/* Chrome — theme toggle */
+.vd-theme-toggle {{
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.25rem; height: 2.25rem; border-radius: {r}full);
+    border: 1px solid var(--vd-color-border); background: var(--vd-color-surface);
+    color: var(--vd-color-text); cursor: pointer; font-size: {t}sm);
+    transition: background {m}normal), border-color {m}normal);
+}}
+.vd-theme-toggle:hover {{ background: var(--vd-color-surface-raised); }}
+.vd-theme-toggle-sun {{ display: none; }}
+.vd-theme-toggle-moon {{ display: inline; }}
+.dark .vd-theme-toggle-sun {{ display: inline; }}
+.dark .vd-theme-toggle-moon {{ display: none; }}
+
+/* Chrome — eyebrow */
+.vd-eyebrow {{
+    display: inline-block; font-size: {t}xs);
+    font-weight: var(--vd-weight-semibold); letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--vd-color-secondary);
+}}
+
+/* Chrome — hero */
+.vd-hero {{
+    display: grid; gap: {s}xl);
+    padding: {s}xxl) 0;
+}}
+
+/* Chrome — page hero */
+.vd-page-hero {{
+    padding: {s}xxl) {s}lg);
+    border-bottom: 1px solid var(--vd-color-border);
+    background: var(--vd-color-surface);
+}}
+
+/* Chrome — chip */
+.vd-chip {{
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    padding: 0.25rem 0.75rem; border-radius: {r}full);
+    border: 1px solid var(--vd-color-border); background: var(--vd-color-surface);
+    font-size: {t}xs); font-weight: var(--vd-weight-medium);
+    color: var(--vd-color-text-muted);
+}}
+
+/* Chrome — code block */
+.vd-code-block {{
+    background: var(--vd-code-background);
+    border: 1px solid var(--vd-code-border);
+    border-radius: {r}lg); padding: {s}lg);
+    overflow-x: auto; white-space: pre;
+    font-family: var(--vd-font-mono);
+    font-size: {t}sm); line-height: 1.7; color: var(--vd-code-text);
+}}
+.vd-code-block code {{ font: inherit; color: inherit; }}
+
+/* Chrome — stats */
+.vd-stats {{ display: grid; gap: {s}md); }}
+.vd-stats--cols-2 {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+.vd-stats--cols-3 {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
+.vd-stats--cols-4 {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }}
+.vd-stat {{
+    display: flex; flex-direction: column; gap: {s}xs);
+    padding: {s}lg); border-radius: {r}lg);
+    border: 1px solid var(--vd-color-border); background: var(--vd-color-surface);
+}}
+.vd-stat-value {{
+    font-family: var(--vd-font-display);
+    font-size: {t}xxxl); font-weight: var(--vd-weight-bold);
+    color: var(--vd-color-text); letter-spacing: -0.02em;
+}}
+.vd-stat-label {{ font-size: {t}sm); color: var(--vd-color-text-muted); }}
+
+/* Chrome — CTA band */
+.vd-cta-band {{
+    padding: {s}xxl) {s}lg); text-align: center;
+    background: var(--vd-color-secondary-soft);
+    border-top: 1px solid var(--vd-color-secondary-line);
+    border-bottom: 1px solid var(--vd-color-secondary-line);
+}}
+
+/* Chrome — back link */
+.vd-back-link {{
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    color: var(--vd-color-text-muted); text-decoration: none;
+    font-size: {t}sm); font-weight: var(--vd-weight-medium);
+    transition: color {m}normal);
+}}
+.vd-back-link::before {{ content: "\\2190"; }}
+.vd-back-link:hover {{ color: var(--vd-color-text); }}
+
+/* Chrome — feature card */
+.vd-feature-card {{
+    padding: {s}lg); border-radius: {r}xl);
+    border: 1px solid var(--vd-color-border); background: var(--vd-color-surface);
+    transition: transform {m}normal), border-color {m}normal), box-shadow {m}normal);
+}}
+.vd-feature-card:hover {{
+    transform: translateY(-2px);
+    border-color: var(--vd-color-secondary);
+    box-shadow: {sh}lg);
+}}
+
+/* Chrome — link arrow */
+.vd-link-arrow {{
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    color: var(--vd-color-secondary); text-decoration: none;
+    font-weight: var(--vd-weight-medium); font-size: {t}sm);
+}}
+.vd-link-arrow::after {{ content: "\\2192"; transition: transform {m}fast); }}
+.vd-link-arrow:hover::after {{ transform: translateX(2px); }}
+
+/* Motion */
+@keyframes vd-fade-up {{
+    from {{ opacity: 0; transform: translateY(12px); }}
+    to {{ opacity: 1; transform: translateY(0); }}
+}}
+@keyframes vd-fade-in {{
+    from {{ opacity: 0; }}
+    to {{ opacity: 1; }}
+}}
+@keyframes vd-pulse {{
+    0%, 100% {{ opacity: 1; }}
+    50% {{ opacity: 0.6; }}
+}}
+.vd-hero, .vd-page-hero, .vd-cta-band {{
+    animation: vd-fade-up {m}slow) ease-out both;
+}}
+
+/* Responsive chrome */
+@media (max-width: 767px) {{
+    .vd-stats--cols-2, .vd-stats--cols-3, .vd-stats--cols-4 {{
+        grid-template-columns: 1fr;
+    }}
+    .vd-navbar {{ justify-content: center; }}
+}}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {{
+    *, *::before, *::after {{
+        animation: none !important;
+        transition: none !important;
+    }}
+}}
 """ + _layout_css()
 
 

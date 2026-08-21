@@ -76,6 +76,55 @@ login = Form(
 )
 ```
 
+### Chrome (page-level)
+
+Ready-made building blocks for navigation, heroes, and landing sections — no
+custom CSS required:
+
+```python
+from voodoo import (
+    Navbar,
+    NavLink,
+    Brand,
+    ThemeToggle,
+    Hero,
+    Eyebrow,
+    Heading,
+    Text,
+    CodeBlock,
+    Stats,
+    Stat,
+    CTABand,
+    Button,
+)
+
+page = Hero(
+    Eyebrow("Voodoo 1.0"),
+    Heading("Ship fast", level=1, size="display"),
+    Text("A programmable runtime for adaptive applications."),
+    CodeBlock("pip install voodoo-framework", language="bash"),
+    Stats(Stat("99.99%", "Uptime"), Stat("12ms", "Latency")),
+    Navbar(
+        Brand("Voodoo"),
+        NavLink("Docs", href="/docs", active=True),
+        ThemeToggle(),
+    ),
+)
+```
+
+| Component | Purpose |
+|---|---|
+| `Navbar` / `NavLink` | Sticky blurred top bar + links (`active`) |
+| `Brand` | Wordmark link in the display face |
+| `ThemeToggle` | Flips `.dark`, persists via cookie |
+| `Hero` / `PageHero` | Landing vs. interior hero |
+| `Eyebrow` / `Chip` | Uppercase accent label / status pill |
+| `CodeBlock` | Escaped `<pre><code>` using `--vd-code-*` tokens |
+| `Stats` / `Stat` | Responsive metric row |
+| `CTABand` | Full-width accent call-to-action |
+| `BackLink` / `LinkArrow` | Muted back link / accent arrow link |
+| `FeatureCard` | Elevated card that lifts on hover |
+
 ### Custom components
 
 ```python
@@ -129,4 +178,6 @@ set_style_adapter(TailwindAdapter())
 - `Component` — base class for all UI elements.
 - `Component.render()` — serialize to HTML.
 - Built-in components: `Div`, `Flex`, `Stack`, `Grid`, `Box`, `Container`, `Page`, `Button`, `Card`, `Text`, `Heading`, `Badge`, `Avatar`, `Divider`, `Dialog`, `Modal`, `Form`, `Label`, `Input`, `Textarea`, `Select`, `Option`, `Checkbox`, `Radio`, `Table`, `List`, `ListItem`, `Nav`, `Header`, `Footer`, `Main`, `Section`, `Article`, `A`, `Link`.
+- Chrome components: `Navbar`, `NavLink`, `Brand`, `ThemeToggle`, `Hero`, `PageHero`, `Eyebrow`, `Chip`, `CodeBlock`, `Stats`, `Stat`, `CTABand`, `BackLink`, `FeatureCard`, `LinkArrow`.
+- Semantic HTML: `Nav`, `Header`, `Footer`, `Main`, `Section`, `Article`, `Aside`, `Figure`, `FigCaption`, `Address`, `Paragraph`, `Time`, `Img`.
 - `set_style_adapter(adapter)` — set the active style adapter.

@@ -39,11 +39,18 @@ re-styles every component instantly, at runtime, without re-rendering HTML.
 | Group | Prefix | Examples |
 |---|---|---|
 | Color | `--vd-color-*` | `primary`, `secondary`, `background`, `surface`, `text`, `text-muted`, `border`, `success`, `warning`, `danger` |
+| On-color | `--vd-color-on-*` | `on-primary`, `on-secondary` (text/icons on a solid fill, per mode) |
 | Spacing | `--vd-space-*` | `xs`, `sm`, `md`, `lg`, `xl`, `xxl`, `xxxl` |
-| Radius | `--vd-radius-*` | `sm`, `md`, `lg`, `xl` |
+| Radius | `--vd-radius-*` | `sm`, `md`, `lg`, `xl`, `xxl`, `full` |
 | Shadow | `--vd-shadow-*` | `sm`, `md`, `lg` |
 | Motion | `--vd-motion-*` | `fast`, `normal`, `slow` |
-| Typography | `--vd-text-*`, `--vd-leading-*`, `--vd-weight-*`, `--vd-font-*` | size scale, line heights, weights, font families |
+| Breakpoints | `--vd-breakpoint-*` | `sm`, `md`, `lg`, `xl` (mobile-first) |
+| Code | `--vd-code-*` | `background`, `surface`, `border`, `text`, `comment`, `keyword`, `function`, `string`, `live` |
+| Typography | `--vd-text-*`, `--vd-leading-*`, `--vd-weight-*`, `--vd-font-*` | size scale, line heights, weights, font families (incl. `--vd-font-display`) |
+
+Derived accent tokens (`--vd-color-secondary-soft`, `-line`, `-glow`,
+`--vd-color-border-soft`) are computed with `color-mix` at use time, so they
+track light/dark automatically without re-defining them per mode.
 
 ### Theming your app
 
@@ -150,11 +157,76 @@ voodoo.setTheme("light");
 `to_css_variables()` emits `:root` (light values) and `.dark` (dark values), so
 toggling `.dark` re-themes every component without a re-render.
 
-## Custom CSS
+## Chrome components
 
-Drop a `styles.css` file in your project root to layer custom CSS on top of the
-theme (loaded by convention, next to the app directory). Use `css={}` for
-inline overrides on individual components:
+Beyond the primitive components (`Button`, `Card`, `Input`, …), Voodoo ships a
+page-level **chrome** tier for building navigation, heroes, and marketing/landing
+sections without hand-rolled CSS:
+
+| Component | Purpose |
+|---|---|
+| `Navbar` / `NavLink` | Sticky, backdrop-blurred top bar and its links (`active` state) |
+| `Brand` | Wordmark/link set in the display face |
+| `ThemeToggle` | Button that flips `.dark` and persists the choice in a cookie |
+| `Hero` / `PageHero` | Landing hero vs. compact interior-page hero |
+| `Eyebrow` / `Chip` | Small uppercase accent label / compact status pill |
+| `CodeBlock` | Syntax-ready `<pre><code>` (HTML-escaped, uses `--vd-code-*`) |
+| `Stats` / `Stat` | Responsive metric row with big display values |
+| `CTABand` | Full-width call-to-action band on the accent tint |
+| `BackLink` / `LinkArrow` | Muted back link / accent link with animated arrow |
+| `FeatureCard` | Elevated card that lifts on hover |
+
+All of these render semantic `vd-*` classes and require no CSS of their own;
+`generate_component_css()` supplies the rules (including motion keyframes and a
+`prefers-reduced-motion` guard).
+
+## Themes as modules (presets)
+
+A **theme preset** is a portable, shareable theme package: a JSON-only
+`theme.json` (the same shape `Theme.model_dump()` produces) plus an optional
+sibling `custom.css`. The project root stays minimal — no `styles.css` in the
+root; custom CSS lives in an organized `.voodoo/theme/` folder.
+
+Resolution order (first match wins):
+
+1. An explicit path or URL (`App(theme="path/to/theme.json")`).
+2. The project preset at `.voodoo/theme/theme.json`.
+3. A built-in preset (`default`, `ember-paper`).
+4. A user-installed preset at `~/.voodoo/themes/<name>/theme.json`.
+5. A PyPI package named `voodoo-theme-<name>` exposing `theme.json`.
+
+```toml
+# voodoo.toml
+[theme]
+preset = "ember-paper"   # name | path | URL
+mode = "dark"            # dark | light | system
+```
+
+Use the CLI to manage presets:
+
+```bash
+voodoo theme list                 # discover available presets
+voodoo theme use ember-paper      # snapshot into .voodoo/theme/
+voodoo theme init                 # snapshot current + scaffold custom.css
+voodoo theme install my-theme     # pip install voodoo-theme-my-theme
+```
+
+A preset's `custom.css` is injected *after* the framework CSS, so it can add
+theme-specific chrome (fonts, glow, terminal styling) the token set does not
+model. For font loading, self-host or `@import` the faces from `custom.css` —
+built-ins stay zero-network by referencing faces by name with system fallbacks.
+
+### Built-in presets
+
+- **`default`** — the stock, minimalist Apple × Linear × Vercel × Raycast look.
+- **`ember-paper`** — warm paper surfaces, an ember accent (`#E8A33D` dark /
+  `#B45309` light), and editorial type (Fraunces display, Schibsted Grotesk
+  body, IBM Plex Mono) with a soft `--vd-glow` halo token.
+
+## Inline custom CSS
+
+Use `css={}` for one-off inline overrides on individual components (the token
+system is the preferred path; this is the escape hatch):
 
 ```python
 Div(Text("Centered"), css={"text_align": "center", "margin_top": "20px"})

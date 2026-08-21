@@ -200,7 +200,8 @@ and [`ARCHITECTURE.md`](ARCHITECTURE.md) for the implementation model.
 
 ### UI & Frontend
 - **Reactive UI** — Component system in pure Python with WebSocket-driven DOM patches
-- **Design System** — Built-in theme engine with Tailwind adapter support
+- **Design System** — Built-in theme engine with Tailwind adapter support, a token-first palette, and a page-level chrome tier (navbar, hero, code block, stats, CTA)
+- **Themes as modules** — Shareable JSON-only theme presets (`.voodoo/theme/theme.json` + `custom.css`) with a `voodoo theme` CLI; install themes from PyPI (`voodoo-theme-<name>`)
 - **SEO & GEO** — Server-side rendering, sitemaps, OpenGraph, and Generative Engine Optimization
 
 ### AI & Agents
