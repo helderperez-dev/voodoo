@@ -373,7 +373,7 @@ class Label(Component):
 
 class Input(Component):
     tag = "input"
-    style = "input"
+    style: str | None = "input"
 
     def __init__(
         self,

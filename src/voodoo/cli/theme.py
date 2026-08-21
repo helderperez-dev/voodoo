@@ -15,6 +15,7 @@ from pathlib import Path
 import typer
 
 from voodoo.cli import terminal
+from voodoo.ui.styles.theme import Theme
 
 theme_app = typer.Typer(
     name="theme",
@@ -29,7 +30,7 @@ def _project_theme_dir() -> Path:
 
 
 def _write_preset(
-    directory: Path, *, name: str, theme: object, custom_css: str = ""
+    directory: Path, *, name: str, theme: Theme, custom_css: str = ""
 ) -> None:
     """Materialize a theme into a project theme directory."""
     from voodoo.ui.styles.presets import ThemePreset
@@ -47,7 +48,7 @@ def _write_preset(
 @theme_app.command("list")
 def list_themes(
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """List discoverable theme presets."""
     from voodoo.ui.styles.presets import list_presets
 
@@ -78,7 +79,7 @@ def list_themes(
 @theme_app.command("use")
 def use_theme(
     preset: str = typer.Argument(..., help="Preset name, path, or URL"),
-):
+) -> None:
     """Switch the project to a preset (writes .voodoo/theme/theme.json)."""
     from voodoo.ui.styles.presets import resolve_theme
 
@@ -109,7 +110,7 @@ def init_theme(
     name: str = typer.Argument(
         "default", help="Preset to snapshot as a starting point"
     ),
-):
+) -> None:
     """Generate .voodoo/theme/theme.json from a preset (start customizing)."""
     from voodoo.ui.styles.presets import resolve_theme
 
@@ -146,7 +147,7 @@ def install_theme(
     name: str = typer.Argument(
         ..., help="Preset name (PyPI package voodoo-theme-<name>)"
     ),
-):
+) -> None:
     """Install a theme preset from PyPI (pip install voodoo-theme-<name>)."""
     from voodoo.ui.styles.presets import _load_from_pypi
 
