@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -12,6 +13,7 @@ from voodoo.ai.providers import (
     ModelDescriptor,
     ProviderEvent,
     ProviderResponse,
+    ToolCall,
 )
 from voodoo.core.errors import ConfigurationError
 
@@ -31,6 +33,64 @@ def _cost(model: str, tokens_in: int, tokens_out: int) -> float:
             rate_in, rate_out = rin, rout
             break
     return tokens_in / 1000 * rate_in + tokens_out / 1000 * rate_out
+
+
+def _parse_tool_calls(msg: Any) -> list[ToolCall]:
+    """Extract native OpenAI tool calls from a chat-completion message."""
+    calls: list[ToolCall] = []
+    for tc in getattr(msg, "tool_calls", None) or []:
+        fn = getattr(tc, "function", None)
+        if fn is None and isinstance(tc, dict):
+            fn = tc.get("function")
+        if fn is None:
+            continue
+        name = getattr(fn, "name", "")
+        if not name and isinstance(fn, dict):
+            name = fn.get("name", "")
+        raw_args = getattr(fn, "arguments", "{}") or "{}"
+        if isinstance(fn, dict):
+            raw_args = fn.get("arguments", "{}") or "{}"
+        try:
+            arguments = json.loads(raw_args)
+        except (json.JSONDecodeError, TypeError):
+            arguments = {"_raw": raw_args}
+        calls.append(
+            ToolCall(name=name, arguments=arguments, id=getattr(tc, "id", None))
+        )
+    return calls
+
+
+def _append_tool_delta(buffers: dict[int, dict[str, Any]], tc: Any) -> None:
+    """Accumulate one streaming tool-call delta into ``buffers`` keyed by index."""
+    index = getattr(tc, "index", 0)
+    buf = buffers.setdefault(index, {"id": None, "name": "", "args": ""})
+    if getattr(tc, "id", None):
+        buf["id"] = tc.id
+    fn = getattr(tc, "function", None)
+    if fn is None:
+        return
+    if getattr(fn, "name", None):
+        buf["name"] = fn.name
+    if getattr(fn, "arguments", None):
+        buf["args"] += fn.arguments
+
+
+def _flush_tool_calls(buffers: dict[int, dict[str, Any]]) -> list[ProviderEvent]:
+    """Convert accumulated streaming tool-call fragments into ``tool_call`` events."""
+    events: list[ProviderEvent] = []
+    for buf in buffers.values():
+        raw_args = buf["args"] or "{}"
+        try:
+            arguments = json.loads(raw_args)
+        except json.JSONDecodeError:
+            arguments = {"_raw": raw_args}
+        events.append(
+            ProviderEvent(
+                type="tool_call",
+                data={"name": buf["name"], "arguments": arguments, "id": buf["id"]},
+            )
+        )
+    return events
 
 
 def _require_openai() -> Any:
@@ -64,16 +124,18 @@ class OpenAIProvider(LLMProvider):
             **kwargs,
         )
         choice = resp.choices[0]
+        msg = choice.message
         usage = getattr(resp, "usage", None)
         tokens_in = getattr(usage, "prompt_tokens", 0) if usage else 0
         tokens_out = getattr(usage, "completion_tokens", 0) if usage else 0
         return ProviderResponse(
-            content=choice.message.content or "",
+            content=msg.content or "",
             model=resp.model or self.model,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             cost=_cost(self.model, tokens_in, tokens_out),
             finish_reason=choice.finish_reason or "stop",
+            tool_calls=_parse_tool_calls(msg),
         )
 
     async def stream(
@@ -85,12 +147,21 @@ class OpenAIProvider(LLMProvider):
             stream=True,
             **kwargs,
         )
+        # OpenAI streams tool calls as incremental JSON fragments keyed by
+        # index; accumulate them and flush as ``tool_call`` events on done.
+        tool_buffers: dict[int, dict[str, Any]] = {}
         async for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield ProviderEvent(
-                    type="text",
-                    data={"text": chunk.choices[0].delta.content},
-                )
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta is None:
+                continue
+            if getattr(delta, "content", None):
+                yield ProviderEvent(type="text", data={"text": delta.content})
+            for tc in getattr(delta, "tool_calls", None) or []:
+                _append_tool_delta(tool_buffers, tc)
+        for event in _flush_tool_calls(tool_buffers):
+            yield event
         yield ProviderEvent(
             type="done",
             data={"model": self.model, "finish_reason": "stop"},

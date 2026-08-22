@@ -16,6 +16,7 @@ call; it is neither memory nor a database — keep the concepts separate.
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -329,13 +330,12 @@ class Agent:
                     )
 
                     self.state = AgentState.thinking
-                    messages.append({"role": "assistant", "content": response.content})
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "content": str(tool_result),
-                            "name": tool_name,
-                        }
+                    messages.extend(
+                        self._tool_follow_up_messages(
+                            tool_request=tool_request,
+                            tool_result=tool_result,
+                            text=response.content,
+                        )
                     )
                     iterations += 1
                     continue
@@ -419,6 +419,7 @@ class Agent:
             while iterations <= self.max_iterations:
                 self.state = AgentState.running
                 accumulated_text = ""
+                structured_tool_request: dict[str, Any] | None = None
                 await self._broadcast(
                     "model.called",
                     {
@@ -433,6 +434,12 @@ class Agent:
                     if event.type == "text":
                         accumulated_text += event.data.get("text", "")
                         yield AgentEvent(type="text", data=event.data)
+                    elif event.type == "tool_call":
+                        structured_tool_request = {
+                            "name": event.data.get("name", ""),
+                            "arguments": event.data.get("arguments", {}),
+                            "id": event.data.get("id"),
+                        }
                     elif event.type == "done":
                         tokens_in += event.data.get("tokens_in", 0)
                         tokens_out += event.data.get("tokens_out", 0)
@@ -451,9 +458,12 @@ class Agent:
                     },
                 )
 
-                # Check if a tool call is needed (mock doesn't emit tool_call,
-                # so we check based on the accumulated text for a special marker).
-                tool_request = self._extract_tool_request_from_stream(accumulated_text)
+                # Native providers emit ``tool_call`` events; mock and legacy
+                # providers encode requests as a ``[TOOL: ...]`` text marker.
+                tool_request = (
+                    structured_tool_request
+                    or self._extract_tool_request_from_stream(accumulated_text)
+                )
 
                 if tool_request and iterations < self.max_iterations:
                     self.state = AgentState.tool_call
@@ -507,9 +517,12 @@ class Agent:
                     self.state = AgentState.thinking
                     yield AgentEvent(type="thinking", data={"tool": tool_name})
 
-                    messages.append({"role": "assistant", "content": accumulated_text})
-                    messages.append(
-                        {"role": "tool", "content": str(tool_result), "name": tool_name}
+                    messages.extend(
+                        self._tool_follow_up_messages(
+                            tool_request=tool_request,
+                            tool_result=tool_result,
+                            text=accumulated_text,
+                        )
                     )
                     iterations += 1
                     continue
@@ -574,22 +587,76 @@ class Agent:
     # -- tool request extraction ------------------------------------------
 
     def _extract_tool_request(self, response: Any) -> dict[str, Any] | None:
-        """Extract a tool call request from a provider response.
+        """Extract a tool-call request from a provider response.
 
-        The mock provider returns plain text; we support a simple convention:
-        if the response content contains ``[TOOL: tool_name]`` (optionally with
-        JSON arguments after ``args:``), we parse it as a tool request.
+        Prefers the native ``tool_calls`` field (ROADMAP §47); falls back to
+        the legacy ``[TOOL: ...]`` text-marker convention for providers that
+        return plain text (mock and older custom providers).
         """
+        structured = getattr(response, "tool_calls", None)
+        if structured:
+            first = structured[0]
+            if isinstance(first, dict):
+                return {
+                    "name": first.get("name", ""),
+                    "arguments": first.get("arguments", {}),
+                    "id": first.get("id"),
+                }
+            return {
+                "name": getattr(first, "name", ""),
+                "arguments": getattr(first, "arguments", {}),
+                "id": getattr(first, "id", None),
+            }
         content = getattr(response, "content", "")
         return self._parse_tool_marker(content)
 
     def _extract_tool_request_from_stream(self, content: str) -> dict[str, Any] | None:
         return self._parse_tool_marker(content)
 
+    def _tool_follow_up_messages(
+        self,
+        tool_request: dict[str, Any],
+        tool_result: Any,
+        text: str = "",
+    ) -> list[Message]:
+        """Build the assistant/tool messages to append after a tool call.
+
+        Native tool calls (carrying an ``id``) are echoed back in the
+        provider's own format so the result maps to the originating call; the
+        legacy marker convention appends a plain assistant message followed by
+        a ``tool`` role message.
+        """
+        tool_name = tool_request["name"]
+        tool_args = tool_request.get("arguments", {})
+        tc_id = tool_request.get("id")
+        if tc_id is not None:
+            assistant_msg: Message = {
+                "role": "assistant",
+                "content": text,
+                "tool_calls": [
+                    {
+                        "id": tc_id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": json.dumps(tool_args),
+                        },
+                    }
+                ],
+            }
+            tool_msg: Message = {
+                "role": "tool",
+                "tool_call_id": tc_id,
+                "content": str(tool_result),
+            }
+            return [assistant_msg, tool_msg]
+        return [
+            {"role": "assistant", "content": text},
+            {"role": "tool", "content": str(tool_result), "name": tool_name},
+        ]
+
     @staticmethod
     def _parse_tool_marker(content: str) -> dict[str, Any] | None:
-        import json
-
         marker = "[TOOL:"
         if marker not in content:
             return None

@@ -20,6 +20,7 @@ __all__ = [
     "VoodooModelProvider",
     "ProviderResponse",
     "ProviderEvent",
+    "ToolCall",
     "Message",
     "EmbeddingResponse",
     "ModelDescriptor",
@@ -73,8 +74,28 @@ class ModelDescriptor:
 
 
 @dataclass
+class ToolCall:
+    """A structured tool-call request from a provider.
+
+    ``id`` is the provider's call identifier, used to match tool results back
+    to calls in native multi-turn transcripts (OpenAI/Anthropic/etc.). It is
+    ``None`` for providers that use the legacy ``[TOOL: ...]`` text-marker
+    convention, where the agent derives the call from the response content.
+    """
+
+    name: str
+    arguments: dict[str, Any] = field(default_factory=dict)
+    id: str | None = None
+
+
+@dataclass
 class ProviderResponse:
-    """Normalized non-streaming completion result with token/cost accounting."""
+    """Normalized non-streaming completion result with token/cost accounting.
+
+    ``tool_calls`` carries structured tool-call requests (the native protocol,
+    ROADMAP §47). When empty, the response is a plain completion (or a legacy
+    ``[TOOL: ...]`` marker that the Agent parses from ``content``).
+    """
 
     content: str
     model: str
@@ -82,6 +103,7 @@ class ProviderResponse:
     tokens_out: int
     cost: float
     finish_reason: str = "stop"
+    tool_calls: list[ToolCall] = field(default_factory=list)
 
 
 @dataclass
