@@ -108,6 +108,8 @@ class StateRenderer:
     def __init__(self) -> None:
         # element_id -> (page_func, state_cells)
         self._bindings: dict[str, tuple[Callable[..., Any], list[State]]] = {}
+        # state cell -> unsubscribe callables (one per binding)
+        self._unsubscribers: dict[int, list[Callable[[], None]]] = {}
 
     def bind(
         self,
@@ -115,10 +117,40 @@ class StateRenderer:
         page_func: Callable[..., Any],
         cells: list[State] | None = None,
     ) -> None:
+        """Bind *element_id* to *page_func*, re-rendering on cell changes.
+
+        When *cells* are provided, each cell's ``set``/``update`` schedules a
+        re-render of this binding (patched over WebSocket) — the "zero JS"
+        reactive loop.
+        """
+        # Re-binding replaces the old subscription set.
+        self.unbind(element_id)
         self._bindings[element_id] = (page_func, cells or [])
+        for cell in cells or []:
+            unsub = self._subscribe_cell(element_id, cell)
+            self._unsubscribers.setdefault(id(cell), []).append(unsub)
+
+    def _subscribe_cell(self, element_id: str, cell: State) -> Callable[[], None]:
+        import asyncio
+
+        def _on_change(_value: Any) -> None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return  # no loop (e.g. sync import-time sets) — skip patch
+            loop.create_task(self.rerender(element_id))
+
+        return cell.subscribe(_on_change)
 
     def unbind(self, element_id: str) -> None:
-        self._bindings.pop(element_id, None)
+        binding = self._bindings.pop(element_id, None)
+        if binding is None:
+            return
+        _page_func, cells = binding
+        for cell in cells:
+            unsubs = self._unsubscribers.pop(id(cell), [])
+            for unsub in unsubs:
+                unsub()
 
     async def rerender(self, element_id: str) -> str | None:
         """Re-run the page function for *element_id* and broadcast the patch.

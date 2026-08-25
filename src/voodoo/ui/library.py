@@ -347,6 +347,227 @@ class ChatBox(Component):
 
 
 # ---------------------------------------------------------------------------
+# Icons (curated SVG set — stroke-based, currentColor, 24x24 viewBox)
+# ---------------------------------------------------------------------------
+
+#: Curated icon paths (stroke style, 24x24 viewBox, rendered with currentColor).
+#: Values are inner-SVG markup; the Icon component wraps them in an <svg>.
+_ICONS: dict[str, str] = {
+    "send": '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>',
+    "user": '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    "bot": '<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1"/><path d="M9 13h.01M15 13h.01"/>',
+    "plus": '<path d="M5 12h14M12 5v14"/>',
+    "trash": '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
+    "check": '<path d="M20 6 9 17l-5-5"/>',
+    "x": '<path d="M18 6 6 18M6 6l12 12"/>',
+    "search": '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>',
+    "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    "sidebar": '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>',
+    "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
+    "refresh": '<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>',
+    "copy": '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+    "edit": '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+    "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+    "chevron-left": '<path d="m15 18-6-6 6-6"/>',
+    "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+    "arrow-right": '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+    "loader": '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+    "sparkles": '<path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>',
+    "message": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    "paperclip": '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+    "stop": '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+    "sun": '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+    "moon": '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    "eye": '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+}
+
+
+class Icon(Component):
+    """Curated SVG icon (stroke, currentColor, 24x24) — no icon-font needed.
+
+    ::
+
+        Icon("send", size="lg")
+        Icon("trash", label="Delete conversation")
+    """
+
+    tag = "svg"
+    auto_id = False
+
+    _SIZES = {"sm": "16", "md": "20", "lg": "24", "xl": "32"}
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        size: str = "md",
+        label: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.icon_name = name
+        self.icon_markup = _ICONS.get(name)
+        if self.icon_markup is None:
+            # Unknown names render a neutral placeholder dot rather than
+            # raising mid-render — resilience over strictness for UI polish.
+            self.icon_markup = "<circle cx='12' cy='12' r='4'/>"
+        self.attrs["width"] = self._SIZES.get(size, "20")
+        self.attrs["height"] = self.attrs["width"]
+        self.attrs["viewBox"] = "0 0 24 24"
+        self.attrs["fill"] = "none"
+        self.attrs["stroke"] = "currentColor"
+        self.attrs["stroke-width"] = "2"
+        self.attrs["stroke-linecap"] = "round"
+        self.attrs["stroke-linejoin"] = "round"
+        self.attrs["aria-hidden"] = "true"
+        if label:
+            self.attrs["role"] = "img"
+            self.attrs["aria-label"] = label
+            self.attrs.pop("aria-hidden", None)
+        self.attrs["class_"] = (self.attrs.get("class_") or "") + " vd-icon"
+
+    def render(self) -> str:
+        attrs = self._render_attrs()
+        return f"<svg{attrs}>{self.icon_markup}</svg>"
+
+
+# ---------------------------------------------------------------------------
+# Markdown (safe minimal renderer)
+# ---------------------------------------------------------------------------
+
+
+class Markdown(Component):
+    """Render a safe subset of Markdown to HTML (no third-party dependency).
+
+    Supports: headings (#..######), bold/italic/inline code, fenced code
+    blocks, unordered/ordered lists, blockquotes, links, paragraphs, and
+    hard line breaks. All raw HTML in the source is escaped.
+
+    ::
+
+        Markdown(agent_output)
+    """
+
+    auto_id = False
+
+    _ESCAPE_HTML = True
+
+    def __init__(self, source: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.source = source
+
+    def render(self) -> str:
+        from voodoo.ui.markdown import render_markdown
+
+        return render_markdown(self.source)
+
+
+# ---------------------------------------------------------------------------
+# Chat primitives
+# ---------------------------------------------------------------------------
+
+
+class MessageList(Component):
+    """Scrollable transcript of chat messages (auto-scrolls on append).
+
+    ::
+
+        MessageList([
+            ChatMessage(role="user", content="Hi"),
+            ChatMessage(role="assistant", content=Markdown(reply)),
+        ])
+    """
+
+    style = "message-list"
+
+    def __init__(self, *children: Any, **kwargs: Any) -> None:
+        super().__init__(*children, **kwargs)
+        self.attrs["data-vd-auto-scroll"] = "bottom"
+
+
+class ChatMessage(Component):
+    """A single chat bubble (``role``: user | assistant | system | tool)."""
+
+    style = "chat-message"
+
+    def __init__(
+        self,
+        *children: Any,
+        role: str = "user",
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*children, **kwargs)
+        self.props = {"role": role}
+
+
+class StreamingText(Component):
+    """Live-streaming assistant text with an animated caret.
+
+    Renders ``content`` plus a blinking caret; patches cheaply because the
+    id stays stable across broadcasts.
+    """
+
+    style = "streaming-text"
+
+    def __init__(self, content: str = "", *, done: bool = False, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.props = {"done": done}
+        self._stream_content = content
+
+    def render(self) -> str:
+        caret = "" if self.props.get("done") else '<span class="vd-caret"></span>'
+        return f"<div{self._render_attrs()}>{escape(self._stream_content)}{caret}</div>"
+
+
+class Composer(Component):
+    """Chat input bar: textarea + send button, wired to a ``@event`` handler.
+
+    Enter sends (Shift+Enter newlines); ``on_send`` is the event name the
+    ``@event``-decorated handler receives as ``(element_id, {value})``. All
+    wiring lives in the framework's client SDK — zero hand-written JS.
+    """
+
+    style = "composer"
+
+    def __init__(
+        self,
+        *,
+        on_send: str,
+        placeholder: str = "Type a message…",
+        disabled: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        self._on_send = on_send
+        self._placeholder = placeholder
+        self._disabled = disabled
+        super().__init__(**kwargs)
+
+    def render(self) -> str:
+        disabled_attr = " disabled" if self._disabled else ""
+        return (
+            f"<div{self._render_attrs()}>"
+            f'<textarea class="vd-composer-input" rows="1" '
+            f'placeholder="{escape(self._placeholder)}" '
+            f'data-vd-enter-send="{escape(self._on_send)}"{disabled_attr}></textarea>'
+            f'<button type="button" class="vd-composer-send" '
+            f'data-vd-enter-send-trigger="{escape(self._on_send)}"{disabled_attr}>'
+            f"{Icon('send').render()}</button>"
+            f"</div>"
+        )
+
+
+class Sidebar(Component):
+    """App sidebar shell (title, nav children, optional new-action button).
+
+    ::
+
+        Sidebar(heading="Chats", Nav(...), new_event="new_chat")
+    """
+
+    style = "sidebar"
+
+
+# ---------------------------------------------------------------------------
 # Forms
 # ---------------------------------------------------------------------------
 
