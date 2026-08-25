@@ -104,7 +104,6 @@ def test_default_model_and_config_driven_provider(monkeypatch):
     # the real module.
     import importlib
 
-    import voodoo.config as _
     from voodoo.ai.providers import default_model
 
     config_mod = importlib.import_module("voodoo.config")
@@ -114,6 +113,7 @@ def test_default_model_and_config_driven_provider(monkeypatch):
             ai=ai, models=config_mod.ModelsConfig(default=models_default)
         )
         monkeypatch.setattr(config_mod, "config", cfg)
+
     # Default with no ai block: models.default.
     with_ai(config_mod.AIConfig())
     assert default_model() == "mock:default"
@@ -130,7 +130,6 @@ def test_default_model_and_config_driven_provider(monkeypatch):
 def test_agent_defaults_to_configured_model(monkeypatch):
     import importlib
 
-    import voodoo.config as _
     from voodoo.ai.agent import Agent
 
     config_mod = importlib.import_module("voodoo.config")
@@ -147,7 +146,6 @@ def test_agent_defaults_to_configured_model(monkeypatch):
 def test_agent_run_through_runtime_flag_from_config(monkeypatch):
     import importlib
 
-    import voodoo.config as _
     from voodoo.routing.api import API
 
     config_mod = importlib.import_module("voodoo.config")

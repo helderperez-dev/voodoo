@@ -16,6 +16,7 @@ adapter replaces the adapter, not this package.
 """
 
 from voodoo.data.base import (
+    FK,
     BaseModel,
     ModelMeta,
     _get_table_name,
@@ -33,6 +34,7 @@ __all__ = [
     "BaseModel",
     "Model",
     "ModelMeta",
+    "FK",
     # Helpers
     "close_db",
     "get_db",
