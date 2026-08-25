@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from voodoo.ai.providers import LLMProvider, Message, get_provider
+from voodoo.ai.providers import LLMProvider, Message, default_model, get_provider
 from voodoo.tools.registry import ToolRegistry, default_registry
 
 __all__ = ["Agent", "AgentRun", "AgentEvent"]
@@ -96,7 +96,9 @@ class Agent:
     Parameters
     ----------
     model:
-        ``"provider:model"`` string resolved via :func:`get_provider`.
+        ``"provider:model"`` string resolved via :func:`get_provider`. When
+        omitted, the configured default (the ``ai`` block or
+        ``models.default`` in ``voodoo.toml``/``voodoo.yaml``) is used.
     tools:
         List of :class:`ToolSpec` objects or tool names registered in the
         chosen registry. ``None`` means "no tools available".
@@ -110,7 +112,7 @@ class Agent:
 
     def __init__(
         self,
-        model: str = "mock:test",
+        model: str | None = None,
         tools: list[Any] | None = None,
         system_prompt: str | None = None,
         registry: ToolRegistry | None = None,
@@ -118,7 +120,7 @@ class Agent:
         capabilities: list[str] | None = None,
         **provider_kwargs: Any,
     ) -> None:
-        self.model = model
+        self.model = model or default_model()
         self.system_prompt = system_prompt
         self.registry = registry or default_registry
         self.max_iterations = max_iterations
@@ -127,7 +129,7 @@ class Agent:
         # execution context holding the capability) before they execute.
         self.capabilities: list[str] = list(capabilities) if capabilities else []
         self.state: AgentState = AgentState.created
-        self.provider: LLMProvider = get_provider(model, **provider_kwargs)
+        self.provider: LLMProvider = get_provider(self.model, **provider_kwargs)
 
         # Resolve tool specs/names into a list of names for tool calling.
         self._tool_names: list[str] = []
@@ -145,7 +147,10 @@ class Agent:
     # -- helpers -----------------------------------------------------------
 
     def _build_messages(
-        self, prompt: str, context: dict | None = None
+        self,
+        prompt: str,
+        context: dict | None = None,
+        history: list[Message] | None = None,
     ) -> list[Message]:
         messages: list[Message] = []
         if self.system_prompt:
@@ -157,6 +162,9 @@ class Agent:
                     "content": f"Context: {context}",
                 }
             )
+        # Prior turns (multi-turn conversation) precede the new user message.
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": prompt})
         return messages
 
@@ -237,8 +245,17 @@ class Agent:
 
     # -- run ---------------------------------------------------------------
 
-    async def run(self, prompt: str, context: dict | None = None) -> AgentRun:
-        """Execute prompt → provider → tool calls → final; return AgentRun."""
+    async def run(
+        self,
+        prompt: str,
+        context: dict | None = None,
+        history: list[Message] | None = None,
+    ) -> AgentRun:
+        """Execute prompt → provider → tool calls → final; return AgentRun.
+
+        ``history`` prepends prior conversation turns (a list of ``Message``
+        dicts) before the new user prompt, enabling multi-turn chat.
+        """
         run_id = str(uuid.uuid4())
         from voodoo.telemetry import telemetry_store
 
@@ -250,7 +267,7 @@ class Agent:
         started = time.time()
         self.state = AgentState.running
 
-        messages = self._build_messages(prompt, context)
+        messages = self._build_messages(prompt, context, history)
         tool_calls: list[dict[str, Any]] = []
         tokens_in = 0
         tokens_out = 0
@@ -390,7 +407,10 @@ class Agent:
     # -- stream ------------------------------------------------------------
 
     async def stream(
-        self, prompt: str, context: dict | None = None
+        self,
+        prompt: str,
+        context: dict | None = None,
+        history: list[Message] | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """Yield normalized events: text, tool_started, tool_finished, thinking, error, completed."""
         run_id = str(uuid.uuid4())
@@ -404,7 +424,7 @@ class Agent:
         started = time.time()
         self.state = AgentState.running
 
-        messages = self._build_messages(prompt, context)
+        messages = self._build_messages(prompt, context, history)
         tool_calls: list[dict[str, Any]] = []
         tokens_in = 0
         tokens_out = 0

@@ -8,14 +8,29 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route
 
 
+def _default_run_through_runtime() -> bool:
+    """Resolve the default ``run_through_runtime`` value from config, falling
+    back to ``True`` when config cannot be loaded (e.g. before app bootstrap).
+    """
+    try:
+        from voodoo.config import config
+
+        return bool(config.runtime.run_api_through_runtime)
+    except Exception:  # noqa: BLE001 — best-effort config resolution
+        return True
+
+
 class API:
     def __init__(self) -> None:
         self.routes: list[Route] = []
         self.paths: dict[str, dict[str, Any]] = {}
         # When True (default), every API handler executes through the Voodoo
         # runtime engine, producing an Execution record (intent ``http:...``)
-        # with actor, effects, cost and telemetry.
-        self.run_through_runtime: bool = True
+        # with actor, effects, cost and telemetry. Configurable via the
+        # ``runtime.run_api_through_runtime`` config flag (or the
+        # ``VOODOO_RUN_API_THROUGH_RUNTIME`` env var); the attribute remains
+        # mutable for per-app overrides.
+        self.run_through_runtime: bool = _default_run_through_runtime()
 
         # Add docs routes
         self.routes.append(

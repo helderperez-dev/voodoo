@@ -5,6 +5,7 @@ Uses the deterministic mock provider so no network calls are needed.
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -169,6 +170,50 @@ async def test_run_with_system_prompt():
     result = await agent.run("hello")
     assert result.status == "completed"
     assert result.output  # non-empty
+
+
+@pytest.mark.asyncio
+async def test_run_with_history_prepends_turns():
+    # Multi-turn: prior turns are prepended before the new user message.
+    agent = Agent(model="mock:test")
+    seen: list[list[dict[str, Any]]] = []
+    original_complete = agent.provider.complete
+
+    async def spy_complete(messages, **kwargs):  # type: ignore[no-untyped-def]
+        seen.append([dict(m) for m in messages])
+        return await original_complete(messages, **kwargs)
+
+    agent.provider.complete = spy_complete  # type: ignore[method-assign]
+    history = [
+        {"role": "user", "content": "My name is Ana."},
+        {"role": "assistant", "content": "Hello Ana!"},
+    ]
+    await agent.run("What is my name?", history=history)
+    assert len(seen) == 1
+    msgs = seen[0]
+    assert msgs[0] == history[0]
+    assert msgs[1] == history[1]
+    assert msgs[-1] == {"role": "user", "content": "What is my name?"}
+
+
+@pytest.mark.asyncio
+async def test_stream_with_history_prepends_turns():
+    agent = Agent(model="mock:test")
+    seen: list[list[dict[str, Any]]] = []
+    original_stream = agent.provider.stream
+
+    async def spy_stream(messages, **kwargs):  # type: ignore[no-untyped-def]
+        seen.append([dict(m) for m in messages])
+        async for ev in original_stream(messages, **kwargs):
+            yield ev
+
+    agent.provider.stream = spy_stream  # type: ignore[method-assign]
+    history = [{"role": "user", "content": "hi"}]
+    async for _ in agent.stream("again", history=history):
+        pass
+    assert len(seen) == 1
+    assert seen[0][0] == history[0]
+    assert seen[0][-1] == {"role": "user", "content": "again"}
 
 
 @pytest.mark.asyncio

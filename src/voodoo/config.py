@@ -166,6 +166,7 @@ class RuntimeConfig(BaseModel):
     """Runtime operating mode and environment options."""
 
     mode: str = "development"
+    run_api_through_runtime: bool = True
 
 
 class ThemeConfig(BaseModel):
@@ -236,6 +237,24 @@ class ModelsConfig(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
+class AIConfig(BaseModel):
+    """AI provider & model configuration (``ai:`` block in voodoo.toml/yaml).
+
+    Enables config-driven, zero-code provider setup: ``provider`` names a
+    built-in provider (e.g. ``openai`` for any OpenAI-compatible endpoint),
+    ``model`` is its model id, ``base_url`` targets an OpenAI-compatible
+    endpoint (e.g. DeepSeek, OpenRouter), and ``api_key`` is a literal or a
+    ``${ENV_VAR}`` reference (interpolated at load time). ``aliases`` merge
+    over the built-in routing aliases.
+    """
+
+    provider: str = ""
+    model: str = ""
+    base_url: str = ""
+    api_key: str = ""
+    aliases: dict[str, str] = Field(default_factory=dict)
+
+
 class VoodooConfig(BaseModel):
     """Core configuration for the Voodoo framework."""
 
@@ -256,6 +275,7 @@ class VoodooConfig(BaseModel):
     objects: ObjectsConfig = Field(default_factory=ObjectsConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
+    ai: AIConfig = Field(default_factory=AIConfig)
 
     seo: SEOConfig = Field(default_factory=SEOConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
@@ -425,6 +445,19 @@ def _build_models_config(file_data: dict[str, Any]) -> ModelsConfig:
     )
 
 
+def _build_ai_config(file_data: dict[str, Any]) -> AIConfig:
+    ai_data = file_data.get("ai") or {}
+    if not isinstance(ai_data, dict):
+        ai_data = {"provider": str(ai_data)}
+    return AIConfig(
+        provider=ai_data.get("provider") or os.getenv("VOODOO_AI_PROVIDER") or "",
+        model=ai_data.get("model") or os.getenv("VOODOO_AI_MODEL") or "",
+        base_url=ai_data.get("base_url") or os.getenv("VOODOO_AI_BASE_URL") or "",
+        api_key=ai_data.get("api_key") or os.getenv("VOODOO_AI_API_KEY") or "",
+        aliases=ai_data.get("aliases") or {},
+    )
+
+
 def _pick(
     file_data: dict[str, Any],
     key: str,
@@ -465,6 +498,10 @@ def _build_runtime_config(file_data: dict[str, Any]) -> RuntimeConfig:
         runtime_data["mode"] = os.environ["VOODOO_RUNTIME_MODE"]
     elif "mode" not in runtime_data and "VOODOO_ENV" in os.environ:
         runtime_data["mode"] = os.environ["VOODOO_ENV"]
+    if "run_api_through_runtime" not in runtime_data:
+        flag = _env_flag("VOODOO_RUN_API_THROUGH_RUNTIME")
+        if flag is not None:
+            runtime_data["run_api_through_runtime"] = flag
     return RuntimeConfig(**runtime_data)
 
 
@@ -513,6 +550,7 @@ def get_config(
     config_args["objects"] = _build_objects_config(file_data)
     config_args["cache"] = _build_cache_config(file_data)
     config_args["models"] = _build_models_config(file_data)
+    config_args["ai"] = _build_ai_config(file_data)
 
     # Existing sub-configurations
     if "seo" in file_data and isinstance(file_data["seo"], dict):
@@ -539,6 +577,7 @@ def get_config(
         "objects",
         "cache",
         "models",
+        "ai",
         "seo",
         "auth",
         "security",
