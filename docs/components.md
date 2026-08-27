@@ -180,4 +180,29 @@ set_style_adapter(TailwindAdapter())
 - Built-in components: `Div`, `Flex`, `Stack`, `Grid`, `Box`, `Container`, `Page`, `Button`, `Card`, `Text`, `Heading`, `Badge`, `Avatar`, `Divider`, `Dialog`, `Modal`, `Form`, `Label`, `Input`, `Textarea`, `Select`, `Option`, `Checkbox`, `Radio`, `Table`, `List`, `ListItem`, `Nav`, `Header`, `Footer`, `Main`, `Section`, `Article`, `A`, `Link`.
 - Chrome components: `Navbar`, `NavLink`, `Brand`, `ThemeToggle`, `Hero`, `PageHero`, `Eyebrow`, `Chip`, `CodeBlock`, `Stats`, `Stat`, `CTABand`, `BackLink`, `FeatureCard`, `LinkArrow`.
 - Semantic HTML: `Nav`, `Header`, `Footer`, `Main`, `Section`, `Article`, `Aside`, `Figure`, `FigCaption`, `Address`, `Paragraph`, `Time`, `Img`.
+- Icons & Markdown:
+  - `Icon(name, size="md", label=None)` — curated inline-SVG icons
+    (`send`, `user`, `bot`, `plus`, `trash`, `check`, `x`, `search`, `menu`,
+    `sidebar`, `settings`, `refresh`, `copy`, `edit`, `chevron-right/left/down`,
+    `arrow-right`, `loader`, `sparkles`, `message`, `paperclip`, `stop`,
+    `sun`, `moon`, `eye`); stroke-based, `currentColor`, sized via `size`
+    (`sm|md|lg|xl`); unknown names render a placeholder dot (never raise).
+  - `Markdown(source)` — safe, dependency-free Markdown → HTML (headings,
+    `**bold**` / `*italic*` / `` `code` ``, fenced blocks, lists, blockquotes,
+    http(s)-only links; **all raw HTML is escaped**).
+- Chat primitives:
+  - `MessageList(*messages)` — scrollable transcript; auto-scrolls on patch
+    (via the client SDK).
+  - `ChatMessage(*children, role="user")` — a chat bubble; `role` ∈
+    `user | assistant | system | tool` selects the `vd-chat-message--{role}`
+    styling.
+  - `StreamingText(content, done=False)` — live-streaming text with an
+    animated caret (hidden when `done=True`).
+  - `Composer(on_send="evt", placeholder="…", disabled=False)` — chat input
+    bar: auto-growing textarea + send button; Enter sends, Shift+Enter
+    newlines (wired by the client SDK — zero hand-written JS).
+  - `Sidebar(*children)` — app sidebar shell styled by `vd-sidebar`.
+- Client JS SDK (`static/client.js`, auto-included): `voodoo.navigate(path)`,
+  `voodoo.scrollToBottom(id)`, `voodoo.onEnter(el, handler)`, plus automatic
+  chat behaviors (`setupChatBehaviors`) re-applied after every DOM patch.
 - `set_style_adapter(adapter)` — set the active style adapter.

@@ -308,6 +308,13 @@ cache:
   provider: memory          # memory (default) | redis
 models:
   default: openai:gpt-4o
+ai:                          # zero-code provider setup (any OpenAI-compatible endpoint)
+  provider: openai
+  model: deepseek-v4-flash
+  base_url: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}"
+  api_key: "${DEEPSEEK_API_KEY}"
+runtime:
+  run_api_through_runtime: true  # set false to bypass execution records for API handlers
 ```
 
 Environment variables follow the `VOODOO_*` convention and override defaults. See [`.env.example`](.env.example) for the complete reference.
@@ -322,6 +329,11 @@ Key variables:
 | `VOODOO_DATABASE_PROVIDER` | `sqlite` | Database backend |
 | `VOODOO_QUEUE_PROVIDER` | `sqlite` | Task queue backend |
 | `VOODOO_REDIS_URL` | — | Redis URL (queue/cache/events fallback) |
+| `VOODOO_AI_PROVIDER` | — | AI provider for the `[ai]` block |
+| `VOODOO_AI_MODEL` | — | AI model for the `[ai]` block |
+| `VOODOO_AI_BASE_URL` | — | OpenAI-compatible base URL |
+| `VOODOO_AI_API_KEY` | — | AI API key |
+| `VOODOO_RUN_API_THROUGH_RUNTIME` | `true` | Run API handlers as Executions |
 | `OPENAI_API_KEY` | — | OpenAI API key for agents |
 
 Generate a secure secret key:

@@ -54,18 +54,27 @@ count.set(20)  # no output
 
 ## Advanced
 
-### StateRenderer
+### StateRenderer — the reactive loop
 
-The `StateRenderer` binds state cells to page functions and re-renders on change:
+The `StateRenderer` binds state cells to page functions. When you pass
+`cells`, each cell's `set()`/`update()` **automatically schedules** a
+re-render of that binding (no explicit `rerender()` call needed in your
+event handlers) — the "zero JS" reactive loop:
 
 ```python
-from voodoo.ui.state import StateRenderer
+from voodoo.ui.state import StateRenderer, state
 
+count = state(0)
 renderer = StateRenderer()
-renderer.bind("element-id", my_page_func, [count])
+renderer.bind("element-id", my_page_func, cells=[count])
+
+# Inside any @event handler:
+count.set(count.get() + 1)  # → page re-rendered → patch broadcast over WS
 ```
 
-When `count` changes, call `renderer.rerender("element-id")` to broadcast a DOM patch.
+`unbind(element_id)` removes the binding and unsubscribes the cells. Without
+`cells`, you keep manual control: call `renderer.rerender(element_id)` to
+re-render and broadcast a DOM patch.
 
 ### WebSocket patches
 

@@ -159,9 +159,47 @@ DONE  |  WIP  |  TODO
 | 20 | Observability | 2.1.0 | Execution-aware tracing, `voodoo status/workers` | TODO |
 | 21 | Protocol schemas & versioning | 2.2.0 | `voodoo.protocol`, schema_version everywhere | TODO |
 | 22 | Local runtime DX | 2.3.0 | `voodoo create` + `voodoo dev` boot the full local runtime | TODO |
+| L1 | Less-code: native tool calling | 1.19.0 | `ToolCall` protocol; OpenAI/Anthropic native parsing | DONE |
+| L2 | Less-code: config-driven AI + multi-turn | 1.19.0 | `[ai]` block, `Agent(history=)`, `run_api_through_runtime` flag | DONE |
+| L3 | Less-code: ORM query API + FK cascades | 1.19.0 | `Model.where/order_by/limit/first/count/delete_where`, `FK[...]` | DONE |
+| L4 | Less-code: UI/realtime foundation | 1.19.0 | Icon/Markdown/chat primitives, reactive wiring, client SDK | DONE |
+| L5 | Less-code: ai-agent template rewrite | 1.19.0 | 285-line single-file chat app; 0 CSS / 0 JS / 0 provider class | DONE |
 
 Spec §52 "Definition of Done — Durable Runtime" is achieved after Sprint 6.
 "Moderate production = PostgreSQL + S3/R2" (§7) is achieved after Sprint 12.
+
+---
+
+# MILESTONE L — "LESS-CODE" INITIATIVE (productized 2026-08)
+
+A template review (`voodoo-templates/ai-agent`) showed apps hand-rolling
+~1,850 lines (provider adapters, chat CSS/JS, raw SQL) for patterns that
+belong in the runtime. Sprints L1–L5 turned those into primitives. The
+rewritten template (the acceptance test) is one 285-line Python file with
+zero hand-written CSS, zero inline JS, and zero custom provider classes.
+
+- **L1 — Native tool calling**: `ToolCall` dataclass +
+  `ProviderResponse.tool_calls`; OpenAI `complete()`/`stream()` parse native
+  tool calls (delta accumulation); Anthropic parses `tool_use`; the agent
+  builds native follow-up messages (`tool_call_id` echo). `[TOOL:]` markers
+  remain as the mock-only fallback.
+- **L2 — Config-driven AI + multi-turn**: `[ai]` block (provider, model,
+  base_url, api_key, aliases) + `VOODOO_AI_*` env fallbacks; any
+  OpenAI-compatible endpoint with zero provider code; `Agent()` defaults to
+  the configured model; `Agent.run/stream(..., history=[...])` multi-turn;
+  `runtime.run_api_through_runtime` flag replaces the module-level hack.
+- **L3 — ORM query API**: lazy chainable `Query` from `Model.where(**f)`
+  (order_by/limit/offset/first/count/delete); `FK[Parent]` annotations with
+  cascade deletes; guard against unconditional `delete()`.
+- **L4 — UI/realtime**: curated `Icon` set; safe `Markdown` renderer;
+  `MessageList`/`ChatMessage`/`StreamingText`/`Composer`/`Sidebar`; `vd-*`
+  design-system CSS for all of them; `StateRenderer.bind(cells=...)` now
+  auto-schedules re-renders on `State.set()`; client SDK gains
+  navigate/scrollToBottom/onEnter + auto chat behaviors after each patch.
+- **L5 — Template rewrite**: `main.py` only — config-driven provider,
+  multi-turn replay, ORM queries + `FK` cascade, chat components, `@event`
+  handlers. Verified end-to-end over WebSocket (agent run → persistence →
+  DOM patches).
 
 ---
 

@@ -39,7 +39,6 @@ from .ui import (
     Brand,
     Button,
     Card,
-    ChatBox,
     ChatMessage,
     Checkbox,
     Chip,
