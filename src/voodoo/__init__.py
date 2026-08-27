@@ -25,7 +25,7 @@ from .ai.agent import Agent, AgentRun
 from .ai.tools import ToolRegistry, ToolSpec, tool
 from .config import config
 from .core import App, create_app, event, page, register_event, state, ws_manager
-from .data import BaseModel, Model
+from .data import FK, BaseModel, Model
 from .mesh import mesh
 from .routing.api import api
 from .telemetry import trace
@@ -39,10 +39,13 @@ from .ui import (
     Brand,
     Button,
     Card,
+    ChatBox,
+    ChatMessage,
     Checkbox,
     Chip,
     CodeBlock,
     Component,
+    Composer,
     Container,
     CTABand,
     Dialog,
@@ -57,6 +60,7 @@ from .ui import (
     Header,
     Heading,
     Hero,
+    Icon,
     Input,
     Label,
     Link,
@@ -64,6 +68,8 @@ from .ui import (
     List,
     ListItem,
     Main,
+    Markdown,
+    MessageList,
     Modal,
     Nav,
     Navbar,
@@ -74,9 +80,11 @@ from .ui import (
     Radio,
     Section,
     Select,
+    Sidebar,
     Stack,
     Stat,
     Stats,
+    StreamingText,
     Table,
     Text,
     Textarea,
@@ -123,6 +131,7 @@ __all__ = [
     # Data
     "BaseModel",
     "Model",
+    "FK",
     # Theming & configuration
     "Theme",
     "ThemeColors",
@@ -156,6 +165,15 @@ __all__ = [
     "Divider",
     "Dialog",
     "Modal",
+    # UI — icons & markdown
+    "Icon",
+    "Markdown",
+    # UI — chat primitives
+    "MessageList",
+    "ChatMessage",
+    "StreamingText",
+    "Composer",
+    "Sidebar",
     # UI — forms
     "Form",
     "Label",
