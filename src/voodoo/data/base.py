@@ -1,3 +1,7 @@
+"""Async ORM base — models, hooks, RLS, FK cascades, and the db lifecycle."""
+
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Callable
 from typing import Any, get_type_hints
@@ -8,6 +12,11 @@ _db_connection = None
 _database: SQLiteDatabase | None = None
 _triggers: dict[str, dict[str, list[Callable]]] = {}
 _rls_policies: dict[str, Callable] = {}
+
+
+def _clear_cascades() -> None:
+    """Reset the FK cascade registry (test isolation)."""
+    _cascades.clear()
 
 
 def _active_adapter() -> SQLiteDatabase | None:
@@ -48,6 +57,17 @@ USER_MODEL_BASELINE = Migration(
     fn=_ensure_user_tables,
     rerun=True,
 )
+
+
+async def _cascade_delete_children(parent_table: str, parent_id: Any) -> None:
+    """Delete child rows referencing ``parent_id`` (registered FK cascades)."""
+    children = _cascades.get(parent_table)
+    if not children:
+        return
+    db = await get_db()
+    for child_table, fk_col in children:
+        await db.execute(f"DELETE FROM {child_table} WHERE {fk_col} = ?", (parent_id,))
+    await db.commit()
 
 
 async def init_db(db_path: str = None):
@@ -153,6 +173,42 @@ def rls_policy(model_cls: type):
 
 _models: list[type] = []
 
+#: Cascade registry: parent_table → [(child_table, fk_column)] (Sprint: ORM FK).
+_cascades: dict[str, list[tuple[str, str]]] = {}
+
+
+class _FKRef:
+    """Internal marker produced by ``FK[TargetModel]`` field annotations."""
+
+    __slots__ = ("target",)
+
+    def __init__(self, target: type) -> None:
+        self.target = target
+
+    def __repr__(self) -> str:  # pragma: no cover — debugging aid
+        return f"FK[{self.target.__name__}]"
+
+
+class FK:
+    """Field annotation declaring a foreign key with cascade delete.
+
+    Annotate a column as ``FK[ParentModel]`` (stored as ``INTEGER``); when a
+    parent row is deleted via the model layer, all child rows referencing it
+    are removed first::
+
+        class Message(Model):
+            conversation_id: FK[Conversation]
+            role: str
+            content: str
+
+        await conversation.delete()  # also deletes its messages
+    """
+
+    def __class_getitem__(cls, target: type) -> _FKRef:  # noqa: N805
+        if not isinstance(target, type):
+            raise TypeError("FK[...] requires a model class")
+        return _FKRef(target)
+
 
 class ModelMeta(type):
     def __init__(cls, name, bases, attrs):
@@ -161,6 +217,26 @@ class ModelMeta(type):
         # (subclasses of either) register themselves for table creation.
         if name not in ("BaseModel", "Model"):
             _models.append(cls)
+            _register_foreign_keys(cls)
+
+
+def _register_foreign_keys(cls: type) -> None:
+    """Record ``FK[Parent]`` annotations in the cascade registry.
+
+    Child column ``parent_ref: FK[Parent]`` (any column name) registers
+    (parent_table, child_table, child_column) so parent deletions cascade.
+    """
+    try:
+        hints = get_type_hints(cls)
+    except Exception:
+        return
+    for col_name, col_type in hints.items():
+        ref = getattr(col_type, "__origin__", None)
+        if isinstance(ref, _FKRef) or isinstance(col_type, _FKRef):
+            target = (col_type if isinstance(col_type, _FKRef) else ref).target
+            parent_table = _get_table_name(target)
+            child_table = _get_table_name(cls)
+            _cascades.setdefault(parent_table, []).append((child_table, col_name))
 
 
 class BaseModel(metaclass=ModelMeta):
@@ -176,6 +252,13 @@ class BaseModel(metaclass=ModelMeta):
         columns = []
         for col_name, col_type in hints.items():
             if col_name.startswith("__"):
+                continue
+            # ``FK[Parent]`` annotations resolve to the internal _FKRef marker
+            # (or a bare _FKRef) — stored as plain INTEGER columns (Sprint: ORM FK).
+            if isinstance(col_type, _FKRef) or isinstance(
+                getattr(col_type, "__origin__", None), _FKRef
+            ):
+                columns.append(f"{col_name} INTEGER")
                 continue
             if col_name == "id":
                 if identity:
@@ -198,7 +281,7 @@ class BaseModel(metaclass=ModelMeta):
         await db.commit()
 
     @classmethod
-    async def find_all(cls, user_context: dict = None) -> list["BaseModel"]:
+    async def find_all(cls, user_context: dict = None) -> list[BaseModel]:
         from voodoo.telemetry import telemetry_store
 
         telemetry_store.record_db_query()

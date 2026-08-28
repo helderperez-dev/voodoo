@@ -40,6 +40,7 @@ EXPECTED_EXPORTS = {
     # Data
     "BaseModel",
     "Model",
+    "FK",
     # Theming & configuration
     "Theme",
     "ThemeColors",
@@ -73,6 +74,15 @@ EXPECTED_EXPORTS = {
     "Divider",
     "Dialog",
     "Modal",
+    # UI — icons & markdown
+    "Icon",
+    "Markdown",
+    # UI — chat primitives
+    "MessageList",
+    "ChatMessage",
+    "StreamingText",
+    "Composer",
+    "Sidebar",
     # UI — forms
     "Form",
     "Label",

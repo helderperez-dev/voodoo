@@ -23,6 +23,128 @@ def _use_tailwind_adapter():
     set_style_adapter(original)
 
 
+# ---------------------------------------------------------------------------
+# New UI primitives (Phase 4 — less-code initiative)
+# ---------------------------------------------------------------------------
+
+
+class TestIcon:
+    def test_renders_curated_svg(self):
+        from voodoo.ui import Icon
+
+        icon = Icon("send")
+        html = icon.render()
+        assert html.startswith("<svg")
+        assert "currentColor" in html
+        assert html.rstrip().endswith("</svg>")
+        # The send glyph (paper plane) path is present.
+        assert "M22 2 11 13" in html
+
+    def test_unknown_icon_renders_placeholder(self):
+        from voodoo.ui import Icon
+
+        html = Icon("does-not-exist").render()
+        assert "<circle" in html  # neutral dot, no raise
+
+    def test_size_and_label(self):
+        from voodoo.ui import Icon
+
+        assert 'width="32"' in Icon("bot", size="xl").render()
+        labeled = Icon("trash", label="Delete").render()
+        assert 'role="img"' in labeled
+        assert 'aria-label="Delete"' in labeled
+
+
+class TestMarkdown:
+    def test_headings_and_paragraph(self):
+        from voodoo.ui import Markdown
+
+        html = Markdown("# Title\n\nBody text").render()
+        assert "<h1>Title</h1>" in html
+        assert "<p>Body text</p>" in html
+
+    def test_bold_italic_code(self):
+        from voodoo.ui import Markdown
+
+        html = Markdown("**b** *i* `c`").render()
+        assert "<strong>b</strong>" in html
+        assert "<em>i</em>" in html
+        assert "<code>c</code>" in html
+
+    def test_fenced_code_block_escapes_html(self):
+        from voodoo.ui import Markdown
+
+        html = Markdown("```python\n<div>x</div>\n```").render()
+        assert "<pre><code" in html
+        assert "&lt;div&gt;" in html
+
+    def test_raw_html_is_escaped(self):
+        from voodoo.ui import Markdown
+
+        html = Markdown("<script>alert(1)</script>").render()
+        assert "<script>" not in html
+        assert "&lt;script&gt;" in html
+
+    def test_lists(self):
+        from voodoo.ui import Markdown
+
+        html = Markdown("- a\n- b\n\n1. one\n2. two").render()
+        assert "<ul><li>a</li><li>b</li></ul>" in html
+        assert "<ol><li>one</li><li>two</li></ol>" in html
+
+    def test_links_only_http(self):
+        from voodoo.ui import Markdown
+
+        html = Markdown("[x](https://ok.dev)").render()
+        assert '<a href="https://ok.dev"' in html
+        bad = Markdown("[x](javascript:alert(1))").render()
+        assert "<a href" not in bad
+
+
+class TestChatPrimitives:
+    def test_message_list_renders_children(self):
+        from voodoo.ui import MessageList
+
+        ml = MessageList("hello")
+        html = ml.render()
+        assert "hello" in html
+
+    def test_chat_message_role_modifier(self):
+        from voodoo.adapters.voodoo_css import VoodooCSSAdapter
+        from voodoo.ui import ChatMessage
+        from voodoo.ui.styles import set_style_adapter
+
+        original = current_adapter()
+        set_style_adapter(VoodooCSSAdapter())
+        try:
+            html = ChatMessage("hi", role="assistant").render()
+            assert "vd-chat-message--assistant" in html
+        finally:
+            set_style_adapter(original)
+
+    def test_streaming_text_caret(self):
+        from voodoo.ui import StreamingText
+
+        streaming = StreamingText("part").render()
+        assert "vd-caret" in streaming
+        done = StreamingText("full", done=True).render()
+        assert "vd-caret" not in done
+
+    def test_composer_wires_enter_send(self):
+        from voodoo.ui import Composer
+
+        html = Composer(on_send="send_message", placeholder="Ask…").render()
+        assert 'data-vd-enter-send="send_message"' in html
+        assert 'placeholder="Ask…"' in html
+        assert 'data-vd-enter-send-trigger="send_message"' in html
+
+    def test_sidebar_renders(self):
+        from voodoo.ui import Sidebar
+
+        html = Sidebar("Chats").render()
+        assert "Chats" in html
+
+
 def test_component_base():
     comp = Component("Hello", id="test-1", className="bg-red-500", data_custom="value")
     html = comp.render()

@@ -5,13 +5,14 @@ Uses the deterministic mock provider so no network calls are needed.
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from voodoo import Agent, AgentRun
 from voodoo.ai.agent import AgentState
-from voodoo.ai.providers import ProviderEvent, ProviderResponse
+from voodoo.ai.providers import ProviderEvent, ProviderResponse, ToolCall
 from voodoo.ai.providers.mock import MockProvider
 from voodoo.tools import registry as tools_module
 from voodoo.tools.registry import ToolRegistry, build_spec
@@ -62,6 +63,38 @@ class ToolThenTextProvider(MockProvider):
                 "cost": 0.0,
                 "finish_reason": "stop",
             },
+        )
+
+
+class NativeToolCallProvider(MockProvider):
+    """Returns a structured ``ToolCall`` on the first call, then a final answer."""
+
+    def __init__(self, name: str, arguments: dict, final: str = "Done"):
+        super().__init__(model="test")
+        self._call_count = 0
+        self._name = name
+        self._arguments = arguments
+        self._final = final
+
+    async def complete(self, messages, **kwargs):
+        self._call_count += 1
+        if self._call_count == 1:
+            return ProviderResponse(
+                content="",
+                model=self.model,
+                tokens_in=1,
+                tokens_out=1,
+                cost=0.0,
+                tool_calls=[
+                    ToolCall(name=self._name, arguments=self._arguments, id="call_1")
+                ],
+            )
+        return ProviderResponse(
+            content=self._final,
+            model=self.model,
+            tokens_in=1,
+            tokens_out=1,
+            cost=0.0,
         )
 
 
@@ -137,6 +170,50 @@ async def test_run_with_system_prompt():
     result = await agent.run("hello")
     assert result.status == "completed"
     assert result.output  # non-empty
+
+
+@pytest.mark.asyncio
+async def test_run_with_history_prepends_turns():
+    # Multi-turn: prior turns are prepended before the new user message.
+    agent = Agent(model="mock:test")
+    seen: list[list[dict[str, Any]]] = []
+    original_complete = agent.provider.complete
+
+    async def spy_complete(messages, **kwargs):  # type: ignore[no-untyped-def]
+        seen.append([dict(m) for m in messages])
+        return await original_complete(messages, **kwargs)
+
+    agent.provider.complete = spy_complete  # type: ignore[method-assign]
+    history = [
+        {"role": "user", "content": "My name is Ana."},
+        {"role": "assistant", "content": "Hello Ana!"},
+    ]
+    await agent.run("What is my name?", history=history)
+    assert len(seen) == 1
+    msgs = seen[0]
+    assert msgs[0] == history[0]
+    assert msgs[1] == history[1]
+    assert msgs[-1] == {"role": "user", "content": "What is my name?"}
+
+
+@pytest.mark.asyncio
+async def test_stream_with_history_prepends_turns():
+    agent = Agent(model="mock:test")
+    seen: list[list[dict[str, Any]]] = []
+    original_stream = agent.provider.stream
+
+    async def spy_stream(messages, **kwargs):  # type: ignore[no-untyped-def]
+        seen.append([dict(m) for m in messages])
+        async for ev in original_stream(messages, **kwargs):
+            yield ev
+
+    agent.provider.stream = spy_stream  # type: ignore[method-assign]
+    history = [{"role": "user", "content": "hi"}]
+    async for _ in agent.stream("again", history=history):
+        pass
+    assert len(seen) == 1
+    assert seen[0][0] == history[0]
+    assert seen[0][-1] == {"role": "user", "content": "again"}
 
 
 @pytest.mark.asyncio
@@ -297,6 +374,70 @@ async def test_tool_call_error_captured():
     result = await agent.run("call it")
     assert len(result.tool_calls) == 1
     assert "error" in result.tool_calls[0]["result"]
+
+
+# ---------------------------------------------------------------------------
+# Native tool-call protocol
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_executes_native_tool_call():
+    """Agent consumes structured ``tool_calls`` (the native protocol)."""
+    registry = ToolRegistry()
+
+    def add(a: int, b: int) -> int:
+        """Add two numbers."""
+        return a + b
+
+    registry.register(build_spec(add, name="add"))
+
+    provider = NativeToolCallProvider("add", {"a": 2, "b": 3}, "Sum done")
+    agent = Agent(model="mock:test", tools=["add"], registry=registry)
+    agent.provider = provider
+
+    result = await agent.run("add 2 and 3")
+
+    assert result.status == "completed"
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0]["name"] == "add"
+    assert result.tool_calls[0]["result"] == 5
+    assert result.output == "Sum done"
+
+
+@pytest.mark.asyncio
+async def test_native_tool_call_builds_structured_follow_up():
+    """Native tool calls are echoed back in the provider's own format."""
+    registry = ToolRegistry()
+
+    def add(a: int, b: int) -> int:
+        """Add two numbers."""
+        return a + b
+
+    registry.register(build_spec(add, name="add"))
+
+    provider = NativeToolCallProvider("add", {"a": 1, "b": 1}, "Two")
+    agent = Agent(model="mock:test", tools=["add"], registry=registry)
+    agent.provider = provider
+
+    captured: list[list[dict]] = []
+    original_complete = agent.provider.complete
+
+    async def spy(messages, **kwargs):
+        captured.append(messages)
+        return await original_complete(messages, **kwargs)
+
+    agent.provider.complete = spy  # type: ignore[method-assign]
+
+    await agent.run("add 1 and 1")
+
+    assert len(captured) == 2
+    assistant = [m for m in captured[1] if m["role"] == "assistant"][0]
+    assert assistant["tool_calls"][0]["id"] == "call_1"
+    assert assistant["tool_calls"][0]["function"]["name"] == "add"
+    tool_msg = [m for m in captured[1] if m["role"] == "tool"][0]
+    assert tool_msg["tool_call_id"] == "call_1"
+    assert tool_msg["content"] == "2"
 
 
 @pytest.mark.asyncio

@@ -128,8 +128,37 @@ store each have their own PostgreSQL contract + failure-path suites
   - `Model.get(id)` — fetch by PK.
   - `Model.all(user_context=None)` — fetch all rows.
   - `model.save()` — insert or update.
-  - `model.delete()` — delete row.
+  - `model.delete()` — delete row (fires FK cascades first).
+- **Fluent queries** — `Model.where(**filters)` returns a lazy, chainable
+  `Query`; nothing hits the database until awaited or a terminal runs:
+  - `await Model.where(status="new")` — matching rows as instances.
+  - `.order_by("-updated_at")` — order (prefix `-` for descending).
+  - `.limit(n)` / `.offset(n)` — paging.
+  - `.first()` — first match or `None`; `.count()` — row count.
+  - `.delete()` — delete matching rows (returns count; requires filters).
+  - Shortcuts: `Model.count(**f)`, `Model.first(**f)`, `Model.delete_where(**f)`.
+- **Foreign keys with cascade** — annotate a column as `FK[ParentModel]`
+  (stored as `INTEGER`); deleting the parent removes referencing children:
+
+  ```python
+  from voodoo.data import FK, Model
+
+
+  class Conversation(Model):
+      title: str
+
+
+  class ChatMessage(Model):
+      conversation_id: FK[Conversation]
+      content: str
+
+
+  await conversation.delete()  # also deletes its ChatMessages
+  ```
+
 - `BaseModel` — base ORM class.
+- `FK` — foreign-key annotation with cascade delete.
+- `Query` — the lazy query builder behind `Model.where()`.
 - `init_db(db_path=None)` — initialize the database.
 - `get_db()` — get the database connection.
 - `on_insert(model_cls)` / `on_update(model_cls)` — lifecycle hook decorators.

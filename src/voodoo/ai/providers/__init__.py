@@ -20,11 +20,13 @@ __all__ = [
     "VoodooModelProvider",
     "ProviderResponse",
     "ProviderEvent",
+    "ToolCall",
     "Message",
     "EmbeddingResponse",
     "ModelDescriptor",
     "get_provider",
     "resolve_model",
+    "default_model",
     "register_provider",
     "describe_model",
 ]
@@ -73,8 +75,28 @@ class ModelDescriptor:
 
 
 @dataclass
+class ToolCall:
+    """A structured tool-call request from a provider.
+
+    ``id`` is the provider's call identifier, used to match tool results back
+    to calls in native multi-turn transcripts (OpenAI/Anthropic/etc.). It is
+    ``None`` for providers that use the legacy ``[TOOL: ...]`` text-marker
+    convention, where the agent derives the call from the response content.
+    """
+
+    name: str
+    arguments: dict[str, Any] = field(default_factory=dict)
+    id: str | None = None
+
+
+@dataclass
 class ProviderResponse:
-    """Normalized non-streaming completion result with token/cost accounting."""
+    """Normalized non-streaming completion result with token/cost accounting.
+
+    ``tool_calls`` carries structured tool-call requests (the native protocol,
+    ROADMAP §47). When empty, the response is a plain completion (or a legacy
+    ``[TOOL: ...]`` marker that the Agent parses from ``content``).
+    """
 
     content: str
     model: str
@@ -82,6 +104,7 @@ class ProviderResponse:
     tokens_out: int
     cost: float
     finish_reason: str = "stop"
+    tool_calls: list[ToolCall] = field(default_factory=list)
 
 
 @dataclass
@@ -237,15 +260,16 @@ def register_provider(name: str, class_path: str) -> None:
 def _routing_aliases(aliases: dict[str, str] | None) -> dict[str, str]:
     """Merge config-provided aliases over the built-in defaults.
 
-    Config aliases come from ``models.aliases`` in ``voodoo.yaml`` (surfaced
-    via :data:`voodoo.config.config.models.aliases`); explicit caller-provided
-    ``aliases`` win over both.
+    Config aliases come from ``models.aliases`` and ``ai.aliases`` in
+    ``voodoo.yaml``/``voodoo.toml`` (surfaced via :data:`voodoo.config.config`);
+    explicit caller-provided ``aliases`` win over both.
     """
     merged = dict(DEFAULT_ALIASES)
     try:
         from voodoo.config import config
 
         merged.update(config.models.aliases or {})
+        merged.update(config.ai.aliases or {})
     except Exception:  # noqa: BLE001 — config resolution is best-effort here
         pass
     if aliases:
@@ -288,11 +312,34 @@ def resolve_model(model: str, aliases: dict[str, str] | None = None) -> tuple[st
     return provider_name, model_id
 
 
+def default_model() -> str:
+    """Return the configured default model reference (``provider:model``).
+
+    The ``ai`` block wins when it declares a model (combined with
+    ``ai.provider``, defaulting to ``openai``), otherwise ``models.default``
+    is used. Falls back to ``mock:default`` when config is unavailable.
+
+    This lets ``Agent()`` and other entry points be configured entirely from
+    ``voodoo.toml``/``voodoo.yaml`` with zero code.
+    """
+    try:
+        from voodoo.config import config
+
+        if config.ai.model:
+            provider = config.ai.provider or "openai"
+            return f"{provider}:{config.ai.model}"
+        return config.models.default
+    except Exception:  # noqa: BLE001 — config resolution is best-effort here
+        return "mock:default"
+
+
 def get_provider(model: str, **kwargs: Any) -> LLMProvider:
     """Resolve ``"provider:model"`` (or a routing alias) into a provider instance.
 
     Provider modules are imported lazily; a missing optional SDK raises an
-    actionable :class:`ConfigurationError`.
+    actionable :class:`ConfigurationError`. For OpenAI-compatible providers,
+    the ``ai`` config block supplies ``base_url``/``api_key`` fallbacks when
+    not passed explicitly, so e.g. DeepSeek works with zero provider code.
     """
     provider_name, model_id = resolve_model(model)
     class_path = _PROVIDER_CLASSES[provider_name]
@@ -301,6 +348,18 @@ def get_provider(model: str, **kwargs: Any) -> LLMProvider:
 
     module = importlib.import_module(module_path)
     provider_cls: type[LLMProvider] = getattr(module, class_name)
+
+    if provider_name == "openai":
+        try:
+            from voodoo.config import config
+
+            if config.ai.base_url:
+                kwargs.setdefault("base_url", config.ai.base_url)
+            if config.ai.api_key:
+                kwargs.setdefault("api_key", config.ai.api_key)
+        except Exception:  # noqa: BLE001 — config resolution is best-effort here
+            pass
+
     return provider_cls(model=model_id, **kwargs)
 
 

@@ -175,3 +175,77 @@ def test_counter_app_full_flow_via_websocket(make_app):
         assert count.get() == 1
 
     state_renderer.unbind("root")
+
+
+# ---------------------------------------------------------------------------
+# Auto re-render (Phase 4 — State.set triggers bound rerender, zero JS)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_state_set_triggers_bound_rerender(monkeypatch):
+    """Binding cells to a renderer makes State.set schedule a patch — the
+    reactive loop without explicit rerender() calls in handlers."""
+    from voodoo.ui.state import StateRenderer
+    from voodoo.ui.state import state as ui_state
+
+    count = ui_state(0)
+
+    def home():
+        return Text(f"Count: {count.get()}", id="count-display")
+
+    renderer = StateRenderer()
+    renderer.bind("root", home, cells=[count])
+
+    broadcasted = []
+
+    async def mock_broadcast(element_id, html):
+        broadcasted.append((element_id, html))
+
+    state_mod = importlib.import_module("voodoo.ui.state")
+    monkeypatch.setattr(
+        state_mod.StateRenderer, "_broadcast_patch", staticmethod(mock_broadcast)
+    )
+
+    # Simulate the event-loop context of a running handler.
+    import asyncio
+
+    count.set(42)
+    # The subscription schedules create_task on the running loop; let it run.
+    await asyncio.sleep(0)
+
+    assert count.get() == 42
+    assert len(broadcasted) == 1
+    assert broadcasted[0][0] == "root"
+    assert "Count: 42" in broadcasted[0][1]
+
+
+@pytest.mark.asyncio
+async def test_state_unbind_stops_rerender(monkeypatch):
+    from voodoo.ui.state import StateRenderer
+    from voodoo.ui.state import state as ui_state
+
+    count = ui_state(0)
+
+    def home():
+        return Text(f"Count: {count.get()}")
+
+    renderer = StateRenderer()
+    renderer.bind("root", home, cells=[count])
+    renderer.unbind("root")
+
+    broadcasted = []
+
+    async def mock_broadcast(element_id, html):
+        broadcasted.append((element_id, html))
+
+    state_mod = importlib.import_module("voodoo.ui.state")
+    monkeypatch.setattr(
+        state_mod.StateRenderer, "_broadcast_patch", staticmethod(mock_broadcast)
+    )
+
+    import asyncio
+
+    count.set(99)
+    await asyncio.sleep(0)
+    assert broadcasted == []  # unsubscribed — no patch

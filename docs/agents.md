@@ -121,6 +121,49 @@ models:
     cheap: "openai:gpt-4o-mini"
 ```
 
+### Config-driven providers (`[ai]` block) — zero-code endpoints
+
+Any OpenAI-compatible endpoint (DeepSeek, OpenRouter, Together, …) is
+configured entirely in `voodoo.toml`/`voodoo.yaml` — no provider class, no
+SDK wiring, no code:
+
+```toml
+[ai]
+provider = "openai"                                # the OpenAI-compatible client
+model = "deepseek-v4-flash"
+base_url = "${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}"
+api_key = "${DEEPSEEK_API_KEY}"
+aliases = { agent = "openai:deepseek-v4-flash" }
+```
+
+With that block, `Agent()` (no `model` argument) resolves everything from
+config: `default_model()` prefers `ai.model` + `ai.provider`; `get_provider()`
+applies `ai.base_url`/`ai.api_key` as fallback kwargs. Env vars
+`VOODOO_AI_PROVIDER` / `_MODEL` / `_BASE_URL` / `_API_KEY` are the fallbacks
+when the file has no `[ai]` block. `ai.aliases` merge into routing.
+
+### Multi-turn conversations
+
+`Agent.run()` / `Agent.stream()` accept a `history` of prior turns
+(`Message` dicts) prepended before the new prompt:
+
+```python
+history = [
+    {"role": "user", "content": "My name is Ana."},
+    {"role": "assistant", "content": "Hello Ana!"},
+]
+run = await agent.run("What is my name?", history=history)
+```
+
+### Native tool calling
+
+Providers surface structured tool-call requests via
+`ProviderResponse.tool_calls` (`ToolCall(name, arguments, id)`), and the
+agent builds native follow-up messages (assistant `tool_calls` + `tool` role
+echoing `tool_call_id`), so OpenAI/Anthropic-style APIs map tool results
+correctly. The legacy `[TOOL: name]` text marker remains only as the
+mock-provider fallback.
+
 ### The `VoodooModelProvider` interface
 
 Every model provider conforms to a normalized interface (spec gap #7):

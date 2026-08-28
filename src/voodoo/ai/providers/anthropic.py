@@ -11,6 +11,7 @@ from voodoo.ai.providers import (
     ModelDescriptor,
     ProviderEvent,
     ProviderResponse,
+    ToolCall,
 )
 from voodoo.core.errors import ConfigurationError
 
@@ -56,16 +57,28 @@ class AnthropicProvider(LLMProvider):
         if system is not None:
             params["system"] = system
         resp = await self._client.messages.create(**params)
-        content = "".join(
-            block.text for block in resp.content if getattr(block, "type", "") == "text"
-        )
+        content_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
+        for block in resp.content:
+            block_type = getattr(block, "type", "")
+            if block_type == "text":
+                content_parts.append(getattr(block, "text", ""))
+            elif block_type == "tool_use":
+                tool_calls.append(
+                    ToolCall(
+                        name=getattr(block, "name", ""),
+                        arguments=getattr(block, "input", {}) or {},
+                        id=getattr(block, "id", None),
+                    )
+                )
         return ProviderResponse(
-            content=content,
+            content="".join(content_parts),
             model=resp.model or self.model,
             tokens_in=getattr(resp.usage, "input_tokens", 0),
             tokens_out=getattr(resp.usage, "output_tokens", 0),
             cost=0.0,
             finish_reason=resp.stop_reason or "stop",
+            tool_calls=tool_calls,
         )
 
     async def stream(

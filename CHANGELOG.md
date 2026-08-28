@@ -2,6 +2,75 @@
 
 ## [Unreleased]
 
+### Added — "Less-Code" initiative
+
+Making Voodoo apps dramatically smaller by turning hand-rolled patterns into
+framework primitives. Validated by rewriting the `ai-agent` template from
+~1,850 lines (~1,120 Python + ~730 CSS + ~200 inline JS) to **one 285-line
+`main.py` with zero CSS, zero inline JS, and zero custom provider classes**.
+
+#### AI — native tool-calling protocol
+
+- **`ToolCall` dataclass** (`name`, `arguments`, `id`) plus
+  `ProviderResponse.tool_calls` — structured tool calls replace the fragile
+  `[TOOL: name]` text-marker convention (kept only as the mock-provider
+  fallback).
+- **`OpenAIProvider`** parses native `message.tool_calls` in `complete()` and
+  accumulates streaming tool-call deltas in `stream()` (flushed as
+  `tool_call` events before `done`).
+- **`AnthropicProvider`** parses `tool_use` blocks into `ToolCall`s.
+- **`Agent`** builds native multi-turn follow-up messages (assistant
+  `tool_calls` + `tool` role with `tool_call_id` echoing the call `id`), so
+  providers map tool results correctly.
+
+#### AI — config-driven providers & multi-turn
+
+- **`[ai]` config block** (`provider`, `model`, `base_url`, `api_key`,
+  `aliases`) in `voodoo.toml`/`voodoo.yaml`, with `VOODOO_AI_*` env fallbacks
+  and `${VAR}` interpolation — **any OpenAI-compatible endpoint (DeepSeek,
+  OpenRouter, …) now works with zero provider code**.
+- **`get_provider()`** applies `ai.base_url`/`ai.api_key` as fallback kwargs
+  for the `openai` provider; `ai.aliases` merge into routing aliases.
+- **`default_model()`** resolves the app's model from config; `Agent()` with
+  no `model` argument uses it.
+- **Multi-turn conversations**: `Agent.run(prompt, history=[...])` and
+  `Agent.stream(...)` accept prior turns as `Message` dicts.
+- **`runtime.run_api_through_runtime`** config flag (env
+  `VOODOO_RUN_API_THROUGH_RUNTIME`) replaces the `api.run_through_runtime`
+  module-level hack (the attribute remains, now config-initialized).
+
+#### Data — fluent query API & FK cascades
+
+- **`Model.where(**filters)`** starts a lazy, chainable `Query`:
+  `.order_by("-col")`, `.limit()`, `.offset()`, `await` (rows), `.first()`,
+  `.count()`, `.delete()`. Class shortcuts: `Model.count(**f)`,
+  `Model.first(**f)`, `Model.delete_where(**f)`.
+- **`FK[ParentModel]` field annotation** — column stored as `INTEGER`;
+  deleting a parent row cascades to children (registered in the model
+  metaclass; portable ANSI SQL). Unconditional `delete()` is guarded.
+- Exported `FK` from `voodoo` and `voodoo.data`.
+
+#### UI — chat primitives, Icon, Markdown, reactive wiring, client SDK
+
+- **`Icon(name, size, label)`** — curated inline-SVG icon set (~26 icons,
+  stroke/currentColor; unknown names render a placeholder, never raise).
+- **`Markdown(source)`** — safe, dependency-free renderer (headings,
+  emphasis, inline code, fenced blocks, lists, quotes, http(s)-only links;
+  **all raw HTML escaped**) in `voodoo.ui.markdown`.
+- **Chat primitives**: `MessageList` (auto-scroll), `ChatMessage(role=…)`
+  (user/assistant/system/tool bubbles), `StreamingText` (animated caret),
+  `Composer(on_send=…)` (Enter-to-send textarea + send button),
+  `Sidebar`. All styled via the `vd-*` design system — zero hand-written CSS.
+- **Reactive loop wired**: `StateRenderer.bind(el, fn, cells=[...])`
+  subscribes to the cells — `State.set()` during a handler now schedules the
+  re-render + WebSocket patch automatically (the "zero JS" promise).
+- **Client JS SDK** (`static/client.js`): `voodoo.navigate`,
+  `voodoo.scrollToBottom`, `voodoo.onEnter`, auto-growing composer,
+  Enter-send / Shift+Enter-newline, auto-scroll on patch/append — installed
+  via `setupChatBehaviors()` after every DOM swap.
+- New components exported from `voodoo` top level: `Icon`, `Markdown`,
+  `MessageList`, `ChatMessage`, `StreamingText`, `Composer`, `Sidebar`.
+
 ### Fixed
 
 - **Dark-mode primary action color was invisible.** The `primary` token was

@@ -37,6 +37,15 @@ class VoodooCSSAdapter:
         if level and component == "heading":
             classes.append(f"vd-{base}--h{level}")
 
+        # Chat message role (user | assistant | system | tool)
+        role = props.get("role")
+        if role and component == "chat-message":
+            classes.append(f"vd-{base}--{role}")
+
+        # Streaming text terminal state (caret hidden when done)
+        if component == "streaming-text" and props.get("done"):
+            classes.append(f"vd-{base}--done")
+
         # Size — button/input use it directly
         if component in ("button", "input"):
             size = props.get("size")
@@ -381,6 +390,128 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
 .vd-chatbox {{
     display: flex; flex-direction: column; gap: {s}sm);
     overflow-y: auto;
+}}
+
+/* Icon (inline SVG sizing + alignment) */
+.vd-icon {{
+    display: inline-block; vertical-align: middle; flex-shrink: 0;
+}}
+
+/* Message list (chat transcript) */
+.vd-message-list {{
+    display: flex; flex-direction: column; gap: {s}md);
+    overflow-y: auto; padding: {s}md);
+    flex: 1; min-height: 0;
+}}
+
+/* Chat message bubbles */
+.vd-chat-message {{
+    display: flex; flex-direction: column; max-width: 80%;
+    padding: {s}sm) {s}md); border-radius: {r}lg);
+    font-size: {t}sm); line-height: 1.6; color: var(--vd-color-text);
+    white-space: pre-wrap; word-break: break-word;
+}}
+.vd-chat-message--user {{
+    align-self: flex-end;
+    background: var(--vd-color-primary); color: var(--vd-color-primary-contrast, #fff);
+    border-bottom-right-radius: {r}sm);
+}}
+.vd-chat-message--assistant {{
+    align-self: flex-start;
+    background: var(--vd-color-surface); border: 1px solid var(--vd-color-border);
+    border-bottom-left-radius: {r}sm);
+}}
+.vd-chat-message--system {{
+    align-self: center; font-size: {t}xs); color: var(--vd-color-text-muted);
+    background: transparent;
+}}
+.vd-chat-message--tool {{
+    align-self: flex-start; font-size: {t}xs);
+    background: var(--vd-color-surface); border: 1px dashed var(--vd-color-border);
+    color: var(--vd-color-text-muted); font-family: var(--vd-font-mono, monospace);
+}}
+.vd-chat-message pre, .vd-chat-message code {{
+    font-family: var(--vd-font-mono, monospace); font-size: {t}xs);
+}}
+.vd-chat-message pre {{
+    background: rgb(0 0 0 / 0.25); padding: {s}sm); border-radius: {r}md);
+    overflow-x: auto; white-space: pre; margin: {s}xs) 0;
+}}
+
+/* Streaming text + caret */
+.vd-streaming-text {{
+    white-space: pre-wrap; word-break: break-word; color: var(--vd-color-text);
+}}
+.vd-caret {{
+    display: inline-block; width: 0.5em; height: 1em; margin-left: 2px;
+    vertical-align: text-bottom; background: var(--vd-color-primary);
+    animation: vd-blink 1s steps(2) infinite;
+}}
+@keyframes vd-blink {{ 50% {{ opacity: 0; }} }}
+
+/* Composer (chat input bar) */
+.vd-composer {{
+    display: flex; align-items: flex-end; gap: {s}sm);
+    padding: {s}sm); border: 1px solid var(--vd-color-border);
+    border-radius: {r}lg); background: var(--vd-color-surface);
+}}
+.vd-composer-input {{
+    flex: 1; resize: none; border: none; outline: none; background: transparent;
+    color: var(--vd-color-text); font-size: {t}sm); line-height: 1.5;
+    font-family: inherit; padding: {s}xs) {s}sm);
+    max-height: 200px;
+}}
+.vd-composer-input:focus {{ box-shadow: none; }}
+.vd-composer-send {{
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.25rem; height: 2.25rem; border: none; cursor: pointer;
+    border-radius: {r}md); background: var(--vd-color-primary);
+    color: var(--vd-color-primary-contrast, #fff);
+    transition: opacity {m}normal);
+}}
+.vd-composer-send:hover {{ opacity: 0.9; }}
+.vd-composer-send:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+
+/* Sidebar shell */
+.vd-sidebar {{
+    display: flex; flex-direction: column; gap: {s}sm);
+    width: 16rem; padding: {s}md); flex-shrink: 0;
+    border-right: 1px solid var(--vd-color-border);
+    background: var(--vd-color-surface); color: var(--vd-color-text);
+    overflow-y: auto;
+}}
+.vd-sidebar-heading {{
+    font-size: {t}xs); font-weight: var(--vd-weight-semibold);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--vd-color-text-muted); padding: 0 {s}xs);
+}}
+
+/* Markdown rendered inside components */
+.vd-markdown p {{ margin: 0 0 {s}sm); }}
+.vd-markdown p:last-child {{ margin-bottom: 0; }}
+.vd-markdown h1, .vd-markdown h2, .vd-markdown h3,
+.vd-markdown h4, .vd-markdown h5, .vd-markdown h6 {{
+    margin: {s}sm) 0 {s}xs); font-weight: var(--vd-weight-semibold);
+    color: var(--vd-color-text); line-height: 1.3;
+}}
+.vd-markdown ul, .vd-markdown ol {{ margin: 0 0 {s}sm); padding-left: 1.25rem; }}
+.vd-markdown li {{ margin: {s}xs) 0; }}
+.vd-markdown blockquote {{
+    margin: 0 0 {s}sm); padding: {s}xs) {s}sm);
+    border-left: 3px solid var(--vd-color-border);
+    color: var(--vd-color-text-muted);
+}}
+.vd-markdown code {{
+    font-family: var(--vd-font-mono, monospace); font-size: 0.875em;
+    background: rgb(0 0 0 / 0.15); padding: 0.125em 0.375em; border-radius: {r}sm);
+}}
+.vd-markdown pre {{
+    margin: 0 0 {s}sm); padding: {s}sm); overflow-x: auto;
+    background: rgb(0 0 0 / 0.25); border-radius: {r}md);
+}}
+.vd-markdown pre code {{ background: transparent; padding: 0; }}
+.vd-markdown a {{
+    color: var(--vd-color-secondary); text-underline-offset: 4px;
 }}
 
 /* Semantic structure */

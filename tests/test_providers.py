@@ -97,6 +97,74 @@ def test_get_provider_unknown_raises_configuration_error():
         get_provider("acme:foo")
 
 
+def test_default_model_and_config_driven_provider(monkeypatch):
+    # NOTE: ``voodoo/__init__.py`` re-exports the config *instance* as the
+    # package attribute, shadowing the submodule, so plain
+    # ``import voodoo.config as m`` binds the instance. Use importlib to get
+    # the real module.
+    import importlib
+
+    from voodoo.ai.providers import default_model
+
+    config_mod = importlib.import_module("voodoo.config")
+
+    def with_ai(ai: object, models_default: str = "mock:default") -> None:
+        cfg = config_mod.VoodooConfig(
+            ai=ai, models=config_mod.ModelsConfig(default=models_default)
+        )
+        monkeypatch.setattr(config_mod, "config", cfg)
+
+    # Default with no ai block: models.default.
+    with_ai(config_mod.AIConfig())
+    assert default_model() == "mock:default"
+
+    # ai block wins when it declares a model; provider defaults to openai.
+    with_ai(config_mod.AIConfig(model="deepseek-chat"))
+    assert default_model() == "openai:deepseek-chat"
+
+    # Explicit ai.provider is honored.
+    with_ai(config_mod.AIConfig(provider="anthropic", model="claude-3"))
+    assert default_model() == "anthropic:claude-3"
+
+
+def test_agent_defaults_to_configured_model(monkeypatch):
+    import importlib
+
+    from voodoo.ai.agent import Agent
+
+    config_mod = importlib.import_module("voodoo.config")
+    cfg = config_mod.VoodooConfig(
+        ai=config_mod.AIConfig(provider="mock", model="configured")
+    )
+    monkeypatch.setattr(config_mod, "config", cfg)
+    agent = Agent()
+    assert agent.model == "mock:configured"
+    assert isinstance(agent.provider, MockProvider)
+    assert agent.provider.model == "configured"
+
+
+def test_agent_run_through_runtime_flag_from_config(monkeypatch):
+    import importlib
+
+    from voodoo.routing.api import API
+
+    config_mod = importlib.import_module("voodoo.config")
+    # Default config (no flag set) keeps runtime execution on.
+    monkeypatch.setattr(config_mod, "config", config_mod.VoodooConfig())
+    api_default = API()
+    assert api_default.run_through_runtime is True
+
+    monkeypatch.setattr(
+        config_mod,
+        "config",
+        config_mod.VoodooConfig(
+            runtime=config_mod.RuntimeConfig(run_api_through_runtime=False)
+        ),
+    )
+    api_off = API()
+    assert api_off.run_through_runtime is False
+
+
 def test_register_provider_and_resolve():
     register_provider("mocktest", "voodoo.ai.providers.mock.MockProvider")
     try:

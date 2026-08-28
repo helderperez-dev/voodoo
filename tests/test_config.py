@@ -148,5 +148,93 @@ def test_theme_block_parses_and_keeps_extra_keys():
         assert "theme" not in cfg.extra
 
 
+def test_ai_block_parses_and_env_fallbacks():
+    from voodoo.config import AIConfig
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yaml_path = Path(tmpdir) / "voodoo.yaml"
+        yaml_content = {
+            "ai": {
+                "provider": "openai",
+                "model": "deepseek-chat",
+                "base_url": "https://api.deepseek.com/v1",
+                "api_key": "${DEEPSEEK_TEST_KEY}",
+                "aliases": {"agent": "openai:deepseek-chat"},
+            },
+        }
+        os.environ["DEEPSEEK_TEST_KEY"] = "sk-test-123"
+        try:
+            with open(yaml_path, "w") as f:
+                yaml.dump(yaml_content, f)
+
+                cfg = get_config(str(yaml_path))
+                assert isinstance(cfg.ai, AIConfig)
+                assert cfg.ai.provider == "openai"
+                assert cfg.ai.model == "deepseek-chat"
+                assert cfg.ai.base_url == "https://api.deepseek.com/v1"
+                # ${VAR} refs in the ai block are interpolated at load time.
+                assert cfg.ai.api_key == "sk-test-123"
+                assert cfg.ai.aliases == {"agent": "openai:deepseek-chat"}
+                # The ai block does not leak into ``extra``.
+                assert "ai" not in cfg.extra
+        finally:
+            os.environ.pop("DEEPSEEK_TEST_KEY", None)
+
+        # Env-var fallbacks when the file has no ai block.
+        with open(yaml_path, "w") as f:
+            yaml.dump({"runtime": {"mode": "development"}}, f)
+
+        env_pairs = {
+            "VOODOO_AI_PROVIDER": "openai",
+            "VOODOO_AI_MODEL": "deepseek-reasoner",
+            "VOODOO_AI_BASE_URL": "https://api.deepseek.com/v1",
+            "VOODOO_AI_API_KEY": "sk-env-456",
+        }
+        saved = {k: os.environ.get(k) for k in env_pairs}
+        try:
+            os.environ.update(env_pairs)
+            cfg_env = get_config(str(yaml_path))
+            assert cfg_env.ai.provider == "openai"
+            assert cfg_env.ai.model == "deepseek-reasoner"
+            assert cfg_env.ai.base_url == "https://api.deepseek.com/v1"
+            assert cfg_env.ai.api_key == "sk-env-456"
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+
+def test_runtime_run_api_through_runtime_flag():
+    # File config: runtime.run_api_through_runtime = false.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yaml_path = Path(tmpdir) / "voodoo.yaml"
+        with open(yaml_path, "w") as f:
+            yaml.dump(
+                {"runtime": {"mode": "development", "run_api_through_runtime": False}},
+                f,
+            )
+        cfg = get_config(str(yaml_path))
+        assert cfg.runtime.run_api_through_runtime is False
+
+    # Env var: VOODOO_RUN_API_THROUGH_RUNTIME=0 → False.
+    key = "VOODOO_RUN_API_THROUGH_RUNTIME"
+    saved = os.environ.get(key)
+    try:
+        os.environ[key] = "0"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yaml_path = Path(tmpdir) / "voodoo.yaml"
+            with open(yaml_path, "w") as f:
+                yaml.dump({}, f)
+            cfg = get_config(str(yaml_path))
+            assert cfg.runtime.run_api_through_runtime is False
+    finally:
+        if saved is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = saved
+
+
 def test_voodoo_config_theme_default():
     assert VoodooConfig().theme.mode == "dark"
