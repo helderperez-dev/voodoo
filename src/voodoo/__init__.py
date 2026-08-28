@@ -59,6 +59,7 @@ from .ui import (
     Header,
     Heading,
     Hero,
+    Html,
     Icon,
     Input,
     Label,
@@ -167,6 +168,7 @@ __all__ = [
     # UI — icons & markdown
     "Icon",
     "Markdown",
+    "Html",
     # UI — chat primitives
     "MessageList",
     "ChatMessage",

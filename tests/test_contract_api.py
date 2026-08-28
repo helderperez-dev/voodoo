@@ -77,6 +77,7 @@ EXPECTED_EXPORTS = {
     # UI — icons & markdown
     "Icon",
     "Markdown",
+    "Html",
     # UI — chat primitives
     "MessageList",
     "ChatMessage",

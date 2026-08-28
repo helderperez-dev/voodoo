@@ -486,6 +486,54 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     color: var(--vd-color-text-muted); padding: 0 {s}xs);
 }}
 
+/* App shell — full-viewport sidebar + main layout (chat apps) */
+.vd-app-shell {{
+    display: flex; align-items: stretch;
+    width: 100%; height: 100dvh; overflow: hidden;
+}}
+.vd-app-shell > .vd-sidebar {{
+    height: 100dvh; border-right: 1px solid var(--vd-color-border);
+}}
+.vd-chat-main {{
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    height: 100dvh; overflow: hidden;
+    padding: {s}lg); gap: {s}md);
+}}
+.vd-chat-scroll {{
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column;
+    border: 1px solid var(--vd-color-border);
+    border-radius: {r}lg); background: var(--vd-color-surface);
+    padding: {s}md);
+}}
+.vd-chat-row {{
+    width: 100%; align-items: center;
+}}
+.vd-chat-row > .vd-button:first-child {{
+    flex: 1; justify-content: flex-start; text-align: left;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    background: transparent; color: var(--vd-color-text);
+    border: none; font-weight: var(--vd-weight-normal);
+}}
+.vd-chat-row > .vd-button:first-child:hover {{
+    background: var(--vd-color-surface); color: var(--vd-color-primary);
+}}
+.vd-chat-row > .vd-button:last-child {{
+    flex-shrink: 0; background: transparent; border: none;
+    color: var(--vd-color-text-muted); padding: {s}xs);
+}}
+.vd-chat-row > .vd-button:last-child:hover {{ color: var(--vd-color-danger); }}
+.vd-suggestions {{
+    display: flex; flex-wrap: wrap; gap: {s}sm);
+}}
+.vd-suggestions > .vd-button {{
+    background: var(--vd-color-surface); border: 1px solid var(--vd-color-border);
+    color: var(--vd-color-text); font-weight: var(--vd-weight-normal);
+}}
+.vd-suggestions > .vd-button:hover {{
+    border-color: var(--vd-color-primary); color: var(--vd-color-primary);
+}}
+
 /* Markdown rendered inside components */
 .vd-markdown p {{ margin: 0 0 {s}sm); }}
 .vd-markdown p:last-child {{ margin-bottom: 0; }}
