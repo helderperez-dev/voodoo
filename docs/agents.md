@@ -202,9 +202,55 @@ Resolves the model through the provider abstraction (no direct SDK use). Set
 `VOODOO_MODELS_DEFAULT` to pick a different model, or `OPENAI_API_KEY` /
 `OPENROUTER_API_KEY` to authenticate.
 
+### Agent memory (Sprint 16)
+
+Every `Agent` has a `memory` property — a `MemoryStore` instance for durable,
+queryable recall. Memories are distinct from context: context is what you pass
+into a single run; memory is what the agent persists across runs.
+
+```python
+from voodoo import Agent, MemoryLayer
+
+agent = Agent(model="mock:test")
+
+# Agent auto-writes episodic memory after every run/stream
+run = await agent.run("What is 2 + 2?")
+
+# Read the agent's episodic memories
+entries = await agent.memory.list_entries(
+    entity_id=f"agent:{agent.agent_id}",
+    layer=MemoryLayer.EPISODIC,
+)
+print(entries[0].content)  # "Prompt: What is 2 + 2? → Mock response..."
+```
+
+**Automatic episodic memory:** After every `run()` or `stream()`, the agent
+writes an `EPISODIC` memory entry summarizing the prompt, response, tool calls,
+and execution metadata. This happens without any manual wiring.
+
+**Custom memory store:** Inject a `SQLiteMemoryStore` for durable persistence:
+
+```python
+from voodoo import Agent, SQLiteMemoryStore
+
+agent = Agent(
+    model="openai:gpt-4o",
+    memory=SQLiteMemoryStore("agent_memory.db"),
+)
+```
+
+**Search:** Find relevant memories with full-text search:
+
+```python
+results = await agent.memory.search(
+    "pricing discussion", entity_id=f"agent:{agent.agent_id}"
+)
+```
+
 ## API reference
 
 - `Agent(model="mock:test", tools=None, system_prompt=None, registry=None, max_iterations=10)` — create an agent.
+- `Agent.memory` — the agent's `MemoryStore` (lazy, defaults to `InMemoryMemoryStore`).
 - `Agent.run(prompt, context=None) -> AgentRun` — execute to completion.
 - `Agent.stream(prompt, context=None) -> AsyncIterator[AgentEvent]` — stream events.
 - `AgentRun` — full run record with token/cost accounting.

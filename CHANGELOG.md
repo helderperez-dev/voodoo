@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+### Added — Sprint 16: Memory as entity state
+
+- **`MemoryStore` Protocol** — the persistence contract for memory backends
+  (`write`, `read`, `search`, `list_entries`, `delete`, `count`) in
+  `voodoo.memory.interfaces`.
+- **`MemoryEntry`** — a single piece of knowledge (entity id, layer, content,
+  metadata, tags, importance, source execution id, TTL).
+- **`MemoryLayer`** — semantic origin tags: `WORKING`, `EPISODIC`, `DURABLE`,
+  `SEMANTIC`.
+- **`SQLiteMemoryStore`** — default durable backend with FTS5 full-text search.
+  Falls back to LIKE when FTS5 is unavailable. WAL mode, `busy_timeout=5000`.
+  No new dependencies.
+- **`InMemoryMemoryStore`** — non-durable store for tests.
+- **Agent.memory** — lazily created memory store on every `Agent` instance.
+  Context ≠ memory: context is an opaque dict for tool calls; memory is a
+  queryable, durable record of what the entity knows.
+- **Episodic memory auto-write** — every `Agent.run()` and `Agent.stream()`
+  writes an episodic memory entry (Layer 1) capturing prompt, output, tool
+  calls, and token accounting.
+- **Public API exports**: `MemoryEntry`, `MemoryLayer`, `MemoryStore`,
+  `SQLiteMemoryStore` from `voodoo`.
+- **`tests/test_memory.py`** — 36 tests covering CRUD, search (FTS5 + LIKE),
+  persistence across restart, agent integration, and episodic auto-write.
+- **`tests/test_contract_api.py`** — updated to pin the new memory exports.
+
+## 1.19.1 — 2026-08-28
+
+### Fixed
+
+- **Chat app-shell layout CSS** — fixed layout issues in the chat application shell.
+- **Top-level `Html` export** — `Html` component now exported from `voodoo` top level.
+
+## 1.19.0 — 2026-08-28
+
 ### Added — "Less-Code" initiative
 
 Making Voodoo apps dramatically smaller by turning hand-rolled patterns into
@@ -71,56 +105,9 @@ framework primitives. Validated by rewriting the `ai-agent` template from
 - New components exported from `voodoo` top level: `Icon`, `Markdown`,
   `MessageList`, `ChatMessage`, `StreamingText`, `Composer`, `Sidebar`.
 
-### Fixed
+## 1.18.0 — 2026-08-28
 
-- **Dark-mode primary action color was invisible.** The `primary` token was
-  near-black (`#18181B`) in *both* light and dark modes, which made primary
-  buttons, links, and focus rings invisible on dark surfaces (the default
-  mode). `primary` now inverts per mode — near-white (`#FAFAFA`) in dark mode,
-  near-black (`#18181B`) in light mode — via new `light_primary` /
-  `light_primary_hover` tokens that `light_overrides()` swaps in.
-- **Links, focus rings, and form accents are consistently visible** in every
-  mode: the indigo `secondary` token now drives `:focus-visible` rings,
-  `::selection`, links, checkbox/radio accent colors, and the user-badge avatar
-  (previously the now-inverted `primary`, which vanished in dark mode).
-- **Default `.vd-button` now has a visible surface + border** (previously
-  transparent), plus hover/active feedback so it reads as interactive in both
-  modes. The Tailwind `primary` variant uses the `surface` token for its text
-  color so it stays legible on the near-white dark-mode fill.
-
-### Changed
-
-#### Sprint 14b — Runtime vision alignment
-
-- Aligned code docstrings, flow diagrams, and package metadata with the
-  "programmable runtime" vision: `AI-native application framework` →
-  `programmable runtime`; `STATE → INTENT → CAPABILITY → COMPUTE → EFFECT →
-  STATE` → `ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE`;
-  `eight architectural primitives` → `computational model`; `AI is one class
-  of Compute` → `AI is one form of Compute`. `pyproject.toml` description and
-  `release.yml` Homebrew `desc` updated to match. No behavior change.
-
-#### Sprint 15 — Design system & theme engine
-
-- **Voodoo CSS is now the polished default** — `VoodooCSSAdapter` gained full
-  component coverage via `generate_component_css()`: base reset, typography
-  scale, and styled `button`, `card`, `form`, `input`, `textarea`, `select`,
-  `badge`, `avatar`, `divider`, `list`, `heading`, `link`, and layout classes.
-- **Layout parity** — `Flex` (`direction`/`justify`/`items`/`wrap`/`gap`),
-  `Grid` (`cols`/`gap`), `Container` (`size`/`centered`), and `Page`
-  (`size`/`pad`) emit semantic `vd-*` classes in the default adapter. Numeric
-  gaps use a 4px base (`calc(0.25rem * 4)`); named gaps use spacing tokens.
-- **Theme mode plumbing** — `render_page` now emits `class="{mode}"`
-  (dark/light/system, no duplicated `dark dark`) plus an inline
-  `theme_init_script` that resolves the `voodoo_theme` cookie → `Theme.mode`
-  → `prefers-color-scheme` before paint (no flash).
-- **No hardcoded Tailwind** — auth forms and library components dropped raw
-  `space-y-*`/`text-center` utilities in favor of semantic `Stack`/`Form`
-  composition; `Form` now uses `style="form"` resolved by every adapter.
-
-### Added
-
-#### Theme presets, chrome components & shareable themes
+### Added — Theme presets, chrome components & shareable themes
 
 - **Themes are now portable modules.** A theme is a JSON-only `theme.json`
   document (the exact shape `Theme.model_dump()` produces) plus an optional
@@ -154,7 +141,46 @@ framework primitives. Validated by rewriting the `ai-agent` template from
 - **`tests/test_theme_presets.py` + `tests/test_chrome.py`** — preset
   resolution/round-trip and chrome rendering/CSS coverage.
 
-#### Sprint 15 — Design system & theme engine
+## 1.17.1 — 2026-08-20
+
+### Fixed
+
+- **Dark-mode primary action color was invisible.** The `primary` token was
+  near-black (`#18181B`) in *both* light and dark modes, which made primary
+  buttons, links, and focus rings invisible on dark surfaces (the default
+  mode). `primary` now inverts per mode — near-white (`#FAFAFA`) in dark mode,
+  near-black (`#18181B`) in light mode — via new `light_primary` /
+  `light_primary_hover` tokens that `light_overrides()` swaps in.
+- **Links, focus rings, and form accents are consistently visible** in every
+  mode: the indigo `secondary` token now drives `:focus-visible` rings,
+  `::selection`, links, checkbox/radio accent colors, and the user-badge avatar
+  (previously the now-inverted `primary`, which vanished in dark mode).
+- **Default `.vd-button` now has a visible surface + border** (previously
+  transparent), plus hover/active feedback so it reads as interactive in both
+  modes. The Tailwind `primary` variant uses the `surface` token for its text
+  color so it stays legible on the near-white dark-mode fill.
+
+## 1.17.0 — 2026-08-20
+
+### Changed — Sprint 15: Design system & theme engine
+
+- **Voodoo CSS is now the polished default** — `VoodooCSSAdapter` gained full
+  component coverage via `generate_component_css()`: base reset, typography
+  scale, and styled `button`, `card`, `form`, `input`, `textarea`, `select`,
+  `badge`, `avatar`, `divider`, `list`, `heading`, `link`, and layout classes.
+- **Layout parity** — `Flex` (`direction`/`justify`/`items`/`wrap`/`gap`),
+  `Grid` (`cols`/`gap`), `Container` (`size`/`centered`), and `Page`
+  (`size`/`pad`) emit semantic `vd-*` classes in the default adapter. Numeric
+  gaps use a 4px base (`calc(0.25rem * 4)`); named gaps use spacing tokens.
+- **Theme mode plumbing** — `render_page` now emits `class="{mode}"`
+  (dark/light/system, no duplicated `dark dark`) plus an inline
+  `theme_init_script` that resolves the `voodoo_theme` cookie → `Theme.mode`
+  → `prefers-color-scheme` before paint (no flash).
+- **No hardcoded Tailwind** — auth forms and library components dropped raw
+  `space-y-*`/`text-center` utilities in favor of semantic `Stack`/`Form`
+  composition; `Form` now uses `style="form"` resolved by every adapter.
+
+### Added — Sprint 15: Design system & theme engine
 
 - **`voodoo.setTheme(mode)`** — client runtime API to toggle light/dark/system
   and persist the choice in the `voodoo_theme` cookie.
@@ -165,7 +191,21 @@ framework primitives. Validated by rewriting the `ai-agent` template from
 - **`docs/design_system.md`** — rewritten with the token, theme, adapter, and
   layout reference; `docs/components.md` documents layout props.
 
-#### Sprint 14 — ModelProvider protocol
+## 1.16.1 — 2026-08-20
+
+### Changed — Sprint 14b: Runtime vision alignment
+
+- Aligned code docstrings, flow diagrams, and package metadata with the
+  "programmable runtime" vision: `AI-native application framework` →
+  `programmable runtime`; `STATE → INTENT → CAPABILITY → COMPUTE → EFFECT →
+  STATE` → `ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE`;
+  `eight architectural primitives` → `computational model`; `AI is one class
+  of Compute` → `AI is one form of Compute`. `pyproject.toml` description and
+  `release.yml` Homebrew `desc` updated to match. No behavior change.
+
+## 1.16.0 — 2026-08-20
+
+### Added — Sprint 14: ModelProvider protocol
 
 - **`VoodooModelProvider` Protocol** — normalized model provider interface
   (`generate`, `stream`, `embed`, `count_tokens`, `describe`, `name`) in
@@ -196,43 +236,21 @@ framework primitives. Validated by rewriting the `ai-agent` template from
 - **Contract tests** — `ModelProviderContractTests` mixin +
   `TestMockProviderContract` in `tests/contracts/test_model_provider.py`.
 
-- **AI development workflow** — structured guidance for AI coding agents
-  (Claude Code, Cursor, GitHub Copilot, etc.):
-  - `AGENTS.md` — root-level AI agent instructions; the entry point for any
-    agent working in the repository.
-  - `.github/copilot-instructions.md` — GitHub Copilot entry point with the
-    architectural invariants, code style, testing standards, and sprint
-    protocol.
-  - `.github/instructions/` — domain-specific instruction files
-    (architecture, runtime, providers, execution, ai, testing,
-    pull-request).
-  - `.github/skills/` — structured workflows (implement-sprint,
-    add-provider, runtime-feature, testing, documentation,
-    architecture-review, release).
-  - `.github/prompts/` — structured prompts (audit-repository, plan-sprint,
-    architecture-review).
-- `ARCHITECTURE.md` — root-level architecture reference (layers,
-  primitives, execution model).
-- `README.md` — "AI Development Workflow" section linking the agent
-  instructions, skills, and prompts.
-- `ROADMAP.md` — "AI development workflow" section describing the `.github/`
-  structure.
-- `SPRINT_PLAN.md` — AI agent workflow note at the top of the sprint
-  protocol.
+### Added — AI development workflow
 
-### Changed
-- `.github/PULL_REQUEST_TEMPLATE.md` — expanded documentation-sync checklist:
-  `CHANGELOG.md` under `[Unreleased]`, `docs/*.md` per the source-path
-  mapping, `README.md`, `SPRINT_PLAN.md`, `ROADMAP.md`, `ARCHITECTURE.md`,
-  and `test_contract_api.py`.
+- Structured guidance for AI coding agents (Claude Code, Cursor, GitHub Copilot):
+  - `AGENTS.md` — root-level AI agent instructions.
+  - `.github/copilot-instructions.md` — GitHub Copilot entry point.
+  - `.github/instructions/` — domain-specific instruction files.
+  - `.github/skills/` — structured workflows.
+  - `.github/prompts/` — structured prompts.
+- `ARCHITECTURE.md` — root-level architecture reference.
+- Expanded PR template with documentation-sync checklist.
 
 ### Fixed
+
 - **Labeler config** — replaced the invalid `any-glob-to-changed-file` key
-  with `any-glob-to-any-file` in `.github/labeler.yml` (`area: docs` and
-  `dependencies` rules). The auto-label PR workflow was failing on every PR
-  because labeler v5 only accepts `any-glob-to-any-file`,
-  `all-globs-to-any-file`, `any-glob-to-all-files`, and
-  `all-globs-to-all-files`.
+  with `any-glob-to-any-file` in `.github/labeler.yml`.
 
 ## 1.15.1 — 2026-08-19
 

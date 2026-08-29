@@ -37,6 +37,11 @@ EXPECTED_EXPORTS = {
     "LLMProvider",
     "VoodooModelProvider",
     "ModelDescriptor",
+    # Memory (Sprint 16)
+    "MemoryEntry",
+    "MemoryLayer",
+    "MemoryStore",
+    "SQLiteMemoryStore",
     # Data
     "BaseModel",
     "Model",

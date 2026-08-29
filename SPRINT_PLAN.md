@@ -29,20 +29,24 @@ another disconnected feature.
 
 | | |
 |---|---|
-| **Latest release** | `1.16.0` (`src/voodoo/__init__.py` → `__version__`) |
-| **Sprints 1–15** | ✅ All DONE (Sprint 15 v1.17.0 pending release) |
-| **Next sprint** | **Sprint 16 — Memory as entity state → `1.18.0`** |
+| **Latest release** | `1.19.1` (`src/voodoo/__init__.py` → `__version__`) |
+| **Sprints 1–15 + L1–L5** | ✅ All DONE |
+| **Next sprint** | **Sprint 17 — Agents as durable entities → `2.0.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
 | Sprint | Version | Sprint | Version |
 |--------|---------|--------|---------|
-| 14b — Runtime vision alignment | 1.16.1 | 19 — Capability security & secrets | 2.0.0 |
-| 14 — ModelProvider protocol | 1.16.0 | 20 — Observability | 2.1.0 |
-| 15 — Voodoo Design System & CSS | 1.17.0 | 21 — Protocol schemas & versioning | 2.2.0 |
-| 16 — Memory capability | 1.18.0 | 22 — Local runtime DX | 2.3.0 |
-| 17 — Agents as durable entities | 1.19.0 | — | — |
-| 18 — Durable HITL | 1.20.0 | — | — |
+| 14 — ModelProvider protocol | 1.16.0 | L1 — Native tool calling | 1.19.0 |
+| 14b — Runtime vision alignment | 1.16.1 | L2 — Config-driven AI | 1.19.0 |
+| 15 — Voodoo Design System & CSS | 1.17.0 | L3 — ORM query API | 1.19.0 |
+| 15 patch — primary token fix | 1.17.1 | L4 — UI/realtime foundation | 1.19.0 |
+| 15 patch — chrome & themes | 1.18.0 | L5 — ai-agent template rewrite | 1.19.0 |
+| — | — | 19.1 patch — chat layout fix | 1.19.1 |
+| 16 — Memory capability | 1.20.0 | 20 — Observability | 2.2.0 |
+| 17 — Agents as durable entities | 2.0.0 | 21 — Protocol schemas | 2.3.0 |
+| 18 — Durable HITL | 2.1.0 | 22 — Local runtime DX | 2.4.0 |
+| 19 — Capability security & secrets | 2.5.0 | — | — |
 
 ### Runtime convergence map
 
@@ -53,6 +57,7 @@ conceptual model in [`docs/primitives.md`](docs/primitives.md):
 |---|---|---|
 | 14b — Vision alignment | Code, docs & metadata speak one vocabulary | Convergence (naming) |
 | 15 — Design System & CSS | Semantic UI is token-driven, polished, professional by default | Convergence (presentation) |
+| L1–L5 — Less-Code | Apps shrink 5×; config-driven AI, ORM, chat primitives | Convergence (DX) |
 | 16 — Memory | Durable, queryable entity recall | State (+ Entity) |
 | 17 — Agents as durable entities | Identity + state + history for agents | Entity, Identity |
 | 18 — Durable HITL | Human approval survives restart | Execution, Constraint |
@@ -151,19 +156,23 @@ DONE  |  WIP  |  TODO
 | 12 | S3/R2 object store | 1.14.0 | Presign, checksums, multipart; `s3` extra | DONE |
 | 13 | Redis adapters (optional) | 1.15.0 | Redis queue/cache behind contracts | DONE |
 | 14 | ModelProvider protocol | 1.16.0 | Model descriptors + routing aliases + contract tests | DONE |
-| 15 | Voodoo Design System & CSS | 1.17.0 | Polished default: layout parity, base reset, full component CSS, light/dark/system | TODO |
-| 16 | Memory capability | 1.18.0 | Layered memory: search/read/write, SQLite default | TODO |
-| 17 | Agents as durable entities | 1.19.0 | Agent registry; runs are executions; CLI | TODO |
-| 18 | Durable human-in-the-loop | 1.20.0 | WAITING_FOR_HUMAN survives restart, no live worker | TODO |
-| 19 | Capability security & secrets | 2.0.0 | secrets.get, redaction, no ambient authority | TODO |
-| 20 | Observability | 2.1.0 | Execution-aware tracing, `voodoo status/workers` | TODO |
-| 21 | Protocol schemas & versioning | 2.2.0 | `voodoo.protocol`, schema_version everywhere | TODO |
-| 22 | Local runtime DX | 2.3.0 | `voodoo create` + `voodoo dev` boot the full local runtime | TODO |
+| 14b | Runtime vision alignment | 1.16.1 | Naming/docstring alignment — no behavior change | DONE |
+| 15 | Voodoo Design System & CSS | 1.17.0 | Polished default: layout parity, base reset, full component CSS, light/dark/system | DONE |
+| — | Primary token & design patch | 1.17.1 | Dark-mode primary invert, focus-ring/link visibility fix | DONE |
+| — | Chrome components & themes | 1.18.0 | Navbar/Hero/ThemeToggle, ember-paper preset, shareable `theme.json` | DONE |
 | L1 | Less-code: native tool calling | 1.19.0 | `ToolCall` protocol; OpenAI/Anthropic native parsing | DONE |
 | L2 | Less-code: config-driven AI + multi-turn | 1.19.0 | `[ai]` block, `Agent(history=)`, `run_api_through_runtime` flag | DONE |
 | L3 | Less-code: ORM query API + FK cascades | 1.19.0 | `Model.where/order_by/limit/first/count/delete_where`, `FK[...]` | DONE |
 | L4 | Less-code: UI/realtime foundation | 1.19.0 | Icon/Markdown/chat primitives, reactive wiring, client SDK | DONE |
 | L5 | Less-code: ai-agent template rewrite | 1.19.0 | 285-line single-file chat app; 0 CSS / 0 JS / 0 provider class | DONE |
+| — | Chat layout fix | 1.19.1 | Chat app-shell CSS fix, top-level `Html` export | DONE |
+| 16 | Memory capability | 1.20.0 | Layered memory: search/read/write, SQLite default | TODO |
+| 17 | Agents as durable entities | 2.0.0 | Agent registry; runs are executions; CLI | TODO |
+| 18 | Durable human-in-the-loop | 2.1.0 | WAITING_FOR_HUMAN survives restart, no live worker | TODO |
+| 19 | Capability security & secrets | 2.2.0 | secrets.get, redaction, no ambient authority | TODO |
+| 20 | Observability | 2.3.0 | Execution-aware tracing, `voodoo status/workers` | TODO |
+| 21 | Protocol schemas & versioning | 2.4.0 | `voodoo.protocol`, schema_version everywhere | TODO |
+| 22 | Local runtime DX | 2.5.0 | `voodoo create` + `voodoo dev` boot the full local runtime | TODO |
 
 Spec §52 "Definition of Done — Durable Runtime" is achieved after Sprint 6.
 "Moderate production = PostgreSQL + S3/R2" (§7) is achieved after Sprint 12.
@@ -508,7 +517,7 @@ Scope:
       checkpoints.
 
 ## Sprint 14b — Runtime vision alignment
-**Version 1.16.1 · ROADMAP §67 · Status: TODO · Released as: —**
+**Version 1.16.1 · ROADMAP §67 · Status: DONE · Released as: 1.16.1**
 
 - **Goal:** Align code docstrings, flow diagrams, and package metadata with the
   "programmable runtime" vision already established in the docs.
@@ -520,18 +529,18 @@ Scope:
   `docs/execution-model.md` use the new ontology; code docstrings/flow diagrams
   and `pyproject.toml` / `release.yml` still use the old framing.
 - **Changes:**
-  - [ ] Replace `STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE` with
+  - [x] Replace `STATE → INTENT → CAPABILITY → COMPUTE → EFFECT → STATE` with
         `ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE` in
         `src/voodoo/__init__.py`, `src/voodoo/primitives/__init__.py`,
         `src/voodoo/runtime/__init__.py`, `src/voodoo/runtime/workflow.py`,
         and `tests/test_primitives.py`.
-  - [ ] Rewrite "eight architectural primitives" → "computational model" in
+  - [x] Rewrite "eight architectural primitives" → "computational model" in
         `src/voodoo/runtime/__init__.py`; "AI-native application framework" →
         "programmable runtime" in `src/voodoo/__init__.py`.
-  - [ ] Align `src/voodoo/runtime/task.py` ("runtime primitives" → "computational
+  - [x] Align `src/voodoo/runtime/task.py` ("runtime primitives" → "computational
         model") and `src/voodoo/primitives/compute.py` ("one class of Compute" →
         "one form of Compute").
-  - [ ] Update `pyproject.toml` `description` and `release.yml` Homebrew `desc`
+  - [x] Update `pyproject.toml` `description` and `release.yml` Homebrew `desc`
         to the programmable-runtime framing.
 - **Dependencies:** None (documentation/metadata only).
 - **Acceptance Criteria:** No `AI-native framework`, `COMPUTE → EFFECT`, or
@@ -542,7 +551,7 @@ Scope:
 - **Definition of Done:** quality gate green + released `1.16.1`.
 
 ## Sprint 15 — Voodoo Design System & CSS
-**Version 1.17.0 · ROADMAP §45, §46 · Status: DONE · Released as: —**
+**Version 1.17.0 · ROADMAP §45, §46 · Status: DONE · Released as: 1.17.0**
 
 > **Cross-cutting presentation sprint.** Ships before the remaining AI-runtime
 > work so every new surface (agents, HITL, observability) renders on a polished
@@ -610,7 +619,7 @@ Scope:
 - **Definition of Done:** quality gate green + released `1.17.0`.
 
 ## Sprint 16 — Memory as entity state
-**Version 1.18.0 · ROADMAP §28, §26 · Status: TODO · Released as: —**
+**Version 1.20.0 · ROADMAP §28, §26 · Status: DONE · Released as: —**
 
 - **Goal:** Give entities durable, queryable memory so their state survives and
   can be recalled — working, episodic, and semantic.
@@ -633,10 +642,10 @@ Scope:
 - **Tests:** memory CRUD contract; episodic records derived from journal;
   memory survives restart.
 - **Documentation:** `docs/data.md`, `docs/agents.md`, `CHANGELOG.md`.
-- **Definition of Done:** quality gate green + released `1.17.0`.
+- **Definition of Done:** quality gate green + released `1.20.0`.
 
 ## Sprint 17 — Agents as durable entities
-**Version 1.19.0 · ROADMAP §47 · Status: TODO · Released as: —**
+**Version 2.0.0 · ROADMAP §47 · Status: TODO · Released as: —**
 
 - **Goal:** Agents become durable entities — stable identity, capabilities,
   state, and queryable execution history.
@@ -659,10 +668,10 @@ Scope:
 - **Tests:** restart survival (registry + state); multi-agent collaboration
   produces linked, parented executions.
 - **Documentation:** `docs/agents.md`, `docs/execution-model.md`, `CHANGELOG.md`.
-- **Definition of Done:** quality gate green + released `1.18.0`.
+- **Definition of Done:** quality gate green + released `2.0.0`.
 
 ## Sprint 18 — Durable human-in-the-loop
-**Version 1.20.0 · ROADMAP §50 · Status: TODO · Released as: —**
+**Version 2.1.0 · ROADMAP §50 · Status: TODO · Released as: —**
 
 - **Goal:** Human approval is an execution state that survives process death;
   a decision resumes the execution on any worker.
@@ -684,10 +693,10 @@ Scope:
 - **Tests:** crash/restart human-in-the-loop path; decisions recorded as
   durable events.
 - **Documentation:** `docs/hitl.md`, `docs/execution-model.md`, `CHANGELOG.md`.
-- **Definition of Done:** quality gate green + released `1.19.0`.
+- **Definition of Done:** quality gate green + released `2.1.0`.
 
 ## Sprint 19 — Capability security & secrets
-**Version 2.0.0 · ROADMAP §55, §70 · Status: TODO · Released as: —**
+**Version 2.2.0 · ROADMAP §55, §70 · Status: TODO · Released as: —**
 
 - **Goal:** No ambient authority. Capabilities gate effects; secrets never
   leak into observability.
@@ -713,14 +722,14 @@ Scope:
 - **Tests:** denied-by-default matrix; redaction of known secret patterns.
 - **Documentation:** `docs/auth.md`, `docs/security`, upgrade guide,
   `CHANGELOG.md`.
-- **Definition of Done:** quality gate green + released `2.0.0`.
+- **Definition of Done:** quality gate green + released `2.2.0`.
 
 ---
 
 # MILESTONE E — PROTOCOL STABILITY & DX
 
 ## Sprint 20 — Observability
-**Version 2.1.0 · ROADMAP §54 · Status: TODO · Released as: —**
+**Version 2.3.0 · ROADMAP §54 · Status: TODO · Released as: —**
 
 - **Goal:** One trace identity propagates through execution, task, worker,
   model, tool, event, and object operation.
@@ -741,10 +750,10 @@ Scope:
   works after restart.
 - **Tests:** trace propagation across the full chain; status persistence.
 - **Documentation:** `docs/telemetry.md`, `CHANGELOG.md`.
-- **Definition of Done:** quality gate green + released `2.1.0`.
+- **Definition of Done:** quality gate green + released `2.3.0`.
 
 ## Sprint 21 — Protocol schemas & versioning
-**Version 2.2.0 · ROADMAP §56, §57 · Status: TODO · Released as: —**
+**Version 2.4.0 · ROADMAP §56, §57 · Status: TODO · Released as: —**
 
 - **Goal:** Canonical entity schemas form the stable semantic boundary for
   other languages and SDKs.
@@ -768,10 +777,10 @@ Scope:
 - **Tests:** protocol conformance round-trips for every entity.
 - **Documentation:** `docs/mcp.md` (or a new `docs/protocol.md`),
   `CHANGELOG.md`.
-- **Definition of Done:** quality gate green + released `2.2.0`.
+- **Definition of Done:** quality gate green + released `2.4.0`.
 
 ## Sprint 22 — Local runtime DX ("WAMP for autonomous software")
-**Version 2.3.0 · ROADMAP §63, §62 · Status: TODO · Released as: —**
+**Version 2.5.0 · ROADMAP §63, §62 · Status: TODO · Released as: —**
 
 - **Goal:** `install → create → dev` boots the whole runtime as one thing, with
   zero external infrastructure.
@@ -794,7 +803,7 @@ Scope:
   crash/restart demo proves durability.
 - **Tests:** first-run end-to-end; durability demo.
 - **Documentation:** `docs/installation.md`, `README.md`, `CHANGELOG.md`.
-- **Definition of Done:** quality gate green + released `2.3.0`.
+- **Definition of Done:** quality gate green + released `2.5.0`.
 
 ---
 

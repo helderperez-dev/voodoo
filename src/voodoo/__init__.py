@@ -26,6 +26,7 @@ from .ai.tools import ToolRegistry, ToolSpec, tool
 from .config import config
 from .core import App, create_app, event, page, register_event, state, ws_manager
 from .data import FK, BaseModel, Model
+from .memory import MemoryEntry, MemoryLayer, MemoryStore, SQLiteMemoryStore
 from .mesh import mesh
 from .routing.api import api
 from .telemetry import trace
@@ -128,6 +129,11 @@ __all__ = [
     "LLMProvider",
     "VoodooModelProvider",
     "ModelDescriptor",
+    # Memory (Sprint 16)
+    "MemoryEntry",
+    "MemoryLayer",
+    "MemoryStore",
+    "SQLiteMemoryStore",
     # Data
     "BaseModel",
     "Model",

@@ -118,11 +118,25 @@ class OpenAIProvider(LLMProvider):
     async def complete(
         self, messages: list[Message], **kwargs: Any
     ) -> ProviderResponse:
-        resp = await self._client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            **kwargs,
-        )
+        try:
+            resp = await self._client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                **kwargs,
+            )
+        except Exception:
+            # If the request failed and tools were included, retry without
+            # them — some OpenAI-compatible endpoints reject unsupported params.
+            if kwargs.get("tools"):
+                kwargs.pop("tools", None)
+                kwargs.pop("tool_choice", None)
+                resp = await self._client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    **kwargs,
+                )
+            else:
+                raise
         choice = resp.choices[0]
         msg = choice.message
         usage = getattr(resp, "usage", None)
@@ -186,13 +200,26 @@ class OpenAIProvider(LLMProvider):
     def describe(self) -> ModelDescriptor:
         """Advertise the OpenAI capability matrix for this model."""
         gpt4o = "gpt-4o" in self.model or "gpt-4.1" in self.model
+        # Models known to support native tool/function calling.  Unknown
+        # OpenAI-compatible models (e.g. LiteLLM proxied non-OpenAI models)
+        # default to False so the agent doesn't send unsupported params.
+        _tool_capable = (
+            gpt4o
+            or "gpt-4" in self.model
+            or "gpt-3.5" in self.model
+            or "o1" in self.model
+            or "o3" in self.model
+            or "o4" in self.model
+            or "claude" in self.model
+            or "deepseek" in self.model
+        )
         return ModelDescriptor(
             provider=self.name,
             model=self.model,
             modalities=["text"],
             context_window=128000 if gpt4o else 0,
-            tool_use=True,
-            structured_output=True,
+            tool_use=_tool_capable,
+            structured_output=_tool_capable,
             streaming=True,
             reasoning="o1" in self.model or "o3" in self.model,
             vision=gpt4o or "gpt-4.5" in self.model,

@@ -43,3 +43,4 @@ build/
 SPEC.md
 .scaffold_check.txt
 
+voodoo.toml

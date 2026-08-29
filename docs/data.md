@@ -121,6 +121,100 @@ store each have their own PostgreSQL contract + failure-path suites
 (`tests/contracts/test_queue_postgres.py`, `test_eventbus_postgres.py`,
 `test_execution_postgres.py`) that run against the same service container.
 
+## Memory (Sprint 16)
+
+Entities need durable, queryable memory — not just one-shot state. The memory
+system gives every entity layered recall: **working** (current context),
+**episodic** (what happened during an execution), **durable** (long-term facts),
+and **semantic** (searchable knowledge). The default backend is SQLite with FTS5
+for full-text search — no external dependencies.
+
+### Minimal example
+
+```python
+from voodoo import SQLiteMemoryStore, MemoryEntry, MemoryLayer
+
+store = SQLiteMemoryStore("memory.db")
+
+# Write a memory
+entry = MemoryEntry(
+    entity_id="user:42",
+    layer=MemoryLayer.EPISODIC,
+    content="User asked about pricing for the enterprise plan",
+    tags=["pricing", "enterprise"],
+    importance=0.8,
+)
+await store.write(entry)
+
+# Search memories
+results = await store.search("pricing", entity_id="user:42")
+for result in results:
+    print(result.entry.content, result.score)
+
+# Read a specific memory
+entry = await store.read(entry_id=results[0].entry.id)
+
+# List all memories for an entity
+entries = await store.list_entries(
+    entity_id="user:42",
+    layer=MemoryLayer.EPISODIC,
+    limit=10,
+)
+```
+
+### Memory layers
+
+| Layer | Purpose | Typical source |
+|---|---|---|
+| `WORKING` | Current session context, short-lived | Manual write |
+| `EPISODIC` | What happened during an execution | Auto-written by Agent |
+| `DURABLE` | Long-term facts that survive sessions | Manual write |
+| `SEMANTIC` | Searchable knowledge, tags + full-text | Manual or derived |
+
+### In-memory store
+
+For tests or ephemeral workloads, use `InMemoryMemoryStore` — same protocol,
+runs entirely in RAM:
+
+```python
+from voodoo.memory import InMemoryMemoryStore
+
+store = InMemoryMemoryStore()
+```
+
+### SQLite memory store
+
+`SQLiteMemoryStore` persists to a SQLite file with WAL mode and FTS5
+full-text search. When FTS5 is unavailable, it falls back to `LIKE` queries.
+
+```python
+from voodoo import SQLiteMemoryStore
+
+store = SQLiteMemoryStore("data/memory.db")
+
+# Count entries
+n = await store.count(entity_id="user:42", layer=MemoryLayer.EPISODIC)
+
+# Delete a memory
+await store.delete(entry_id=some_id)
+```
+
+### MemoryEntry fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `str` | Unique ID (auto-generated UUID) |
+| `entity_id` | `str` | Owner entity (e.g. `"user:42"`, `"agent:lead-scorer"`) |
+| `layer` | `MemoryLayer` | Working / Episodic / Durable / Semantic |
+| `content` | `str` | The memory content text |
+| `metadata` | `dict` | Arbitrary key-value metadata |
+| `tags` | `list[str]` | Searchable tags |
+| `importance` | `float` | 0.0–1.0 importance score |
+| `source_execution_id` | `str \| None` | Link to the execution that produced this memory |
+| `created_at` | `str` | ISO timestamp |
+| `updated_at` | `str` | ISO timestamp |
+| `expires_at` | `str \| None` | Optional expiration (for working memory) |
+
 ## API reference
 
 - `Model` — async CRUD facade over `BaseModel`.

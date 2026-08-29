@@ -29,6 +29,19 @@ from voodoo.tools.registry import ToolRegistry, default_registry
 
 __all__ = ["Agent", "AgentRun", "AgentEvent"]
 
+# Lazy import for memory — avoids circular deps and keeps memory optional.
+_memory_store_cls = None
+
+
+def _get_memory_store_class() -> Any:
+    """Resolve the default memory store class (lazy)."""
+    global _memory_store_cls
+    if _memory_store_cls is None:
+        from voodoo.memory.interfaces import InMemoryMemoryStore
+
+        _memory_store_cls = InMemoryMemoryStore
+    return _memory_store_cls
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -108,6 +121,12 @@ class Agent:
         Tool registry used for tool lookup; defaults to the global registry.
     max_iterations:
         Maximum tool-call iterations before forcing a final answer.
+    memory:
+        Memory store for durable entity state. When ``None``, an
+        :class:`~voodoo.memory.interfaces.InMemoryMemoryStore` is created
+        lazily on first access. Context is NOT memory — context is an
+        opaque dict passed to tool calls; memory is a queryable, durable
+        record of what the entity knows.
     """
 
     def __init__(
@@ -118,6 +137,7 @@ class Agent:
         registry: ToolRegistry | None = None,
         max_iterations: int = 10,
         capabilities: list[str] | None = None,
+        memory: Any | None = None,
         **provider_kwargs: Any,
     ) -> None:
         self.model = model or default_model()
@@ -130,6 +150,7 @@ class Agent:
         self.capabilities: list[str] = list(capabilities) if capabilities else []
         self.state: AgentState = AgentState.created
         self.provider: LLMProvider = get_provider(self.model, **provider_kwargs)
+        self._memory: Any | None = memory
 
         # Resolve tool specs/names into a list of names for tool calling.
         self._tool_names: list[str] = []
@@ -143,6 +164,69 @@ class Agent:
                     self._tool_names.append(t.__tool_spec__.name)
 
         self.state = AgentState.configured
+
+    # -- memory ------------------------------------------------------------
+
+    @property
+    def memory(self) -> Any:
+        """The memory store for this agent.
+
+        Lazily creates an :class:`~voodoo.memory.interfaces.InMemoryMemoryStore`
+        if no store was provided at construction time. This is NOT context —
+        context is an opaque dict passed to tool calls; memory is a queryable,
+        durable record of what the entity knows.
+        """
+        if self._memory is None:
+            from voodoo.memory.interfaces import InMemoryMemoryStore
+
+            self._memory = InMemoryMemoryStore()
+        return self._memory
+
+    @memory.setter
+    def memory(self, store: Any) -> None:
+        self._memory = store
+
+    async def _write_episodic_memory(self, run_record: AgentRun) -> None:
+        """Write episodic memory entries derived from a completed run.
+
+        Each run produces a summary memory entry capturing the prompt, output,
+        tool calls, and token accounting. This is Layer 1 (episodic) — the
+        execution-derived record of what happened.
+        """
+        from voodoo.memory.interfaces import MemoryEntry, MemoryLayer
+
+        tool_summary = ""
+        if run_record.tool_calls:
+            names = [tc["name"] for tc in run_record.tool_calls]
+            tool_summary = f" Tools used: {', '.join(names)}."
+
+        content = (
+            f"Run {run_record.run_id}: {run_record.prompt[:200]} "
+            f"→ {run_record.output[:200]}.{tool_summary}"
+        )
+
+        entry = MemoryEntry(
+            entity_id="agent",
+            layer=MemoryLayer.EPISODIC,
+            content=content,
+            metadata={
+                "run_id": run_record.run_id,
+                "model": run_record.model,
+                "provider": run_record.provider,
+                "tokens_in": run_record.tokens_in,
+                "tokens_out": run_record.tokens_out,
+                "cost": run_record.cost,
+                "status": run_record.status,
+                "tool_count": len(run_record.tool_calls),
+            },
+            tags=["agent-run", run_record.provider],
+            source_execution_id=run_record.run_id,
+            importance=0.6,
+        )
+        try:
+            self.memory.write(entry)
+        except Exception:  # noqa: BLE001 — memory writes never break the run
+            pass
 
     # -- helpers -----------------------------------------------------------
 
@@ -289,9 +373,15 @@ class Agent:
                         "model": self.model,
                     },
                 )
-                response = await self.provider.complete(
-                    messages, tools=self._tools_for_provider()
-                )
+                # Only send tools when the model advertises tool_use support.
+                # Some OpenAI-compatible endpoints (e.g. LiteLLM proxies for
+                # non-tool models) reject requests with unsupported params.
+                try:
+                    desc = self.provider.describe()
+                    tools_arg = self._tools_for_provider() if desc.tool_use else None
+                except Exception:  # noqa: BLE001 — best-effort capability check
+                    tools_arg = self._tools_for_provider()
+                response = await self.provider.complete(messages, tools=tools_arg)
                 await self._broadcast(
                     "model.completed",
                     {
@@ -392,6 +482,7 @@ class Agent:
         )
 
         telemetry_store.record_agent_run(run_record)
+        await self._write_episodic_memory(run_record)
         await self._broadcast(
             "agent.completed",
             {
@@ -406,7 +497,7 @@ class Agent:
 
     # -- stream ------------------------------------------------------------
 
-    async def stream(
+    async def stream(  # noqa: C901
         self,
         prompt: str,
         context: dict | None = None,
@@ -448,9 +539,12 @@ class Agent:
                         "model": self.model,
                     },
                 )
-                async for event in self.provider.stream(
-                    messages, tools=self._tools_for_provider()
-                ):
+                try:
+                    desc = self.provider.describe()
+                    tools_arg = self._tools_for_provider() if desc.tool_use else None
+                except Exception:  # noqa: BLE001 — best-effort capability check
+                    tools_arg = self._tools_for_provider()
+                async for event in self.provider.stream(messages, tools=tools_arg):
                     if event.type == "text":
                         accumulated_text += event.data.get("text", "")
                         yield AgentEvent(type="text", data=event.data)
@@ -582,6 +676,7 @@ class Agent:
         )
 
         telemetry_store.record_agent_run(run_record)
+        await self._write_episodic_memory(run_record)
         await self._broadcast(
             "agent.completed",
             {
