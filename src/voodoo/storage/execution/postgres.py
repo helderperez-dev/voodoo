@@ -81,6 +81,17 @@ class PostgresExecutionStore:
                     cur.execute(
                         _translate("ALTER TABLE executions ADD COLUMN checkpoint TEXT")
                     )
+            # Sprint 18: durable participant column for approvals — guarded
+            # because databases created at v8 already lack it.
+            with self._conn.cursor() as cur:
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'approvals' AND column_name = 'participant'"
+                )
+                if cur.fetchone() is None:
+                    cur.execute(
+                        _translate("ALTER TABLE approvals ADD COLUMN participant TEXT")
+                    )
             self._conn.commit()
 
     # -- ExecutionStore protocol (sync) ------------------------------------

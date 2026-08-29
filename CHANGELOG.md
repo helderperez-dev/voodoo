@@ -7,8 +7,9 @@
 ### Added — Sprint 18: Durable human-in-the-loop
 
 - **`Approval.participant`** — durable handle naming the compute to re-run
-  after a decision. Persisted in the `approvals` table (migration v9,
-  `participant` column) on both SQLite and PostgreSQL stores.
+  after a decision. Persisted in the `approvals` table (`participant` column;
+  included in the v8 CREATE for fresh databases, guarded ALTER for existing
+  ones) on both SQLite and PostgreSQL stores.
 - **`ExecutionEngine.register_participant(name, compute)`** /
   **`.resolve_participant(name)`** — registry of named compute participants.
   After a restart, `approve()` re-resolves the compute by name and resumes

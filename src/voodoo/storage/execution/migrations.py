@@ -15,10 +15,10 @@ from voodoo.storage.database.interfaces import Migration
 from voodoo.storage.database.sqlite import register_framework_migration
 
 # Versions follow the global framework namespace: … 6 events, 7 artifacts,
-# 8 approvals, 9 durable participants (Sprint 18).
+# 8 approvals (Sprint 18 added the `participant` column to the v8 CREATE —
+# existing databases add it via a guarded ALTER in each store's setup).
 EXECUTION_ARTIFACTS_MIGRATION_VERSION = 7
 EXECUTION_APPROVALS_MIGRATION_VERSION = 8
-EXECUTION_PARTICIPANTS_MIGRATION_VERSION = 9
 
 EXECUTION_ARTIFACTS_MIGRATION = Migration(
     version=EXECUTION_ARTIFACTS_MIGRATION_VERSION,
@@ -48,6 +48,7 @@ EXECUTION_APPROVALS_MIGRATION = Migration(
     name="execution_approvals",
     statements=(
         # Approvals (Sprint 4) — pending human decisions survive restarts.
+        # `participant` (Sprint 18) — durable compute handle for resume.
         """
         CREATE TABLE IF NOT EXISTS approvals (
             id TEXT PRIMARY KEY,
@@ -60,7 +61,8 @@ EXECUTION_APPROVALS_MIGRATION = Migration(
             decided_by TEXT,
             decided_at TEXT,
             reason TEXT,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            participant TEXT
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_approvals_execution "
@@ -71,23 +73,9 @@ EXECUTION_APPROVALS_MIGRATION = Migration(
 register_framework_migration(EXECUTION_ARTIFACTS_MIGRATION)
 register_framework_migration(EXECUTION_APPROVALS_MIGRATION)
 
-EXECUTION_PARTICIPANTS_MIGRATION = Migration(
-    version=EXECUTION_PARTICIPANTS_MIGRATION_VERSION,
-    name="execution_participants",
-    statements=(
-        # Durable HITL (Sprint 18) — the participant name persists so a
-        # restarted process can re-resolve the compute by name.
-        "ALTER TABLE approvals ADD COLUMN participant TEXT",
-    ),
-)
-
-register_framework_migration(EXECUTION_PARTICIPANTS_MIGRATION)
-
 __all__ = [
     "EXECUTION_APPROVALS_MIGRATION",
     "EXECUTION_APPROVALS_MIGRATION_VERSION",
     "EXECUTION_ARTIFACTS_MIGRATION",
     "EXECUTION_ARTIFACTS_MIGRATION_VERSION",
-    "EXECUTION_PARTICIPANTS_MIGRATION",
-    "EXECUTION_PARTICIPANTS_MIGRATION_VERSION",
 ]
