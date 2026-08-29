@@ -23,7 +23,23 @@ from voodoo.primitives.capability import Capability
 from voodoo.runtime.context import ExecutionContext
 from voodoo.runtime.errors import ApprovalRequired, CapabilityDenied
 
-__all__ = ["Resolution", "CapabilityResolver"]
+__all__ = ["Resolution", "CapabilityResolver", "SENSITIVE_CAPABILITIES"]
+
+
+#: Capabilities that require explicit grants — no ambient authority by
+#: default (Sprint 19, ROADMAP §55).  An agent or tool that attempts to
+#: use one of these without an explicit grant gets a :class:`CapabilityDenied`
+#: error, never a silent pass-through.
+SENSITIVE_CAPABILITIES: frozenset[str] = frozenset(
+    {
+        "filesystem.write",
+        "network.request",
+        "shell.execute",
+        "secrets.read",
+        "payment.execute",
+        "email.send",
+    }
+)
 
 
 class Resolution(StrEnum):
@@ -65,17 +81,50 @@ class CapabilityResolver:
         Context-granted capabilities take precedence (they are the
         delegated authority for an in-flight execution). Otherwise the
         registry is consulted.
-        """
-        if context is not None and context.has_capability(name, scope=scope):
-            if name in self.approval_capabilities:
-                return Resolution.REQUIRES_APPROVAL
-            return Resolution.ALLOWED
 
+        Sensitive capabilities (Sprint 19) are denied by default — they
+        require an explicit grant in the context or registry.
+        """
+        if name in SENSITIVE_CAPABILITIES:
+            return self._resolve_sensitive(name, scope=scope, context=context)
+        return self._resolve_standard(name, scope=scope, context=context)
+
+    def _resolve_sensitive(
+        self,
+        name: str,
+        *,
+        scope: str | None = None,
+        context: ExecutionContext | None = None,
+    ) -> Resolution:
+        """Resolve a sensitive capability — requires explicit grant."""
+        if context is not None and context.has_capability(name, scope=scope):
+            return self._check_approval(name)
+        cap = self.capabilities.get(name)
+        if cap is not None and cap.valid:
+            if scope is not None and cap.scope is not None and cap.scope != scope:
+                return Resolution.DENIED
+            return self._check_approval(name)
+        return Resolution.DENIED
+
+    def _resolve_standard(
+        self,
+        name: str,
+        *,
+        scope: str | None = None,
+        context: ExecutionContext | None = None,
+    ) -> Resolution:
+        """Resolve a standard capability — normal registry rules."""
+        if context is not None and context.has_capability(name, scope=scope):
+            return self._check_approval(name)
         cap = self.capabilities.get(name)
         if cap is None or not cap.valid:
             return Resolution.DENIED
         if scope is not None and cap.scope is not None and cap.scope != scope:
             return Resolution.DENIED
+        return self._check_approval(name)
+
+    def _check_approval(self, name: str) -> Resolution:
+        """Check whether a capability requires human approval."""
         if name in self.approval_capabilities:
             return Resolution.REQUIRES_APPROVAL
         return Resolution.ALLOWED
@@ -114,4 +163,5 @@ class CapabilityResolver:
         return {
             "capabilities": [c.name for c in self.capabilities.values()],
             "approval_required": sorted(self.approval_capabilities),
+            "sensitive": sorted(SENSITIVE_CAPABILITIES),
         }

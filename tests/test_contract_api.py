@@ -171,6 +171,17 @@ def test_no_overlap_between_all_and_deprecated():
         "telemetry_store",
         "set_theme",
         "GEO",
+        # Sprint 19 deprecated re-exports
+        "SecretStore",
+        "EnvSecretStore",
+        "LocalSecretStore",
+        "SecretsError",
+        "secrets",
+        "configure_secrets",
+        "RedactionGuard",
+        "redact",
+        "redact_string",
+        "SENSITIVE_CAPABILITIES",
     ],
 )
 def test_deprecated_names_resolve_with_warning(name):

@@ -61,6 +61,11 @@ class Effect(BaseModel):
     error: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     executed_at: datetime | None = None
+    # Authorization context (Sprint 19, ROADMAP §55)
+    actor: str | None = None
+    principal: str | None = None
+    resource: str | None = None
+    scope: str | None = None
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -114,6 +119,10 @@ class Effect(BaseModel):
             "status": self.status.value,
             "intent_id": self.intent_id,
             "capability": self.capability_name,
+            "actor": self.actor,
+            "principal": self.principal,
+            "resource": self.resource,
+            "scope": self.scope,
             "reversible": self.reversible,
             "idempotent": self.idempotent,
             "idempotency_key": self.idempotency_key,

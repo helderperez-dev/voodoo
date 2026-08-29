@@ -173,10 +173,16 @@ class ExecutionEngine:
     def _journal_approval_decision(
         self, execution_id: str, event: str, payload: dict
     ) -> None:
-        """Record an approval decision as a journal event (Sprint 4)."""
+        """Record an approval decision as a journal event (Sprint 4).
+
+        Applies redaction to prevent secrets from leaking into the
+        execution journal (Sprint 19, ROADMAP §55).
+        """
         store = self._execution_store
         if store is not None and hasattr(store, "append_event"):
-            store.append_event(execution_id, event, payload)
+            from voodoo.security.redaction import redact
+
+            store.append_event(execution_id, event, redact(payload))
 
     def checkpoint(self, execution: Execution) -> None:
         """Public checkpoint API — persists an execution mid-flight.
@@ -511,6 +517,13 @@ class ExecutionEngine:
         """Record a compute result's effects, state changes and resources."""
         for effect in result.effects:
             effect.intent_id = intent.id
+            # Authorization context (Sprint 19, ROADMAP §55): record
+            # who triggered the effect, which capability authorized it,
+            # and what resource/scope it targets.
+            if effect.actor is None:
+                effect.actor = ctx.actor
+            if effect.capability_name is None and ctx.capabilities:
+                effect.capability_name = ctx.capabilities[0].name
             # Idempotency key: stable per execution+effect so a resumed
             # execution can safely skip already-completed effects (spec §15).
             if effect.idempotency_key is None:
@@ -722,15 +735,21 @@ class ExecutionEngine:
             return out
 
     async def _emit(self, event: str, payload: dict[str, Any]) -> None:
-        """Publish a namespaced mesh event (best-effort, never breaks)."""
+        """Publish a namespaced mesh event (best-effort, never breaks).
+
+        Applies redaction to prevent secrets from leaking into the
+        event bus (Sprint 19, ROADMAP §55).
+        """
         try:
             from voodoo.mesh import mesh
+            from voodoo.security.redaction import redact
 
-            await mesh.broadcast(event, payload)
+            await mesh.broadcast(event, redact(payload))
         except Exception:  # noqa: BLE001
             pass
 
     def _record_telemetry(self, execution: Execution) -> None:
+        """Record execution telemetry with redaction (Sprint 19)."""
         try:
             from voodoo.telemetry import telemetry_store
 

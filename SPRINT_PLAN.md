@@ -31,7 +31,7 @@ another disconnected feature.
 |---|---|
 | **Latest release** | `1.19.1` (`src/voodoo/__init__.py` → `__version__`) |
 | **Sprints 1–15 + L1–L5** | ✅ All DONE |
-| **Next sprint** | **Sprint 19 — Capability security & secrets → `2.2.0`** |
+| **Next sprint** | **Sprint 20 — Observability → `2.3.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
@@ -696,7 +696,7 @@ Scope:
 - **Definition of Done:** quality gate green + released `2.1.0`.
 
 ## Sprint 19 — Capability security & secrets
-**Version 2.2.0 · ROADMAP §55, §70 · Status: TODO · Released as: —**
+**Version 2.2.0 · ROADMAP §55, §70 · Status: DONE · Released as: 2.2.0**
 
 - **Goal:** No ambient authority. Capabilities gate effects; secrets never
   leak into observability.
@@ -705,16 +705,16 @@ Scope:
 - **Current State:** Capabilities exist but authority is implicit; secrets have
   no central redaction.
 - **Changes:**
-  - [ ] `secrets.get(name)` interface: env/local-default backend; encrypted
+  - [x] `secrets.get(name)` interface: env/local-default backend; encrypted
         local store option; provider managers are future adapters.
-  - [ ] Redaction guard: secrets never persisted into events/journal/telemetry
+  - [x] Redaction guard: secrets never persisted into events/journal/telemetry
         (ROADMAP §55) — enforced centrally.
-  - [ ] Effect authorization context: actor, principal, capability, resource,
+  - [x] Effect authorization context: actor, principal, capability, resource,
         scope recorded on every effect (ROADMAP §55).
-  - [ ] Sensitive capabilities (`filesystem.write`, `network.request`,
+  - [x] Sensitive capabilities (`filesystem.write`, `network.request`,
         `shell.execute`, `secrets.read`, `payment.execute`, `email.send`)
         require explicit grants — no ambient authority by default.
-  - [ ] Migration note + upgrade guide for existing agents (CHANGELOG + docs).
+  - [x] Migration note + upgrade guide for existing agents (CHANGELOG + docs).
 - **Dependencies:** Sprint 8 (capability negotiation), Sprint 17 (agent
   entities).
 - **Acceptance Criteria:** denied-by-default matrix holds; secrets are redacted

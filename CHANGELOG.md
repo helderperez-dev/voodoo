@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## 2.2.0 — 2026-08-29
+
+### Added — Sprint 19: Capability security & secrets
+
+- **`SecretStore` Protocol** — interface for secret backends with `get(name)` and `has(name)`.
+- **`EnvSecretStore`** — reads secrets from environment variables (default zero-config backend).
+- **`LocalSecretStore`** — encrypted local file store using Fernet; falls back to plain JSON
+  when `cryptography` is not installed or no key is available.
+- **Module-level convenience API** — `voodoo.security.secrets.get()`, `.has()`, `.configure()`,
+  `.register_name()`, `.registered_names()`.
+- **`RedactionGuard`** — recursive redaction of sensitive keys (secret, password, token, api_key,
+  auth, credential, private_key, access_key, session_id, cookie) and value patterns (Bearer tokens,
+  `sk-*` keys, AWS `AKIA*` keys, JWTs, passwords in URIs).
+- **Module-level redaction** — `voodoo.security.redact()`, `.redact_string()`, `.add_known_value()`.
+- **Effect auth context** — `Effect` gained `actor`, `principal`, `resource`, `scope` fields for
+  tracking who triggered what against which resource.
+- **Sensitive capability enforcement** — 6 capabilities (`filesystem.write`, `network.request`,
+  `shell.execute`, `secrets.read`, `payment.execute`, `email.send`) are denied by default and
+  require explicit grant in execution context or the capability registry.
+- **Engine redaction** — `_emit()` and `_journal_approval_decision()` apply `redact()` to
+  payloads before broadcasting to mesh / persisting to the execution store.
+- **`tests/test_capability_security.py`** — 57 tests covering the sensitive capability matrix,
+  effect auth context, secret stores, redaction guard patterns, and engine integration.
+
 ## 2.1.0 — 2026-08-29
 
 ### Added — Sprint 18: Durable human-in-the-loop

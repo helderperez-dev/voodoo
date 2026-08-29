@@ -119,3 +119,84 @@ user.has_scope("read")  # True
 - `generate_api_key(prefix=None)` — generate a secure API key.
 - `set_auth_cookie(response, token)` / `clear_auth_cookie(response)` — cookie helpers.
 - `AuthMiddleware` — ASGI middleware (auto-installed).
+
+---
+
+## Capability security & secrets (Sprint 19)
+
+### Secrets management
+
+```python
+from voodoo.security import secrets, configure_secrets, EnvSecretStore, LocalSecretStore
+
+# Default: reads from environment variables
+value = secrets.get("MY_API_KEY")
+
+# Switch to encrypted local file store
+configure_secrets(LocalSecretStore(path=".voodoo-secrets"))
+```
+
+`EnvSecretStore` is the zero-config default. `LocalSecretStore` encrypts at rest with Fernet (install `cryptography`) or falls back to plain JSON.
+
+### Redaction guard
+
+```python
+from voodoo.security import redact, redact_string, RedactionGuard
+
+# Redact sensitive keys from a dict
+safe = redact({"api_key": "sk-abc123", "name": "Ada"})
+# → {"api_key": "[REDACTED]", "name": "Ada"}
+
+# Redact a raw string
+safe_text = redact_string("Authorization: Bearer eyJhbGci...")
+```
+
+The engine applies `redact()` automatically before broadcasting events to mesh and before persisting journal entries. Sensitive key patterns (secret, password, token, api_key, auth, credential, private_key, access_key, session_id, cookie) and known value patterns (Bearer tokens, `sk-*` keys, AWS AKIA keys, JWTs) are matched.
+
+### Sensitive capabilities
+
+Six capabilities are **denied by default** — they require an explicit grant in the execution context or capability registry:
+
+| Capability | What it gates |
+|---|---|
+| `filesystem.write` | File creation/modification |
+| `network.request` | Outbound HTTP calls |
+| `shell.execute` | Shell command execution |
+| `secrets.read` | Accessing the secret store |
+| `payment.execute` | Financial transactions |
+| `email.send` | Sending emails |
+
+```python
+from voodoo.runtime.capability import resolve, Capability
+
+# Denied without grant
+result = await resolve(
+    Capability(name="filesystem.write"),
+    ctx={"capabilities": []},
+)
+# result.granted is False
+
+# Granted with explicit context
+result = await resolve(
+    Capability(name="filesystem.write"),
+    ctx={"capabilities": ["filesystem.write"]},
+)
+# result.granted is True
+```
+
+### Effect authorization context
+
+`Effect` now carries `actor`, `principal`, `resource`, and `scope` fields for audit trails:
+
+```python
+from voodoo.primitives.effect import Effect
+
+effect = Effect(
+    kind="call",
+    description="Write config file",
+    actor="agent:writer",
+    principal="user:ada",
+    resource="file:config.toml",
+    scope="filesystem.write",
+)
+```

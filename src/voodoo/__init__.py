@@ -102,7 +102,7 @@ from .ui.styles import (
 from .ui.styles.theme import Theme, ThemeColors, create_theme
 from .workers import task
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 __all__ = [
     # Core runtime
@@ -306,6 +306,18 @@ _DEPRECATED_EXPORTS: dict[str, str] = {
     "rate_limiter": "voodoo.security",
     "set_csrf_cookie": "voodoo.security",
     "validate_password_strength": "voodoo.security",
+    # voodoo.security — Sprint 19
+    "SecretStore": "voodoo.security",
+    "EnvSecretStore": "voodoo.security",
+    "LocalSecretStore": "voodoo.security",
+    "SecretsError": "voodoo.security",
+    "secrets": "voodoo.security",
+    "configure_secrets": "voodoo.security",
+    "RedactionGuard": "voodoo.security",
+    "redact": "voodoo.security",
+    "redact_string": "voodoo.security",
+    # voodoo.runtime — Sprint 19
+    "SENSITIVE_CAPABILITIES": "voodoo.runtime.capability",
     # voodoo.seo
     "FAQ": "voodoo.seo",
     "GEO": "voodoo.seo",

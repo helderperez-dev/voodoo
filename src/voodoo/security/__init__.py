@@ -10,6 +10,10 @@ This package re-exports the names that previously lived in the flat
 - ``voodoo/security/rate_limit.py`` — ``RateLimiter``, ``RateLimitMiddleware``
   and the shared ``rate_limiter`` singleton
 - ``voodoo/security/passwords.py`` — ``validate_password_strength``
+- ``voodoo/security/secrets.py`` — ``SecretStore``, ``EnvSecretStore``,
+  ``LocalSecretStore``, ``secrets``, ``configure`` (Sprint 19)
+- ``voodoo/security/redaction.py`` — ``redact``, ``redact_string``,
+  ``RedactionGuard`` (Sprint 19)
 """
 
 from voodoo.security.cors import CORSMiddleware
@@ -24,6 +28,17 @@ from voodoo.security.rate_limit import (
     RateLimiter,
     RateLimitMiddleware,
     rate_limiter,
+)
+from voodoo.security.redaction import RedactionGuard, redact, redact_string
+from voodoo.security.secrets import (
+    EnvSecretStore,
+    LocalSecretStore,
+    SecretsError,
+    SecretStore,
+    secrets,
+)
+from voodoo.security.secrets import (
+    configure as configure_secrets,
 )
 
 __all__ = [
@@ -41,4 +56,15 @@ __all__ = [
     "rate_limiter",
     # Passwords
     "validate_password_strength",
+    # Secrets (Sprint 19)
+    "SecretStore",
+    "EnvSecretStore",
+    "LocalSecretStore",
+    "SecretsError",
+    "secrets",
+    "configure_secrets",
+    # Redaction (Sprint 19)
+    "RedactionGuard",
+    "redact",
+    "redact_string",
 ]
