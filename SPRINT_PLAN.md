@@ -29,9 +29,9 @@ another disconnected feature.
 
 | | |
 |---|---|
-| **Latest release** | `1.19.1` (`src/voodoo/__init__.py` → `__version__`) |
+| **Latest release** | `2.3.0` (`src/voodoo/__init__.py` → `__version__`) |
 | **Sprints 1–15 + L1–L5** | ✅ All DONE |
-| **Next sprint** | **Sprint 20 — Observability → `2.3.0`** |
+| **Next sprint** | **Sprint 21 — Protocol schemas & versioning → `2.4.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
@@ -43,10 +43,10 @@ another disconnected feature.
 | 15 patch — primary token fix | 1.17.1 | L4 — UI/realtime foundation | 1.19.0 |
 | 15 patch — chrome & themes | 1.18.0 | L5 — ai-agent template rewrite | 1.19.0 |
 | — | — | 19.1 patch — chat layout fix | 1.19.1 |
-| 16 — Memory capability | 1.20.0 | 20 — Observability | 2.2.0 |
-| 17 — Agents as durable entities | 2.0.0 | 21 — Protocol schemas | 2.3.0 |
-| 18 — Durable HITL | 2.1.0 | 22 — Local runtime DX | 2.4.0 |
-| 19 — Capability security & secrets | 2.5.0 | — | — |
+| 16 — Memory capability | 1.20.0 | 20 — Observability | 2.3.0 |
+| 17 — Agents as durable entities | 2.0.0 | 21 — Protocol schemas | 2.4.0 |
+| 18 — Durable HITL | 2.1.0 | 22 — Local runtime DX | 2.5.0 |
+| 19 — Capability security & secrets | 2.2.0 | — | — |
 
 ### Runtime convergence map
 
@@ -166,11 +166,11 @@ DONE  |  WIP  |  TODO
 | L4 | Less-code: UI/realtime foundation | 1.19.0 | Icon/Markdown/chat primitives, reactive wiring, client SDK | DONE |
 | L5 | Less-code: ai-agent template rewrite | 1.19.0 | 285-line single-file chat app; 0 CSS / 0 JS / 0 provider class | DONE |
 | — | Chat layout fix | 1.19.1 | Chat app-shell CSS fix, top-level `Html` export | DONE |
-| 16 | Memory capability | 1.20.0 | Layered memory: search/read/write, SQLite default | TODO |
-| 17 | Agents as durable entities | 2.0.0 | Agent registry; runs are executions; CLI | TODO |
-| 18 | Durable human-in-the-loop | 2.1.0 | WAITING_FOR_HUMAN survives restart, no live worker | TODO |
-| 19 | Capability security & secrets | 2.2.0 | secrets.get, redaction, no ambient authority | TODO |
-| 20 | Observability | 2.3.0 | Execution-aware tracing, `voodoo status/workers` | TODO |
+| 16 | Memory capability | 1.20.0 | Layered memory: search/read/write, SQLite default | DONE |
+| 17 | Agents as durable entities | 2.0.0 | Agent registry; runs are executions; CLI | DONE |
+| 18 | Durable human-in-the-loop | 2.1.0 | WAITING_FOR_HUMAN survives restart, no live worker | DONE |
+| 19 | Capability security & secrets | 2.2.0 | secrets.get, redaction, no ambient authority | DONE |
+| 20 | Observability | 2.3.0 | Execution-aware tracing, `voodoo status/workers` | DONE |
 | 21 | Protocol schemas & versioning | 2.4.0 | `voodoo.protocol`, schema_version everywhere | TODO |
 | 22 | Local runtime DX | 2.5.0 | `voodoo create` + `voodoo dev` boot the full local runtime | TODO |
 
@@ -729,7 +729,7 @@ Scope:
 # MILESTONE E — PROTOCOL STABILITY & DX
 
 ## Sprint 20 — Observability
-**Version 2.3.0 · ROADMAP §54 · Status: TODO · Released as: —**
+**Version 2.3.0 · ROADMAP §54 · Status: DONE · Released as: 2.3.0**
 
 - **Goal:** One trace identity propagates through execution, task, worker,
   model, tool, event, and object operation.
@@ -737,13 +737,13 @@ Scope:
   contextvar chains instead of one.
 - **Current State:** Correlation IDs exist but are split across subsystems.
 - **Changes:**
-  - [ ] Trace/correlation identity on: execution, task, worker, model call,
+  - [x] Trace/correlation identity on: execution, task, worker, model call,
         tool call, event, object op (single contextvar chain, today: two).
-  - [ ] OpenTelemetry-compatible span model; optional OTLP export behind
+  - [x] OpenTelemetry-compatible span model; optional OTLP export behind
         `[otel]` extra (in-memory store remains default).
-  - [ ] CLI: `voodoo status`, `voodoo workers`, upgraded `voodoo doctor`
+  - [x] CLI: `voodoo status`, `voodoo workers`, upgraded `voodoo doctor`
         (providers, capabilities, migrations, queue depth, schedule health).
-  - [ ] Telemetry summaries persisted (rolling) so `voodoo status` works after
+  - [x] Telemetry summaries persisted (rolling) so `voodoo status` works after
         restart.
 - **Dependencies:** Sprint 3 (executions), Sprint 17 (entities).
 - **Acceptance Criteria:** `trace_id` propagates end-to-end; `voodoo status`

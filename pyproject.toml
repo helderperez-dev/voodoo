@@ -93,6 +93,11 @@ s3 = [
 redis = [
     "redis>=5.0",
 ]
+otel = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20",
+]
 
 [tool.setuptools.dynamic]
 version = { attr = "voodoo.__version__" }

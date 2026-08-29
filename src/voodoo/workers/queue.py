@@ -110,16 +110,23 @@ async def _run_worker(name: str, worker_id: str):
                 await asyncio.sleep(0.5)
                 continue
 
-            token = trace_id_var.set(task.trace_id or str(uuid.uuid4()))
+            resolved_trace = task.trace_id or str(uuid.uuid4())
+            token = trace_id_var.set(resolved_trace)
             try:
+                from voodoo.runtime.context import ExecutionContext, use_context
+
                 intent = Intent(name=f"worker:{name}", params={"payload": task.payload})
+                ctx = ExecutionContext(trace_id=resolved_trace, actor=f"worker:{name}")
 
                 async def compute(ctx, _func=func, _payload=task.payload):
                     if is_async:
                         return await _func(_payload)
                     return _func(_payload)
 
-                await runtime_engine.execute(intent, compute, actor=f"worker:{name}")
+                async with use_context(ctx):
+                    await runtime_engine.execute(
+                        intent, compute, actor=f"worker:{name}", parent=ctx
+                    )
                 await q.complete(task.id, worker_id)
             except Exception as exc:
                 logger.error("Error in worker %s task %d: %r", name, task.id, exc)

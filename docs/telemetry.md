@@ -103,11 +103,93 @@ The middleware is auto-installed. It:
 
 ## API reference
 
-- `trace(name=None)` — decorator for tracing function blocks.
+- `trace(name=None)` — decorator for tracing function blocks. Now also creates an OTel-compatible span with parent hierarchy.
 - `telemetry_store` — global `TelemetryStore` singleton.
 - `trace_id_var` — `ContextVar` holding the current trace ID.
+- `new_trace_id()` — generate a new UUID4 hex trace ID.
+- `Span` — frozen dataclass: `trace_id`, `span_id`, `parent_span_id`, `name`, `start_time`, `end_time`, `status`, `attributes`. Has `duration_ms` property and `to_dict()`.
+- `start_span(name, attributes=None)` — async context manager creating child spans with automatic parent tracking.
 - `TelemetryStore.record_request(latency_ms, error=False)` — record an HTTP request.
 - `TelemetryStore.record_trace(name, latency_ms, error=False)` — record a custom trace.
+- `TelemetryStore.record_span(span)` — store a Span in the ring buffer (max 1000) and forward to OTLP exporter if configured.
 - `TelemetryStore.record_agent_run(run_record)` — record an agent run.
 - `TelemetryStore.record_tool_call(tool_name, latency_ms, error=False)` — record a tool call.
-- `TelemetryStore.get_summary() -> dict` — summary of all metrics.
+- `TelemetryStore.get_summary() -> dict` — summary of all metrics including `spans_total`.
+
+## Span model (Sprint 20)
+
+The `Span` dataclass is OTel-compatible and tracks hierarchical execution:
+
+```python
+from voodoo.telemetry import Span, start_span, telemetry_store
+
+# Manual span creation
+span = Span(trace_id="abc123", name="db.query", attributes={"table": "users"})
+telemetry_store.record_span(span)
+
+# Context manager with automatic parent tracking
+async with start_span("outer") as outer:
+    async with start_span("inner") as inner:
+        # inner.parent_span_id == outer.span_id
+        pass
+```
+
+Spans are stored in an in-memory ring buffer (max 1000). The `trace()` decorator now automatically creates spans alongside trace records.
+
+## OTLP export (Sprint 20)
+
+Optional OpenTelemetry export is available behind the `[otel]` extra:
+
+```bash
+pip install voodoo[otel]
+```
+
+Enable by setting the `VOODOO_OTEL_EXPORTER` environment variable:
+
+```bash
+export VOODOO_OTEL_EXPORTER=otlp
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317  # default
+```
+
+When enabled, every `record_span()` call forwards the span to the OTLP endpoint via a lazy-initialized `TracerProvider` with `BatchSpanProcessor`. If the SDK is not installed or the env var is unset, export is silently skipped.
+
+## Telemetry persistence (Sprint 20)
+
+Rolling counters are persisted to `.voodoo/telemetry_summary.json` every 50 requests and restored on startup:
+
+```json
+{
+  "requests_total": 150,
+  "errors_total": 3,
+  "db_queries": 420,
+  "agent_tokens": 15000
+}
+```
+
+This is best-effort (no new dependencies) and ensures `voodoo status` shows meaningful data after a restart.
+
+## CLI commands (Sprint 20)
+
+### `voodoo status`
+
+Displays a runtime health overview:
+
+```bash
+voodoo status
+```
+
+Shows: requests total, errors, error rate, avg latency, DB queries, agent runs, tokens in/out, cost, tool calls/errors, spans recorded, OTLP export status.
+
+### `voodoo workers`
+
+Shows registered workers and queue state:
+
+```bash
+voodoo workers
+```
+
+Displays: registered worker names, queue depth, running worker task count.
+
+### `voodoo doctor` (upgraded)
+
+Now includes queue depth, registered workers, scheduler DB health, and OTLP exporter availability checks.

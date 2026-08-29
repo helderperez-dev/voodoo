@@ -13,9 +13,11 @@ from voodoo.cli import (
     recover,
     routes,
     schedules,
+    status,
     tasks,
     theme,
     version,
+    workers_cmd,
 )
 from voodoo.cli.auth import auth_app
 from voodoo.cli.inspect import inspect_app
@@ -45,6 +47,8 @@ app.add_typer(theme.theme_app, name="theme")
 # (timeline from the journal) and `voodoo events` (recent journal events).
 app.command("execution")(executions.show_execution)
 app.command("events")(executions.list_events)
+app.command()(status.status)
+app.command()(workers_cmd.workers)
 app.command()(version.version)
 app.command()(doctor.doctor)
 app.command()(routes.routes)

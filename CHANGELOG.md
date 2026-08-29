@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+## 2.3.0 — 2026-08-29
+
+### Added — Sprint 20: Observability
+
+- **OTel-compatible `Span` dataclass** — `trace_id`, `span_id`, `parent_span_id`, `name`,
+  `start_time`, `end_time`, `status`, `attributes`. Frozen, with `duration_ms` property and
+  `to_dict()` method. Stored in a ring buffer (max 1000) on `TelemetryStore`.
+- **`start_span(name, attributes=None)`** — async context manager that creates child spans with
+  automatic parent-span tracking via `_span_id_var` ContextVar. Records ok/error status on exit.
+- **`new_trace_id()`** — generates a UUID4 hex trace ID string.
+- **`[otel]` optional extra** — `opentelemetry-api`, `opentelemetry-sdk`,
+  `opentelemetry-exporter-otlp-proto-grpc` (all ≥1.20). Activated by `VOODOO_OTEL_EXPORTER`
+  env var.
+- **OTLP exporter** (`voodoo.telemetry.otlp`) — lazily initializes a `TracerProvider` with
+  `BatchSpanProcessor` and `OTLPSpanExporter`. Endpoint configurable via `OTEL_EXPORTER_OTLP_ENDPOINT`
+  (default `http://localhost:4317`). Graceful degradation if SDK not installed.
+- **Telemetry summary persistence** — rolling counters (`requests_total`, `errors_total`,
+  `db_queries`, `agent_tokens`) persisted to `.voodoo/telemetry_summary.json` every 50 requests
+  and restored on startup. Best-effort, no new dependencies.
+- **`voodoo status` CLI command** — displays runtime health overview: requests, errors, error
+  rate, avg latency, DB queries, agent runs, tokens in/out, cost, tool calls, spans recorded,
+  OTLP export status.
+- **`voodoo workers` CLI command** — shows registered workers, queue depth, and running worker
+  task count.
+- **Upgraded `voodoo doctor`** — new sections: queue depth + registered workers, scheduler DB
+  health, OTLP exporter availability.
+- **Unified trace chain** — `_run_worker()` now creates `ExecutionContext` with `trace_id` and
+  wraps execution via `use_context()`, ensuring trace_id propagates through the full
+  worker → engine → compute → tool → span chain.
+- **`trace()` decorator upgrade** — now wraps function execution in `start_span()`, creating
+  both a trace record AND an OTel-compatible span with parent hierarchy.
+- **`tests/test_observability.py`** — 25 tests covering Span model, persistence, trace
+  propagation (execution context, mesh, queue, full chain), CLI commands, and OTLP exporter.
+
 ## 2.2.0 — 2026-08-29
 
 ### Added — Sprint 19: Capability security & secrets
