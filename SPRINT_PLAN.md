@@ -31,7 +31,7 @@ another disconnected feature.
 |---|---|
 | **Latest release** | `2.3.0` (`src/voodoo/__init__.py` → `__version__`) |
 | **Sprints 1–15 + L1–L5** | ✅ All DONE |
-| **Next sprint** | **Sprint 21 — Protocol schemas & versioning → `2.4.0`** |
+| **Next sprint** | **Sprint 22 — Local runtime DX → `2.5.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
@@ -171,7 +171,7 @@ DONE  |  WIP  |  TODO
 | 18 | Durable human-in-the-loop | 2.1.0 | WAITING_FOR_HUMAN survives restart, no live worker | DONE |
 | 19 | Capability security & secrets | 2.2.0 | secrets.get, redaction, no ambient authority | DONE |
 | 20 | Observability | 2.3.0 | Execution-aware tracing, `voodoo status/workers` | DONE |
-| 21 | Protocol schemas & versioning | 2.4.0 | `voodoo.protocol`, schema_version everywhere | TODO |
+| 21 | Protocol schemas & versioning | 2.4.0 | `voodoo.protocol`, schema_version everywhere | DONE |
 | 22 | Local runtime DX | 2.5.0 | `voodoo create` + `voodoo dev` boot the full local runtime | TODO |
 
 Spec §52 "Definition of Done — Durable Runtime" is achieved after Sprint 6.
@@ -753,7 +753,7 @@ Scope:
 - **Definition of Done:** quality gate green + released `2.3.0`.
 
 ## Sprint 21 — Protocol schemas & versioning
-**Version 2.4.0 · ROADMAP §56, §57 · Status: TODO · Released as: —**
+**Version 2.4.0 · ROADMAP §56, §57 · Status: DONE · Released as: 2.4.0**
 
 - **Goal:** Canonical entity schemas form the stable semantic boundary for
   other languages and SDKs.
@@ -761,22 +761,21 @@ Scope:
   Identity, Event, and Relationship survive across processes and languages.
 - **Current State:** Entity schemas are implicit in code, not declared.
 - **Changes:**
-  - [ ] `voodoo.protocol` package: canonical entity schemas (identity,
+  - [x] `voodoo.protocol` package: canonical entity schemas (identity,
         capabilities, intents, executions, tasks, events, objects, errors)
         as the stable semantic boundary.
-  - [ ] `schema_version` on every persisted record + envelope; versioned event
+  - [x] `schema_version` on every persisted record + envelope; versioned event
         types (`execution.completed.v1` or `schema_version: 1`).
-  - [ ] JSON Schema export command (`voodoo protocol export`) for other
+  - [x] JSON Schema export command (`voodoo protocol export`) for other
         languages/SDKs.
-  - [ ] Compatibility policy documented (additive within major; migrations for
+  - [x] Compatibility policy documented (additive within major; migrations for
         stored data).
 - **Dependencies:** Sprint 3 (executions), Sprint 8 (contracts), Sprint 17
   (entities).
 - **Acceptance Criteria:** every entity round-trips serialize/deserialize; the
   export command emits valid schemas.
 - **Tests:** protocol conformance round-trips for every entity.
-- **Documentation:** `docs/mcp.md` (or a new `docs/protocol.md`),
-  `CHANGELOG.md`.
+- **Documentation:** `docs/protocol.md`, `CHANGELOG.md`.
 - **Definition of Done:** quality gate green + released `2.4.0`.
 
 ## Sprint 22 — Local runtime DX ("WAMP for autonomous software")

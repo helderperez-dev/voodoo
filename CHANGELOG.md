@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## 2.4.0 — 2026-08-29
+
+### Added — Sprint 21: Protocol Schemas & Versioning
+
+- **`voodoo.protocol` package** — 18 canonical Pydantic models forming the stable semantic
+  boundary for cross-language interop: `Identity`, `Capability`, `Constraint`, `Resource`,
+  `TimeSpec`, `ComputeSpec`, `Intent`, `Effect`, `Execution`, `Task`, `Event`, `ObjectRef`,
+  `Error`, `TelemetrySpan`, `Approval`, `AgentEntity`, `AgentRun`, `MemoryEntry`.
+- **6 enums** — `ExecutionStatus`, `IntentStatus`, `EffectStatus`, `TaskStatus`,
+  `ApprovalStatus`, `ComputeKind` with full lifecycle state coverage.
+- **`SCHEMA_VERSION` constant** — integer version (currently 1) carried by every entity.
+  Additive within a major version; breaking changes bump the major.
+- **`export_json_schemas()`** — exports JSON Schema for all protocol entities with
+  `$schema`, `$id`, and `x-voodoo-schema-version` metadata.
+- **`export_json_schemas_json(indent=2)`** — JSON string variant of the export.
+- **`schema_for(entity_name)`** — retrieve a single entity's JSON Schema by name.
+- **`voodoo protocol export` CLI command** — export JSON Schema to stdout or file.
+  Supports `--entity` for single-entity export and `--output` for file output.
+- **`voodoo protocol list` CLI command** — list all protocol entity names.
+- **Protocol conformance tests** (`tests/test_protocol.py`) — 107 tests covering
+  round-trip serialization, schema_version presence, enum values, JSON Schema export
+  completeness, and JSON-friendly serialization.
+- **Compatibility policy docs** (`docs/protocol.md`) — rules for additive evolution,
+  breaking changes, schema_version semantics, and migration path.
+
 ## 2.3.0 — 2026-08-29
 
 ### Added — Sprint 20: Observability

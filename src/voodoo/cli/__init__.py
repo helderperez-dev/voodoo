@@ -10,6 +10,7 @@ from voodoo.cli import (
     generate,
     new,
     objects,
+    protocol,
     recover,
     routes,
     schedules,
@@ -43,6 +44,7 @@ app.add_typer(objects.objects_app, name="objects")
 app.add_typer(agents.agents_app, name="agents")
 app.add_typer(approvals.approvals_app, name="approvals")
 app.add_typer(theme.theme_app, name="theme")
+app.add_typer(protocol.protocol_app, name="protocol")
 # Top-level aliases per the Sprint 3 CLI surface: `voodoo execution <id>`
 # (timeline from the journal) and `voodoo events` (recent journal events).
 app.command("execution")(executions.show_execution)
