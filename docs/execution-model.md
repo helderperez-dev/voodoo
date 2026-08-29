@@ -110,6 +110,25 @@ agent run is its parent. This gives full traceability:
 Cancelling a parent propagates to children. Completing a parent requires its
 children to have completed, failed, or been cancelled.
 
+## Agents and executions (Sprint 17)
+
+Agents are durable entities registered in an `AgentRegistry`. Every agent
+run **is** an Execution — there is no separate agent execution model. The
+registry links the two:
+
+- `AgentEntity` — durable agent identity (id, model, tools, capabilities,
+  state) stored in the registry.
+- `AgentRunRecord` — persisted after every run/stream, linking `agent_id` →
+  `execution_id` with prompt, output, tokens, cost, and `trace_id`.
+
+Because runs are executions, agent history is queryable through the normal
+execution views (`voodoo inspect executions`) **and** per-agent via the
+registry (`registry.get_runs(agent_id)` / `voodoo agents show <id>`). Two
+agents collaborating via events produce linked, parented executions — no
+bespoke agent RPC (ROADMAP §47).
+
+See [agents.md](agents.md) for the registry API and CLI.
+
 ## Cancellation
 
 Cancellation is cooperative. An execution carries a `cancel` signal

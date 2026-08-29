@@ -275,14 +275,14 @@ run = await agent.run("Score lead #42")
 
 # Inspect the persisted entity
 entity = await registry.get("lead-scorer")
-print(entity.name)       # "Lead Scorer"
-print(entity.state)      # "active"
+print(entity.name)  # "Lead Scorer"
+print(entity.state)  # "active"
 print(entity.capabilities)  # ["scoring.read"]
 
 # Review run history
 runs = await registry.get_runs("lead-scorer")
-print(runs[0].prompt)    # "Score lead #42"
-print(runs[0].status)    # "completed"
+print(runs[0].prompt)  # "Score lead #42"
+print(runs[0].status)  # "completed"
 ```
 
 **Run history:** Every `run()` and `stream()` persists an `AgentRunRecord`
@@ -306,8 +306,8 @@ await scorer.run("Score all new leads")
 await emailer.run("Send follow-up emails to hot leads")
 
 # Each agent has its own run history
-print(await registry.count_agents())   # 2
-print(await registry.count_runs("scorer"))   # 1
+print(await registry.count_agents())  # 2
+print(await registry.count_runs("scorer"))  # 1
 print(await registry.count_runs("emailer"))  # 1
 ```
 

@@ -403,7 +403,7 @@ voodoo auth secret-key
 
 ## Project Status & Roadmap
 
-Voodoo is in active development (v1.16.0, Beta). The core runtime, UI system, AI agents, MCP, durable execution, and adaptive runtime are production-ready. PostgreSQL, S3/R2, and Redis adapters are shipped behind optional extras; the AI runtime (model-provider protocol, memory, durable agents, and durable human-in-the-loop) is the current focus.
+Voodoo is in active development (v2.0.0, Beta). The core runtime, UI system, AI agents, MCP, durable execution, adaptive runtime, model-provider protocol, layered memory, and durable agent registry are production-ready. PostgreSQL, S3/R2, and Redis adapters are shipped behind optional extras; durable human-in-the-loop is the current focus.
 
 ```mermaid
 timeline
@@ -414,26 +414,20 @@ timeline
         Unified Runtime : ExecutionEngine : Planner : Adaptive supervisor
         Durable Local Runtime : SQLite queue : Executions : Scheduler : Objects : Events
         Production Providers : PostgreSQL : S3/R2 : Redis
-    section In Progress (v1.16–v1.19)
+    section Shipped (v1.16–v2.0)
         ModelProvider protocol : Model descriptors : Routing aliases
         Memory capability : Layered memory : SQLite + FTS5
-        Durable Agents & HITL : Agent registry : Resumable approvals
-    section Planned (v2.0+)
-        Capability Security & Secrets : v2.0
-        Observability & Protocol : v2.1–v2.2
-        Local Runtime DX : v2.3
-```
-
-| Milestone | Version | Status |
-|-----------|---------|--------|
-| Core framework — runtime, UI, routing, reactive state | v1.0–v1.1 | ✅ Shipped |
-| AI & unified runtime — agents, tools, MCP, HITL, ExecutionEngine, planner, adaptive runtime | v1.2 | ✅ Shipped |
-| Durable local runtime (zero-infra) — SQLite storage, queue, executions, scheduler, objects, events | v1.3–v1.9 | ✅ Shipped |
-| Adapter contracts & runtime configuration | v1.10–v1.11 | ✅ Shipped |
-| Production providers (optional) — PostgreSQL, S3/R2, Redis | v1.12–v1.15 | ✅ Shipped |
-| AI runtime — model-provider protocol, memory, durable agents, durable HITL | v1.16–v1.19 | 🚧 In Progress |
-| Capability security & secrets | v2.0 | 📋 Planned |
-| Protocol stability & DX — observability, schemas, local runtime | v2.1–v2.3 | 📋 Planned |
+        Durable Agents : Agent registry : v2.0
+    section In Progress (v2.1)
+        Durable HITL : Resumable approvals
+    section Planned (v2.2+)
+        Capability Security & Secrets : v2.2
+        Observability & Protocol : v2.3–v2.4
+        Local Runtime DX : v2.5
+| AI runtime — model-provider protocol, memory, durable agent registry | v1.16–v2.0 | ✅ Shipped |
+| Durable human-in-the-loop — resumable approvals | v2.1 | 🚧 In Progress |
+| Capability security & secrets | v2.2 | 📋 Planned |
+| Protocol stability & DX — observability, schemas, local runtime | v2.3–v2.5 | 📋 Planned |
 
 See the [master roadmap](ROADMAP.md) and [sprint plan](SPRINT_PLAN.md) for details.
 

@@ -1,6 +1,6 @@
 # Human-in-the-Loop
 
-> **Status:** Implemented. Durable approvals land in Sprint 17 (v1.19.0).
+> **Status:** Implemented. Durable, resumable approvals land in Sprint 18 (v2.1.0).
 
 Voodoo treats humans as **compute participants**, not afterthoughts. The
 runtime provides first-class primitives for requesting human input,
@@ -78,7 +78,7 @@ dies while waiting for a human decision:
 3. The human can approve/deny via CLI on any machine
 4. The execution resumes on whichever worker picks it up
 
-> **Sprint 17 (v1.19.0)** will make `WAITING_FOR_HUMAN` executions
+> **Sprint 18 (v2.1.0)** will make `WAITING_FOR_HUMAN` executions
 > fully resumable across workers — no requirement for the original
 > worker process to be alive.
 
