@@ -167,6 +167,13 @@ class SQLiteExecutionStore:
         }
         if "checkpoint" not in columns:
             self._conn.execute("ALTER TABLE executions ADD COLUMN checkpoint TEXT")
+        # Sprint 18: durable participant column for approvals (idempotent —
+        # fresh databases create it via the v9 migration; existing ones here).
+        approval_columns = {
+            row[1] for row in self._conn.execute("PRAGMA table_info(approvals)")
+        }
+        if "participant" not in approval_columns:
+            self._conn.execute("ALTER TABLE approvals ADD COLUMN participant TEXT")
         self._conn.commit()
 
     # -- ExecutionStore protocol (sync, engine-compatible) -----------------
@@ -327,13 +334,14 @@ class SQLiteExecutionStore:
             """
             INSERT INTO approvals (
                 id, execution_id, trace_id, capability, question, requested_by,
-                status, decided_by, decided_at, reason, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status, decided_by, decided_at, reason, created_at, participant
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (id) DO UPDATE SET
                 status = excluded.status,
                 decided_by = excluded.decided_by,
                 decided_at = excluded.decided_at,
-                reason = excluded.reason
+                reason = excluded.reason,
+                participant = excluded.participant
             """,
             (
                 approval.id,
@@ -349,6 +357,7 @@ class SQLiteExecutionStore:
                 approval.created_at.isoformat()
                 if approval.created_at
                 else datetime.now(UTC).isoformat(),
+                getattr(approval, "participant", None),
             ),
         )
         self._conn.commit()
@@ -363,6 +372,19 @@ class SQLiteExecutionStore:
         if row is None:
             return None
         return dict(row)
+
+    def load_approvals(self, pending_only: bool = False) -> list[dict[str, Any]]:
+        """List approvals — newest first, optionally pending only (Sprint 18)."""
+        if pending_only:
+            rows = self._conn.execute(
+                "SELECT * FROM approvals WHERE status = 'pending' "
+                "ORDER BY created_at DESC"
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM approvals ORDER BY created_at DESC"
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     # -- internals ---------------------------------------------------------
 

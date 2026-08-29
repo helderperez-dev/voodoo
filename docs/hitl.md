@@ -1,6 +1,7 @@
 # Human-in-the-Loop
 
-> **Status:** Implemented. Durable, resumable approvals land in Sprint 18 (v2.1.0).
+> **Status:** Fully durable (Sprint 18, v2.1.0). Waiting approvals survive
+> process death and resume on any worker via registered participants.
 
 Voodoo treats humans as **compute participants**, not afterthoughts. The
 runtime provides first-class primitives for requesting human input,
@@ -60,27 +61,69 @@ async def review_pull_request(pr_id: int):
 ## Approving via CLI
 
 ```bash
-# List pending approvals
-voodoo approvals
+# List approvals (pending and decided)
+voodoo approvals list
 
-# Approve or deny
-voodoo approvals approve <id>
-voodoo approvals deny <id>
+# Only pending
+voodoo approvals list --pending
+
+# Inspect one in detail
+voodoo approvals show <execution-id>
+
+# Approve or deny — resumes the execution
+voodoo approvals approve <execution-id> --by ops --note "ship it"
+voodoo approvals deny <execution-id> --by admin --reason "too risky"
+
+# Import the app first so participants re-register and the
+# approved execution actually re-runs
+voodoo approvals approve <execution-id> --app main:app
 ```
 
 ## Durability
 
-Approvals are persisted to the execution store. If the worker process
-dies while waiting for a human decision:
+Approvals are persisted to the execution store (`approvals` table). If the
+worker process dies while waiting for a human decision:
 
-1. The execution is saved as `WAITING_FOR_HUMAN`
-2. On restart, `voodoo recover` restores it
+1. The execution is saved as `WAITING_FOR_HUMAN` with a journal event
+   `approval.requested`
+2. On restart, `voodoo recover` restores it and rehydrates the approval
 3. The human can approve/deny via CLI on any machine
-4. The execution resumes on whichever worker picks it up
+4. The execution resumes **on any worker** through its registered
+   participant — the original process does not need to be alive
 
-> **Sprint 18 (v2.1.0)** will make `WAITING_FOR_HUMAN` executions
-> fully resumable across workers — no requirement for the original
-> worker process to be alive.
+### Durable participants (Sprint 18)
+
+What makes a resume possible after a restart: the approval persists a
+**participant name**, and the process that decides registers that name with
+the engine:
+
+```python
+from voodoo import Intent
+from voodoo.runtime import engine
+
+
+async def deploy_compute(ctx):
+    if ctx.metadata.get("approval") != "approved":
+        raise ApprovalRequired("Deploy to production?")
+    return "deployed"
+
+
+# Register the participant — its name is the durable handle.
+engine.register_participant("deploy_wf", deploy_compute)
+await engine.execute(Intent(name="deploy"), deploy_compute)
+# → execution waits; approval persisted with participant="deploy_wf"
+```
+
+After a crash, on any machine:
+
+```bash
+voodoo approvals list --pending
+voodoo approvals approve <execution-id> --by ops --app main:app
+# → imports main.py (re-registers "deploy_wf"), resumes, completes
+```
+
+Decisions are journaled: `approval.requested` on wait,
+`approval.granted` / `approval.denied` on decide.
 
 ## Integration with Agents
 

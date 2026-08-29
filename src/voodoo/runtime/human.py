@@ -54,6 +54,12 @@ class Approval:
     id: str = field(default_factory=lambda: str(uuid4()))
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
+    #: Registered participant name — the durable handle to what re-runs
+    #: once approved (resolved through the engine's planner registry;
+    #: Sprint 18). Takes precedence over the live ``compute`` callable
+    #: when resuming after a restart.
+    participant: str | None = None
+
     # resumable payload — what to re-run once approved
     intent: Intent | None = None
     compute: ComputeFn | None = None
@@ -96,6 +102,7 @@ class ApprovalRegistry:
         compute: ComputeFn | None = None,
         output_type: type | None = None,
         context: ExecutionContext | None = None,
+        participant: str | None = None,
     ) -> Approval:
         approval = Approval(
             execution_id=execution.id,
@@ -112,6 +119,7 @@ class ApprovalRegistry:
             compute=compute,
             output_type=output_type,
             context=context,
+            participant=participant,
         )
         self.records[execution.id] = approval
         return approval

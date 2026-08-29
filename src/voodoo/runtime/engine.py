@@ -117,12 +117,45 @@ class ExecutionEngine:
         self.approvals = ApprovalRegistry()
         self._execution_store: Any = None
         self._checkpoint_sequences: dict[str, int] = {}
+        #: Durable compute registry — named participants that can be
+        #: re-resolved after a restart (Sprint 18). Maps participant
+        #: name → compute callable + metadata.
+        self._participants: dict[str, Any] = {}
 
     # -- persistence / recovery ---------------------------------------------
 
     def use_store(self, store: Any) -> None:
         """Attach an ExecutionStore (persistence seam, Phase 11)."""
         self._execution_store = store
+
+    def register_participant(
+        self,
+        name: str,
+        compute: ComputeFn | None = None,
+        *,
+        execute: Any | None = None,
+        kind: str = "compute",
+        capabilities: list[str] | None = None,
+    ) -> None:
+        """Register a named compute participant for durable resume (Sprint 18).
+
+        Participants registered here can be re-resolved by name after a
+        process restart, making ``WAITING_FOR_HUMAN`` executions fully
+        resumable on any worker (ROADMAP §50).
+        """
+        self._participants[name] = {
+            "compute": compute,
+            "execute": execute,
+            "kind": kind,
+            "capabilities": capabilities or [],
+        }
+
+    def resolve_participant(self, name: str) -> Any | None:
+        """Resolve a registered participant by name.
+
+        Returns the registration dict, or ``None`` when not registered.
+        """
+        return self._participants.get(name)
 
     def _persist(self, execution: Execution) -> None:
         """Checkpoint an execution — raises on failure (spec §51.16)."""
@@ -253,6 +286,7 @@ class ExecutionEngine:
                 else None
             ),
             reason=record["reason"],
+            participant=record.get("participant"),
         )
         self.approvals.records[execution.id] = approval
 
@@ -273,7 +307,7 @@ class ExecutionEngine:
         self._persist_approval(approval)
         self._journal_approval_decision(
             execution_id,
-            "human.approved",
+            "approval.granted",
             {"by": by, "capability": approval.capability},
         )
         waiting = self.executions.get(execution_id)
@@ -283,6 +317,16 @@ class ExecutionEngine:
             "human.approved",
             {"execution_id": execution_id, "by": by, "capability": approval.capability},
         )
+
+        # Durable resume (Sprint 18): when the live compute is gone (e.g.
+        # after a restart) but a registered participant exists, re-resolve
+        # the compute from the participant registry. The waiting execution's
+        # persisted intent supplies the outcome when the approval record
+        # has none (a restarted process serializes no live objects).
+        if approval.compute is None and approval.participant is not None:
+            approval.compute = self._participant_compute(approval)
+        if approval.intent is None and waiting is not None:
+            approval.intent = waiting.intent
         if approval.compute is None or approval.intent is None:
             if waiting is not None:
                 waiting.complete(result={"approved": True, "by": by})
@@ -310,6 +354,15 @@ class ExecutionEngine:
             waiting.complete(result=resumed.result)
         return resumed
 
+    def _participant_compute(self, approval: Any) -> ComputeFn | None:
+        """Synchronously re-resolve compute from the participant registry."""
+        if approval.participant is None:
+            return None
+        participant = self.resolve_participant(approval.participant)
+        if participant is None:
+            return None
+        return participant["compute"]
+
     async def deny(
         self, execution_id: str, *, by: str = "human", reason: str = "denied"
     ) -> Execution | None:
@@ -324,7 +377,7 @@ class ExecutionEngine:
         self._persist_approval(approval)
         self._journal_approval_decision(
             execution_id,
-            "human.denied",
+            "approval.denied",
             {"by": by, "reason": reason},
         )
         waiting = self.executions.get(execution_id)
@@ -526,6 +579,15 @@ class ExecutionEngine:
             # Persist the pending approval so a restart can rehydrate it
             # (spec §30 — decisions recorded as journal events on decide).
             self._persist_approval(approval)
+            self._journal_approval_decision(
+                execution.id,
+                "approval.requested",
+                {
+                    "capability": exc.context.get("capability"),
+                    "question": exc.message,
+                    "requested_by": execution.actor,
+                },
+            )
             await self._emit(
                 "human.approval_required",
                 {

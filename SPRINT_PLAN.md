@@ -31,7 +31,7 @@ another disconnected feature.
 |---|---|
 | **Latest release** | `1.19.1` (`src/voodoo/__init__.py` → `__version__`) |
 | **Sprints 1–15 + L1–L5** | ✅ All DONE |
-| **Next sprint** | **Sprint 18 — Durable human-in-the-loop → `2.1.0`** |
+| **Next sprint** | **Sprint 19 — Capability security & secrets → `2.2.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
@@ -671,7 +671,7 @@ Scope:
 - **Definition of Done:** quality gate green + released `2.0.0`.
 
 ## Sprint 18 — Durable human-in-the-loop
-**Version 2.1.0 · ROADMAP §50 · Status: TODO · Released as: —**
+**Version 2.1.0 · ROADMAP §50 · Status: DONE · Released as: 2.1.0**
 
 - **Goal:** Human approval is an execution state that survives process death;
   a decision resumes the execution on any worker.
@@ -680,12 +680,12 @@ Scope:
 - **Current State:** Approvals persist but cannot resume the original work
   after the worker process dies.
 - **Changes:**
-  - [ ] `WAITING_FOR_HUMAN` executions persist resumable intent/compute
+  - [x] `WAITING_FOR_HUMAN` executions persist resumable intent/compute
         (registered participants serialized durably — leverages Sprint 4).
-  - [ ] Approval decision → event → execution resumes on any worker.
-  - [ ] `approvals` durable registry; journal events
+  - [x] Approval decision → event → execution resumes on any worker.
+  - [x] `approvals` durable registry; journal events
         `approval.requested/granted/denied`.
-  - [ ] CLI: `voodoo approvals` list, `voodoo approvals approve/deny <id>`.
+  - [x] CLI: `voodoo approvals` list, `voodoo approvals approve/deny <id>`.
 - **Dependencies:** Sprints 3–4 (executions + checkpoints), Sprint 11 (optional
   PG).
 - **Acceptance Criteria:** request approval → kill process → decide via CLI →

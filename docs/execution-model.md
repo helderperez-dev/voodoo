@@ -129,6 +129,23 @@ bespoke agent RPC (ROADMAP §47).
 
 See [agents.md](agents.md) for the registry API and CLI.
 
+## Durable human approvals (Sprint 18)
+
+A `WAITING_FOR_HUMAN` execution is a first-class durable state — not a live
+callback. The approval record persists a **participant name**; any process
+that registers that participant can resume the work after a decision:
+
+- On wait: journal `approval.requested`, persist the approval (with
+  participant) to the store.
+- On decide (`approve`/`deny`): journal `approval.granted`/`approval.denied`,
+  re-resolve the compute from the participant registry (falling back to the
+  waiting execution's persisted intent), and re-run it under a child context
+  carrying the decision.
+
+Because the resume path normalizes through `engine.execute`, a resumed
+approval is itself an Execution — cancel, retry, and telemetry behave
+identically. See [hitl.md](hitl.md) for the CLI workflow.
+
 ## Cancellation
 
 Cancellation is cooperative. An execution carries a `cancel` signal

@@ -230,13 +230,14 @@ class PostgresExecutionStore:
                 _translate(
                     "INSERT INTO approvals ("
                     "id, execution_id, trace_id, capability, question, requested_by, "
-                    "status, decided_by, decided_at, reason, created_at"
-                    ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "status, decided_by, decided_at, reason, created_at, participant"
+                    ") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                     "ON CONFLICT (id) DO UPDATE SET "
                     "status = excluded.status, "
                     "decided_by = excluded.decided_by, "
                     "decided_at = excluded.decided_at, "
-                    "reason = excluded.reason"
+                    "reason = excluded.reason, "
+                    "participant = excluded.participant"
                 ),
                 (
                     approval.id,
@@ -252,6 +253,7 @@ class PostgresExecutionStore:
                     approval.created_at.isoformat()
                     if approval.created_at
                     else datetime.now(UTC).isoformat(),
+                    getattr(approval, "participant", None),
                 ),
             )
         self._conn.commit()
@@ -267,6 +269,17 @@ class PostgresExecutionStore:
             )
             row = cur.fetchone()
         return dict(row) if row is not None else None
+
+    def load_approvals(self, pending_only: bool = False) -> list[dict[str, Any]]:
+        """List approvals — newest first, optionally pending only (Sprint 18)."""
+        query = "SELECT * FROM approvals"
+        if pending_only:
+            query += " WHERE status = 'pending'"
+        query += " ORDER BY created_at DESC"
+        with self._lock, self._conn.cursor() as cur:
+            cur.execute(_translate(query))
+            rows = cur.fetchall()
+        return [dict(row) for row in rows]
 
     # -- internals ---------------------------------------------------------
 

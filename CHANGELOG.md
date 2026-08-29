@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+## 2.1.0 — 2026-08-29
+
+### Added — Sprint 18: Durable human-in-the-loop
+
+- **`Approval.participant`** — durable handle naming the compute to re-run
+  after a decision. Persisted in the `approvals` table (migration v9,
+  `participant` column) on both SQLite and PostgreSQL stores.
+- **`ExecutionEngine.register_participant(name, compute)`** /
+  **`.resolve_participant(name)`** — registry of named compute participants.
+  After a restart, `approve()` re-resolves the compute by name and resumes
+  the waiting execution on any worker.
+- **Durable resume on approve** — `engine.approve()` re-resolves the compute
+  from the participant registry when the live callable is gone and falls
+  back to the waiting execution's persisted intent, so the resumed run
+  executes the original work instead of a bare acknowledgement.
+- **Journal events** — `approval.requested` (on wait), `approval.granted`,
+  `approval.denied` (on decide), recorded to the execution journal on both
+  SQLite and PostgreSQL stores.
+- **`store.load_approvals(pending_only=False)`** — list approvals (newest
+  first) on SQLite + PostgreSQL execution stores.
+- **CLI `voodoo approvals`** — `list [--pending]`, `show <id>`,
+  `approve <id> [--by] [--note]`, `deny <id> [--by] [--reason]`, operating
+  directly on the durable store with optional `--app` to import the
+  application so participants re-register.
+- **`tests/test_durable_hitl.py`** — 12 tests including the sprint
+  acceptance criterion (crash → decide → resume completes) and journal-event
+  coverage.
+
 ## 2.0.0 — 2026-08-29
 
 ### Added — Sprint 17: Agents as durable entities (v2.0.0)
