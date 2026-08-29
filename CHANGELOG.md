@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 1.20.0 — 2026-08-29
+
 ### Added — Sprint 16: Memory as entity state
 
 - **`MemoryStore` Protocol** — the persistence contract for memory backends
