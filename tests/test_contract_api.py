@@ -197,7 +197,7 @@ def test_version_is_string():
     assert voodoo.__version__.count(".") == 2
 
 
-def test_version_is_1_0():
-    """The public API is frozen at semver 1.0."""
+def test_version_is_2_0():
+    """The public API is frozen at semver 2.0 (major bump at Sprint 17)."""
     major = voodoo.__version__.split(".")[0]
-    assert major == "1", f"Expected major version 1, got {major}"
+    assert major == "2", f"Expected major version 2, got {major}"
