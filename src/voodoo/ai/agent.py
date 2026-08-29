@@ -127,6 +127,16 @@ class Agent:
         lazily on first access. Context is NOT memory — context is an
         opaque dict passed to tool calls; memory is a queryable, durable
         record of what the entity knows.
+    agent_id:
+        Stable identity for this agent. When provided with an
+        ``agent_registry``, the agent is auto-registered and run history
+        is persisted. Auto-generated UUID if not provided.
+    name:
+        Human-readable display name for registry entry.
+    agent_registry:
+        :class:`~voodoo.agents.registry.AgentRegistry` for durable
+        identity and run history. When ``None``, run history is not
+        persisted (memory episodic entries still write).
     """
 
     def __init__(
@@ -138,6 +148,9 @@ class Agent:
         max_iterations: int = 10,
         capabilities: list[str] | None = None,
         memory: Any | None = None,
+        agent_id: str | None = None,
+        name: str = "",
+        agent_registry: Any | None = None,
         **provider_kwargs: Any,
     ) -> None:
         self.model = model or default_model()
@@ -152,6 +165,12 @@ class Agent:
         self.provider: LLMProvider = get_provider(self.model, **provider_kwargs)
         self._memory: Any | None = memory
 
+        # Agent identity (Sprint 17).
+        self.agent_id: str = agent_id or str(uuid.uuid4())
+        self.name: str = name
+        self._agent_registry: Any | None = agent_registry
+        self._registered: bool = False
+
         # Resolve tool specs/names into a list of names for tool calling.
         self._tool_names: list[str] = []
         if tools:
@@ -164,6 +183,51 @@ class Agent:
                     self._tool_names.append(t.__tool_spec__.name)
 
         self.state = AgentState.configured
+
+    # -- agent registry (Sprint 17) ----------------------------------------
+
+    async def _ensure_registered(self) -> None:
+        """Auto-register this agent in the agent registry (lazy)."""
+        if self._agent_registry is None or self._registered:
+            return
+        from voodoo.agents.models import AgentEntity
+
+        existing = await self._agent_registry.get(self.agent_id)
+        if existing is None:
+            entity = AgentEntity(
+                agent_id=self.agent_id,
+                name=self.name or self.agent_id,
+                model=self.model,
+                system_prompt=self.system_prompt,
+                capabilities=list(self.capabilities),
+                tools=list(self._tool_names),
+            )
+            await self._agent_registry.register(entity)
+        self._registered = True
+
+    async def _record_run(self, run_record: AgentRun) -> None:
+        """Persist a run record to the agent registry."""
+        if self._agent_registry is None:
+            return
+        from voodoo.agents.models import AgentRunRecord
+
+        await self._ensure_registered()
+        record = AgentRunRecord(
+            run_id=run_record.run_id,
+            agent_id=self.agent_id,
+            execution_id=run_record.trace_id,
+            prompt=run_record.prompt,
+            output=run_record.output,
+            status=run_record.status,
+            tokens_in=run_record.tokens_in,
+            tokens_out=run_record.tokens_out,
+            cost=run_record.cost,
+            tool_calls=run_record.tool_calls,
+            started_at=run_record.started_at,
+            completed_at=run_record.completed_at,
+            trace_id=run_record.trace_id,
+        )
+        await self._agent_registry.record_run(record)
 
     # -- memory ------------------------------------------------------------
 
@@ -483,6 +547,7 @@ class Agent:
 
         telemetry_store.record_agent_run(run_record)
         await self._write_episodic_memory(run_record)
+        await self._record_run(run_record)
         await self._broadcast(
             "agent.completed",
             {
@@ -677,6 +742,7 @@ class Agent:
 
         telemetry_store.record_agent_run(run_record)
         await self._write_episodic_memory(run_record)
+        await self._record_run(run_record)
         await self._broadcast(
             "agent.completed",
             {

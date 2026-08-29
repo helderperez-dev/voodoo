@@ -20,6 +20,7 @@ import warnings
 from typing import Any
 
 from .adapters import TailwindAdapter, VoodooCSSAdapter
+from .agents import AgentEntity, AgentRegistry, AgentRunRecord, SQLiteAgentRegistry
 from .ai import LLMProvider, ModelDescriptor, VoodooModelProvider
 from .ai.agent import Agent, AgentRun
 from .ai.tools import ToolRegistry, ToolSpec, tool
@@ -101,7 +102,7 @@ from .ui.styles import (
 from .ui.styles.theme import Theme, ThemeColors, create_theme
 from .workers import task
 
-__version__ = "1.19.1"
+__version__ = "2.0.0"
 
 __all__ = [
     # Core runtime
@@ -134,6 +135,11 @@ __all__ = [
     "MemoryLayer",
     "MemoryStore",
     "SQLiteMemoryStore",
+    # Agent registry (Sprint 17)
+    "AgentEntity",
+    "AgentRegistry",
+    "AgentRunRecord",
+    "SQLiteAgentRegistry",
     # Data
     "BaseModel",
     "Model",

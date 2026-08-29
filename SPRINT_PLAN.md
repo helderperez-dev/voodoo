@@ -31,7 +31,7 @@ another disconnected feature.
 |---|---|
 | **Latest release** | `1.19.1` (`src/voodoo/__init__.py` → `__version__`) |
 | **Sprints 1–15 + L1–L5** | ✅ All DONE |
-| **Next sprint** | **Sprint 17 — Agents as durable entities → `2.0.0`** |
+| **Next sprint** | **Sprint 18 — Durable human-in-the-loop → `2.1.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
@@ -645,7 +645,7 @@ Scope:
 - **Definition of Done:** quality gate green + released `1.20.0`.
 
 ## Sprint 17 — Agents as durable entities
-**Version 2.0.0 · ROADMAP §47 · Status: TODO · Released as: —**
+**Version 2.0.0 · ROADMAP §47 · Status: DONE · Released as: 2.0.0**
 
 - **Goal:** Agents become durable entities — stable identity, capabilities,
   state, and queryable execution history.
@@ -654,14 +654,14 @@ Scope:
 - **Current State:** An agent run already creates an Execution, but there is no
   agent registry, identity, or persisted state.
 - **Changes:**
-  - [ ] `agents` registry table: identity, capabilities, model policy, tools,
+  - [x] `agents` registry table: identity, capabilities, model policy, tools,
         permissions, configuration, state.
-  - [ ] An agent run always creates an Execution (already true) **and** persists
+  - [x] An agent run always creates an Execution (already true) **and** persists
         agent state/history links (execution history queryable per agent).
-  - [ ] Multi-agent interaction via existing primitives only (events/tasks/
+  - [x] Multi-agent interaction via existing primitives only (events/tasks/
         executions) — no bespoke agent RPC (ROADMAP §47); parent/child executions
         keep trace relationships.
-  - [ ] CLI: `voodoo agents`, `voodoo agent <id>` (history, state, runs).
+  - [x] CLI: `voodoo agents`, `voodoo agent <id>` (history, state, runs).
 - **Dependencies:** Sprint 3 (executions), Sprint 14 (model provider).
 - **Acceptance Criteria:** an agent survives restart with identity, state, and
   history intact; two agents collaborating via events produce linked executions.

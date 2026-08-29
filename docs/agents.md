@@ -247,14 +247,93 @@ results = await agent.memory.search(
 )
 ```
 
+### Agent registry (Sprint 17)
+
+Agents are **durable entities** — their identity, configuration, tools,
+capabilities, and run history survive process restarts. The `AgentRegistry`
+Protocol provides `InMemoryAgentRegistry` (tests) and `SQLiteAgentRegistry`
+(production, WAL mode).
+
+**Auto-registration:** An agent with `agent_id` and `agent_registry` is
+automatically registered on its first `run()` or `stream()`:
+
+```python
+from voodoo import Agent, SQLiteAgentRegistry
+
+registry = SQLiteAgentRegistry("agents.db")
+agent = Agent(
+    model="openai:gpt-4o",
+    agent_id="lead-scorer",
+    name="Lead Scorer",
+    tools=["get_lead", "update_lead"],
+    capabilities=["scoring.read"],
+    agent_registry=registry,
+)
+
+# First run auto-registers the agent + records run history
+run = await agent.run("Score lead #42")
+
+# Inspect the persisted entity
+entity = await registry.get("lead-scorer")
+print(entity.name)       # "Lead Scorer"
+print(entity.state)      # "active"
+print(entity.capabilities)  # ["scoring.read"]
+
+# Review run history
+runs = await registry.get_runs("lead-scorer")
+print(runs[0].prompt)    # "Score lead #42"
+print(runs[0].status)    # "completed"
+```
+
+**Run history:** Every `run()` and `stream()` persists an `AgentRunRecord`
+linking the agent to its execution, tokens, cost, tool calls, and trace ID:
+
+```python
+for run in await registry.get_runs("lead-scorer"):
+    print(f"{run.run_id}: {run.status} ({run.tokens_in + run.tokens_out} tokens)")
+```
+
+**Multi-agent collaboration:** Multiple agents share a registry and produce
+distinct, queryable histories:
+
+```python
+registry = SQLiteAgentRegistry("agents.db")
+
+scorer = Agent(model="openai:gpt-4o", agent_id="scorer", agent_registry=registry)
+emailer = Agent(model="openai:gpt-4o", agent_id="emailer", agent_registry=registry)
+
+await scorer.run("Score all new leads")
+await emailer.run("Send follow-up emails to hot leads")
+
+# Each agent has its own run history
+print(await registry.count_agents())   # 2
+print(await registry.count_runs("scorer"))   # 1
+print(await registry.count_runs("emailer"))  # 1
+```
+
+**CLI inspection:**
+
+```bash
+voodoo agents list              # list all registered agents
+voodoo agents list --state active  # filter by state
+voodoo agents list --json       # JSON output
+voodoo agents show <agent-id>   # inspect agent details + recent runs
+voodoo agents show <agent-id> --limit 20  # more run history
+```
+
 ## API reference
 
-- `Agent(model="mock:test", tools=None, system_prompt=None, registry=None, max_iterations=10)` — create an agent.
+- `Agent(model, tools=None, system_prompt=None, registry=None, max_iterations=10, agent_id=None, name=None, agent_registry=None, memory=None)` — create an agent.
 - `Agent.memory` — the agent's `MemoryStore` (lazy, defaults to `InMemoryMemoryStore`).
 - `Agent.run(prompt, context=None) -> AgentRun` — execute to completion.
 - `Agent.stream(prompt, context=None) -> AsyncIterator[AgentEvent]` — stream events.
 - `AgentRun` — full run record with token/cost accounting.
 - `AgentEvent` — streaming event (`type`, `data`).
+- `AgentEntity` — durable agent identity (id, name, model, tools, capabilities, state).
+- `AgentRunRecord` — run history record linking an agent to an execution.
+- `AgentRegistry` — Protocol for agent persistence (`register`, `get`, `list_agents`, `update`, `delete`, `record_run`, `get_runs`).
+- `InMemoryAgentRegistry` — in-memory registry for tests.
+- `SQLiteAgentRegistry(path)` — durable SQLite registry (WAL mode).
 - `VoodooModelProvider` — normalized model provider Protocol.
 - `ModelDescriptor` — static model capability descriptor.
 - `get_provider(model)`, `resolve_model(model)`, `describe_model(model)` — model resolution helpers.

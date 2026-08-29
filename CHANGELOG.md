@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## 2.0.0 — 2026-08-29
+
+### Added — Sprint 17: Agents as durable entities (v2.0.0)
+
+- **`AgentEntity`** — durable agent identity (id, name, description, model,
+  system_prompt, capabilities, tools, permissions, config, state, metadata,
+  timestamps) in `voodoo.agents.models`. Serializes to/from dict.
+- **`AgentRunRecord`** — run history record (run_id, agent_id, execution_id,
+  prompt, output, status, tokens, cost, tool_calls, trace_id) in
+  `voodoo.agents.models`.
+- **`AgentRegistry` Protocol** — persistence contract for agent registries
+  (`register`, `get`, `list_agents`, `update`, `delete`, `record_run`,
+  `get_runs`, `count_agents`, `count_runs`) in `voodoo.agents.registry`.
+- **`InMemoryAgentRegistry`** — in-memory registry for tests.
+- **`SQLiteAgentRegistry`** — durable SQLite registry with WAL mode and
+  `busy_timeout=5000`. Agents and runs tables with CASCADE delete. JSON
+  serialization for list/dict fields.
+- **Agent auto-registration** — agents with `agent_id` + `agent_registry`
+  are automatically registered on first `run()` or `stream()`.
+- **Agent run history** — every `Agent.run()` and `Agent.stream()` persists
+  an `AgentRunRecord` to the registry (prompt, output, status, tokens, cost,
+  tool calls, trace ID).
+- **CLI `voodoo agents list`** — list registered agents with `--state`,
+  `--limit`, `--json` flags.
+- **CLI `voodoo agents show <id>`** — inspect agent details + recent run
+  history with `--limit`, `--json` flags.
+- **Public API exports**: `AgentEntity`, `AgentRegistry`, `AgentRunRecord`,
+  `SQLiteAgentRegistry` from `voodoo`.
+- **`tests/test_agent_registry.py`** — 27 tests covering entity models,
+  in-memory registry, SQLite registry, persistence across reopen, agent
+  integration, and multi-agent collaboration.
+
 ## 1.20.0 — 2026-08-29
 
 ### Added — Sprint 16: Memory as entity state

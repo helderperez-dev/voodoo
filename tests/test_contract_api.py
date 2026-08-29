@@ -42,6 +42,11 @@ EXPECTED_EXPORTS = {
     "MemoryLayer",
     "MemoryStore",
     "SQLiteMemoryStore",
+    # Agent registry (Sprint 17)
+    "AgentEntity",
+    "AgentRegistry",
+    "AgentRunRecord",
+    "SQLiteAgentRegistry",
     # Data
     "BaseModel",
     "Model",
