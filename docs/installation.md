@@ -36,27 +36,28 @@ voodoo version
 ## Scaffold a new project
 
 ```bash
-voodoo new my_app
+voodoo create my_app
 cd my_app
 voodoo dev
 ```
 
 The app starts on `http://localhost:8000` with hot-reloading enabled.
 
-The scaffold produces a minimal project using Voodoo CSS (the default style adapter) and folder-based routing:
+`voodoo create` scaffolds a **full local runtime app** with durable tasks,
+scheduler, events, object store, and agent runtime — all running on zero
+infrastructure (SQLite + local filesystem). The generated app includes a
+crash/restart demo proving durability.
 
 ```
 my_app/
-├── app/
-│   ├── page.py              → /
-│   ├── about/
-│   │   └── page.py          → /about
-│   └── users/
-│       └── [id]/
-│           └── page.py      → /users/{id}
-├── pyproject.toml
-└── voodoo.toml
+├── main.py              # App entry point — full runtime demo
+├── voodoo.toml          # Runtime configuration
+├── pyproject.toml       # Python project metadata
+├── app/                 # Folder-based routes (add page.py files here)
+└── .voodoo/state/       # Local state (SQLite, queue, schedules)
 ```
+
+> **Tip:** For a minimal scaffold without the full runtime, use `voodoo new` instead.
 
 No `main.py`, no `.env`, no placeholder directories, no infrastructure configuration. Capabilities like database, storage, workers, and AI activate lazily when used.
 

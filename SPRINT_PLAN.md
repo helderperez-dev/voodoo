@@ -31,7 +31,7 @@ another disconnected feature.
 |---|---|
 | **Latest release** | `2.3.0` (`src/voodoo/__init__.py` → `__version__`) |
 | **Sprints 1–15 + L1–L5** | ✅ All DONE |
-| **Next sprint** | **Sprint 22 — Local runtime DX → `2.5.0`** |
+| **Next sprint** | **Sprint 23 — TypeScript SDK → `2.6.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
@@ -172,7 +172,7 @@ DONE  |  WIP  |  TODO
 | 19 | Capability security & secrets | 2.2.0 | secrets.get, redaction, no ambient authority | DONE |
 | 20 | Observability | 2.3.0 | Execution-aware tracing, `voodoo status/workers` | DONE |
 | 21 | Protocol schemas & versioning | 2.4.0 | `voodoo.protocol`, schema_version everywhere | DONE |
-| 22 | Local runtime DX | 2.5.0 | `voodoo create` + `voodoo dev` boot the full local runtime | TODO |
+| 22 | Local runtime DX | 2.5.0 | `voodoo create` + `voodoo dev` boot the full local runtime | DONE |
 
 Spec §52 "Definition of Done — Durable Runtime" is achieved after Sprint 6.
 "Moderate production = PostgreSQL + S3/R2" (§7) is achieved after Sprint 12.
@@ -779,7 +779,7 @@ Scope:
 - **Definition of Done:** quality gate green + released `2.4.0`.
 
 ## Sprint 22 — Local runtime DX ("WAMP for autonomous software")
-**Version 2.5.0 · ROADMAP §63, §62 · Status: TODO · Released as: —**
+**Version 2.5.0 · ROADMAP §63, §62 · Status: DONE · Released as: 2.5.0**
 
 - **Goal:** `install → create → dev` boots the whole runtime as one thing, with
   zero external infrastructure.
@@ -788,15 +788,15 @@ Scope:
 - **Current State:** `voodoo new` + `voodoo dev` exist but do not boot the full
   local runtime.
 - **Changes:**
-  - [ ] `voodoo create <app>` (evolve `voodoo new`) scaffolds an app wired for
+  - [x] `voodoo create <app>` (evolve `voodoo new`) scaffolds an app wired for
         the full local runtime (durable tasks, scheduler, events, objects,
         agent runtime) with a working example of each.
-  - [ ] `voodoo dev` boots everything and prints a runtime banner: providers
+  - [x] `voodoo dev` boots everything and prints a runtime banner: providers
         active, queue depth, schedules, object store path, agent runtime,
         MCP endpoint.
-  - [ ] First-run experience: install → `voodoo create` → `voodoo dev` →
+  - [x] First-run experience: install → `voodoo create` → `voodoo dev` →
         working autonomous app with **zero external infrastructure** (ROADMAP §63).
-  - [ ] Template includes a crash/restart demo task proving durability.
+  - [x] Template includes a crash/restart demo task proving durability.
 - **Dependencies:** Sprints 2–7 (the local runtime pieces).
 - **Acceptance Criteria:** first-run works with zero infrastructure; the
   crash/restart demo proves durability.

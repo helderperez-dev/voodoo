@@ -4,6 +4,7 @@ from voodoo.cli import (
     agents,
     ai,
     approvals,
+    create,
     dev,
     doctor,
     executions,
@@ -32,6 +33,7 @@ app = typer.Typer(
 )
 
 app.command()(new.new)
+app.command()(create.create)
 app.command()(dev.dev)
 app.command()(generate.generate)
 app.add_typer(auth_app, name="auth")

@@ -70,6 +70,9 @@ def dev(
     terminal.label_value("docs", f"{local_url}/docs")
     terminal.blank()
 
+    # Sprint 22: runtime banner — show providers and runtime state
+    _print_runtime_banner()
+
     local_venv_python = (
         Path(".venv/bin/python")
         if os.name != "nt"
@@ -117,3 +120,54 @@ def dev(
     except KeyboardInterrupt:
         terminal.blank()
         terminal.status("runtime", "stopped")
+
+
+def _print_runtime_banner() -> None:
+    """Print runtime providers and state (Sprint 22)."""
+    from voodoo.config import get_config
+
+    cfg = get_config()
+
+    # Providers
+    terminal.heading("providers")
+    db_provider = cfg.database.provider.lower()
+    terminal.status("database", db_provider)
+
+    queue_provider = cfg.queue.provider.lower()
+    terminal.status("queue", queue_provider)
+
+    # Object store
+    terminal.status("objects", cfg.objects.provider.lower())
+
+    # Agent runtime
+    try:
+        from voodoo.ai.providers import _PROVIDER_CLASSES
+
+        providers = list(_PROVIDER_CLASSES.keys())
+        terminal.status("agents", ", ".join(providers) if providers else "none")
+    except Exception:
+        terminal.status("agents", "mock")
+
+    # MCP endpoint
+    terminal.label_value("mcp", "/mcp")
+
+    # Registered workers
+    try:
+        from voodoo.workers.queue import _workers
+
+        worker_names = list(_workers.keys())
+        if worker_names:
+            terminal.label_value("workers", ", ".join(worker_names))
+        else:
+            terminal.label_value("workers", "none")
+    except Exception:
+        terminal.label_value("workers", "none")
+
+    # Schedules DB
+    schedule_path = Path(".voodoo/state/schedules.db")
+    if schedule_path.exists():
+        terminal.status("scheduler", "ready")
+    else:
+        terminal.status("scheduler", "will be created")
+
+    terminal.blank()

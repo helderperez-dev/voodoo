@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## 2.5.0 — 2026-08-29
+
+### Added — Sprint 22: Local Runtime DX
+
+- **`voodoo create <app>` CLI command** — scaffolds a full local runtime app with durable
+  tasks, scheduler, events, object store, and agent runtime. Generates `main.py` with
+  crash/restart demo proving durability, `voodoo.toml`, and `pyproject.toml`.
+- **Runtime banner in `voodoo dev`** — prints providers active (database, queue, objects),
+  agent runtime, MCP endpoint, registered workers, and scheduler status on boot.
+- **Zero-infrastructure first run** — `voodoo create myapp && cd myapp && voodoo dev` works
+  with no external services. SQLite, local filesystem, and in-memory queues are the defaults.
+- **Crash/restart demo** — the generated app enqueues a durable task on first boot; stopping
+  and restarting the server recovers pending tasks automatically.
+- **Sprint 22 tests** (`tests/test_create.py`) — 16 tests covering scaffold structure,
+  template content, and runtime banner import.
+
 ## 2.4.0 — 2026-08-29
 
 ### Added — Sprint 21: Protocol Schemas & Versioning

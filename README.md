@@ -52,14 +52,16 @@ Voodoo is **not** a wrapper around other frameworks. It's a unified runtime wher
 
 ```bash
 pip install voodoo-framework
-voodoo new my_app
+voodoo create my_app
 cd my_app
 voodoo dev
 ```
 
 Open `http://localhost:8000` — that's it. No npm, no bundler, no config files.
 
-The scaffold produces only `app/page.py`, `voodoo.toml`, and `pyproject.toml` — nothing else. No `main.py`, no `.env`, no placeholder directories.
+`voodoo create` scaffolds a full local runtime app with durable tasks, scheduler, events, and agent runtime — all on zero infrastructure. The generated app includes a crash/restart demo proving durability.
+
+> **Want a minimal scaffold?** Use `voodoo new` instead for a bare-bones app with just UI routing.
 
 > **Want AI features?** Install with `pip install "voodoo-framework[ai]"` to add OpenAI, Anthropic, Gemini, and Ollama SDKs.
 
@@ -165,7 +167,7 @@ if __name__ == "__main__":
 | **Human-in-the-Loop** | `ask_human()` + `approve()`/`deny()` — humans as compute participants, not afterthoughts |
 | **Adaptive execution** | Planner resolves capabilities to compute participants; supervisor steers with retry, fallback, budget control |
 | **Durable by default** | Tasks, executions, schedules, and events survive process restarts — backed by SQLite out of the box |
-| **Zero-config runtime** | `voodoo new` → `voodoo dev` → working app. No build step. Add `voodoo.toml` when you need configuration |
+| **Zero-config runtime** | `voodoo create` → `voodoo dev` → working app. No build step. Add `voodoo.toml` when you need configuration |
 | **Local-first, cloud-capable** | SQLite by default; PostgreSQL, Redis, and S3/R2 are optional adapters behind the same contracts |
 
 ## The Computational Model
