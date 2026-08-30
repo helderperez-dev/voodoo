@@ -223,6 +223,13 @@ async def authenticate_device(
 
     await store.mark_credential_used(record.credential_id)
 
+    # Reconnect: invalidate any existing sessions for this device before
+    # creating a new one.  The device transitions RECONNECTING → CONNECTED
+    # so downstream observers see a clean lifecycle signal (EDGE §30).
+    old_session_count = await store.delete_device_sessions(device.device_id)
+    if old_session_count > 0:
+        await store.update_device_status(device.device_id, DeviceStatus.RECONNECTING)
+
     session = DeviceSession(
         device_id=device.device_id,
         transport=transport,

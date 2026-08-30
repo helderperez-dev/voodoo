@@ -27,6 +27,8 @@ from voodoo.edge.auth import (
 from voodoo.edge.errors import (
     AuthenticationFailedError,
     AuthorizationFailedError,
+    DeliveryFailedError,
+    DeviceIdMismatchError,
     DeviceNotFoundError,
     DeviceRevokedError,
     DuplicateMessageError,
@@ -37,6 +39,9 @@ from voodoo.edge.errors import (
     InvalidMessageError,
     InvalidProtocolVersionError,
     InvalidStateVersionError,
+    PayloadTooLargeError,
+    SessionInvalidError,
+    SessionRequiredError,
     TransportError,
     error_response,
 )
@@ -109,7 +114,9 @@ __all__ = [
     "error_response",
     "AuthenticationFailedError",
     "AuthorizationFailedError",
+    "DeliveryFailedError",
     "DeviceNotFoundError",
+    "DeviceIdMismatchError",
     "DeviceRevokedError",
     "DuplicateMessageError",
     "EffectExpiredError",
@@ -118,5 +125,8 @@ __all__ = [
     "InvalidMessageError",
     "InvalidProtocolVersionError",
     "InvalidStateVersionError",
+    "PayloadTooLargeError",
+    "SessionInvalidError",
+    "SessionRequiredError",
     "TransportError",
 ]

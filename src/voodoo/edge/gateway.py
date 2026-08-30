@@ -22,10 +22,12 @@ from voodoo.edge.auth import authenticate_device, consume_enrollment
 from voodoo.edge.errors import (
     AuthenticationFailedError,
     AuthorizationFailedError,
+    DeviceIdMismatchError,
     DeviceNotFoundError,
     EffectNotFoundError,
     InvalidMessageError,
     InvalidStateVersionError,
+    PayloadTooLargeError,
 )
 from voodoo.edge.models import (
     AuthenticatedDeviceContext,
@@ -50,6 +52,17 @@ logger = logging.getLogger("voodoo.edge")
 __all__ = ["DeviceGateway"]
 
 
+def _redact(value: str, *, show: int = 4) -> str:
+    """Redact a sensitive value, showing only the last *show* characters.
+
+    Used for debug logging of device IDs and session tokens — credentials
+    are never logged (EDGE §9).
+    """
+    if len(value) <= show:
+        return "***"
+    return f"{'*' * (len(value) - show)}{value[-show:]}"
+
+
 # Events that are pure telemetry — never become Executions (EDGE §21).
 _TELEMETRY_EVENTS = frozenset({"heartbeat", "device.heartbeat"})
 
@@ -68,10 +81,15 @@ class DeviceGateway:
     """
 
     def __init__(
-        self, store: DeviceStoreProtocol, engine: ExecutionEngine | None = None
+        self,
+        store: DeviceStoreProtocol,
+        engine: ExecutionEngine | None = None,
+        *,
+        config: Any | None = None,
     ) -> None:
         self._store = store
         self._engine = engine
+        self._config = config
         # Authenticated contexts by session_id — reconnects re-attach.
         self._contexts: dict[str, AuthenticatedDeviceContext] = {}
 
@@ -117,7 +135,8 @@ class DeviceGateway:
         This is the canonical way transports authenticate — direct calls
         to ``authenticate_device`` bypass session tracking. Returns
         ``(context, session)`` with the context registered for subsequent
-        messages.
+        messages.  On reconnect, stale contexts for the same device are
+        evicted first.
         """
 
         ctx, session = await authenticate_device(
@@ -126,6 +145,12 @@ class DeviceGateway:
             claimed_device_id=claimed_device_id,
             transport=transport,
         )
+        # Evict any stale contexts for this device (reconnect cleanup).
+        stale_sids = [
+            sid for sid, c in self._contexts.items() if c.device_id == ctx.device_id
+        ]
+        for sid in stale_sids:
+            self._contexts.pop(sid, None)
         self._contexts[session.session_id] = ctx
         await self._emit(
             "device.connected",
@@ -137,6 +162,31 @@ class DeviceGateway:
             trace_id=None,
         )
         return ctx, session
+
+    # ------------------------------------------------------------------
+    # Stateless authentication (HTTP — no session created)
+    # ------------------------------------------------------------------
+
+    async def authenticate_request(
+        self,
+        credential: str,
+        *,
+        transport: TransportKind = TransportKind.HTTP,
+    ) -> AuthenticatedDeviceContext:
+        """Authenticate a device credential without creating a session.
+
+        For stateless transports (HTTP) where each request carries its
+        own credential. Validates the credential, checks the device is
+        not revoked, and updates ``last_seen_at``. Returns the
+        authenticated context only — no session is persisted.
+        """
+        ctx, _session = await authenticate_device(
+            self._store,
+            credential,
+            transport=transport,
+        )
+        await self._store.update_last_seen(ctx.device_id)
+        return ctx
 
     # ------------------------------------------------------------------
     # Message entry point (EDGE §72 — thin route → gateway)
@@ -158,11 +208,34 @@ class DeviceGateway:
         """
         message = decode_message(raw)
 
+        # Resource limit: message size (EDGE §76).
+        if self._config is not None:
+            edge_cfg = getattr(self._config, "edge", None)
+            if edge_cfg is not None:
+                max_size = getattr(edge_cfg, "max_message_size", 0)
+                if max_size > 0:
+                    raw_size = (
+                        len(raw) if isinstance(raw, (str, bytes)) else len(str(raw))
+                    )
+                    if raw_size > max_size:
+                        raise PayloadTooLargeError(
+                            f"Message size {raw_size} exceeds limit {max_size}"
+                        )
+
         # Protocol-version gate happens inside decode; re-check payload types.
         if message.type is EdgeMessageType.AUTH:
             return await self.handle_auth(message, transport=transport)
 
         ctx = context or await self._require_context(message)
+
+        # Identity validation: message device_id must match the
+        # authenticated context (EDGE §77).
+        if message.device_id and message.device_id != ctx.device_id:
+            raise DeviceIdMismatchError(
+                f"Message device_id '{message.device_id}' does not match "
+                f"authenticated device '{ctx.device_id}'"
+            )
+
         handler = {
             EdgeMessageType.HELLO: self.handle_hello,
             EdgeMessageType.STATE_SYNC: self.handle_state_sync,
@@ -236,13 +309,18 @@ class DeviceGateway:
         """Ingest a device event (EDGE §19–§21).
 
         Duplicate message_ids (protocol retries) are idempotent — the
-        first delivery wins and retries receive the same response.
-        Telemetry events update state without creating Executions;
-        semantic events become Intents executed by the engine.
+        first delivery wins and retries receive the **same** response
+        (replayed from the message log).  Telemetry events update state
+        without creating Executions; semantic events become Intents
+        executed by the engine.
         """
         payload = message.typed_payload()  # EventPayload
         if await self._store.seen_message(message.message_id):
-            # Idempotent duplicate: acknowledge without re-processing.
+            # Idempotent duplicate: replay the original response.
+            stored = await self._store.get_stored_response(message.message_id)
+            if stored is not None:
+                return EdgeMessage.model_validate_json(stored)
+            # Fallback for messages logged before response storage existed.
             return make_message(
                 EdgeMessageType.EVENT,
                 device_id=ctx.device_id,
@@ -269,7 +347,7 @@ class DeviceGateway:
 
         if event_name in _TELEMETRY_EVENTS:
             await self._store.update_last_seen(ctx.device_id)
-            return make_message(
+            response = make_message(
                 EdgeMessageType.EVENT,
                 device_id=ctx.device_id,
                 payload={
@@ -280,6 +358,10 @@ class DeviceGateway:
                 correlation_id=message.message_id,
                 trace_id=message.trace_id,
             )
+            await self._store.store_response(
+                message.message_id, response.model_dump_json()
+            )
+            return response
 
         execution_id: str | None = None
         if self._engine is not None:
@@ -302,7 +384,7 @@ class DeviceGateway:
             )
             execution_id = execution.id
 
-        return make_message(
+        response = make_message(
             EdgeMessageType.EVENT,
             device_id=ctx.device_id,
             payload={
@@ -313,6 +395,8 @@ class DeviceGateway:
             correlation_id=message.message_id,
             trace_id=message.trace_id,
         )
+        await self._store.store_response(message.message_id, response.model_dump_json())
+        return response
 
     async def handle_state_sync(
         self, message: EdgeMessage, ctx: AuthenticatedDeviceContext
@@ -320,6 +404,20 @@ class DeviceGateway:
         """Versioned state ingestion — stale writes rejected (EDGE §22–§24)."""
         payload = message.typed_payload()  # StateSyncPayload
         device = await self._require_device(ctx.device_id)
+
+        # Resource limit: state size (EDGE §76).
+        if self._config is not None:
+            edge_cfg = getattr(self._config, "edge", None)
+            if edge_cfg is not None:
+                max_size = getattr(edge_cfg, "max_state_size", 0)
+                if max_size > 0:
+                    import json
+
+                    state_size = len(json.dumps(payload.state).encode())
+                    if state_size > max_size:
+                        raise PayloadTooLargeError(
+                            f"State size {state_size} exceeds limit {max_size}"
+                        )
 
         applied = await self._store.update_device_state(
             ctx.device_id, payload.state, payload.state_version
@@ -415,7 +513,8 @@ class DeviceGateway:
 
         Enforces capability authorization at the runtime boundary
         (EDGE §50) — a device without the required capability never
-        receives the effect.
+        receives the effect.  The retry limit is read from
+        ``config.edge.max_effect_retries`` (default 3).
         """
         device = await self._require_device(device_id)
         if capability not in device.capabilities:
@@ -426,12 +525,31 @@ class DeviceGateway:
                     "device_capabilities": device.capabilities,
                 },
             )
+        # Resource limit: pending effects per device (EDGE §76).
+        if self._config is not None:
+            edge_cfg = getattr(self._config, "edge", None)
+            if edge_cfg is not None:
+                max_pending = getattr(edge_cfg, "max_pending_effects", 0)
+                if max_pending > 0:
+                    pending = await self._store.pending_effects(device_id)
+                    if len(pending) >= max_pending:
+                        raise PayloadTooLargeError(
+                            f"Device '{device_id}' has {len(pending)} pending effects "
+                            f"(limit {max_pending})"
+                        )
+        max_retries = 3
+        if self._config is not None:
+            try:
+                max_retries = int(self._config.edge.max_effect_retries)
+            except (AttributeError, TypeError, ValueError):
+                pass
         delivery = EffectDelivery(
             effect_id=effect_id,
             execution_id=execution_id,
             device_id=device_id,
             capability=capability,
             payload=payload,
+            max_retries=max_retries,
         )
         # Idempotent on effect_id — duplicate submissions are no-ops.
         await self._store.add_effect_delivery(delivery)
@@ -449,18 +567,39 @@ class DeviceGateway:
     async def pending_effects(
         self, device_id: str, ctx: AuthenticatedDeviceContext
     ) -> list[EffectDelivery]:
-        """Retrieve pending effects for a device (device isolation enforced)."""
+        """Retrieve and claim pending effects for a device.
+
+        Device isolation is enforced — a device can only list its own
+        effects.  Each effect is atomically claimed (``pending →
+        delivering``) so concurrent HTTP polls never receive the same
+        effect twice.
+        """
         if device_id != ctx.device_id:
             raise AuthorizationFailedError("Devices may only list their own effects")
         deliveries = await self._store.pending_effects(device_id)
+        claimed: list[EffectDelivery] = []
         for d in deliveries:
-            await self._store.mark_effect_delivered(d.effect_id)
+            if await self._store.claim_effect(device_id, d.effect_id):
+                claimed.append(d)
         await self._emit(
             "device.effect.delivered",
-            {"device_id": device_id, "count": len(deliveries)},
+            {"device_id": device_id, "count": len(claimed)},
             trace_id=None,
         )
-        return deliveries
+        return claimed
+
+    async def retry_effects(self, device_id: str) -> int:
+        """Reset stale ``delivering`` effects back to ``pending`` for retry.
+
+        Returns the number of effects that were reset or marked as
+        ``delivery_failed`` (exceeded max retries).
+        """
+        stale = await self._store.stale_deliveries(device_id)
+        retried = 0
+        for d in stale:
+            if await self._store.retry_effect(d.effect_id):
+                retried += 1
+        return retried
 
     # ------------------------------------------------------------------
     # Sessions & revocation

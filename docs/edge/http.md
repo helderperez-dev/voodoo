@@ -2,6 +2,11 @@
 
 > REST endpoints under `/v1/edge/*`. Easy to exercise with curl and
 > integration tests — the reference transport.
+>
+> **Sprint 23.1:** HTTP is fully **stateless** — no persistent sessions are
+> created per request. Each request authenticates independently via the
+> `X-Device-Credential` header. Only `/v1/edge/auth` creates a session (for
+> explicit session-based flows).
 
 ## Authentication
 
@@ -20,19 +25,28 @@ Authorization: Device vdk_...
 Missing/invalid credentials on protected endpoints → `401` with
 `AUTHENTICATION_FAILED`. Revoked devices → `401` (credential cascade-revoked).
 
+**Stateless per-request auth:** Each HTTP request authenticates independently
+via `gateway.authenticate_request()`. No session is created or stored. This
+eliminates session leaks under high HTTP load.
+
 ## Endpoints
 
 ### POST /v1/edge/enrollments — issue an enrollment key
 
-Runtime-operator endpoint (guard with user auth middleware in production;
- CSRF-exempt by PORT semantics — see [security.md](security.md)).
+Runtime-operator endpoint. **Protected by admin token** when
+`edge.enrollment_auth_required = True` (default). Pass the admin token in
+the `X-Admin-Token` header:
 
 ```bash
 curl -X POST http://localhost:8000/v1/edge/enrollments \
   -H "Content-Type: application/json" \
+  -H "X-Admin-Token: <enrollment_admin_token>" \
   -d '{"device_type": "esp32", "capabilities": ["relay.fan.control"]}'
 # → {"enrollment_key": "vde_..."}   (single-use, ~1h TTL)
 ```
+
+Set `edge.enrollment_auth_required = false` in config to disable the guard
+(for local development only).
 
 ### POST /v1/edge/enroll — consume the key
 
@@ -88,7 +102,7 @@ curl -X POST http://localhost:8000/v1/edge/hello \
 curl -X POST http://localhost:8000/v1/edge/events \
   -H "X-Device-Credential: vdk_..." \
   -H "Content-Type: application/json" \
-  -d '{"event_name": "temperature.changed", "event_payload": {"value": 31.4}}'
+  -d '{"event_name": "temperature.changed", "event_payload": {"value": 31.4}, "message_id": "msg_..."}'
 ```
 
 Response includes the created execution id when the event triggers one:
@@ -97,7 +111,10 @@ Response includes the created execution id when the event triggers one:
 {"payload": {"status": "accepted", "event_name": "temperature.changed", "execution_id": "exec_..."}}
 ```
 
-Duplicate `message_id` retries → `{"payload": {"status": "duplicate", ...}}` (200).
+**Idempotency:** Include a `message_id` in the request body to enable
+client-driven idempotency. The HTTP transport extracts it and passes it to
+the protocol envelope. Duplicate `message_id` retries replay the original
+response: `{"payload": {"status": "duplicate", ...}}` (200).
 
 ### POST /v1/edge/state — sync state
 

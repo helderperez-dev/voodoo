@@ -2,6 +2,11 @@
 
 > What is guaranteed, what is not, and how device trust works. This
 > document makes no claims beyond what the implementation provides.
+>
+> **Sprint 23.1:** Enrollment creation protected by admin token. Secret
+> redaction audit ensures credentials never appear in logs/events. Device
+> identity validation prevents impersonation. New error types for session
+> and delivery failures.
 
 ## Identity (EDGE §8)
 
@@ -45,6 +50,11 @@ Runtime creates enrollment (raw key shown once)
    → single-use consumption (PENDING → CONSUMED)
    → device identity + vdk_ credential issued
 ```
+
+**Enrollment creation guard (Sprint 23.1):** The `POST /v1/edge/enrollments`
+endpoint is protected by admin token when `edge.enrollment_auth_required = True`
+(default). Pass `X-Admin-Token: <token>` header. Set
+`edge.enrollment_auth_required = false` to disable (local dev only).
 
 - Reuse of a consumed key → `AUTHENTICATION_FAILED`.
 - Revocation: `revoke_enrollment()` blocks pending tokens.
@@ -99,10 +109,35 @@ credential hash **and** its binding to the claimed device:
 2. All ACTIVE credentials for the device → REVOKED.
 3. Live gateway sessions are dropped.
 
+## Secret redaction (Sprint 23.1)
+
+The gateway uses a `_redact()` helper to ensure sensitive values never appear
+in:
+
+- Log messages (structured logging)
+- Mesh events (namespaced `edge.*` events)
+- Error responses (error bodies contain stable codes, never secrets)
+- Telemetry traces (`trace_id` propagates; credentials do not)
+
+**Verified by test:** `TestSecretRedaction` asserts that credentials, keys,
+and tokens are absent from all captured mesh events and log output.
+
+## Device identity validation (Sprint 23.1)
+
+The gateway validates that `message.device_id` matches the authenticated
+device context on every request. A message claiming to be from Device A
+but authenticated as Device B is rejected with `DEVICE_ID_MISMATCH` (403).
+
+This prevents:
+- Device impersonation via crafted payloads
+- Accidental device_id mismatches from buggy clients
+- Cross-device message injection
+
+**Verified by test:** `TestDeviceIsolation` and `TestIdempotencySecurity`
+assert that device identity is enforced on every message type.
+
 ## Known limitations (explicit)
 
-- Enrollment-admin endpoint should sit behind user auth middleware in
-  production deployments (it is open in edge-only test apps).
 - Credential lifetime expiry is modeled but not hard-enforced.
 - No per-tenant device scoping yet (single-runtime scope).
 - No rate limiting specific to edge endpoints beyond the global

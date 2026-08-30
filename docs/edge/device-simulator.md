@@ -103,3 +103,19 @@ sim.enroll → sim.connect → sim.send_state → sim.send_event
 
 Reconnect testing: `disconnect()` then `connect()` again — the entity,
 state, and pending effects survive (see device-lifecycle.md).
+
+## Failure injection (Sprint 23.1)
+
+The simulator includes methods for adversarial testing — simulating buggy
+or malicious client behavior:
+
+| Method | What it does |
+|---|---|
+| `send_duplicate_event(name, payload)` | Sends the same event twice with the same `message_id` |
+| `send_state(state, version)` | Sends state with a specific version (use low version for stale test) |
+| `send_wrong_device_id()` | Sends a message claiming to be from a different device |
+| `send_invalid_credential()` | Sends a request with a garbage credential |
+| `reconnect()` | Disconnects and re-authenticates (tests reconnect lifecycle) |
+
+These are used in `tests/test_edge_e2e.py` and `tests/test_edge_security.py`
+to verify that the gateway correctly handles adversarial scenarios.

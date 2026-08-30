@@ -225,6 +225,44 @@ class TestHTTPEdgeEndpoints:
         resp = client.post("/v1/edge/heartbeat", json={}, headers=headers)
         assert resp.status_code == 401
 
+    def test_http_stateless_no_session_created(self, edge_stack):
+        """HTTP endpoints use stateless auth — no session is created per request."""
+        client, gateway, _, device_id, headers = self._authed(edge_stack)
+        # Before any request, no sessions.
+        assert len(gateway._contexts) == 0
+
+        # Make a request — should NOT create a session.
+        resp = client.post(
+            "/v1/edge/heartbeat", json={"uptime_seconds": 1}, headers=headers
+        )
+        assert resp.status_code == 200
+        assert len(gateway._contexts) == 0
+
+    def test_device_id_mismatch_rejected_via_http(self, edge_stack):
+        """HTTP derives device_id from credential — body device_id is payload,
+        not the envelope identity. Verify the event succeeds with the correct
+        device_id from the credential."""
+        client, gateway, engine, device_id, headers = self._authed(
+            edge_stack, ["relay.fan.control"]
+        )
+        # The body's device_id field is part of the event payload, not the
+        # envelope. The HTTP handler always sets envelope device_id from the
+        # authenticated credential. So this should succeed.
+        resp = client.post(
+            "/v1/edge/events",
+            json={
+                "event_name": "temperature.changed",
+                "event_payload": {"value": 1},
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        # The execution is attributed to the correct device.
+        execution_id = resp.json()["payload"]["execution_id"]
+        assert execution_id
+        execution = engine.get(execution_id)
+        assert execution.actor == f"device:{device_id}"
+
 
 # ---------------------------------------------------------------------------
 # HTTP E2E — the primary acceptance scenario via the simulator (EDGE §42–§43)

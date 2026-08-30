@@ -40,9 +40,15 @@ __all__ = [
 class EffectDelivery:
     """Tracks delivery state of one effect to one device.
 
-    Lifecycle: ``pending → delivered → acked`` (completed/failed/rejected).
-    Delivery is at-least-once; the stable ``effect_id`` provides
-    idempotency for the device (EDGE §28).
+    Lifecycle::
+
+        pending → delivering → delivered → acknowledged → completed
+                    ↓                        ↓
+              delivery_failed             failed
+
+    An additional ``unknown`` status covers network failures where the
+    ACK status is indeterminate.  Delivery is at-least-once; the stable
+    ``effect_id`` provides idempotency for the device (EDGE §28).
     """
 
     __slots__ = (
@@ -57,6 +63,8 @@ class EffectDelivery:
         "acked_at",
         "ack_status",
         "deliveries",
+        "retry_count",
+        "max_retries",
     )
 
     def __init__(
@@ -66,6 +74,8 @@ class EffectDelivery:
         device_id: str,
         capability: str,
         payload: dict[str, Any],
+        *,
+        max_retries: int = 3,
     ) -> None:
         self.effect_id = effect_id
         self.execution_id = execution_id
@@ -78,6 +88,8 @@ class EffectDelivery:
         self.acked_at: str | None = None
         self.ack_status: str | None = None
         self.deliveries = 0
+        self.retry_count = 0
+        self.max_retries = max_retries
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -92,6 +104,8 @@ class EffectDelivery:
             "acked_at": self.acked_at,
             "ack_status": self.ack_status,
             "deliveries": self.deliveries,
+            "retry_count": self.retry_count,
+            "max_retries": self.max_retries,
         }
 
 
@@ -147,6 +161,7 @@ class DeviceStoreProtocol(Protocol):
     async def create_session(self, session: DeviceSession) -> None: ...
     async def delete_session(self, session_id: str) -> None: ...
     async def get_session(self, session_id: str) -> DeviceSession | None: ...
+    async def delete_device_sessions(self, device_id: str) -> int: ...
 
     # -- effects -------------------------------------------------------------
 
@@ -159,11 +174,20 @@ class DeviceStoreProtocol(Protocol):
     async def mark_effect_acked(
         self, effect_id: str, ack_status: str
     ) -> EffectDelivery | None: ...
+    async def mark_effect_delivering(self, effect_id: str) -> bool: ...
+    async def mark_effect_delivery_failed(self, effect_id: str) -> bool: ...
+    async def claim_effect(self, device_id: str, effect_id: str) -> bool: ...
+    async def retry_effect(self, effect_id: str) -> bool: ...
+    async def stale_deliveries(
+        self, device_id: str, limit: int = 50
+    ) -> list[EffectDelivery]: ...
 
     # -- idempotency -----------------------------------------------------------
 
     async def seen_message(self, message_id: str) -> bool: ...
     async def mark_message_seen(self, message_id: str) -> None: ...
+    async def store_response(self, message_id: str, response_json: str) -> None: ...
+    async def get_stored_response(self, message_id: str) -> str | None: ...
 
     # -- lifecycle -------------------------------------------------------------
 
@@ -185,6 +209,7 @@ class InMemoryDeviceStore:
         self._sessions: dict[str, DeviceSession] = {}
         self._effects: dict[str, EffectDelivery] = {}
         self._seen_messages: set[str] = set()
+        self._responses: dict[str, str] = {}
 
     # -- devices -----------------------------------------------------------
 
@@ -332,6 +357,14 @@ class InMemoryDeviceStore:
     async def get_session(self, session_id: str) -> DeviceSession | None:
         return self._sessions.get(session_id)
 
+    async def delete_device_sessions(self, device_id: str) -> int:
+        to_remove = [
+            sid for sid, s in self._sessions.items() if s.device_id == device_id
+        ]
+        for sid in to_remove:
+            del self._sessions[sid]
+        return len(to_remove)
+
     # -- effects -------------------------------------------------------------
 
     async def add_effect_delivery(self, delivery: EffectDelivery) -> None:
@@ -370,6 +403,69 @@ class InMemoryDeviceStore:
         delivery.status = ack_status
         return delivery
 
+    async def mark_effect_delivering(self, effect_id: str) -> bool:
+        """Transition pending → delivering.  Returns False if not pending."""
+        delivery = self._effects.get(effect_id)
+        if delivery is None or delivery.status != "pending":
+            return False
+        delivery.status = "delivering"
+        delivery.delivered_at = _iso_now()
+        return True
+
+    async def mark_effect_delivery_failed(self, effect_id: str) -> bool:
+        """Transition delivering → delivery_failed.  Returns False if not delivering."""
+        delivery = self._effects.get(effect_id)
+        if delivery is None or delivery.status != "delivering":
+            return False
+        delivery.status = "delivery_failed"
+        return True
+
+    async def claim_effect(self, device_id: str, effect_id: str) -> bool:
+        """Atomically claim a pending effect for delivery.
+
+        Prevents concurrent HTTP polls from receiving the same effect.
+        Returns True if the claim succeeded (effect is now ``delivering``).
+        """
+        delivery = self._effects.get(effect_id)
+        if (
+            delivery is None
+            or delivery.device_id != device_id
+            or delivery.status != "pending"
+        ):
+            return False
+        delivery.status = "delivering"
+        delivery.delivered_at = _iso_now()
+        return True
+
+    async def retry_effect(self, effect_id: str) -> bool:
+        """Reset a delivering effect back to pending for retry.
+
+        Increments ``retry_count``.  If the count exceeds ``max_retries``
+        the effect transitions to ``delivery_failed`` instead.
+        Returns True if the state changed.
+        """
+        delivery = self._effects.get(effect_id)
+        if delivery is None or delivery.status != "delivering":
+            return False
+        delivery.retry_count += 1
+        if delivery.retry_count >= delivery.max_retries:
+            delivery.status = "delivery_failed"
+        else:
+            delivery.status = "pending"
+            delivery.delivered_at = None
+        return True
+
+    async def stale_deliveries(
+        self, device_id: str, limit: int = 50
+    ) -> list[EffectDelivery]:
+        """Return delivering effects that may need retry."""
+        out = [
+            e
+            for e in self._effects.values()
+            if e.device_id == device_id and e.status == "delivering"
+        ]
+        return out[:limit]
+
     # -- idempotency -----------------------------------------------------------
 
     async def seen_message(self, message_id: str) -> bool:
@@ -377,6 +473,12 @@ class InMemoryDeviceStore:
 
     async def mark_message_seen(self, message_id: str) -> None:
         self._seen_messages.add(message_id)
+
+    async def store_response(self, message_id: str, response_json: str) -> None:
+        self._responses[message_id] = response_json
+
+    async def get_stored_response(self, message_id: str) -> str | None:
+        return self._responses.get(message_id)
 
     # -- lifecycle -------------------------------------------------------------
 
@@ -454,14 +556,17 @@ CREATE TABLE IF NOT EXISTS device_effect_deliveries (
     delivered_at  TEXT,
     acked_at      TEXT,
     ack_status    TEXT,
-    deliveries    INTEGER NOT NULL DEFAULT 0
+    deliveries    INTEGER NOT NULL DEFAULT 0,
+    retry_count   INTEGER NOT NULL DEFAULT 0,
+    max_retries   INTEGER NOT NULL DEFAULT 3
 );
 CREATE INDEX IF NOT EXISTS idx_effect_deliveries_device
     ON device_effect_deliveries(device_id);
 
 CREATE TABLE IF NOT EXISTS device_message_log (
-    message_id  TEXT PRIMARY KEY,
-    seen_at     TEXT NOT NULL
+    message_id    TEXT PRIMARY KEY,
+    seen_at       TEXT NOT NULL,
+    response_json TEXT
 );
 """
 
@@ -490,6 +595,7 @@ def _delivery_row_to_obj(row: dict[str, Any]) -> EffectDelivery:
         device_id=row["device_id"],
         capability=row["capability"],
         payload=json.loads(row["payload"]),
+        max_retries=row.get("max_retries", 3),
     )
     delivery.status = row["status"]
     delivery.created_at = row["created_at"]
@@ -497,6 +603,7 @@ def _delivery_row_to_obj(row: dict[str, Any]) -> EffectDelivery:
     delivery.acked_at = row["acked_at"]
     delivery.ack_status = row["ack_status"]
     delivery.deliveries = row["deliveries"]
+    delivery.retry_count = row.get("retry_count", 0)
     return delivery
 
 
@@ -765,6 +872,13 @@ class SQLiteDeviceStore:
         row = cur.fetchone()
         return DeviceSession.from_dict(dict(row)) if row else None
 
+    async def delete_device_sessions(self, device_id: str) -> int:
+        cur = self._conn.execute(
+            "DELETE FROM device_sessions WHERE device_id = ?", (device_id,)
+        )
+        self._conn.commit()
+        return cur.rowcount
+
     # -- effects -------------------------------------------------------------
 
     async def add_effect_delivery(self, delivery: EffectDelivery) -> None:
@@ -772,10 +886,12 @@ class SQLiteDeviceStore:
             """
             INSERT OR IGNORE INTO device_effect_deliveries
                 (effect_id, execution_id, device_id, capability, payload, status,
-                 created_at, delivered_at, acked_at, ack_status, deliveries)
+                 created_at, delivered_at, acked_at, ack_status, deliveries,
+                 retry_count, max_retries)
             VALUES
                 (:effect_id, :execution_id, :device_id, :capability, :payload, :status,
-                 :created_at, :delivered_at, :acked_at, :ack_status, :deliveries)
+                 :created_at, :delivered_at, :acked_at, :ack_status, :deliveries,
+                 :retry_count, :max_retries)
             """,
             {**delivery.to_dict(), "payload": json.dumps(delivery.payload)},
         )
@@ -818,6 +934,79 @@ class SQLiteDeviceStore:
         self._conn.commit()
         return await self.get_effect_delivery(effect_id)
 
+    async def mark_effect_delivering(self, effect_id: str) -> bool:
+        """Transition pending → delivering.  Returns False if not pending."""
+        cur = self._conn.execute(
+            "UPDATE device_effect_deliveries SET status = 'delivering', "
+            "delivered_at = ? WHERE effect_id = ? AND status = 'pending'",
+            (_iso_now(), effect_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    async def mark_effect_delivery_failed(self, effect_id: str) -> bool:
+        """Transition delivering → delivery_failed.  Returns False if not delivering."""
+        cur = self._conn.execute(
+            "UPDATE device_effect_deliveries SET status = 'delivery_failed' "
+            "WHERE effect_id = ? AND status = 'delivering'",
+            (effect_id,),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    async def claim_effect(self, device_id: str, effect_id: str) -> bool:
+        """Atomically claim a pending effect for delivery.
+
+        Prevents concurrent HTTP polls from receiving the same effect.
+        Returns True if the claim succeeded (effect is now ``delivering``).
+        """
+        cur = self._conn.execute(
+            "UPDATE device_effect_deliveries SET status = 'delivering', "
+            "delivered_at = ? "
+            "WHERE effect_id = ? AND device_id = ? AND status = 'pending'",
+            (_iso_now(), effect_id, device_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    async def retry_effect(self, effect_id: str) -> bool:
+        """Reset a delivering effect back to pending for retry.
+
+        Increments ``retry_count``.  If the count exceeds ``max_retries``
+        the effect transitions to ``delivery_failed`` instead.
+        Returns True if the state changed.
+        """
+        delivery = await self.get_effect_delivery(effect_id)
+        if delivery is None or delivery.status != "delivering":
+            return False
+        new_count = delivery.retry_count + 1
+        if new_count >= delivery.max_retries:
+            self._conn.execute(
+                "UPDATE device_effect_deliveries SET retry_count = ?, "
+                "status = 'delivery_failed' WHERE effect_id = ?",
+                (new_count, effect_id),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE device_effect_deliveries SET retry_count = ?, "
+                "status = 'pending', delivered_at = NULL WHERE effect_id = ?",
+                (new_count, effect_id),
+            )
+        self._conn.commit()
+        return True
+
+    async def stale_deliveries(
+        self, device_id: str, limit: int = 50
+    ) -> list[EffectDelivery]:
+        """Return delivering effects that may need retry."""
+        cur = self._conn.execute(
+            "SELECT * FROM device_effect_deliveries "
+            "WHERE device_id = ? AND status = 'delivering' "
+            "ORDER BY created_at LIMIT ?",
+            (device_id, limit),
+        )
+        return [_delivery_row_to_obj(dict(r)) for r in cur.fetchall()]
+
     # -- idempotency -----------------------------------------------------------
 
     async def seen_message(self, message_id: str) -> bool:
@@ -833,3 +1022,18 @@ class SQLiteDeviceStore:
             (message_id, _iso_now()),
         )
         self._conn.commit()
+
+    async def store_response(self, message_id: str, response_json: str) -> None:
+        self._conn.execute(
+            "UPDATE device_message_log SET response_json = ? WHERE message_id = ?",
+            (response_json, message_id),
+        )
+        self._conn.commit()
+
+    async def get_stored_response(self, message_id: str) -> str | None:
+        cur = self._conn.execute(
+            "SELECT response_json FROM device_message_log WHERE message_id = ?",
+            (message_id,),
+        )
+        row = cur.fetchone()
+        return row["response_json"] if row and row["response_json"] else None

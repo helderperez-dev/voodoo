@@ -1,5 +1,83 @@
 # Changelog
 
+## [2.6.1] — 2026-08-30
+
+### Added — Sprint 23.1: Edge Hardening & Runtime Integration
+
+Hardening sprint that makes the Edge boundary a trustworthy external surface
+of the Voodoo Runtime. No new features — only correctness, security,
+reliability, and test coverage improvements to the Sprint 23 Edge
+implementation.
+
+- **Stateless HTTP transport** — HTTP requests no longer create persistent
+  sessions. Each request authenticates independently via
+  `gateway.authenticate_request()`. Only `/v1/edge/auth` creates a session
+  (for explicit session-based flows). Eliminates session leak under HTTP
+  load.
+- **Device identity validation** — Gateway rejects messages where
+  `message.device_id` does not match the authenticated device context.
+  Prevents device impersonation via crafted payloads.
+- **MQTT session registry & topic binding** — MQTT transport maintains a
+  per-device session map. Pre-AUTH messages are rejected. Authenticated
+  devices can only publish to their own topic namespace
+  (`voodoo/v1/devices/{own_id}/...`). Cross-device topic publishing is
+  rejected.
+- **Enrollment security** — Enrollment creation endpoint
+  (`POST /v1/edge/enrollments`) is protected by admin token when
+  `edge.enrollment_auth_required = True` (default). Configurable via
+  `edge.enrollment_admin_token`.
+- **Effect lifecycle integration** — Effects now track a full state machine
+  (`pending → delivering → delivered → acknowledged → completed`) with
+  failure paths. Effects bind to `execution_id`. Concurrent HTTP polling
+  uses atomic `claim_effect()`. Configurable retry policy
+  (`edge.max_effect_retries`, default 3).
+- **Idempotent response replay** — Duplicate messages return the stored
+  original response instead of a generic "duplicate" status. Clients get
+  consistent results regardless of retries.
+- **State reconciliation** — Documented authority model: device is source
+  of truth for its own sensor state; runtime can propose desired actuator
+  state. Stale state rejection includes current `state_version` in error
+  response.
+- **Reconnect semantics** — Re-authenticating a device with active sessions
+  invalidates old sessions, transitions through `RECONNECTING` →
+  `CONNECTED`, and evicts stale gateway contexts. No duplicate device
+  entities are created.
+- **Disconnect lifecycle** — `disconnect()` sets device to `DISCONNECTED`
+  and clears session. Device entity persists for future reconnect.
+  `last_seen_at` only updated on valid authenticated activity.
+- **New error types** — `SessionRequiredError` (401), `SessionInvalidError`
+  (401), `DeliveryFailedError` (502), `DeviceIdMismatchError` (403) with
+  stable protocol codes.
+- **Secret redaction** — `_redact()` helper in gateway ensures credentials,
+  keys, and tokens never appear in logs or mesh events.
+- **Simulator failure injection** — `DeviceSimulator` gains methods for
+  adversarial testing: `send_duplicate_event()`, `send_stale_state()`,
+  `send_wrong_device_id()`, `send_invalid_credential()`, `reconnect()`.
+- **E2E integration tests** — New `tests/test_edge_e2e.py` with 7 tests
+  covering full lifecycle (AUTH → EVENT → Execution → Effect → ACK),
+  reconnect, idempotency, and stale state rejection through real HTTP
+  transport.
+- **Security tests** — New `tests/test_edge_security.py` with 18 tests
+  covering authentication enforcement, credential validation, device
+  isolation, enrollment security, idempotency security, state
+  reconciliation security, and secret redaction.
+- **HTTP message_id passthrough** — HTTP transport now extracts
+  `message_id` from request body and passes it to the protocol envelope,
+  enabling client-driven idempotency.
+
+### Changed
+
+- **`EdgeConfig`** — Added `max_effect_retries: int = 3` field.
+- **`DeviceGateway.connect()`** — Now evicts stale contexts for the same
+  `device_id` on reconnect.
+- **`DeviceGateway.handle_message()`** — Validates `message.device_id`
+  against authenticated context.
+- **`EdgeHTTPTransport`** — Reads enrollment config from
+  `config.edge.enrollment_auth_required` (was incorrectly
+  `config.enrollment_auth_required`).
+- **`EdgeAuth.authenticate_device()`** — Calls
+  `store.delete_device_sessions()` before creating new session on reconnect.
+
 ## [2.6.0] — 2026-08-30
 
 ### Added — Sprint 23: Edge Readiness, Device Gateway & Edge Protocol

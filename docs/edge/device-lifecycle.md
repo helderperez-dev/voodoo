@@ -1,6 +1,11 @@
 # Edge Device Lifecycle
 
 > Device states, sessions, and reconnect semantics (EDGE §7, §31, §45).
+>
+> **Sprint 23.1:** Reconnect semantics hardened — old sessions are
+> invalidated on re-auth, device transitions through RECONNECTING → CONNECTED,
+> stale gateway contexts are evicted. HTTP is fully stateless (no sessions
+> created per request).
 
 ## Two orthogonal lifecycles
 
@@ -52,10 +57,11 @@ DeviceSession: session_id · device_id · transport · connected_at ·
                last_seen_at · protocol_version
 ```
 
-- HTTP: credential validated per request; each validation creates a fresh
-  session record (lightweight — no per-request DB transaction beyond the
-  session insert).
-- MQTT: one AUTH establishes a session; subsequent envelope payloads carry
+- **HTTP (Sprint 23.1):** Fully stateless. No sessions are created per
+  request. Each request authenticates independently via
+  `gateway.authenticate_request()`. Only `/v1/edge/auth` creates a session
+  (for explicit session-based flows).
+- **MQTT:** One AUTH establishes a session; subsequent envelope payloads carry
   `"session_id"`, which the gateway **re-binds to the same device** on
   every message. A session can never act for a different device.
 
@@ -72,9 +78,22 @@ connected ──► event ──► disconnect ──► [runtime keeps the enti
       ──► same device_id (NO duplicate entity) ──► state sync resumes
 ```
 
+**Sprint 23.1 reconnect flow:**
+
+1. Device re-authenticates with existing credential.
+2. `authenticate_device()` calls `store.delete_device_sessions(device_id)`
+   to invalidate any existing sessions.
+3. If old sessions existed, device transitions to `RECONNECTING` then
+   immediately to `CONNECTED`.
+4. Gateway evicts stale `AuthenticatedDeviceContext` for the same
+   `device_id` from its in-memory map.
+5. New session is created. Pending effects are available for delivery.
+
 Guarantees:
 
 - Reconnection **never duplicates the device entity** (tested).
+- Old sessions are **invalidated** on re-auth — no stale session leaks.
+- Stale gateway contexts are **evicted** on reconnect.
 - Pending effects queued while offline are delivered after reconnect
   (HTTP poll / next MQTT session).
 - State synchronization resumes with the stored `state_version`; a device

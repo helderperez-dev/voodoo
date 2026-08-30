@@ -74,9 +74,28 @@ def _envelope_response(message: Any) -> JSONResponse:
 
 
 def _make_enrollments_endpoint(gateway: DeviceGateway):
-    """POST /v1/edge/enrollments — issue a single-use enrollment key."""
+    """POST /v1/edge/enrollments — issue a single-use enrollment key.
+
+    Protected by ``X-Admin-Token`` when
+    ``config.edge.enrollment_auth_required`` is set (Sprint 23.1).
+    """
 
     async def enrollments(request: Request) -> Response:
+        # Enrollment auth guard (Sprint 23.1).
+        config = getattr(gateway, "_config", None)
+        edge_cfg = getattr(config, "edge", None) if config else None
+        if edge_cfg is not None and getattr(
+            edge_cfg, "enrollment_auth_required", False
+        ):
+            admin_token = getattr(edge_cfg, "enrollment_admin_token", "")
+            if admin_token:
+                provided = request.headers.get("x-admin-token", "")
+                if provided != admin_token:
+                    return _error_to_response(
+                        AuthenticationFailedError(
+                            "Missing or invalid admin token for enrollment"
+                        )
+                    )
         body = await _json_body(request)
         raw_key = await create_enrollment(
             gateway.store,
@@ -151,7 +170,12 @@ def _make_auth_endpoint(gateway: DeviceGateway):
 
 
 def _make_device_endpoint(gateway: DeviceGateway, message_type: EdgeMessageType):
-    """Shared factory for authenticated device → runtime endpoints."""
+    """Shared factory for stateless authenticated device → runtime endpoints.
+
+    Each HTTP request authenticates independently via
+    ``gateway.authenticate_request()`` — no persistent session is
+    created. This matches HTTP's stateless nature.
+    """
 
     async def handler(request: Request) -> Response:
         credential = _credential_from_request(request)
@@ -161,7 +185,7 @@ def _make_device_endpoint(gateway: DeviceGateway, message_type: EdgeMessageType)
             )
         body = await _json_body(request)
         try:
-            ctx, _session = await gateway.connect(
+            ctx = await gateway.authenticate_request(
                 credential, transport=TransportKind.HTTP
             )
         except EdgeError as e:
@@ -171,6 +195,7 @@ def _make_device_endpoint(gateway: DeviceGateway, message_type: EdgeMessageType)
             message_type,
             device_id=ctx.device_id,
             payload=body,
+            message_id=body.pop("message_id", None),
             trace_id=request.headers.get("x-trace-id"),
         )
         try:
@@ -196,7 +221,7 @@ def _make_effects_endpoint(gateway: DeviceGateway):
                 AuthenticationFailedError("Missing device credential")
             )
         try:
-            ctx, _session = await gateway.connect(
+            ctx = await gateway.authenticate_request(
                 credential, transport=TransportKind.HTTP
             )
         except EdgeError as e:
@@ -238,7 +263,7 @@ def _make_effect_ack_endpoint(gateway: DeviceGateway):
         effect_id = str(request.path_params.get("effect_id", ""))
         body.setdefault("effect_id", effect_id)
         try:
-            ctx, _session = await gateway.connect(
+            ctx = await gateway.authenticate_request(
                 credential, transport=TransportKind.HTTP
             )
         except EdgeError as e:

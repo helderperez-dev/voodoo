@@ -284,6 +284,11 @@ class EdgeConfig(BaseModel):
     max_state_size: int = 65536  # 64 KiB
     max_pending_effects: int = 1000
     heartbeat_interval: int = 30
+    # Enrollment security (Sprint 23.1).
+    enrollment_auth_required: bool = True
+    enrollment_admin_token: str = ""
+    # Effect delivery (Sprint 23.1).
+    max_effect_retries: int = 3
 
 
 class VoodooConfig(BaseModel):

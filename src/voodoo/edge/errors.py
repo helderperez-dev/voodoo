@@ -17,6 +17,7 @@ __all__ = [
     "AuthenticationFailedError",
     "AuthorizationFailedError",
     "DeviceNotFoundError",
+    "DeviceIdMismatchError",
     "DeviceRevokedError",
     "InvalidMessageError",
     "InvalidProtocolVersionError",
@@ -25,6 +26,9 @@ __all__ = [
     "DuplicateMessageError",
     "EffectNotFoundError",
     "EffectExpiredError",
+    "SessionRequiredError",
+    "SessionInvalidError",
+    "DeliveryFailedError",
     "TransportError",
     "HTTP_STATUS",
     "error_response",
@@ -50,6 +54,9 @@ class EdgeErrorCode:
     DUPLICATE_MESSAGE = "DUPLICATE_MESSAGE"
     EFFECT_NOT_FOUND = "EFFECT_NOT_FOUND"
     EFFECT_EXPIRED = "EFFECT_EXPIRED"
+    SESSION_REQUIRED = "SESSION_REQUIRED"
+    SESSION_INVALID = "SESSION_INVALID"
+    DELIVERY_FAILED = "DELIVERY_FAILED"
     TRANSPORT_ERROR = "TRANSPORT_ERROR"
 
 
@@ -66,6 +73,9 @@ HTTP_STATUS: dict[str, int] = {
     EdgeErrorCode.DUPLICATE_MESSAGE: 200,  # idempotent success, not an error for the client
     EdgeErrorCode.EFFECT_NOT_FOUND: 404,
     EdgeErrorCode.EFFECT_EXPIRED: 410,
+    EdgeErrorCode.SESSION_REQUIRED: 401,
+    EdgeErrorCode.SESSION_INVALID: 401,
+    EdgeErrorCode.DELIVERY_FAILED: 502,
     EdgeErrorCode.TRANSPORT_ERROR: 502,
 }
 
@@ -161,6 +171,41 @@ class EffectExpiredError(EdgeError):
 class TransportError(EdgeError):
     code = EdgeErrorCode.TRANSPORT_ERROR
     status = 502
+
+
+class SessionRequiredError(AuthenticationFailedError):
+    """Request requires an authenticated session."""
+
+    code = EdgeErrorCode.SESSION_REQUIRED
+    status = 401
+
+
+class SessionInvalidError(AuthenticationFailedError):
+    """Session ID is invalid or expired."""
+
+    code = EdgeErrorCode.SESSION_INVALID
+    status = 401
+
+
+class DeliveryFailedError(TransportError):
+    """Effect delivery failed after max retries."""
+
+    code = EdgeErrorCode.DELIVERY_FAILED
+    status = 502
+
+
+class DeviceIdMismatchError(AuthorizationFailedError):
+    """Message device_id does not match the authenticated device."""
+
+    code = EdgeErrorCode.AUTHORIZATION_FAILED
+
+
+class PayloadTooLargeError(InvalidMessageError):
+    """Message or state payload exceeds configured size limit."""
+
+    code = EdgeErrorCode.INVALID_MESSAGE
+    status = 413
+    status = 403
 
 
 # ---------------------------------------------------------------------------

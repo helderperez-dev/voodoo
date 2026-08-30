@@ -309,6 +309,71 @@ class DeviceSimulator:
             "heartbeat", {"uptime_seconds": 1}, session_id=self.session_id
         )
 
+    # -- failure injection (Sprint 23.1) ----------------------------------------
+
+    async def send_duplicate_event(
+        self, event_name: str, payload: dict[str, Any] | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Send the same event twice (same message_id) — tests idempotency."""
+        mid = _mid()
+        body = {
+            "event_name": event_name,
+            "event_payload": payload or {},
+            "message_id": mid,
+        }
+        first = await self.transport.send("event", body, session_id=self.session_id)
+        second = await self.transport.send("event", body, session_id=self.session_id)
+        return first, second
+
+    async def send_stale_state(
+        self, state: dict[str, Any], stale_version: int
+    ) -> dict[str, Any]:
+        """Send state with a version the runtime has already superseded."""
+        return await self.transport.send(
+            "state_sync",
+            {"state": state, "state_version": stale_version},
+            session_id=self.session_id,
+        )
+
+    async def send_wrong_device_id(
+        self, event_name: str, wrong_id: str
+    ) -> dict[str, Any]:
+        """Send an event claiming to be a different device."""
+        return await self.transport.send(
+            "event",
+            {
+                "device_id": wrong_id,
+                "event_name": event_name,
+                "event_payload": {},
+                "message_id": _mid(),
+            },
+            session_id=self.session_id,
+        )
+
+    async def send_invalid_credential(self, bad_credential: str) -> None:
+        """Attempt to authenticate with an invalid credential."""
+        old = (
+            self.transport._credential
+            if hasattr(self.transport, "_credential")
+            else None
+        )
+        self.transport.set_credential(bad_credential)
+        try:
+            await self.transport.send(
+                "auth",
+                {"device_id": self.device_id, "credential": bad_credential},
+            )
+        finally:
+            if old is not None:
+                self.transport.set_credential(old)
+
+    async def reconnect(
+        self, *, device_type: str = "esp32-sim", capabilities: list[str] | None = None
+    ) -> None:
+        """Disconnect and re-authenticate — tests reconnect lifecycle."""
+        await self.disconnect()
+        await self.connect(device_type=device_type, capabilities=capabilities)
+
     # -- effects ------------------------------------------------------------------
 
     async def fetch_effects(self) -> list[dict[str, Any]]:

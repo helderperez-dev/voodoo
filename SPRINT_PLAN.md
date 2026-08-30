@@ -29,8 +29,8 @@ another disconnected feature.
 
 | | |
 |---|---|
-| **Latest release** | `2.6.0` (`src/voodoo/__init__.py` → `__version__`) |
-| **Sprints 1–15 + L1–L5 + 16–22.2** | ✅ All DONE |
+| **Latest release** | `2.6.1` (`src/voodoo/__init__.py` → `__version__`) |
+| **Sprints 1–15 + L1–L5 + 16–23** | ✅ All DONE |
 | **Next sprint** | **Sprint 24 — Voodoo Edge ESP32 Reference Implementation → `2.7.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
@@ -888,6 +888,39 @@ Scope:
   device scoping.
 - **Definition of Done:** quality gate green + full suite (1028+ tests)
   unchanged + released `2.6.0`.
+
+---
+
+## Sprint 23.1 — Edge Hardening & Runtime Integration
+**Version 2.6.1 · Status: DONE · Released as: 2.6.1**
+
+- **Goal:** Harden the Sprint 23 Edge implementation to make it a
+  trustworthy external boundary of the Voodoo Runtime. Correctness,
+  security, reliability, and test coverage — no new features.
+- **Scope delivered:**
+  - [x] Stateless HTTP transport — no persistent sessions per request.
+  - [x] Device identity validation — `message.device_id` must match
+        authenticated context.
+  - [x] MQTT session registry & topic binding — pre-AUTH rejection,
+        cross-device publishing rejected.
+  - [x] Enrollment security — admin token guard on enrollment creation.
+  - [x] Effect lifecycle — full state machine, execution binding, claiming,
+        retry policy (`max_effect_retries`).
+  - [x] Idempotent response replay — duplicates return stored response.
+  - [x] State reconciliation — authority model documented, stale rejection
+        includes `state_version`.
+  - [x] Reconnect semantics — old session invalidation, RECONNECTING →
+        CONNECTED, stale context eviction.
+  - [x] Disconnect lifecycle — DISCONNECTED status, session cleanup.
+  - [x] New error types — `SessionRequiredError`, `SessionInvalidError`,
+        `DeliveryFailedError`, `DeviceIdMismatchError`.
+  - [x] Secret redaction — `_redact()` helper, credentials never in logs.
+  - [x] Simulator failure injection — 5 adversarial methods.
+  - [x] E2E integration tests — 7 tests through real HTTP transport.
+  - [x] Security tests — 18 adversarial tests across 6 categories.
+  - [x] HTTP `message_id` passthrough — client-driven idempotency.
+- **Definition of Done:** quality gate green + 128 edge tests pass + full
+  suite (1225+ passed, postgres contract errors only) + released `2.6.1`.
 
 ---
 

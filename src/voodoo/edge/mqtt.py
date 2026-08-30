@@ -9,6 +9,10 @@ QoS 1 (at-least-once) is deliberate: the stable ``message_id`` /
 ``effect_id`` provide application-level idempotency, which remains
 required regardless of QoS (EDGE §37).
 
+MQTT is session-oriented: AUTH establishes a persistent context keyed
+by ``device_id``. Subsequent messages reuse the stored context. Only
+AUTH is allowed before a session is established (Sprint 23.1).
+
 The paho-mqtt dependency is optional (``voodoo[edge]`` extra); importing
 this module without it raises a clear ImportError.
 """
@@ -22,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from voodoo.edge.errors import TransportError
 from voodoo.edge.gateway import DeviceGateway
-from voodoo.edge.models import TransportKind
+from voodoo.edge.models import AuthenticatedDeviceContext, TransportKind
 from voodoo.edge.protocol import EdgeMessageType, make_message
 
 if TYPE_CHECKING:
@@ -130,6 +134,8 @@ class EdgeMQTTTransport:
         self._connected = asyncio.Event()
         # Per-device subscriptions for outbound effects.
         self._device_queues: dict[str, asyncio.Queue[Any]] = {}
+        # MQTT session registry — AUTH establishes persistent context.
+        self._sessions: dict[str, AuthenticatedDeviceContext] = {}
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -167,6 +173,14 @@ class EdgeMQTTTransport:
     @property
     def connected(self) -> bool:
         return self._client is not None and self._connected.is_set()
+
+    def session_for(self, device_id: str) -> AuthenticatedDeviceContext | None:
+        """Return the authenticated session for a device, if any."""
+        return self._sessions.get(device_id)
+
+    def disconnect_device(self, device_id: str) -> None:
+        """Remove a device's MQTT session (e.g. on revoke or disconnect)."""
+        self._sessions.pop(device_id, None)
 
     # -- outbound: effects to devices ---------------------------------------
 
@@ -215,12 +229,19 @@ class EdgeMQTTTransport:
         )
 
     async def _handle_inbox(self, topic: str, payload: str) -> None:
-        """Route a decoded inbox message through the shared gateway."""
+        """Route a decoded inbox message through the shared gateway.
+
+        Sprint 23.1 hardening:
+        - Topic identity binding: topic device_id must match message device_id.
+        - Pre-AUTH rejection: only AUTH allowed before session is established.
+        - Session registry: AUTH stores context; subsequent messages reuse it.
+        - Topic authorization: device can only publish to its own namespace.
+        """
         parsed = parse_topic(topic)
         if parsed is None:
             logger.warning("Ignoring malformed topic %s", topic)
             return
-        device_id, kind = parsed
+        topic_device_id, kind = parsed
         expected_type = _INBOX_TOPICS.get(kind)
         if expected_type is None:
             logger.warning("Ignoring unknown topic kind %s", kind)
@@ -230,10 +251,73 @@ class EdgeMQTTTransport:
         except json.JSONDecodeError:
             logger.warning("Malformed JSON on %s", topic)
             return
+
+        if not self._validate_message(raw, topic_device_id, kind, expected_type):
+            return
+
         # Normalize into the canonical envelope typed for the topic kind.
         raw.setdefault("type", expected_type.value)
-        raw.setdefault("device_id", device_id)
+        raw.setdefault("device_id", topic_device_id)
         try:
-            await self._gateway.handle_message(raw, transport=TransportKind.MQTT)
+            response = await self._gateway.handle_message(
+                raw, transport=TransportKind.MQTT
+            )
         except Exception as e:  # noqa: BLE001 — broker handler must never crash
             logger.warning("Gateway rejected message on %s: %s", topic, e)
+            return
+
+        # AUTH success → store session context for subsequent messages.
+        if expected_type is EdgeMessageType.AUTH:
+            self._register_session(response, topic_device_id)
+
+    def _validate_message(
+        self,
+        raw: dict[str, Any],
+        topic_device_id: str,
+        kind: str,
+        expected_type: EdgeMessageType,
+    ) -> bool:
+        """Validate topic/message identity and pre-AUTH rules. Returns True if OK."""
+        message_device_id = raw.get("device_id", "")
+
+        # Topic identity binding: topic device_id must match message device_id.
+        if message_device_id and message_device_id != topic_device_id:
+            logger.warning(
+                "Rejecting %s: message device_id '%s' != topic device_id '%s'",
+                kind,
+                message_device_id,
+                topic_device_id,
+            )
+            return False
+
+        # Pre-AUTH rejection: only AUTH messages allowed before session.
+        if expected_type is not EdgeMessageType.AUTH:
+            if topic_device_id not in self._sessions:
+                logger.warning(
+                    "Rejecting %s from %s: no authenticated session",
+                    kind,
+                    topic_device_id,
+                )
+                return False
+            # Topic authorization: device can only publish to own namespace.
+            session = self._sessions[topic_device_id]
+            if message_device_id and message_device_id != session.device_id:
+                logger.warning(
+                    "Rejecting %s: message device_id '%s' != session device '%s'",
+                    kind,
+                    message_device_id,
+                    session.device_id,
+                )
+                return False
+
+        return True
+
+    def _register_session(self, response: Any, topic_device_id: str) -> None:
+        """Store the MQTT session context after successful AUTH."""
+        session_id = response.payload.get("session_id", "")
+        device_id = response.payload.get("device_id", topic_device_id)
+        if session_id:
+            ctx = self._gateway.context_for_session(session_id)
+            if ctx is not None:
+                self._sessions[device_id] = ctx
+                logger.info("MQTT session established for %s", device_id)
