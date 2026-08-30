@@ -186,13 +186,17 @@ class SQLiteExecutionStore:
         ``running``, ``execution.completed`` for ``completed``, etc. A
         ``state.changed`` event is appended after the status event when the
         execution already existed (subsequent write).
+
+        Materialized row is upserted FIRST to satisfy FK constraints
+        (``execution_events.execution_id → executions.id``), matching
+        the PostgreSQL store ordering.
         """
+        self._upsert_materialized(execution)
         self.append_event(
             execution.id,
             _status_event_type(execution.status),
             _execution_payload(execution),
         )
-        self._upsert_materialized(execution)
 
     def load_all(self) -> list[Execution]:
         """Return every execution (materialized projection, last write wins)."""

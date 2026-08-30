@@ -33,7 +33,7 @@ from voodoo.primitives.intent import Intent
 from voodoo.primitives.resource import Resource
 from voodoo.primitives.state import State
 
-__all__ = ["ExecutionStatus", "Execution"]
+__all__ = ["ExecutionStatus", "LEGAL_TRANSITIONS", "Execution"]
 
 
 class ExecutionStatus(StrEnum):
@@ -65,6 +65,52 @@ class ExecutionStatus(StrEnum):
             ExecutionStatus.RUNNING,
             ExecutionStatus.WAITING,
         )
+
+
+# ---------------------------------------------------------------------------
+# Legal state transitions — enforced by Execution._transition()
+# ---------------------------------------------------------------------------
+
+LEGAL_TRANSITIONS: dict[ExecutionStatus, set[ExecutionStatus]] = {
+    ExecutionStatus.CREATED: {
+        ExecutionStatus.PLANNED,
+        ExecutionStatus.AUTHORIZED,
+        ExecutionStatus.RUNNING,
+        ExecutionStatus.WAITING,
+        ExecutionStatus.COMPLETED,
+        ExecutionStatus.FAILED,
+        ExecutionStatus.CANCELLED,
+    },
+    ExecutionStatus.PLANNED: {
+        ExecutionStatus.AUTHORIZED,
+        ExecutionStatus.RUNNING,
+        ExecutionStatus.FAILED,
+        ExecutionStatus.CANCELLED,
+    },
+    ExecutionStatus.AUTHORIZED: {
+        ExecutionStatus.RUNNING,
+        ExecutionStatus.FAILED,
+        ExecutionStatus.CANCELLED,
+    },
+    ExecutionStatus.RUNNING: {
+        ExecutionStatus.WAITING,
+        ExecutionStatus.COMPLETED,
+        ExecutionStatus.FAILED,
+        ExecutionStatus.CANCELLED,
+        ExecutionStatus.TIMED_OUT,
+    },
+    ExecutionStatus.WAITING: {
+        ExecutionStatus.RUNNING,
+        ExecutionStatus.COMPLETED,
+        ExecutionStatus.FAILED,
+        ExecutionStatus.CANCELLED,
+    },
+    # Terminal states — no transitions out.
+    ExecutionStatus.COMPLETED: set(),
+    ExecutionStatus.FAILED: set(),
+    ExecutionStatus.CANCELLED: set(),
+    ExecutionStatus.TIMED_OUT: set(),
+}
 
 
 class Execution(BaseModel):
@@ -150,6 +196,12 @@ class Execution(BaseModel):
         self._transition(ExecutionStatus.TIMED_OUT)
 
     def _transition(self, new_status: ExecutionStatus) -> None:
+        allowed = LEGAL_TRANSITIONS.get(self.status, set())
+        if new_status not in allowed:
+            raise ValueError(
+                f"Illegal transition: {self.status.value} → {new_status.value}. "
+                f"Allowed: {sorted(s.value for s in allowed) or '(terminal state)'}"
+            )
         self.status = new_status
 
     # -- recording ---------------------------------------------------------

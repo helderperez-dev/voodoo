@@ -804,6 +804,23 @@ Scope:
 - **Documentation:** `docs/installation.md`, `README.md`, `CHANGELOG.md`.
 - **Definition of Done:** quality gate green + released `2.5.0`.
 
+## Sprint 22.1 — Architecture Review & Stabilization
+**Version 2.5.1 · Status: DONE · Released as: 2.5.1**
+
+- **Goal:** Architectural clarification and stabilization before the next feature cycle.
+- **Why:** 22 sprints of incremental development created documentation drift, missing
+  transition validation, protocol/runtime type mismatches, and deprecated API usage.
+  These must be fixed before adding more features.
+- **Changes:**
+  - [x] Architecture review document (`docs/architecture-review-v2.5.md`) — 22-section audit.
+  - [x] Transition validation — `LEGAL_TRANSITIONS` dict + validation in `Execution._transition()`.
+  - [x] Protocol/runtime conversion — `from_runtime_execution()` / `to_runtime_execution()`.
+  - [x] `datetime.utcnow()` deprecation fix — 14 occurrences in `protocol/schemas.py`.
+  - [x] SQLite FK ordering fix — `save()` upsert order matches PostgreSQL.
+  - [x] Execution store contract test — 13-test mixin for adapter parity.
+  - [x] Documentation drift fixes — `execution-model.md`, `adaptive.md`.
+- **Definition of Done:** quality gate green + released `2.5.1`.
+
 ---
 
 # BACKLOG (explicitly not scheduled — build only when justified)

@@ -76,10 +76,8 @@ from voodoo.runtime import AdaptiveSupervisor, SupervisorConfig
 supervisor = AdaptiveSupervisor(
     config=SupervisorConfig(
         max_retries=3,
-        max_cost=1.0,  # USD
-        max_duration=300,  # seconds
-        fallback_on_failure=True,
-        delegate_on_timeout=True,
+        max_iterations=10,
+        budget=1.0,  # USD
     )
 )
 
@@ -92,11 +90,13 @@ The supervisor can make the following decisions:
 
 | Decision | When | Effect |
 |----------|------|--------|
+| **Continue** | Execution is progressing normally | No intervention |
 | **Retry** | Transient failure (timeout, rate limit) | Re-run with backoff |
 | **Fallback** | Repeated failure on same participant | Switch to alternative |
 | **Delegate** | Execution exceeds budget or timeout | Hand off to a different capability |
-| **Steer** | Execution drifting (too many tokens, too slow) | Adjust parameters mid-flight |
-| **Cancel** | Budget exhausted or constraint violated | Terminate execution |
+| **Wait** | Resource or approval needed | Pause execution |
+| **Request Approval** | Sensitive capability requires human consent | Enter WAITING state |
+| **Fail** | Budget exhausted or constraint violated | Terminate execution |
 
 ### Constraint-Driven Retry Hints
 

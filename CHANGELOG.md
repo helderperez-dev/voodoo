@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## 2.5.1 — 2026-08-29
+
+### Added — Sprint 22.1: Architecture Review & Stabilization
+
+- **Architecture review document** (`docs/architecture-review-v2.5.md`) — comprehensive 22-section
+  audit of the v2.5.0 codebase covering execution convergence, source of truth matrix, lifecycle
+  audit, durability audit, security audit, agent audit, HITL audit, protocol audit, storage audit,
+  documentation drift, and architectural debt classification (P0–P3).
+- **Transition validation** — `Execution._transition()` now enforces `LEGAL_TRANSITIONS` dict.
+  Illegal transitions (e.g. `COMPLETED → RUNNING`) raise `ValueError`.
+- **Protocol/runtime conversion methods** — `Execution.from_runtime_execution()` and
+  `Execution.to_runtime_execution()` on protocol `Execution` schema enable round-tripping
+  between runtime and protocol representations.
+- **Execution store contract test** (`tests/contracts/test_execution_store.py`) — 13-test mixin
+  (`ExecutionStoreContractTests`) enforcing SQLite/PostgreSQL execution store parity.
+
+### Fixed
+
+- **`datetime.utcnow()` deprecation** — replaced all 14 occurrences in `protocol/schemas.py`
+  with `datetime.now(UTC)` (deprecated since Python 3.12).
+- **SQLite execution store FK ordering** — `save()` now upserts the materialized row BEFORE
+  appending journal events, matching PostgreSQL store behavior and satisfying FK constraints.
+- **Documentation drift** — `docs/execution-model.md` now clearly separates 9 implemented states
+  from 5 aspirational states. `docs/adaptive.md` corrected: removed "steer" decision (not
+  implemented), fixed `SupervisorConfig` field names to match code (`max_retries`, `max_iterations`,
+  `budget`).
+
 ## 2.5.0 — 2026-08-29
 
 ### Added — Sprint 22: Local Runtime DX

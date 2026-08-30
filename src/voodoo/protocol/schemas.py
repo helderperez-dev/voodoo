@@ -17,7 +17,7 @@ Compatibility policy (see ``docs/protocol.md``):
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -150,8 +150,8 @@ class Identity(BaseModel):
     id: str = Field(description="Globally unique entity ID (UUID4).")
     kind: str = Field(description="Entity kind (e.g. 'agent', 'execution', 'task').")
     owner: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -165,7 +165,7 @@ class Capability(BaseModel):
     delegate_to: str | None = None
     expires_at: datetime | None = None
     revoked: bool = False
-    issued_at: datetime = Field(default_factory=datetime.utcnow)
+    issued_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     issued_by: str | None = None
 
 
@@ -228,8 +228,8 @@ class Intent(BaseModel):
     requires: list[str] = Field(default_factory=list)
     constraints: list[Constraint] = Field(default_factory=list)
     effect_ids: list[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     result: Any = None
     error: str | None = None
 
@@ -248,7 +248,7 @@ class Effect(BaseModel):
     status: EffectStatus = EffectStatus.PENDING
     result: Any = None
     error: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     executed_at: datetime | None = None
     actor: str | None = None
     principal: str | None = None
@@ -275,9 +275,75 @@ class Execution(BaseModel):
     error: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     checkpoint: dict[str, Any] | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
+
+    # -- runtime conversion ------------------------------------------------
+
+    @classmethod
+    def from_runtime_execution(
+        cls,
+        exec: Any,  # noqa: ANN401 — runtime.Execution
+    ) -> Execution:
+        """Convert a runtime ``Execution`` to a protocol ``Execution``.
+
+        Runtime ``State`` objects in ``state_changes`` are converted to dicts
+        via ``model_dump()`` so the protocol representation is JSON-safe.
+        """
+        return cls(
+            id=exec.id,
+            trace_id=exec.trace_id,
+            parent_execution_id=exec.parent_execution_id,
+            status=ExecutionStatus(exec.status.value),
+            intent=exec.intent,
+            actor=exec.actor,
+            compute=exec.compute,
+            capabilities=list(exec.capabilities),
+            resources=exec.resources,
+            effects=list(exec.effects),
+            state_changes=[
+                s.model_dump() if hasattr(s, "model_dump") else s
+                for s in exec.state_changes
+            ],
+            result=exec.result,
+            error=exec.error,
+            metadata=dict(exec.metadata),
+            checkpoint=exec.checkpoint,
+            created_at=exec.created_at,
+            started_at=exec.started_at,
+            completed_at=exec.completed_at,
+        )
+
+    def to_runtime_execution(self) -> Any:  # noqa: ANN401
+        """Convert this protocol ``Execution`` back to a runtime ``Execution``.
+
+        Requires ``voodoo.runtime.execution.Execution`` to be importable.
+        Uses a lazy import to avoid circular dependencies.
+        """
+        from voodoo.runtime.execution import Execution as RuntimeExecution
+        from voodoo.runtime.execution import ExecutionStatus as RuntimeStatus
+
+        return RuntimeExecution(
+            id=self.id,
+            trace_id=self.trace_id,
+            parent_execution_id=self.parent_execution_id,
+            status=RuntimeStatus(self.status.value),
+            intent=self.intent,
+            actor=self.actor,
+            compute=self.compute,
+            capabilities=list(self.capabilities),
+            resources=self.resources,
+            effects=list(self.effects),
+            state_changes=self.state_changes,
+            result=self.result,
+            error=self.error,
+            metadata=dict(self.metadata),
+            checkpoint=self.checkpoint,
+            created_at=self.created_at,
+            started_at=self.started_at,
+            completed_at=self.completed_at,
+        )
 
 
 class Task(BaseModel):
@@ -326,7 +392,7 @@ class ObjectRef(BaseModel):
     content_type: str | None = None
     checksum: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Error(BaseModel):
@@ -339,7 +405,7 @@ class Error(BaseModel):
     trace_id: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
     cause: str | None = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class TelemetrySpan(BaseModel):
@@ -370,7 +436,7 @@ class Approval(BaseModel):
     decided_by: str | None = None
     decided_at: datetime | None = None
     reason: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     participant: str | None = None
 
 
@@ -389,8 +455,8 @@ class AgentEntity(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
     state: str = "active"
     metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AgentRun(BaseModel):
@@ -424,8 +490,8 @@ class MemoryEntry(BaseModel):
     tags: list[str] = Field(default_factory=list)
     source_execution_id: str | None = None
     importance: float = 0.5
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
 
 

@@ -36,41 +36,70 @@ Entity → State → Intent → Capability → Execution → Effect → State
 
 ## Execution Lifecycle
 
+### Implemented states (v2.5.0)
+
 The happy path:
 
 ```text
-Created → Validated → Planned → Authorized → Running → Effects → Completed
+Created → Authorized → Running → Completed
 ```
 
-Alternative and intermediate states:
+Alternative and terminal states:
 
 ```text
-Failed      Cancelled    Timed Out
-Blocked     Waiting      Paused
+Planned     Waiting      Failed
+Cancelled   Timed Out
+```
+
+Total: **9 states**. Transitions are validated — illegal transitions raise
+`ValueError`. See `LEGAL_TRANSITIONS` in `voodoo.runtime.execution`.
+
+### Aspirational states (not yet implemented)
+
+The following states are part of the long-term model but are not yet
+implemented in the code:
+
+```text
+Validated   Blocked      Paused
 Recovering  Compensating
 ```
 
-### State transitions
+These will be added when their semantics are fully defined. Do not reference
+them as if they exist in the current runtime.
+
+### State transitions (implemented)
 
 | From | To | Trigger |
 |---|---|---|
-| `created` | `validated` | Intent and inputs are well-formed |
-| `validated` | `planned` | Planner resolves participants and steps |
+| `created` | `authorized` | Engine authorizes capability (default path) |
+| `created` | `planned` | Planner resolves participants |
+| `created` | `running` | Direct start (test/recovery) |
+| `created` | `waiting` | Direct wait (test/recovery) |
+| `created` | `completed` | Skipped task |
+| `created` | `failed` | Validation failure |
+| `created` | `cancelled` | Cancelled before start |
 | `planned` | `authorized` | Capability resolution allows |
-| `planned` | `rejected` | Capability resolution denies |
+| `planned` | `running` | Direct start |
+| `planned` | `failed` | Planning failure |
+| `planned` | `cancelled` | Cancelled during planning |
 | `authorized` | `running` | Compute begins |
+| `authorized` | `failed` | Authorization failure |
+| `authorized` | `cancelled` | Cancelled after authorization |
 | `running` | `waiting` | Human approval or resource needed |
-| `waiting` | `running` | Approval granted / resource available |
-| `waiting` | `cancelled` | Approval denied / timeout |
 | `running` | `completed` | All effects applied |
 | `running` | `failed` | Error or constraint violation |
+| `running` | `cancelled` | Cooperative cancellation |
 | `running` | `timed_out` | Deadline exceeded |
-| `running` | `recovering` | Restart found unfinished work |
-| `recovering` | `running` / `waiting` | Resumed from checkpoint |
-| `failed` | `compensating` | Undo reversible effects |
+| `waiting` | `running` | Approval granted / resource available |
+| `waiting` | `completed` | Direct completion |
+| `waiting` | `failed` | Approval denied |
+| `waiting` | `cancelled` | Approval timeout |
+
+Terminal states (`completed`, `failed`, `cancelled`, `timed_out`) have no
+outgoing transitions. Attempting an illegal transition raises `ValueError`.
 
 States move forward. The only backward move is `running → waiting` (human in
-the loop), plus the recovery re-entry `recovering → running`.
+the loop).
 
 ### The execution fields (conceptual)
 
