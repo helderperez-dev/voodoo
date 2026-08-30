@@ -1,5 +1,79 @@
 # Changelog
 
+## [2.6.0] — 2026-08-30
+
+### Added — Sprint 23: Edge Readiness, Device Gateway & Edge Protocol
+
+External physical devices (ESP32, Raspberry Pi, robots, industrial
+controllers) are now first-class Voodoo Entities participating in the same
+Entity → Event → Execution → Effect model — through a stable,
+transport-independent **`voodoo-edge/v1`** protocol with HTTP and MQTT
+transports. **No second execution architecture**: device-triggered work
+enters the standard ExecutionEngine. Status: Runtime edge-ready; the ESP32
+client is explicitly the next phase (Sprint 24).
+
+- **Device as Entity** (`voodoo.edge.models`) — `Device` (identity
+  `device:<id>`, advertised capabilities, versioned state, lifecycle),
+  `DeviceCredential`, `DeviceEnrollment`, `DeviceSession`,
+  `AuthenticatedDeviceContext`.
+- **Persistence** (`voodoo.edge.store`) — `DeviceStoreProtocol`,
+  in-memory + SQLite (WAL) stores; message idempotency log; effect
+  delivery records. Local-first: no external services required.
+- **Device authentication** (`voodoo.edge.auth`) — dedicated `vdk_`
+  credentials (hash-only storage, shown once), single-use short-lived
+  `vde_` enrollment keys, rotation, revocation with credential cascade.
+  Device auth is fully separate from user auth; a claimed `device_id` is
+  never trusted without credential binding.
+- **Edge Protocol v1** (`voodoo.edge.protocol`) — canonical envelope +
+  7 message types (HELLO, AUTH, STATE_SYNC, EVENT, EFFECT, EFFECT_ACK,
+  HEARTBEAT); JSON primitives only (C++/ESP32-friendly); strict
+  validation before anything enters the runtime.
+- **Edge error model** (`voodoo.edge.errors`) — 12 stable machine-readable
+  codes (`AUTHENTICATION_FAILED` … `TRANSPORT_ERROR`) mapped to HTTP
+  statuses; secrets never appear in error bodies.
+- **Device Gateway** (`voodoo.edge.gateway`) — the single Edge boundary:
+  authentication, protocol validation, event ingestion (semantic events →
+  `Intent("device:<event>")` executed by the standard engine with actor
+  `device:<id>`; heartbeats stay telemetry-only), versioned state sync
+  with stale rejection (compare-and-swap), capability enforcement at the
+  runtime boundary, effect delivery + acknowledgement, sessions and
+  reconnect (no duplicate entities), namespaced mesh events +
+  `trace_id` propagation (credentials never logged).
+- **HTTP transport** (`voodoo.edge.http`) — `/v1/edge/*` REST endpoints
+  (`enrollments`, `enroll`, `auth`, `hello`, `events`, `state`,
+  `heartbeat`, `effects` poll + `{id}/ack`) with
+  `X-Device-Credential` header auth; curl-friendly.
+- **MQTT transport** (`voodoo.edge.mqtt`) — versioned topics
+  `voodoo/v1/devices/{device_id}/{events|state|ack|heartbeat|auth|effects}`,
+  QoS 1 (at-least-once, documented), TLS support, asyncio bridge over
+  paho-mqtt ≥ 2.0 (optional `[edge]` extra — no new required
+  dependencies).
+- **Device simulator** (`voodoo.edge.simulator`) — protocol-faithful
+  virtual device (HTTP + MQTT transports) driving E2E tests exactly as
+  the future ESP32 client will; never bypasses the protocol.
+- **Configuration** — `[edge]` block (`enabled`, `http_enabled`,
+  `mqtt_enabled`, MQTT broker/TLS/QoS, resource limits) +
+  `VOODOO_EDGE_*`/`MQTT_*` env vars. **Edge disabled by default** —
+  non-edge apps pay zero overhead (no broker, gateway, or device tables).
+- **App integration** — edge routes mounted in `create_app` when enabled;
+  MQTT transport lifecycle managed in the app lifespan; `just mqtt-up` /
+  `just mqtt-down` (local Mosquitto).
+- **Reliability contract** — at-least-once delivery + mandatory
+  idempotency (stable `message_id`/`effect_id`; duplicates collapse).
+  No exactly-once claims anywhere.
+- **Tests** — 72 new edge tests: device/auth/enrollment/credential
+  lifecycle, protocol round-trips, gateway semantics, HTTP endpoints +
+  full E2E acceptance (EDGE §42), duplicate event/effect idempotency,
+  stale-state rejection, revoked-device rejection, capability
+  authorization, cross-device isolation, observability (mesh events +
+  trace propagation + no credential leakage), and HTTP/MQTT
+  semantic-equivalence contract tests.
+- **Documentation** — nine guides under `docs/edge/` (overview, protocol,
+  http, mqtt, security, device-lifecycle, state-synchronization,
+  reliability, device-simulator) + runtime-contract amendment separating
+  the frozen Core Runtime Contract from versioned External Integration
+  Contracts (`voodoo-edge/v1`).
+
 ## [2.5.2] — 2026-08-29
 
 ### Changed — Architecture Stabilization (REVIEW_PLAN)

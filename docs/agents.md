@@ -395,8 +395,8 @@ the entire stack.
 ```python
 run = await agent.run("What is 2 + 2?")
 run.execution_id  # links to the Execution
-run.trace_id      # correlation id (distinct from execution_id)
-run.run_id        # same as execution_id when running via engine
+run.trace_id  # correlation id (distinct from execution_id)
+run.run_id  # same as execution_id when running via engine
 ```
 
 ### Standalone mode

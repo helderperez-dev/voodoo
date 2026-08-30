@@ -255,6 +255,37 @@ class AIConfig(BaseModel):
     aliases: dict[str, str] = Field(default_factory=dict)
 
 
+class EdgeConfig(BaseModel):
+    """Edge device gateway configuration (``edge:`` block) — Sprint 23.
+
+    Edge is disabled by default: users who never enable it pay zero
+    overhead and need no MQTT broker, device tables, or gateway
+    (EDGE §68 — backwards compatibility).
+    """
+
+    enabled: bool = False
+    http_enabled: bool = True
+    mqtt_enabled: bool = False
+    # Optional separate listener for the edge gateway; when empty the
+    # edge routes mount onto the main app instead.
+    http_host: str = ""
+    http_port: int = 0
+    # MQTT broker connection (EDGE §35, §38).
+    mqtt_broker_url: str = ""
+    mqtt_port: int = 1883
+    mqtt_tls: bool = False
+    mqtt_username: str = ""
+    mqtt_password: str = ""
+    mqtt_client_id: str = "voodoo-runtime"
+    mqtt_keepalive: int = 60
+    mqtt_qos: int = 1
+    # Resource limits (EDGE §76).
+    max_message_size: int = 262144  # 256 KiB
+    max_state_size: int = 65536  # 64 KiB
+    max_pending_effects: int = 1000
+    heartbeat_interval: int = 30
+
+
 class VoodooConfig(BaseModel):
     """Core configuration for the Voodoo framework."""
 
@@ -276,6 +307,7 @@ class VoodooConfig(BaseModel):
     cache: CacheConfig = Field(default_factory=CacheConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
+    edge: EdgeConfig = Field(default_factory=EdgeConfig)
 
     seo: SEOConfig = Field(default_factory=SEOConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
@@ -458,6 +490,54 @@ def _build_ai_config(file_data: dict[str, Any]) -> AIConfig:
     )
 
 
+def _build_edge_config(file_data: dict[str, Any]) -> EdgeConfig:
+    """Merge file ``edge:`` block with ``VOODOO_EDGE_*``/``MQTT_*`` env vars."""
+    edge_data = file_data.get("edge") or {}
+    if not isinstance(edge_data, dict):
+        edge_data = {"enabled": bool(edge_data)}
+
+    def _flag(key: str, env: str) -> bool | None:
+        if key in edge_data:
+            return bool(edge_data[key])
+        val = _env_flag(env)
+        return val
+
+    enabled = _flag("enabled", "VOODOO_EDGE_ENABLED")
+    mqtt = edge_data.get("mqtt") or {}
+    if not isinstance(mqtt, dict):
+        mqtt = {}
+
+    kwargs: dict[str, Any] = {
+        "enabled": enabled if enabled is not None else False,
+        "http_enabled": (_flag("http_enabled", "VOODOO_EDGE_HTTP_ENABLED") or False)
+        if "http_enabled" in edge_data or "VOODOO_EDGE_HTTP_ENABLED" in os.environ
+        else True,
+        "mqtt_enabled": (_flag("mqtt_enabled", "VOODOO_EDGE_MQTT_ENABLED") or False)
+        if "mqtt_enabled" in edge_data or "VOODOO_EDGE_MQTT_ENABLED" in os.environ
+        else (bool(mqtt) or "MQTT_BROKER_URL" in os.environ),
+        "mqtt_broker_url": mqtt.get("broker_url") or os.getenv("MQTT_BROKER_URL", ""),
+        "mqtt_port": int(mqtt.get("port") or os.getenv("MQTT_PORT", "1883")),
+        "mqtt_tls": bool(mqtt.get("tls") or _env_flag("MQTT_TLS") or False),
+        "mqtt_username": mqtt.get("username") or os.getenv("MQTT_USERNAME", ""),
+        "mqtt_password": mqtt.get("password") or os.getenv("MQTT_PASSWORD", ""),
+        "mqtt_client_id": mqtt.get("client_id")
+        or os.getenv("MQTT_CLIENT_ID", "voodoo-runtime"),
+        "mqtt_keepalive": int(mqtt.get("keepalive", 60)),
+        "mqtt_qos": int(mqtt.get("qos", 1)),
+    }
+    for key in (
+        "max_message_size",
+        "max_state_size",
+        "max_pending_effects",
+        "heartbeat_interval",
+        "http_host",
+        "http_port",
+    ):
+        if key in edge_data:
+            kwargs[key] = edge_data[key]
+    return EdgeConfig(**kwargs)
+
+
 def _pick(
     file_data: dict[str, Any],
     key: str,
@@ -551,6 +631,7 @@ def get_config(
     config_args["cache"] = _build_cache_config(file_data)
     config_args["models"] = _build_models_config(file_data)
     config_args["ai"] = _build_ai_config(file_data)
+    config_args["edge"] = _build_edge_config(file_data)
 
     # Existing sub-configurations
     if "seo" in file_data and isinstance(file_data["seo"], dict):
@@ -578,6 +659,7 @@ def get_config(
         "cache",
         "models",
         "ai",
+        "edge",
         "seo",
         "auth",
         "security",

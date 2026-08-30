@@ -82,8 +82,11 @@ The sophistication is in the model, not in the API surface. Voodoo should feel a
 │               Realtime Layer                   │
 │  Voodoo Mesh (events, expose, WS nodes)       │
 │  MCP Server (SSE, tools/list, tools/call)     │
-├─────────────────────────────────────────────┤
-│               Worker Layer                    │
+├─────────────────────────────────────────────┤│               Edge Layer (Sprint 23)            │
+│  Device Gateway (auth, validation, effects)     │
+│  Edge Protocol v1 (voodoo-edge/v1 envelope)    │
+│  Transports (HTTP REST, MQTT topics)            │
+├─────────────────────────────────────────────────┐│               Worker Layer                    │
 │  @task (retries, timeout, telemetry)          │
 │  Async Queue (enqueue, start_workers)         │
 ├─────────────────────────────────────────────┤
@@ -209,6 +212,29 @@ voodoo recover --store .voodoo/executions.jsonl
 voodoo inspect approvals --pending
 voodoo inspect plan notify.customer --requires email.send,sms.send
 ```
+
+## Edge device loop (Sprint 23)
+
+External devices participate in the same execution model — the Edge layer
+is a boundary, **not** a second runtime:
+
+```
+Device
+  ↓  voodoo-edge/v1 message (HTTP or MQTT — same envelope)
+Device Gateway ── authenticate (vdk_ credential) ── validate protocol
+  ↓
+Event → Intent("device:<event>") → ExecutionEngine (actor device:<id>)
+  ↓
+Effect (capability-checked at the boundary)
+  ↓
+Device Gateway ── deliver (at-least-once, stable effect_id)
+  ↓
+Device ── EFFECT_ACK (completed/failed/rejected)
+```
+
+No `DeviceExecutionEngine` exists; device state uses standard versioned
+State semantics; heartbeats never create Executions. Edge is disabled by
+default — see [docs/edge/overview.md](edge/overview.md).
 
 ## Framework boundaries
 

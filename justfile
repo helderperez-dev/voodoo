@@ -44,6 +44,18 @@ postgres-up:
     @for i in $(seq 1 30); do docker exec voodoo-pg pg_isready -U voodoo >/dev/null 2>&1 && break; sleep 1; done
     @echo "PostgreSQL ready at postgresql://voodoo:voodoo@localhost:5432/voodoo_test"
 
+# Start a local Mosquitto MQTT broker for edge integration tests
+mqtt-up:
+    docker rm -f voodoo-mqtt 2>/dev/null || true
+    docker run --name voodoo-mqtt -p 1883:1883 -d eclipse-mosquitto:2 \
+        mosquitto -c /mosquitto-no-auth.conf
+    @echo "Mosquitto MQTT ready at mqtt://localhost:1883 (no auth, local dev only)"
+
+# Stop and remove the local Mosquitto MQTT broker
+mqtt-down:
+    docker rm -f voodoo-mqtt 2>/dev/null || true
+    @echo "Mosquitto MQTT container removed"
+
 # Stop and remove the local PostgreSQL container
 postgres-down:
     docker rm -f voodoo-pg 2>/dev/null || true

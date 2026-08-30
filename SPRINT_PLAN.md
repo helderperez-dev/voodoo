@@ -29,9 +29,9 @@ another disconnected feature.
 
 | | |
 |---|---|
-| **Latest release** | `2.3.0` (`src/voodoo/__init__.py` → `__version__`) |
-| **Sprints 1–15 + L1–L5** | ✅ All DONE |
-| **Next sprint** | **Sprint 23 — TypeScript SDK → `2.6.0`** |
+| **Latest release** | `2.6.0` (`src/voodoo/__init__.py` → `__version__`) |
+| **Sprints 1–15 + L1–L5 + 16–22.2** | ✅ All DONE |
+| **Next sprint** | **Sprint 24 — Voodoo Edge ESP32 Reference Implementation → `2.7.0`** |
 
 **Release cadence (one version per sprint, minor bump each):**
 
@@ -839,6 +839,55 @@ Scope:
   - [x] Documentation synchronized — execution-model, agents, runtime docs.
   - [x] REVIEW_PLAN.md removed (all 18 steps complete).
 - **Definition of Done:** quality gate green + released `2.5.2`.
+
+## Sprint 23 — Edge Readiness, Device Gateway & Edge Protocol
+**Version 2.6.0 · Status: DONE · Released as: 2.6.0**
+
+- **Goal:** Treat external physical devices as first-class Voodoo Entities
+  through a stable, transport-independent Edge Protocol (`voodoo-edge/v1`)
+  with HTTP and MQTT — **without a second execution architecture**.
+- **Status after this sprint:** Runtime = Edge-ready. ESP32 client =
+  NOT yet implemented (explicitly Sprint 24).
+- **Scope delivered:**
+  - [x] Device as Entity — `Device`, `DeviceCredential`, `DeviceEnrollment`,
+        `DeviceSession` models (`voodoo.edge.models`).
+  - [x] Persistence — Protocol + in-memory + SQLite (`WAL`) stores, message
+        idempotency log, effect delivery records (`voodoo.edge.store`).
+  - [x] Device auth — dedicated `vdk_` credentials (hash-only storage),
+        enrollment (single-use `vde_` keys), rotation, revocation cascade
+        (`voodoo.edge.auth`).
+  - [x] Edge Protocol v1 — 7 message types (HELLO, AUTH, STATE_SYNC, EVENT,
+        EFFECT, EFFECT_ACK, HEARTBEAT), canonical envelope, machine-readable
+        error model (12 codes) (`voodoo.edge.protocol`, `voodoo.edge.errors`).
+  - [x] Device Gateway — auth, validation, event → Execution bridge (actor
+        `device:<id>`), capability enforcement at the boundary, effect
+        delivery + ACK, state CAS (stale rejected), heartbeats (no
+        Executions), sessions/reconnect, mesh events + trace_id
+        (`voodoo.edge.gateway`).
+  - [x] HTTP transport — `/v1/edge/*` endpoints, `X-Device-Credential`
+        header auth, admin enrollment endpoint (`voodoo.edge.http`).
+  - [x] MQTT transport — `voodoo/v1/devices/{id}/...` topics, QoS 1, TLS,
+        asyncio bridge via paho ≥ 2.0; optional `[edge]` extra
+        (`voodoo.edge.mqtt`).
+  - [x] Device simulator — protocol-faithful virtual device driving E2E
+        tests over real transports (`voodoo.edge.simulator`).
+  - [x] Config — `[edge]` block + `VOODOO_EDGE_*`/`MQTT_*` env; disabled by
+        default (zero overhead for non-edge apps).
+  - [x] App integration — gateway mounted in `create_app` when enabled;
+        MQTT lifecycle in app lifespan; `just mqtt-up/down`.
+  - [x] Tests — 72 edge tests incl. HTTP E2E acceptance (EDGE §42),
+        duplicate event/effect, stale state, revocation, capability
+        authorization, cross-device isolation, observability, and
+        HTTP/MQTT semantic-equivalence contract tests
+        (`tests/contracts/test_edge_protocol.py`).
+  - [x] Documentation — 9 docs under `docs/edge/`; runtime-contract
+        amendment (Core vs External contracts); EDGE.md removed after
+        execution.
+- **Explicitly NOT done (by design):** ESP32 firmware (Sprint 24), local AI
+  on edge, offline autonomous execution, exactly-once claims, per-tenant
+  device scoping.
+- **Definition of Done:** quality gate green + full suite (1028+ tests)
+  unchanged + released `2.6.0`.
 
 ---
 

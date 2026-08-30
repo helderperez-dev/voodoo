@@ -241,6 +241,22 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
     routes.extend(voodoo_api.routes)
 
+    # --- Edge device gateway (Sprint 23, EDGE §68) -------------------------
+    # Entirely optional: when ``edge.enabled`` is False, no store, gateway,
+    # routes, or MQTT client are created — regular apps pay zero overhead.
+    edge_gateway: list = []  # mutable holder so lifespan can share/replace the gateway
+    if config.edge.enabled and config.edge.http_enabled:
+        from voodoo.edge import DeviceGateway, SQLiteDeviceStore
+
+        edge_store = SQLiteDeviceStore(".voodoo/state/devices.db")
+        from voodoo.runtime.engine import engine as _runtime_engine
+
+        gateway = DeviceGateway(edge_store, _runtime_engine)
+        edge_gateway.append(gateway)
+        from voodoo.edge.http import build_edge_routes as _build_edge_routes
+
+        routes.extend(_build_edge_routes(gateway))
+
     from voodoo.auth import AuthMiddleware
     from voodoo.i18n import I18nMiddleware
     from voodoo.security import (
@@ -290,8 +306,39 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
         if _workers:
             worker_task = asyncio.create_task(start_workers())
+
+        # Edge MQTT transport (Sprint 23) — optional, only when configured.
+        mqtt_transport = None
+        if config.edge.enabled and config.edge.mqtt_enabled:
+            try:
+                from voodoo.edge import DeviceGateway as _DG
+                from voodoo.edge import SQLiteDeviceStore as _SDS
+                from voodoo.edge.mqtt import EdgeMQTTTransport
+                from voodoo.runtime.engine import engine as _rt_engine
+
+                gateway = (
+                    edge_gateway[0]
+                    if edge_gateway
+                    else _DG(_SDS(".voodoo/state/devices.db"), _rt_engine)
+                )
+                mqtt_transport = EdgeMQTTTransport(
+                    gateway,
+                    broker_url=config.edge.mqtt_broker_url or "localhost",
+                    port=config.edge.mqtt_port,
+                    tls=config.edge.mqtt_tls,
+                    username=config.edge.mqtt_username or None,
+                    password=config.edge.mqtt_password or None,
+                    client_id=config.edge.mqtt_client_id,
+                    qos=config.edge.mqtt_qos,
+                )
+                await mqtt_transport.start()
+            except ImportError:
+                # paho-mqtt not installed — edge stays HTTP-only.
+                pass
         yield
         # Shutdown
+        if mqtt_transport is not None:
+            await mqtt_transport.stop()
         await stop_workers()
         if worker_task:
             worker_task.cancel()

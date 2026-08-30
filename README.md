@@ -165,6 +165,7 @@ if __name__ == "__main__":
 | **Observability everywhere** | Correlation IDs and telemetry built into every subsystem |
 | **Unified runtime engine** | Every operation (HTTP, Agent, Tool, MCP, Worker, Human, Event) produces an `Execution` record with full traceability |
 | **Human-in-the-Loop** | `ask_human()` + `approve()`/`deny()` — humans as compute participants, not afterthoughts |
+| **Physical devices as Entities** | `voodoo-edge/v1` protocol + Device Gateway over HTTP/MQTT — ESP32s, robots, and sensors join the same execution model as agents and workers |
 | **Adaptive execution** | Planner resolves capabilities to compute participants; supervisor steers with retry, fallback, budget control |
 | **Durable by default** | Tasks, executions, schedules, and events survive process restarts — backed by SQLite out of the box |
 | **Zero-config runtime** | `voodoo create` → `voodoo dev` → working app. No build step. Add `voodoo.toml` when you need configuration |
@@ -217,6 +218,7 @@ and [`ARCHITECTURE.md`](ARCHITECTURE.md) for the implementation model.
 - **Auth** — JWT tokens, API keys, session cookies, RBAC route guards
 - **Workers** — `@task` decorator with retries, timeout, and telemetry spans
 - **Voodoo Mesh** — Realtime event bus with local + remote boundaries
+- **Edge Devices** — Device Gateway (`voodoo-edge/v1` over HTTP & MQTT): devices emit events, trigger Executions, receive Effects — see [`docs/edge/overview.md`](docs/edge/overview.md)
 
 ### Runtime & Infrastructure
 - **Runtime Engine** — Unified `ExecutionEngine` producing `Execution` records for every operation
@@ -369,6 +371,14 @@ voodoo auth secret-key
 ### Realtime & Workers
 - [Mesh](docs/mesh.md)
 - [Workers](docs/workers.md)
+
+### Edge Devices
+- [Edge Overview](docs/edge/overview.md)
+- [Edge Protocol v1](docs/edge/protocol.md)
+- [HTTP Transport](docs/edge/http.md)
+- [MQTT Transport](docs/edge/mqtt.md)
+- [Device Security](docs/edge/security.md)
+- [Reliability](docs/edge/reliability.md)
 
 ### Runtime & Operations
 - [Runtime Engine](docs/runtime.md)

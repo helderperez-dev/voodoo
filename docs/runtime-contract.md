@@ -314,6 +314,69 @@ Every execution carries a `trace_id` that propagates through:
 
 ---
 
+## External Devices & the Edge Protocol (Sprint 23)
+
+> **Amendment to the Architecture Freeze** — distinguishes the **Core
+> Runtime Contract** (frozen above) from **External Integration
+> Contracts** (versioned boundaries). The Edge Protocol is the first
+> such external contract: `voodoo-edge/v1`. Future protocol versions
+> must be additive or explicitly versioned; V1 clients must never be
+> silently broken.
+
+A physical or distributed device (ESP32, Raspberry Pi, robot,
+industrial controller, browser runtime) participates in the **same**
+model — no second architecture:
+
+- **A Device is an Entity** — identity (`device:<id>`), versioned State,
+  advertised Capabilities, participation in Executions.
+- **Device Events enter the normal Event system.** A semantic event
+  creates `Intent("device:<event>")` run by the standard
+  ExecutionEngine with actor `device:<id>`; telemetry (heartbeat)
+  updates state without creating Executions.
+- **Device-triggered work enters the normal Execution system** — there
+  is **no** `DeviceExecutionEngine`. Device executions carry the same
+  lifecycle, capability checks, durability, and checkpoints as any
+  other execution.
+- **Device Effects are normal Effects** — stable `effect_id`, capability
+  authorization at the runtime boundary, delivery tracked as
+  `pending → delivered → acked` through the Device Gateway.
+- **Capabilities govern Device Effects** — advertisement is separate
+  from authorization; the runtime rejects effects a device lacks the
+  capability for, at the boundary.
+- **Device State uses normal State semantics** — monotonic
+  `state_version` with compare-and-swap; stale state never overwrites
+  newer state. Runtime-authoritative reconciliation (explicit).
+
+### Edge concepts (NOT new core primitives)
+
+The following are **conceptual contracts / boundary types** in
+`voodoo.edge`, deliberately outside the frozen core: Device Identity,
+Device Session (transport state — not an Entity, not an Execution),
+Transport (HTTP/MQTT — interchangeable carriers of the same envelope),
+Protocol Message (`voodoo-edge/v1` envelope), Acknowledgement
+(effect delivery confirmation), Synchronization (state versioning +
+reconciliation).
+
+### Reliability contract
+
+Edge delivery is **at-least-once with mandatory idempotency** — stable
+`message_id`/`effect_id` collapse duplicates. No exactly-once semantics
+are claimed on any transport.
+
+### Where it lives
+
+```
+src/voodoo/edge/   — models, store, auth, protocol, gateway, transports, simulator
+docs/edge/         — overview, protocol, http, mqtt, security, lifecycle,
+                     state-synchronization, reliability, simulator
+```
+
+Edge is **disabled by default**; enabling it is pure configuration
+(`[edge]` block / `VOODOO_EDGE_*`). Applications that never enable it
+are unaffected (zero overhead — no broker, gateway, or device tables).
+
+---
+
 ## Adding a New Core Primitive
 
 Any new core primitive must answer:
@@ -336,4 +399,4 @@ If those questions cannot be answered convincingly, do not add it to core.
 - [Agents](agents.md)
 - [Primitives](primitives.md)
 - [Architecture Review](architecture-review-v2.5.md)
-- [REVIEW_PLAN.md](../REVIEW_PLAN.md)
+- [Voodoo Edge](edge/overview.md) · [Edge Protocol](edge/protocol.md)
