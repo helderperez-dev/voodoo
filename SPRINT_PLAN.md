@@ -821,6 +821,25 @@ Scope:
   - [x] Documentation drift fixes — `execution-model.md`, `adaptive.md`.
 - **Definition of Done:** quality gate green + released `2.5.1`.
 
+## Sprint 22.2 — Architecture Deep Stabilization (REVIEW_PLAN)
+**Version 2.5.2 · Status: DONE · Released as: 2.5.2**
+
+- **Goal:** Deep architecture stabilization — agent convergence, lifecycle hardening,
+  runtime contract formalization.
+- **Why:** Sprint 22.1 fixed surface issues. REVIEW_PLAN identified deeper architectural
+  gaps: agent bypassing ExecutionEngine, tool calls not creating child Executions,
+  missing runtime contract, incomplete lifecycle validation.
+- **Changes:**
+  - [x] Agent convergence with ExecutionEngine — `Agent.run()` creates Execution via engine.
+  - [x] Tool child Executions — tool calls create child Executions via `engine.delegate()`.
+  - [x] Capability propagation — explicit propagation from parent to child executions.
+  - [x] AgentRun as projection — carries `execution_id`, not a second source of truth.
+  - [x] Runtime contract (`docs/runtime-contract.md`) — §28 Architecture Freeze.
+  - [x] Architecture review updated for v2.5.2 — all sections reflect fixes.
+  - [x] Documentation synchronized — execution-model, agents, runtime docs.
+  - [x] REVIEW_PLAN.md removed (all 18 steps complete).
+- **Definition of Done:** quality gate green + released `2.5.2`.
+
 ---
 
 # BACKLOG (explicitly not scheduled — build only when justified)
