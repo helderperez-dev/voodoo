@@ -1,6 +1,40 @@
 # Changelog
 
-## [Unreleased]
+## [2.5.2] — 2026-08-29
+
+### Changed — Architecture Stabilization (REVIEW_PLAN)
+
+- **Agent convergence with ExecutionEngine** — `Agent.run()` now creates a first-class
+  `Execution` via the `ExecutionEngine` when an engine is available (passed at construction
+  or attached to the active `ExecutionContext`). The agent's provider loop is the *compute*
+  participant; the engine owns lifecycle, persistence, recovery and observability. Standalone
+  runs (no engine) remain backward-compatible.
+- **Tool child Executions** — tool calls inside an engine Execution create *child* Executions
+  via `engine.delegate()`, producing a full execution graph:
+  `Agent Execution → [Tool Execution #1, Tool Execution #2, …]`.
+  Each tool Execution has its own `execution_id`, `parent_execution_id`, capability context,
+  trace context, lifecycle, and effect record.
+- **Capability propagation** — capabilities propagate explicitly from parent to child
+  executions via `ExecutionContext.child()` (copies capabilities) and `engine.execute()`
+  (grants additional capabilities). No ambient authority: tool calls require matching
+  capabilities granted to the agent or the active execution context.
+- **AgentRun is a projection** — `AgentRun` now carries `execution_id` linking it to the
+  canonical `Execution`. It exists for backward-compatible telemetry and agent-specific
+  accounting, not as a second source of truth.
+- **`Agent.__init__` accepts `engine` parameter** — optional `ExecutionEngine` reference.
+  When set, `Agent.run()` creates Executions through the engine.
+
+### Documentation
+
+- **Runtime contract** (`docs/runtime-contract.md`) — definitive semantics of all core
+  primitives (Entity, State, Intent, Capability, Execution, Compute, Effect, Event, Memory,
+  Identity, Resource, Constraint), durability guarantees, security model, and observability.
+- **Architecture review updated** (`docs/architecture-review-v2.5.md`) — all sections updated
+  to reflect v2.5.2 fixes: agent convergence, lifecycle hardening, documentation drift resolved.
+- **Execution model** (`docs/execution-model.md`) — agent convergence section with execution
+  graph, capability propagation, AgentRun as projection.
+- **Agents** (`docs/agents.md`) — architecture section with execution graph diagram.
+- **Runtime** (`docs/runtime.md`) — status updated for v2.5.2.
 
 ## 2.5.1 — 2026-08-29
 

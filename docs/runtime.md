@@ -1,6 +1,8 @@
 # Runtime Engine
 
 > **Status:** Implemented (Sprints 1–7). Durable by default since v1.5.0.
+> Architecture-stabilized in v2.5.2 — Agent converged with ExecutionEngine,
+> tool calls create child Executions, lifecycle and durability semantics formalized.
 
 The Voodoo Runtime Engine is the unified execution model that makes the
 computational model operational. Every meaningful operation —

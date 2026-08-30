@@ -323,11 +323,11 @@ voodoo agents show <agent-id> --limit 20  # more run history
 
 ## API reference
 
-- `Agent(model, tools=None, system_prompt=None, registry=None, max_iterations=10, agent_id=None, name=None, agent_registry=None, memory=None)` — create an agent.
+- `Agent(model, tools=None, system_prompt=None, registry=None, max_iterations=10, agent_id=None, name=None, agent_registry=None, memory=None, engine=None)` — create an agent.
 - `Agent.memory` — the agent's `MemoryStore` (lazy, defaults to `InMemoryMemoryStore`).
 - `Agent.run(prompt, context=None) -> AgentRun` — execute to completion.
 - `Agent.stream(prompt, context=None) -> AsyncIterator[AgentEvent]` — stream events.
-- `AgentRun` — full run record with token/cost accounting.
+- `AgentRun` — full run record with token/cost accounting (projection of Execution).
 - `AgentEvent` — streaming event (`type`, `data`).
 - `AgentEntity` — durable agent identity (id, name, model, tools, capabilities, state).
 - `AgentRunRecord` — run history record linking an agent to an execution.
@@ -337,3 +337,70 @@ voodoo agents show <agent-id> --limit 20  # more run history
 - `VoodooModelProvider` — normalized model provider Protocol.
 - `ModelDescriptor` — static model capability descriptor.
 - `get_provider(model)`, `resolve_model(model)`, `describe_model(model)` — model resolution helpers.
+
+## Architecture: Agent as Runtime Participant
+
+The Agent is a *participant* in the Voodoo runtime, not a parallel execution
+framework. When an `ExecutionEngine` is available, `Agent.run()` creates a
+first-class `Execution` so agent runs share the same lifecycle, persistence,
+recovery and observability as every other execution path (HTTP, Worker, Task,
+MCP, …).
+
+### Execution graph
+
+When running inside an engine, tool calls create *child* Executions:
+
+```
+Agent Execution (execution_id: abc-123)
+      ├── Tool Execution #1 (execution_id: def-456, parent: abc-123)
+      ├── Tool Execution #2 (execution_id: ghi-789, parent: abc-123)
+      └── Tool Execution #3 (execution_id: jkl-012, parent: abc-123)
+```
+
+Each tool Execution has its own lifecycle, capability context, trace context,
+and effect record. This allows the runtime to answer "what exactly did this
+Agent do?" using the execution graph rather than relying on logs.
+
+### Capability propagation
+
+Capabilities propagate explicitly from parent to child executions. A tool
+must never silently acquire authority simply because it was invoked by an
+Agent:
+
+```python
+from voodoo import Agent, ExecutionEngine
+
+engine = ExecutionEngine()
+agent = Agent(
+    model="openai:gpt-4o",
+    tools=["send_email"],
+    capabilities=["email.send"],  # explicit grant
+    engine=engine,
+)
+
+# The agent's capabilities propagate to tool child executions.
+# A tool requiring "email.send" will be authorized.
+# A tool requiring "payment.execute" will be denied.
+run = await agent.run("Send a follow-up email")
+```
+
+### AgentRun as projection
+
+`AgentRun` is a *projection* of the underlying `Execution` — it exists for
+backward-compatible telemetry and agent-specific accounting, not as a second
+source of truth. The `execution_id` field links the `AgentRun` to the
+canonical `Execution`; `trace_id` is the correlation id propagated through
+the entire stack.
+
+```python
+run = await agent.run("What is 2 + 2?")
+run.execution_id  # links to the Execution
+run.trace_id      # correlation id (distinct from execution_id)
+run.run_id        # same as execution_id when running via engine
+```
+
+### Standalone mode
+
+When no engine is available (no `engine` parameter and no active
+`ExecutionContext`), the agent runs in standalone mode — backward-compatible,
+with its own telemetry and memory writes, but without creating an `Execution`.

@@ -139,11 +139,47 @@ agent run is its parent. This gives full traceability:
 Cancelling a parent propagates to children. Completing a parent requires its
 children to have completed, failed, or been cancelled.
 
-## Agents and executions (Sprint 17)
+## Agents and executions (Sprint 17 + Stabilization)
 
 Agents are durable entities registered in an `AgentRegistry`. Every agent
 run **is** an Execution — there is no separate agent execution model. The
-registry links the two:
+Agent is a *participant* in the runtime, not a parallel execution framework.
+
+When an `ExecutionEngine` is available, `Agent.run()` creates a first-class
+`Execution` via the engine so agent runs share the same lifecycle,
+persistence, recovery and observability as every other execution path.
+
+### Execution graph
+
+Tool calls inside an engine Execution create *child* Executions:
+
+```
+Agent Execution (execution_id: abc-123)
+      ├── Tool Execution #1 (execution_id: def-456, parent: abc-123)
+      ├── Tool Execution #2 (execution_id: ghi-789, parent: abc-123)
+      └── Tool Execution #3 (execution_id: jkl-012, parent: abc-123)
+```
+
+Each tool Execution has its own lifecycle, capability context, trace context,
+and effect record. This allows the runtime to answer "what exactly did this
+Agent do?" using the execution graph rather than relying on logs.
+
+### Capability propagation
+
+Capabilities propagate explicitly from parent to child executions via
+`ExecutionContext.child()` (copies capabilities) and `engine.execute()`
+(grants additional capabilities). No ambient authority: tool calls require
+matching capabilities granted to the agent or the active execution context.
+
+### AgentRun as projection
+
+`AgentRun` is a *projection* of the underlying `Execution` — it exists for
+backward-compatible telemetry and agent-specific accounting, not as a second
+source of truth. The `execution_id` field links the `AgentRun` to the
+canonical `Execution`; `trace_id` is the correlation id propagated through
+the entire stack.
+
+The registry links the two:
 
 - `AgentEntity` — durable agent identity (id, model, tools, capabilities,
   state) stored in the registry.

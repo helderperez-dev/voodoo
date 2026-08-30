@@ -4,14 +4,22 @@ The Agent turns a prompt into a final answer by iterating:
 
     prompt → provider → tool calls (via registry) → final
 
-``run()`` returns a full :class:`AgentRun` record with token/cost accounting;
-``stream()`` yields normalized :class:`AgentEvent` objects so the UI can react
-to agent activity in real time. Lifecycle states (created → configured →
-running → tool_call ⇄ thinking → completed | error → retry/failed) are
-captured for telemetry and surfaced through mesh events (S7-2).
+The Agent is a *participant* in the runtime, not a parallel execution
+framework.  ``run()`` creates an :class:`~voodoo.runtime.execution.Execution`
+via the :class:`~voodoo.runtime.engine.ExecutionEngine` so that agent
+runs share the same lifecycle, persistence, recovery, authorization and
+observability as every other execution path (HTTP, Worker, Task, MCP, …).
 
-The ``context`` parameter is an explicit, opaque dict passed to every tool
-call; it is neither memory nor a database — keep the concepts separate.
+``run()`` returns a full :class:`AgentRun` record with token/cost
+accounting; ``stream()`` yields normalized :class:`AgentEvent` objects
+so the UI can react to agent activity in real time.  Lifecycle states
+(created → configured → running → tool_call ⇄ thinking → completed |
+error → retry/failed) are captured for telemetry and surfaced through
+mesh events (S7-2).
+
+The ``context`` parameter is an explicit, opaque dict passed to every
+tool call; it is neither memory nor a database — keep the concepts
+separate.
 """
 
 from __future__ import annotations
@@ -67,7 +75,15 @@ class AgentState(StrEnum):
 
 @dataclass
 class AgentRun:
-    """Full run record with token/cost accounting."""
+    """Full run record with token/cost accounting.
+
+    This is a *projection* of the underlying
+    :class:`~voodoo.runtime.execution.Execution` — it exists for
+    backward-compatible telemetry and agent-specific accounting, not as
+    a second source of truth.  The ``execution_id`` links this record
+    to the canonical Execution; ``trace_id`` is the correlation id
+    propagated through the entire stack.
+    """
 
     run_id: str
     model: str
@@ -84,6 +100,7 @@ class AgentRun:
     started_at: float = field(default_factory=time.time)
     completed_at: float | None = None
     trace_id: str | None = None
+    execution_id: str | None = None
 
 
 @dataclass
@@ -151,6 +168,7 @@ class Agent:
         agent_id: str | None = None,
         name: str = "",
         agent_registry: Any | None = None,
+        engine: Any | None = None,
         **provider_kwargs: Any,
     ) -> None:
         self.model = model or default_model()
@@ -170,6 +188,11 @@ class Agent:
         self.name: str = name
         self._agent_registry: Any | None = agent_registry
         self._registered: bool = False
+
+        # Execution engine — when set, Agent.run() creates an Execution
+        # via the engine so the run shares lifecycle, persistence,
+        # recovery and observability with every other execution path.
+        self._engine: Any | None = engine
 
         # Resolve tool specs/names into a list of names for tool calling.
         self._tool_names: list[str] = []
@@ -336,9 +359,22 @@ class Agent:
         """Invoke a registered tool through the runtime authorization path.
 
         Flow: Agent → Intent → capability check → Tool → Effect → Mesh.
+
+        When running inside an
+        :class:`~voodoo.runtime.engine.ExecutionEngine` Execution, each
+        tool call creates a *child* Execution so the full agent activity
+        is visible in the execution graph:
+
+        ::
+
+            Agent Execution
+                  ├── Tool Execution #1
+                  ├── Tool Execution #2
+                  └── Tool Execution #3
+
         Tools that declare ``permissions`` require a matching capability,
         granted either to this agent or held by the active runtime
-        :class:`~voodoo.runtime.context.ExecutionContext`. Unauthorized
+        :class:`~voodoo.runtime.context.ExecutionContext`.  Unauthorized
         tool calls are denied before any side effect executes.
         """
         from voodoo.primitives.effect import Effect
@@ -371,6 +407,15 @@ class Agent:
                 f"{', '.join(missing)}"
             }
 
+        # When inside an engine Execution, create a child Execution for
+        # this tool call so it appears in the execution graph.
+        engine = ctx.engine if ctx else None
+        if engine is not None:
+            return await self._execute_tool_as_child_execution(
+                engine, name, arguments, spec, ctx
+            )
+
+        # Standalone path: record as an Effect on the current context.
         effect = Effect(
             name=f"tool.{name}", capability_name=required[0] if required else None
         )
@@ -391,6 +436,56 @@ class Agent:
         await self._broadcast("tool.completed", {"tool": name, "status": "succeeded"})
         return result
 
+    async def _execute_tool_as_child_execution(
+        self,
+        engine: Any,
+        name: str,
+        arguments: dict[str, Any],
+        spec: Any,
+        parent_ctx: Any,
+    ) -> Any:
+        """Execute a tool call as a child Execution on the engine.
+
+        Creates a child Execution with its own lifecycle, capability
+        context and effect record.  The parent agent Execution's
+        capabilities propagate to the child (Step 4: capability
+        propagation).
+        """
+        from voodoo.primitives.intent import Intent
+        from voodoo.runtime.context import ExecutionContext
+
+        intent = Intent(
+            name=f"tool.{name}",
+            description=f"Tool call: {name}",
+            params={"tool": name, "arguments": arguments},
+            requires=list(spec.permissions if spec else []),
+        )
+
+        async def _tool_compute(ctx: ExecutionContext) -> Any:
+            await self._broadcast("tool.called", {"tool": name, "arguments": arguments})
+            try:
+                result = await self.registry.call(name, **arguments)
+                await self._broadcast(
+                    "tool.completed",
+                    {"tool": name, "status": "succeeded"},
+                )
+                return result
+            except Exception as e:  # noqa: BLE001
+                await self._broadcast(
+                    "tool.completed",
+                    {"tool": name, "status": "failed", "error": str(e)},
+                )
+                return {"error": str(e)}
+
+        execution = await engine.execute(
+            intent,
+            _tool_compute,
+            actor=f"agent:{self.agent_id}",
+            capabilities=list(spec.permissions if spec else []),
+            parent=parent_ctx,
+        )
+        return execution.result
+
     # -- run ---------------------------------------------------------------
 
     async def run(
@@ -401,12 +496,126 @@ class Agent:
     ) -> AgentRun:
         """Execute prompt → provider → tool calls → final; return AgentRun.
 
+        When an :class:`~voodoo.runtime.engine.ExecutionEngine` is
+        available (either passed at construction or attached to the
+        active :class:`~voodoo.runtime.context.ExecutionContext`), the
+        run creates a first-class
+        :class:`~voodoo.runtime.execution.Execution` so it shares
+        lifecycle, persistence, recovery and observability with every
+        other execution path.
+
         ``history`` prepends prior conversation turns (a list of ``Message``
         dicts) before the new user prompt, enabling multi-turn chat.
         """
-        run_id = str(uuid.uuid4())
+        from voodoo.runtime.context import current_context
+
+        # Resolve the engine: explicit on the agent, or from the active
+        # context (set by ExecutionEngine._run_compute), or None.
+        ctx = current_context()
+        engine = self._engine or (ctx.engine if ctx else None)
+
+        if engine is not None:
+            return await self._run_via_engine(
+                engine, prompt, context=context, history=history, parent_ctx=ctx
+            )
+        return await self._run_standalone(prompt, context=context, history=history)
+
+    # -- engine-backed run -------------------------------------------------
+
+    async def _run_via_engine(
+        self,
+        engine: Any,
+        prompt: str,
+        *,
+        context: dict | None = None,
+        history: list[Message] | None = None,
+        parent_ctx: Any | None = None,
+    ) -> AgentRun:
+        """Run the agent loop inside an ExecutionEngine Execution.
+
+        The engine owns lifecycle, persistence, recovery and
+        observability.  The agent's provider loop is the *compute*
+        participant — it receives an
+        :class:`~voodoo.runtime.context.ExecutionContext` and returns a
+        :class:`~voodoo.runtime.engine.ComputeResult`.
+        """
+        from voodoo.primitives.intent import Intent
+        from voodoo.runtime.context import ExecutionContext
+
+        # Build the intent that represents this agent run.
+        intent = Intent(
+            name=f"agent.{self.name or self.agent_id}",
+            description=prompt[:200],
+            params={"prompt": prompt, "model": self.model},
+        )
+
+        # The compute function encapsulates the entire provider loop.
+        async def _agent_compute(ctx: ExecutionContext) -> Any:
+            return await self._provider_loop(
+                prompt, context=context, history=history, run_id=ctx.execution_id
+            )
+
+        # Execute through the engine — this creates the Execution,
+        # manages lifecycle, persists, and records telemetry.
+        execution = await engine.execute(
+            intent,
+            _agent_compute,
+            actor=f"agent:{self.agent_id}",
+            capabilities=self.capabilities or None,
+            parent=parent_ctx,
+        )
+
+        # Build the AgentRun projection from the Execution.
+        compute_result = execution.result
+        if isinstance(compute_result, AgentRun):
+            compute_result.execution_id = execution.id
+            return compute_result
+
+        # Fallback: wrap unexpected result types.
+        return AgentRun(
+            run_id=execution.id,
+            model=self.model,
+            provider=self.provider.name,
+            prompt=prompt,
+            output=str(compute_result) if compute_result is not None else "",
+            status=execution.status.value,
+            error=execution.error,
+            started_at=execution._started_ts or time.time(),
+            completed_at=execution._completed_ts,
+            trace_id=execution.trace_id,
+            execution_id=execution.id,
+        )
+
+    async def _run_standalone(
+        self,
+        prompt: str,
+        *,
+        context: dict | None = None,
+        history: list[Message] | None = None,
+    ) -> AgentRun:
+        """Run the agent loop without an engine (backward-compatible).
+
+        Used when no ExecutionEngine is available.  Still produces a
+        valid AgentRun with telemetry and memory writes.
+        """
+        return await self._provider_loop(prompt, context=context, history=history)
+
+    async def _provider_loop(
+        self,
+        prompt: str,
+        *,
+        context: dict | None = None,
+        history: list[Message] | None = None,
+        run_id: str | None = None,
+    ) -> AgentRun:
+        """The core provider loop shared by engine-backed and standalone runs.
+
+        When ``run_id`` is ``None``, a new UUID is generated.  When
+        called inside an engine Execution, ``run_id`` is the execution id.
+        """
         from voodoo.telemetry import telemetry_store
 
+        run_id = run_id or str(uuid.uuid4())
         trace_id = (
             telemetry_store.trace_id_var.get()
             if hasattr(telemetry_store, "trace_id_var")

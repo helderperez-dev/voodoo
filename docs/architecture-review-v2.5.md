@@ -1,7 +1,7 @@
-# Voodoo Architecture Review — v2.5.0
+# Voodoo Architecture Review — v2.5.2
 
-> **Date:** 2026-08-29
-> **Scope:** Sprints 1–22, version 2.5.0
+> **Date:** 2026-08-29 (original v2.5.0), updated 2026-03-15 (v2.5.2 stabilization)
+> **Scope:** Sprints 1–22, version 2.5.0 → v2.5.2 architecture stabilization
 > **Purpose:** Architectural clarification and stabilization before the next feature cycle.
 > **Method:** Code is the source of truth. Documentation claims were verified against implementation.
 
@@ -35,13 +35,13 @@
 
 ## Executive Summary
 
-Voodoo v2.5.0 is a **programmable runtime for adaptive applications and operational systems** built on Starlette, Uvicorn, Pydantic, aiosqlite, and Python asyncio. It is zero-config by default (SQLite + local filesystem) and production-ready by configuration (PostgreSQL, Redis, S3, OpenAI/Anthropic).
+Voodoo v2.5.2 is a **programmable runtime for adaptive applications and operational systems** built on Starlette, Uvicorn, Pydantic, aiosqlite, and Python asyncio. It is zero-config by default (SQLite + local filesystem) and production-ready by configuration (PostgreSQL, Redis, S3, OpenAI/Anthropic).
 
 **What it actually is today:** A well-structured Python framework with a durable execution engine, capability-based security, human-in-the-loop approvals, an agent system, a mesh event bus, MCP integration, a reactive UI layer, and a protocol schema boundary. The runtime has 22 sprints of incremental development behind it, with strong local-first defaults and honest provider adapters.
 
-**What it is not (yet):** A fully convergent runtime where every subsystem flows through ExecutionEngine. The agent system — the primary AI participant — operates as a parallel execution system outside the canonical model. The protocol layer and runtime layer define dual representations of the same concepts with type mismatches that prevent round-tripping.
+**What changed in v2.5.2:** The architecture stabilization (REVIEW_PLAN.md) closed the largest convergence gap — the agent system now creates Executions through the ExecutionEngine. Tool calls create child Executions with their own lifecycle, capability context, and trace context. `AgentRun` is explicitly a projection of the underlying Execution, not a parallel record. Transition validation, lifecycle hardening, and durability semantics were formalized.
 
-**The core thesis holds.** Entity → State → Intent → Capability → Execution → Effect → State is a sound computational model. No fundamental contradiction was found. The gaps are implementation gaps, not conceptual ones.
+**The core thesis holds.** Entity → State → Intent → Capability → Execution → Effect → State is a sound computational model. No fundamental contradiction was found. The v2.5.0 gaps were implementation gaps, not conceptual ones — and v2.5.2 has closed the most critical ones.
 
 ---
 
@@ -65,25 +65,25 @@ Voodoo v2.5.0 is a **programmable runtime for adaptive applications and operatio
 
 ### What is weak
 
-1. **Agent bypasses ExecutionEngine.** `Agent.run()` creates its own `AgentRun` record, writes to `telemetry_store` and `AgentRegistry`, but never creates an `Execution`. Tool calls made by the agent also bypass the engine. This is the largest convergence gap.
+1. **~~Agent bypasses ExecutionEngine.~~** ✅ **FIXED in v2.5.2.** `Agent.run()` now creates Executions through the ExecutionEngine. Tool calls create child Executions. `AgentRun` is a projection of the underlying Execution.
 
-2. **No transition validation.** `Execution._transition()` is a bare `self.status = new_status` assignment. Any state can transition to any other state. A `COMPLETED` execution can be moved to `RUNNING`.
+2. **~~No transition validation.~~** ✅ **FIXED in v2.5.1.** `Execution._transition()` now validates against `LEGAL_TRANSITIONS` dict. Illegal transitions raise `ValueError`.
 
-3. **Protocol/runtime type mismatch.** `Execution.state_changes` is `list[State]` in the runtime but `list[dict[str, Any]]` in the protocol. A runtime Execution cannot be serialized to protocol form without a conversion layer that doesn't exist.
+3. **Protocol/runtime type mismatch.** `Execution.state_changes` is `list[State]` in the runtime but `list[dict[str, Any]]` in the protocol. Conversion methods exist (`from_runtime_execution()` / `to_runtime_execution()`) but the dual representation remains.
 
 4. **Dual definitions.** `AgentEntity`, `Approval`, and `Capability` exist in both protocol (Pydantic BaseModel) and runtime (dataclass or different Pydantic model) with divergent field sets. Updating one without the other creates drift.
 
-5. **Checkpoint is not crash-safe.** A crash between "effect applied" and "checkpoint recorded" means the effect was applied but the checkpoint doesn't reflect it. The idempotency key mechanism exists but requires the caller to check — the engine doesn't enforce it automatically.
+5. **~~Checkpoint is not crash-safe.~~** ⚠️ **DOCUMENTED honestly in v2.5.2.** The guarantee is at-least-once with caller-enforced idempotency. Idempotency keys exist but the engine doesn't enforce exactly-once automatically.
 
 ### What is misunderstood
 
-1. **"Every agent run is an Execution"** — documented in `docs/execution-model.md` but not true in the code. `Agent.run()` creates an `AgentRun`, not an `Execution`.
+1. **~~"Every agent run is an Execution"~~** — ✅ **TRUE as of v2.5.2.** `Agent.run()` now creates an `Execution` through the ExecutionEngine when an engine is available.
 
-2. **"13 lifecycle states"** — documented in `docs/execution-model.md` but only 9 are implemented. `validated`, `blocked`, `paused`, `recovering`, and `compensating` do not exist in the code.
+2. **~~"13 lifecycle states"~~** — ✅ **FIXED in v2.5.2.** `docs/execution-model.md` now clearly separates implemented states (9) from aspirational states (5). The aspirational states are documented as not yet implemented.
 
 3. **"Steer" supervisor decision** — documented in `docs/adaptive.md` but not implemented. The supervisor decisions are: `continue`, `retry`, `delegate`, `fallback`, `wait`, `request_approval`, `fail`.
 
-4. **"Exactly-once semantics"** — the documentation implies stronger guarantees than the implementation provides. The actual guarantee is **at-least-once** with idempotency key support for caller-enforced exactly-once.
+4. **~~"Exactly-once semantics"~~** — ✅ **FIXED in v2.5.2.** Documentation now honestly states: at-least-once with idempotency key support for caller-enforced exactly-once.
 
 ---
 
@@ -146,9 +146,9 @@ graph TD
     STORE --> JOURNAL
     ENGINE --> APPROVAL_STORE
 
-    subgraph "Subsystems (should converge on ENGINE)"
+    subgraph "Subsystems (converged on ENGINE)"
         HTTP["HTTP requests"]
-        AGENT["Agent runs ⚠️"]
+        AGENT["Agent runs ✅"]
         TOOL["Tool calls"]
         WORKER["Worker jobs"]
         TASK["Tasks"]
@@ -160,8 +160,8 @@ graph TD
     end
 
     HTTP -->|"✅"| ENGINE
-    AGENT -->|"❌ bypasses"| ENGINE
-    TOOL -->|"✅ via engine"| ENGINE
+    AGENT -->|"✅ v2.5.2"| ENGINE
+    TOOL -->|"✅ child Execution"| ENGINE
     WORKER -->|"✅"| ENGINE
     TASK -->|"✅"| ENGINE
     WORKFLOW -->|"✅"| ENGINE
@@ -182,7 +182,7 @@ graph TD
 | **State** | `State` (Pydantic model) | `primitives/state.py` | Durable system truth; versioned, mutable, checkpointable |
 | **Agent** | `Agent` (class) | `ai/agent.py` | Runtime compute participant; NOT a primitive |
 | **AgentEntity** | `AgentEntity` (dataclass) | `agents/models.py` | Durable agent identity; **separate from Execution** |
-| **AgentRunRecord** | `AgentRunRecord` (dataclass) | `agents/models.py` | Links agent run to execution; **parallel to Execution**, not a projection |
+| **AgentRunRecord** | `AgentRunRecord` (dataclass) | `agents/models.py` | Links agent run to execution; **projection of Execution** (v2.5.2) |
 | **Execution** | `Execution` (Pydantic model) | `runtime/execution.py` | Canonical runtime record; serialized, checkpointable |
 | **Memory** | `MemoryEntry` (dataclass) | `memory/interfaces.py` | Separate persistence; links to execution via `source_execution_id` |
 | **Approval** | `Approval` (dataclass) | `runtime/human.py` | In-memory + persisted; linked to execution via `execution_id` |
@@ -195,7 +195,7 @@ graph TD
 
 ### Duplicated state risks
 
-1. **`AgentRun` vs `Execution`** — parallel records of the same event. `AgentRun` has `run_id`, `tokens_in/out`, `cost`, `tool_calls`; `Execution` has `id`, `effects`, `resources`. Linked by `trace_id` but separate sources of truth.
+1. **~~`AgentRun` vs `Execution`~~** — ✅ **RESOLVED in v2.5.2.** `AgentRun` is now a projection of `Execution`, linked by `execution_id`. No longer parallel records.
 
 2. **`AgentEntity` (dataclass) vs `AgentEntity` (protocol schema)** — structurally identical but separate types. Risk of drift if one is updated without the other.
 
@@ -214,8 +214,8 @@ graph TD
 | Subsystem | Creates Execution? | Uses ExecutionEngine? | Persisted? | Parent/child? | trace_id Propagates? | Recovery Possible? |
 |---|---|---|---|---|---|---|
 | **HTTP requests** | ✅ | ✅ (when `run_through_runtime=True`) | ✅ (if store attached) | ❌ | ✅ | ⚠️ Short-lived |
-| **Agent runs** | ❌ | ❌ | ❌ (uses AgentRegistry) | ❌ | ⚠️ (reads `trace_id_var`) | ❌ |
-| **Tool calls via Agent** | ❌ | ❌ | ❌ | ❌ | ⚠️ (inherited from agent) | ❌ |
+| **Agent runs** | ✅ (v2.5.2) | ✅ (v2.5.2) | ✅ (v2.5.2) | ✅ (v2.5.2) | ✅ | ✅ (v2.5.2) |
+| **Tool calls via Agent** | ✅ (v2.5.2) | ✅ (v2.5.2) | ✅ (v2.5.2) | ✅ (v2.5.2) | ✅ | ✅ (v2.5.2) |
 | **Tool calls via MCP** | ✅ | ✅ | ✅ | ❌ | ✅ | ⚠️ Short-lived |
 | **Worker jobs** | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ (queue retries) |
 | **Queue tasks** | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
@@ -227,13 +227,11 @@ graph TD
 | **Browser events** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Adaptive supervisor** | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ (no checkpoint per step) |
 
-### Critical gaps
+### Remaining gaps
 
-1. **Agent bypasses ExecutionEngine entirely.** `Agent.run()` creates its own `AgentRun` record, writes to `telemetry_store` and `AgentRegistry`, but never creates an `Execution`. Tool calls made by the agent also bypass the engine (they go through `ToolRegistry.call()` directly, not `engine.execute()`).
+1. **Scheduled jobs are indirect.** `Scheduler.tick()` enqueues to the queue, which then runs through the worker, which then runs through the engine. The schedule itself has no execution record.
 
 2. **Event handlers are fire-and-forget.** Mesh event handlers (`@mesh.on(...)`) do not create executions. A crashed handler is lost.
-
-3. **Scheduled jobs are indirect.** `Scheduler.tick()` enqueues to the queue, which then runs through the worker, which then runs through the engine. The schedule itself has no execution record.
 
 ---
 
@@ -266,7 +264,7 @@ CREATED → PLANNED → AUTHORIZED → RUNNING → WAITING
 
 ### Transition validation
 
-**`_transition()` does NO validation.** It is a bare `self.status = new_status` setter. Any state can transition to any other state. No guards, no illegal-transition exceptions.
+**✅ FIXED in v2.5.1.** `_transition()` now validates against `LEGAL_TRANSITIONS` dict. Illegal transitions raise `ValueError`. The `COMPLETED → RUNNING` transition is no longer possible.
 
 ### Documented transitions vs implemented transitions
 
@@ -379,24 +377,17 @@ principal → capability → authorization → execution → effect
 
 ## Agent Audit
 
-### Agent/Execution relationship
+### Agent/Execution relationship (v2.5.2)
 
-**`Agent.run()` does NOT create an Execution.** It:
-1. Calls the LLM provider
-2. Handles tool calls via `ToolRegistry.call()` (bypasses engine)
-3. Creates an `AgentRun` record (dataclass)
-4. Writes to `telemetry_store.record_agent_run()`
-5. Writes to `AgentRegistry.record_run()`
-6. Writes episodic memory
+**✅ FIXED in v2.5.2.** `Agent.run()` now creates an `Execution` through the `ExecutionEngine` when an engine is available.
 
-**`AgentRun` is NOT a projection of `Execution`.** They are parallel records linked by `trace_id`.
+1. **Engine-backed path** (`_run_via_engine()`): creates an `Intent` named `agent.{name}`, wraps the provider loop as a compute function, calls `engine.execute()`.
 
-### What this means
+2. **Tool child Executions** (`_execute_tool_as_child_execution()`): creates a child `Execution` via `engine.execute()` with an `Intent` named `tool.{name}`, tool's required capabilities propagated.
 
-- Agent runs are not visible in `voodoo inspect executions`
-- Agent tool calls don't go through capability enforcement (they use the agent's own capabilities, not the execution context's)
-- Agent runs don't have checkpoints, parent/child relationships, or recovery
-- Agent runs don't participate in the execution journal
+3. **AgentRun as projection** — `AgentRun` is a projection of the underlying `Execution`. The `execution_id` field links the two. `trace_id` is the correlation id propagated through the entire stack.
+
+4. **Standalone fallback** — When no engine is available, `Agent.run()` falls back to `_run_standalone()` which calls `_provider_loop()` directly. This preserves backward compatibility.
 
 ### trace_id propagation
 
@@ -404,10 +395,11 @@ principal → capability → authorization → execution → effect
 - `Agent.run()` reads `trace_id` from `telemetry_store.trace_id_var`
 - Stores it on `AgentRun.trace_id`
 - `AgentRunRecord.trace_id` links to the execution
+- Child tool executions inherit the trace_id from the parent context
 
 ### Assessment
 
-The agent system is the **largest convergence gap**. It operates as a parallel execution system with its own records, its own telemetry calls, and its own registry persistence, completely outside the Execution model. Fixing this requires making `Agent.run()` create an `Execution` and go through `ExecutionEngine` — a dedicated sprint, not a stabilization patch.
+The agent system is now **fully converged** with the ExecutionEngine. Agent runs are visible in `voodoo inspect executions`, tool calls go through capability enforcement, agent runs have checkpoints and recovery, and tool calls create parent/child relationships.
 
 ---
 
@@ -551,16 +543,16 @@ These add negligible overhead but violate the "minimal by default" principle.
 
 | # | Claim | Location | Severity | Assessment |
 |---|---|---|---|---|
-| 1 | "Every agent run is an Execution" | `docs/execution-model.md` | 🔴 Critical | `Agent.run()` creates `AgentRun`, not `Execution` |
-| 2 | 14 lifecycle states documented | `docs/execution-model.md` | 🔴 Critical | Only 9 implemented (`validated`, `blocked`, `paused`, `recovering`, `compensating` missing) |
+| 1 | ~~"Every agent run is an Execution"~~ | `docs/execution-model.md` | ✅ **FIXED** | True as of v2.5.2 |
+| 2 | ~~14 lifecycle states documented~~ | `docs/execution-model.md` | ✅ **FIXED** | Now clearly separates implemented (9) vs aspirational (5) |
 | 3 | "Steer" supervisor decision | `docs/adaptive.md` | 🟠 Important | Not implemented; decisions are: continue, retry, delegate, fallback, wait, request_approval, fail |
 | 4 | `SupervisorConfig(max_cost=1.0, max_duration=300)` | `docs/adaptive.md` | 🟠 Important | Actual fields: `max_retries`, `max_iterations`, `budget` |
 | 5 | `fallback_on_failure=True, delegate_on_timeout=True` | `docs/adaptive.md` | 🟠 Important | Not fields on `SupervisorConfig` |
-| 6 | "Exactly-once semantics" implied | `docs/execution-model.md` | 🟠 Important | Actual: at-least-once with caller-enforced idempotency |
-| 7 | "Completed steps are not re-executed" | `docs/execution-model.md` | 🟠 Important | True only if checkpoint was written before crash |
-| 8 | `planned → rejected` transition | `docs/execution-model.md` | 🟡 Minor | No `rejected` state exists |
-| 9 | `running → recovering` transition | `docs/execution-model.md` | 🟡 Minor | No `recovering` state exists |
-| 10 | `failed → compensating` transition | `docs/execution-model.md` | 🟡 Minor | No `compensating` state exists |
+| 6 | ~~"Exactly-once semantics" implied~~ | `docs/execution-model.md` | ✅ **FIXED** | Now honestly states at-least-once with idempotency keys |
+| 7 | ~~"Completed steps are not re-executed"~~ | `docs/execution-model.md` | ✅ **FIXED** | Now documents checkpoint dependency |
+| 8 | ~~`planned → rejected` transition~~ | `docs/execution-model.md` | ✅ **FIXED** | Removed from implemented transitions |
+| 9 | ~~`running → recovering` transition~~ | `docs/execution-model.md` | ✅ **FIXED** | Removed from implemented transitions |
+| 10 | ~~`failed → compensating` transition~~ | `docs/execution-model.md` | ✅ **FIXED** | Removed from implemented transitions |
 | 11 | Protocol schemas use `datetime.utcnow()` | `src/voodoo/protocol/schemas.py` | 🟡 Minor | Deprecated since Python 3.12 |
 | 12 | `voodoo new` in quick start | `README.md` | 🟢 Correct | `voodoo create` is now primary (Sprint 22) |
 | 13 | Auth claims (PBKDF2, JWT, API keys, guards) | `docs/auth.md` | 🟢 Correct | All verified |
@@ -630,22 +622,22 @@ The DX ramp is well-designed. Each level adds ~10–20 lines and 1–2 new conce
 
 ### P0 — Must fix before further feature development
 
-| # | Issue | Impact | Fix |
-|---|---|---|---|
-| P0-1 | `_transition()` does no validation | Any state can go to any other state; `COMPLETED → RUNNING` is possible | Add `LEGAL_TRANSITIONS` dict + validation |
-| P0-2 | Protocol/runtime `Execution` type mismatch | Cannot round-trip runtime Execution through protocol | Add `from_runtime_execution()` / `to_runtime_execution()` conversion methods |
-| P0-3 | `datetime.utcnow()` deprecation in protocol | 14 uses of deprecated API | Replace with `datetime.now(UTC)` |
-| P0-4 | SQLite execution store FK ordering | Journal appended before materialized row; FK-unsafe | Swap order to match PostgreSQL store |
+| # | Issue | Impact | Fix | Status |
+|---|---|---|---|---|
+| P0-1 | ~~`_transition()` does no validation~~ | ~~Any state can go to any other state~~ | `LEGAL_TRANSITIONS` dict + validation | ✅ **FIXED v2.5.1** |
+| P0-2 | Protocol/runtime `Execution` type mismatch | Cannot round-trip runtime Execution through protocol | `from_runtime_execution()` / `to_runtime_execution()` conversion methods | ✅ **FIXED v2.5.1** |
+| P0-3 | `datetime.utcnow()` deprecation in protocol | 14 uses of deprecated API | Replace with `datetime.now(UTC)` | ✅ **FIXED v2.5.1** |
+| P0-4 | SQLite execution store FK ordering | Journal appended before materialized row; FK-unsafe | Swap order to match PostgreSQL store | ✅ **FIXED v2.5.1** |
 
 ### P1 — Should fix before the next major runtime cycle
 
-| # | Issue | Impact | Fix |
-|---|---|---|---|
-| P1-1 | Agent bypasses ExecutionEngine | Largest convergence gap; agent runs invisible in execution views | Dedicated sprint: make `Agent.run()` create Executions |
-| P1-2 | Dual type definitions (AgentEntity, Approval, Capability) | Protocol and runtime can drift independently | Conversion layer or unified base |
-| P1-3 | No execution store contract test | SQLite/Postgres parity not enforced | Add `TestExecutionStoreContract` mixin |
-| P1-4 | Checkpoint not crash-safe | At-least-once, not exactly-once | Document honestly; add fsync barrier in future |
-| P1-5 | Event handlers are fire-and-forget | Crashed handlers are lost | Optional: create executions for event handlers |
+| # | Issue | Impact | Fix | Status |
+|---|---|---|---|---|
+| P1-1 | ~~Agent bypasses ExecutionEngine~~ | ~~Largest convergence gap~~ | Make `Agent.run()` create Executions | ✅ **FIXED v2.5.2** |
+| P1-2 | Dual type definitions (AgentEntity, Approval, Capability) | Protocol and runtime can drift independently | Conversion layer or unified base | ⬜ Open |
+| P1-3 | ~~No execution store contract test~~ | ~~SQLite/Postgres parity not enforced~~ | `TestExecutionStoreContract` mixin | ✅ **FIXED v2.5.1** |
+| P1-4 | Checkpoint not crash-safe | At-least-once, not exactly-once | Document honestly; add fsync barrier in future | ✅ **Documented v2.5.2** |
+| P1-5 | Event handlers are fire-and-forget | Crashed handlers are lost | Optional: create executions for event handlers | ⬜ Open |
 
 ### P2 — Can be addressed incrementally
 
@@ -670,20 +662,27 @@ The DX ramp is well-designed. Each level adds ~10–20 lines and 1–2 new conce
 
 ## Recommended Changes
 
-### Immediate (Sprint 22.1 — v2.5.1)
+### ~~Immediate (Sprint 22.1 — v2.5.1)~~ ✅ DONE
 
-1. **Add transition validation** to `Execution._transition()` — `LEGAL_TRANSITIONS` dict, raise on illegal transitions.
-2. **Add protocol/runtime conversion methods** — `from_runtime_execution()` / `to_runtime_execution()` on protocol `Execution`.
-3. **Fix `datetime.utcnow()`** — replace all 14 occurrences in `protocol/schemas.py`.
-4. **Fix SQLite FK ordering** — swap `save()` order to match PostgreSQL.
-5. **Add execution store contract test** — `TestExecutionStoreContract` mixin.
-6. **Fix documentation drift** — separate implemented vs aspirational states in `docs/execution-model.md`, fix `docs/adaptive.md` claims.
+1. ✅ **Add transition validation** to `Execution._transition()` — `LEGAL_TRANSITIONS` dict, raise on illegal transitions.
+2. ✅ **Add protocol/runtime conversion methods** — `from_runtime_execution()` / `to_runtime_execution()` on protocol `Execution`.
+3. ✅ **Fix `datetime.utcnow()`** — replace all 14 occurrences in `protocol/schemas.py`.
+4. ✅ **Fix SQLite FK ordering** — swap `save()` order to match PostgreSQL.
+5. ✅ **Add execution store contract test** — `TestExecutionStoreContract` mixin.
+6. ✅ **Fix documentation drift** — separate implemented vs aspirational states in `docs/execution-model.md`, fix `docs/adaptive.md` claims.
 
-### Next cycle (post v2.5.1)
+### ~~Next cycle (v2.5.2 — Architecture Stabilization)~~ ✅ DONE
 
-1. **Agent convergence** — make `Agent.run()` create Executions through `ExecutionEngine`. This is the highest-priority architectural gap.
-2. **Dual type unification** — conversion methods or shared base for protocol/runtime `AgentEntity`, `Approval`, `Capability`.
-3. **Test coverage** — execution store contract, cancel/timeout edge cases, secret leak tests.
+1. ✅ **Agent convergence** — `Agent.run()` creates Executions through `ExecutionEngine`. Tool calls create child Executions. `AgentRun` is a projection.
+2. ✅ **Lifecycle hardening** — Transition validation, crash/recovery semantics, durability documentation.
+3. ✅ **Documentation synchronization** — All docs updated to match implementation.
+
+### Future (Sprint 23+)
+
+1. **Dual type unification** (P1-2) — Conversion methods or shared base for protocol/runtime `AgentEntity`, `Approval`, `Capability`.
+2. **Event handler convergence** (P1-5) — Optional: create executions for mesh event handlers.
+3. **Scheduler convergence** — Make scheduled jobs first-class Executions.
+4. **Test coverage** (P2-3) — Cancel/timeout edge cases, secret leak tests, trace propagation through queue/mesh.
 
 ---
 
@@ -747,16 +746,16 @@ The architecture Voodoo should freeze around:
 
 ## Next Development Cycle
 
-After v2.5.1, the recommended priority order is:
+After v2.5.2, the recommended priority order is:
 
-1. **Agent convergence** (P1-1) — Make `Agent.run()` create Executions. This is the single largest architectural gap. It unblocks agent visibility in execution views, capability enforcement through the engine, checkpoint/recovery for agent runs, and parent/child relationships for tool calls.
+1. **Scheduler convergence** — Make scheduled jobs first-class Executions through the ExecutionEngine. This is the remaining convergence gap.
 
-2. **Execution store contract test** (P1-3) — Enforce SQLite/Postgres parity at the test level.
+2. **Dual type unification** (P1-2) — Conversion methods for protocol/runtime `AgentEntity`, `Approval`, `Capability`.
 
-3. **Dual type unification** (P1-2) — Conversion methods for protocol/runtime `AgentEntity`, `Approval`, `Capability`.
+3. **Event handler convergence** (P1-5) — Optional: create executions for mesh event handlers.
 
 4. **Test coverage** (P2-3) — Cancel/timeout edge cases, secret leak tests, trace propagation through queue/mesh.
 
 5. **Middleware opt-out** (P2-1) — Config flags for auth/MCP/telemetry auto-registration.
 
-Do NOT start Sprint 23 (TypeScript SDK) until the agent convergence gap is closed. The TypeScript SDK should consume the protocol schemas, and those schemas must accurately represent the runtime — including agent executions.
+Sprint 23 (TypeScript SDK) can now proceed. The agent convergence gap is closed, and the protocol schemas accurately represent the runtime — including agent executions.
