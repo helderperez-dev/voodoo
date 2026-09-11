@@ -21,7 +21,7 @@ Supported strategies:
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -50,12 +50,7 @@ class WorkflowStrategy(StrEnum):
 
 @dataclass
 class WorkflowRun:
-    """The result of running a :class:`Workflow`.
-
-    Captures per-task results (keyed by task name), the executions
-    produced, and overall status — making the workflow inspectable and
-    durable enough to recover from interruption.
-    """
+    """Result of running a :class:`Workflow`."""
 
     workflow_id: str
     status: str = "running"
@@ -68,26 +63,12 @@ class WorkflowRun:
 
 @dataclass
 class Workflow:
-    """A composable execution plan that coordinates Tasks.
-
-    Example
-    -------
-    ::
-
-        research = Task(name="research", agent=researcher)
-        write = Task(name="write", agent=writer, depends_on=[research])
-        review = Task(name="review", agent=reviewer, depends_on=[write])
-
-        workflow = Workflow(tasks=[research, write, review])
-        run = await workflow.run()
-    """
+    """A composable execution plan that coordinates Tasks."""
 
     tasks: list[Task] = field(default_factory=list)
     strategy: WorkflowStrategy = WorkflowStrategy.SEQUENTIAL
     name: str = ""
     id: str = field(default_factory=lambda: str(uuid4()))
-
-    # iterative strategy controls
     until: Callable[[WorkflowRun], bool] | None = None
     max_iterations: int = 1
 
@@ -96,11 +77,10 @@ class Workflow:
     def _validate_topology(self) -> None:
         """Validate task identity, dependency membership, and acyclicity.
 
-        Task names are the workflow's durable result/dependency keys, so they
-        must be unique. Dependencies must point to tasks that actually belong
-        to this workflow. Cycles are rejected before any task executes instead
-        of silently falling back to declaration order or reporting a partially
-        executed parallel workflow as completed.
+        Task names are durable result/dependency keys, so they must be unique.
+        Dependencies must belong to this workflow. Cycles are rejected before
+        any task executes instead of silently running declaration order or
+        allowing a partial parallel run to look successful.
         """
         names = [task.name for task in self.tasks]
         duplicates = sorted({name for name in names if names.count(name) > 1})
@@ -146,8 +126,6 @@ class Workflow:
                 if all(dep.name in done for dep in task.depends_on)
             ]
             if not ready:
-                # ``run`` validates first; keep this guard for callers of this
-                # private helper during maintenance/debugging.
                 cycle = ", ".join(task.name for task in remaining)
                 raise ValueError(f"Workflow dependency cycle detected among: {cycle}")
             for task in ready:
@@ -175,32 +153,10 @@ class Workflow:
     ) -> WorkflowRun:
         """Execute the workflow according to its strategy."""
         run = WorkflowRun(workflow_id=self.id)
-        strategy = self.strategy
-
         try:
-            # Validate before any compute runs. A workflow with an ambiguous or
-            # impossible dependency graph must fail atomically at the topology
-            # boundary rather than execute a partial plan.
-            if strategy is not WorkflowStrategy.HIERARCHICAL:
+            if self.strategy is not WorkflowStrategy.HIERARCHICAL:
                 self._validate_topology()
-
-            if strategy is WorkflowStrategy.SEQUENTIAL:
-                await self._run_sequential(run, engine, parent, context)
-            elif strategy is WorkflowStrategy.PARALLEL:
-                await self._run_parallel(run, engine, parent, context)
-            elif strategy is WorkflowStrategy.CONDITIONAL:
-                await self._run_conditional(run, engine, parent, context)
-            elif strategy is WorkflowStrategy.ITERATIVE:
-                await self._run_iterative(run, engine, parent, context)
-            elif strategy is WorkflowStrategy.DELEGATED:
-                await self._run_delegated(run, engine, parent, context)
-            elif strategy is WorkflowStrategy.HIERARCHICAL:
-                await self._run_hierarchical(run, engine, parent, context)
-            elif strategy is WorkflowStrategy.ADAPTIVE:
-                await self._run_adaptive(run, engine, parent, context)
-            else:
-                await self._run_sequential(run, engine, parent, context)
-
+            await self._dispatch(run, engine, parent, context)
             run.status = "completed"
         except Exception as error:  # noqa: BLE001
             run.status = "failed"
@@ -209,7 +165,7 @@ class Workflow:
                 raise
             raise WorkflowFailure(
                 f"Workflow '{self.name or self.id}' failed: {error}",
-                context={"workflow_id": self.id, "strategy": strategy.value},
+                context={"workflow_id": self.id, "strategy": self.strategy.value},
             ) from error
 
         await self._emit(
@@ -217,6 +173,32 @@ class Workflow:
             {"workflow_id": self.id, "status": run.status, "tasks": run.task_statuses},
         )
         return run
+
+    async def _dispatch(
+        self,
+        run: WorkflowRun,
+        engine: ExecutionEngine,
+        parent: ExecutionContext | None,
+        context: dict[str, Any] | None,
+    ) -> None:
+        """Dispatch one validated workflow to its strategy implementation."""
+        handlers: dict[
+            WorkflowStrategy,
+            Callable[
+                [WorkflowRun, ExecutionEngine, ExecutionContext | None, dict | None],
+                Awaitable[None],
+            ],
+        ] = {
+            WorkflowStrategy.SEQUENTIAL: self._run_sequential,
+            WorkflowStrategy.PARALLEL: self._run_parallel,
+            WorkflowStrategy.CONDITIONAL: self._run_conditional,
+            WorkflowStrategy.ITERATIVE: self._run_iterative,
+            WorkflowStrategy.DELEGATED: self._run_delegated,
+            WorkflowStrategy.HIERARCHICAL: self._run_hierarchical,
+            WorkflowStrategy.ADAPTIVE: self._run_adaptive,
+        }
+        handler = handlers.get(self.strategy, self._run_sequential)
+        await handler(run, engine, parent, context)
 
     # -- strategies --------------------------------------------------------
 
@@ -265,11 +247,11 @@ class Workflow:
                     f"Workflow cannot make progress; unresolved tasks: {unfinished}",
                     context={"unfinished": unfinished},
                 )
-            coros = [
+            coroutines = [
                 task.run(context=ctx, engine=engine, parent=parent, results=results)
                 for task in ready
             ]
-            executions = await asyncio.gather(*coros, return_exceptions=True)
+            executions = await asyncio.gather(*coroutines, return_exceptions=True)
             for task, execution in zip(ready, executions, strict=True):
                 if isinstance(execution, Exception):
                     run.task_statuses[task.name] = TaskStatus.FAILED.value
@@ -374,8 +356,6 @@ class Workflow:
                 run.task_results[item.name] = item.result
                 results[item.name] = item.result
 
-    # -- adaptive ----------------------------------------------------------
-
     async def _run_adaptive(
         self,
         run: WorkflowRun,
@@ -383,7 +363,7 @@ class Workflow:
         parent: ExecutionContext | None,
         ctx: dict | None,
     ) -> None:
-        """Run the planner/supervisor strategy using declared task capabilities."""
+        """Run the planner/supervisor strategy using declared capabilities."""
         await self._emit(
             "workflow.started", {"workflow_id": self.id, "strategy": "adaptive"}
         )
