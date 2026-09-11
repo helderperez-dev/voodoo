@@ -11,13 +11,19 @@ This document records product/architecture constraints that keep Voodoo coherent
 7. **The ORM remains application-focused.** Voodoo should provide the common async persistence path without competing feature-for-feature with general-purpose SQL toolkits.
 8. **Documentation must describe implemented behavior.** README examples must execute the chain they claim; architecture docs must describe native provider tool calling rather than historical marker protocols.
 9. **Every release protects the simple path.** New capabilities must not make the zero-infrastructure local experience harder.
+10. **Agency is capability-mediated.** Voodoo should maximize what intelligent entities can perceive, remember, decide, delegate and execute without introducing ambient authority. Freedom to reason is not unlimited authority to act.
+11. **Embodiment does not create a second runtime.** Physical devices are external participants connected through Edge. The Voodoo Runtime remains authoritative for identity, execution, policy, durable state and lineage; devices observe the world, execute physical effects and report acknowledgements/state back.
+12. **Autonomy closes the loop through state.** Sending an effect is not enough. Autonomous and embodied flows must be able to observe the consequence, reconcile state and continue execution from operational truth.
+
+See [`agency-and-embodiment.md`](agency-and-embodiment.md) for the architectural north star behind the agency and physical-system constraints.
 
 ## Canonical acceptance applications
 
-The project should continuously validate three application shapes:
+The project should continuously validate four application shapes:
 
 - **Simple Web App:** UI + reactive state + Model + Auth.
 - **AI Operational App:** UI + Agent + Tool + Memory + Task + HITL.
 - **Distributed Operational App:** API + application events + Worker + Scheduler + production adapters + recovery + telemetry.
+- **Embodied AI App:** Edge Event + Runtime State + Agent/Policy + Execution + Effect + physical Device + ACK/state reconciliation.
 
-These are canaries, not separate architectures. They should demonstrate that increasingly complex applications compose the same Voodoo runtime primitives.
+These are canaries, not separate architectures. They should demonstrate that increasingly complex applications compose the same Voodoo runtime primitives. The embodied canary is especially important because it proves that the same execution model can cross the software/physical boundary and return with observable state instead of becoming a disconnected IoT control path.
