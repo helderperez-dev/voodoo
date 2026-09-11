@@ -127,6 +127,4 @@ class LocalObjectStore:
         return str(self.root / checksum[:2] / checksum)
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        self._conn.close()
