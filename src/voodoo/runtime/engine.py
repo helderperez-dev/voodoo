@@ -48,7 +48,6 @@ __all__ = [
     "engine",
 ]
 
-#: A compute participant. Receives the shared context, returns a result.
 ComputeFn = Callable[
     [ExecutionContext], Union[Awaitable["ComputeResult"], "ComputeResult"]
 ]
@@ -56,13 +55,7 @@ ComputeFn = Callable[
 
 @dataclass
 class ComputeResult:
-    """What a compute participant returns to the engine.
-
-    ``value``    — the primary output (validated when ``output_type`` is set)
-    ``effects``  — side effects produced (recorded on the execution)
-    ``states``   — state changes produced (recorded on the execution)
-    ``resources``— resource usage to account for
-    """
+    """What a compute participant returns to the engine."""
 
     value: Any = None
     effects: list[Effect] = field(default_factory=list)
@@ -97,13 +90,7 @@ class ComputeResult:
 
 @dataclass
 class ExecutionEngine:
-    """The single execution engine for the Voodoo runtime.
-
-    Holds the capability resolver, constraint enforcer and resource
-    accountant so that *one* policy system governs Agent, Tool, Worker,
-    Workflow and Task — instead of each reimplementing authorization,
-    retries, cost limits and telemetry.
-    """
+    """The single execution engine for the Voodoo runtime."""
 
     capabilities: CapabilityResolver = field(default_factory=CapabilityResolver)
     constraints: ConstraintEnforcer = field(default_factory=ConstraintEnforcer)
@@ -111,15 +98,11 @@ class ExecutionEngine:
     executions: dict[str, Execution] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        # Imported lazily to avoid a circular module dependency.
         from voodoo.runtime.human import ApprovalRegistry
 
         self.approvals = ApprovalRegistry()
         self._execution_store: Any = None
         self._checkpoint_sequences: dict[str, int] = {}
-        #: Durable compute registry — named participants that can be
-        #: re-resolved after a restart (Sprint 18). Maps participant
-        #: name → compute callable + metadata.
         self._participants: dict[str, Any] = {}
 
     # -- persistence / recovery ---------------------------------------------
@@ -137,12 +120,7 @@ class ExecutionEngine:
         kind: str = "compute",
         capabilities: list[str] | None = None,
     ) -> None:
-        """Register a named compute participant for durable resume (Sprint 18).
-
-        Participants registered here can be re-resolved by name after a
-        process restart, making ``WAITING_FOR_HUMAN`` executions fully
-        resumable on any worker (ROADMAP §50).
-        """
+        """Register a named compute participant for durable resume (Sprint 18)."""
         self._participants[name] = {
             "compute": compute,
             "execute": execute,
@@ -151,10 +129,7 @@ class ExecutionEngine:
         }
 
     def resolve_participant(self, name: str) -> Any | None:
-        """Resolve a registered participant by name.
-
-        Returns the registration dict, or ``None`` when not registered.
-        """
+        """Resolve a registered participant by name."""
         return self._participants.get(name)
 
     def _persist(self, execution: Execution) -> None:
@@ -173,11 +148,7 @@ class ExecutionEngine:
     def _journal_approval_decision(
         self, execution_id: str, event: str, payload: dict
     ) -> None:
-        """Record an approval decision as a journal event (Sprint 4).
-
-        Applies redaction to prevent secrets from leaking into the
-        execution journal (Sprint 19, ROADMAP §55).
-        """
+        """Record a redacted approval decision as a journal event."""
         store = self._execution_store
         if store is not None and hasattr(store, "append_event"):
             from voodoo.security.redaction import redact
@@ -185,21 +156,12 @@ class ExecutionEngine:
             store.append_event(execution_id, event, redact(payload))
 
     def checkpoint(self, execution: Execution) -> None:
-        """Public checkpoint API — persists an execution mid-flight.
-
-        Used by workflows to checkpoint per-task progress so a restart
-        can recover partial workflow state.
-        """
+        """Public checkpoint API — persists an execution mid-flight."""
         self._build_checkpoint(execution)
         self._persist(execution)
 
     def _build_checkpoint(self, execution: Execution) -> None:
-        """Build a JSON-serializable checkpoint payload (spec §14).
-
-        Captures resumable state: completed effect ids (for idempotency
-        skip), current step, state changes count, and metadata.
-        Never includes live Python objects.
-        """
+        """Build a JSON-serializable checkpoint payload (spec §14)."""
         from voodoo.primitives.effect import EffectStatus
 
         completed_effects = [
@@ -217,22 +179,13 @@ class ExecutionEngine:
         )
 
     def resume_checkpoint(self, execution: Execution) -> list[str]:
-        """Return effect ids already completed at last checkpoint.
-
-        Used by resumed executions to skip re-running non-idempotent
-        effects (spec §15).
-        """
+        """Return effect ids already completed at last checkpoint."""
         if execution.checkpoint is None:
             return []
         return list(execution.checkpoint.get("completed_effects", []))
 
     def recover(self) -> list[Execution]:
-        """Reload unfinished executions from the attached store.
-
-        Restores ``waiting``/``running`` executions into the engine after a
-        restart so they remain inspectable and resumable (e.g. pending
-        human approvals). Returns the recovered executions.
-        """
+        """Reload unfinished executions from the attached store."""
         from voodoo.runtime.persistence import filter_unfinished
 
         if self._execution_store is None:
@@ -258,10 +211,7 @@ class ExecutionEngine:
                 if persisted is not None:
                     self._rehydrate_approval(ex, persisted)
                 else:
-                    self.approvals.create(
-                        execution=ex,
-                        requested_by=ex.actor,
-                    )
+                    self.approvals.create(execution=ex, requested_by=ex.actor)
         return recovered
 
     def _rehydrate_approval(self, execution: Execution, record: dict) -> None:
@@ -287,17 +237,12 @@ class ExecutionEngine:
         )
         self.approvals.records[execution.id] = approval
 
+    # -- human-in-the-loop --------------------------------------------------
+
     def _approval_parent_context(
         self, waiting: Execution | None, approval: Any
     ) -> ExecutionContext:
-        """Rebuild the exact parent boundary used for an approved resume.
-
-        A live approval retains its original context. After a restart, live
-        Python objects are gone, so reconstruct the parent from the durable
-        waiting execution. The context keeps the waiting execution id; the
-        normal ``execute(parent=...)`` path then creates exactly one direct
-        child with correct lineage before that child is persisted.
-        """
+        """Rebuild the exact parent boundary used for an approved resume."""
         from voodoo.primitives.capability import Capability
 
         if approval.context is not None:
@@ -319,47 +264,41 @@ class ExecutionEngine:
                 parent.deadline = waiting.intent.deadline
         else:
             parent = ExecutionContext(actor=approval.requested_by, engine=self)
-
-        parent.metadata["approval"] = "approved"
         return parent
 
-    # -- human-in-the-loop --------------------------------------------------
-
-    async def approve(
-        self, execution_id: str, *, by: str = "human", note: str | None = None
-    ) -> Execution | None:
-        """Approve a waiting execution and durably resume it as a child."""
-        from voodoo.primitives.capability import Capability
-        from voodoo.runtime.human import ApprovalStatus
-
-        approval = self.approvals.decide(
-            execution_id, ApprovalStatus.APPROVED, by=by, reason=note
-        )
-        if approval is None:
-            return None
-        self._persist_approval(approval)
-        self._journal_approval_decision(
-            execution_id,
-            "approval.granted",
-            {"by": by, "capability": approval.capability},
-        )
-        waiting = self.executions.get(execution_id)
-        if waiting is not None:
-            waiting.metadata["approved_by"] = by
-        await self._emit(
-            "human.approved",
-            {"execution_id": execution_id, "by": by, "capability": approval.capability},
-        )
-
+    def _resolve_approved_compute(
+        self, approval: Any, waiting: Execution | None
+    ) -> None:
+        """Restore compute and intent references available after a restart."""
         if approval.compute is None and approval.participant is not None:
             approval.compute = self._participant_compute(approval)
         if approval.intent is None and waiting is not None:
             approval.intent = waiting.intent
+
+    def _complete_waiting(self, waiting: Execution, result: Any) -> None:
+        """Transition the original waiting execution and persist it durably."""
+        if waiting.status.terminal:
+            return
+        waiting.complete(result=result)
+        self._build_checkpoint(waiting)
+        self._persist(waiting)
+
+    async def _resume_approved(
+        self,
+        approval: Any,
+        waiting: Execution | None,
+        *,
+        by: str,
+        note: str | None,
+    ) -> Execution | None:
+        """Resume approved compute as one direct child of the waiting execution."""
+        from voodoo.primitives.capability import Capability
+        from voodoo.runtime.human import ApprovalStatus
+
+        self._resolve_approved_compute(approval, waiting)
         if approval.compute is None or approval.intent is None:
             if waiting is not None:
-                waiting.complete(result={"approved": True, "by": by})
-                self._build_checkpoint(waiting)
-                self._persist(waiting)
+                self._complete_waiting(waiting, {"approved": True, "by": by})
             return waiting
 
         parent = self._approval_parent_context(waiting, approval)
@@ -384,11 +323,35 @@ class ExecutionEngine:
                 self._persist(waiting)
             raise
 
-        if waiting is not None and not waiting.status.terminal:
-            waiting.complete(result=resumed.result)
-            self._build_checkpoint(waiting)
-            self._persist(waiting)
+        if waiting is not None:
+            self._complete_waiting(waiting, resumed.result)
         return resumed
+
+    async def approve(
+        self, execution_id: str, *, by: str = "human", note: str | None = None
+    ) -> Execution | None:
+        """Approve a waiting execution and durably resume it as a child."""
+        from voodoo.runtime.human import ApprovalStatus
+
+        approval = self.approvals.decide(
+            execution_id, ApprovalStatus.APPROVED, by=by, reason=note
+        )
+        if approval is None:
+            return None
+        self._persist_approval(approval)
+        self._journal_approval_decision(
+            execution_id,
+            "approval.granted",
+            {"by": by, "capability": approval.capability},
+        )
+        waiting = self.executions.get(execution_id)
+        if waiting is not None:
+            waiting.metadata["approved_by"] = by
+        await self._emit(
+            "human.approved",
+            {"execution_id": execution_id, "by": by, "capability": approval.capability},
+        )
+        return await self._resume_approved(approval, waiting, by=by, note=note)
 
     def _participant_compute(self, approval: Any) -> ComputeFn | None:
         """Synchronously re-resolve compute from the participant registry."""
@@ -439,26 +402,7 @@ class ExecutionEngine:
         output_type: type | None = None,
         parent: ExecutionContext | None = None,
     ) -> Execution:
-        """Execute an intent through the canonical pipeline.
-
-        Parameters
-        ----------
-        intent:
-            The outcome to achieve.
-        compute:
-            The compute participant (sync or async). If ``None``, the
-            intent's ``params`` are returned as the result — useful for
-            pure intent routing / testing.
-        actor:
-            Who is requesting the execution.
-        capabilities:
-            Capability names to grant for this execution (resolved against
-            the registered capability templates).
-        output_type:
-            Optional structured-output type to validate the result against.
-        parent:
-            Optional parent context for delegated/child executions.
-        """
+        """Execute an intent through the canonical pipeline."""
         ctx = self._build_context(intent, actor=actor, parent=parent)
         if capabilities:
             from voodoo.primitives.capability import Capability
@@ -497,14 +441,10 @@ class ExecutionEngine:
                     required, context=ctx, execution_id=execution.id
                 )
             execution.mark_authorized()
-
             self.constraints.enforce(ctx, execution_id=execution.id)
-
             execution.start()
             result = await self._run_compute(compute, ctx, output_type=output_type)
-
             await self._record_result(execution, intent, result, ctx)
-
             value = result.validated()
             if ctx.intent is not None:
                 ctx.intent.complete(result=value)
@@ -569,7 +509,6 @@ class ExecutionEngine:
             self.resources.account(result.resources, execution_id=execution.id)
 
         self._build_checkpoint(execution)
-
         self.constraints.enforce(
             ctx,
             cost=execution.resources.cost or None,
@@ -588,11 +527,7 @@ class ExecutionEngine:
         compute: ComputeFn | None = None,
         output_type: type | None = None,
     ) -> None:
-        """Transition the execution to its terminal state and re-raise.
-
-        Structured runtime errors pass through unchanged, retaining their
-        execution identity; bare exceptions are wrapped in ``ExecutionError``.
-        """
+        """Transition the execution to its terminal state and re-raise."""
         if isinstance(exc, ApprovalRequired):
             execution.wait()
             self._build_checkpoint(execution)
@@ -663,12 +598,7 @@ class ExecutionEngine:
         actor: str,
         output_type: type | None = None,
     ) -> Execution:
-        """Execute a delegated (child) intent under a narrowed context.
-
-        Delegation always creates a child execution with
-        ``parent_execution_id`` set, enabling auditability and limiting
-        privilege escalation.
-        """
+        """Execute a delegated (child) intent under a narrowed context."""
         return await self.execute(
             intent,
             compute,
@@ -744,11 +674,7 @@ class ExecutionEngine:
             return out
 
     async def _emit(self, event: str, payload: dict[str, Any]) -> None:
-        """Publish a namespaced mesh event (best-effort, never breaks).
-
-        Applies redaction to prevent secrets from leaking into the
-        event bus (Sprint 19, ROADMAP §55).
-        """
+        """Publish a redacted namespaced mesh event best-effort."""
         try:
             from voodoo.mesh import mesh
             from voodoo.security.redaction import redact
@@ -771,5 +697,4 @@ class ExecutionEngine:
             pass
 
 
-#: The default/global execution engine.
 engine = ExecutionEngine()
