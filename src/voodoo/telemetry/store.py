@@ -14,7 +14,9 @@ from typing import Any
 from uuid import uuid4
 
 # Context variable for tracing
-trace_id_var = contextvars.ContextVar("trace_id", default=None)
+trace_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "trace_id", default=None
+)
 
 # Context variable for current span (enables parent-span tracking)
 _span_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
