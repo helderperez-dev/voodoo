@@ -243,20 +243,11 @@ class ExecutionEngine:
             return []
         recovered = []
         for ex in filter_unfinished(all_execs):
-            # A running execution left over from a crash is recoverable:
-            # mark it waiting so it can be resumed from its last checkpoint.
             if ex.status is ExecutionStatus.RUNNING:
                 ex.wait()
             self.executions.setdefault(ex.id, ex)
             ex = self.executions[ex.id]
             recovered.append(ex)
-            # Rebuild a pending approval record for waiting executions so
-            # `inspect approvals` and `approve()` work after a restart.
-            # When the store persisted the approval (Sprint 4), rehydrate
-            # it (status, decided_by, reason, …); otherwise create an
-            # in-memory placeholder (the original compute/intent are not
-            # serialized, so a restarted approval can be decided but not
-            # re-run — documented).
             if (
                 ex.status is ExecutionStatus.WAITING
                 and self.approvals.get(ex.id) is None
@@ -296,12 +287,48 @@ class ExecutionEngine:
         )
         self.approvals.records[execution.id] = approval
 
+    def _approval_parent_context(
+        self, waiting: Execution | None, approval: Any
+    ) -> ExecutionContext:
+        """Rebuild the exact parent boundary used for an approved resume.
+
+        A live approval retains its original context. After a restart, live
+        Python objects are gone, so reconstruct the parent from the durable
+        waiting execution. The context keeps the waiting execution id; the
+        normal ``execute(parent=...)`` path then creates exactly one direct
+        child with correct lineage before that child is persisted.
+        """
+        from voodoo.primitives.capability import Capability
+
+        if approval.context is not None:
+            parent = approval.context
+            parent.engine = self
+        elif waiting is not None:
+            parent = ExecutionContext(
+                execution_id=waiting.id,
+                trace_id=waiting.trace_id,
+                parent_execution_id=waiting.parent_execution_id,
+                actor=waiting.actor,
+                intent=waiting.intent,
+                capabilities=[Capability(name=name) for name in waiting.capabilities],
+                engine=self,
+            )
+            if waiting.intent is not None:
+                for constraint in waiting.intent.constraints:
+                    parent.constrain(constraint)
+                parent.deadline = waiting.intent.deadline
+        else:
+            parent = ExecutionContext(actor=approval.requested_by, engine=self)
+
+        parent.metadata["approval"] = "approved"
+        return parent
+
     # -- human-in-the-loop --------------------------------------------------
 
     async def approve(
         self, execution_id: str, *, by: str = "human", note: str | None = None
     ) -> Execution | None:
-        """Approve a waiting execution and resume it as a child execution."""
+        """Approve a waiting execution and durably resume it as a child."""
         from voodoo.primitives.capability import Capability
         from voodoo.runtime.human import ApprovalStatus
 
@@ -324,11 +351,6 @@ class ExecutionEngine:
             {"execution_id": execution_id, "by": by, "capability": approval.capability},
         )
 
-        # Durable resume (Sprint 18): when the live compute is gone (e.g.
-        # after a restart) but a registered participant exists, re-resolve
-        # the compute from the participant registry. The waiting execution's
-        # persisted intent supplies the outcome when the approval record
-        # has none (a restarted process serializes no live objects).
         if approval.compute is None and approval.participant is not None:
             approval.compute = self._participant_compute(approval)
         if approval.intent is None and waiting is not None:
@@ -336,28 +358,36 @@ class ExecutionEngine:
         if approval.compute is None or approval.intent is None:
             if waiting is not None:
                 waiting.complete(result={"approved": True, "by": by})
+                self._build_checkpoint(waiting)
+                self._persist(waiting)
             return waiting
 
-        # Resume under a child context carrying the decision.
-        base = approval.context or ExecutionContext(actor=approval.requested_by)
-        child_ctx = base.child(actor=f"approved:{by}")
-        child_ctx.metadata["approval"] = ApprovalStatus.APPROVED.value
+        parent = self._approval_parent_context(waiting, approval)
+        parent.metadata["approval"] = ApprovalStatus.APPROVED.value
         if note:
-            child_ctx.metadata["approval_note"] = note
-        if approval.capability:
-            child_ctx.grant(Capability(name=approval.capability))
+            parent.metadata["approval_note"] = note
+        if approval.capability and not parent.has_capability(approval.capability):
+            parent.grant(Capability(name=approval.capability))
 
-        resumed = await self.execute(
-            approval.intent,
-            approval.compute,
-            actor=child_ctx.actor,
-            output_type=approval.output_type,
-            parent=child_ctx,
-        )
-        # link + complete the waiting execution with the resumed result
-        resumed.parent_execution_id = waiting.id if waiting else None
-        if waiting is not None:
+        try:
+            resumed = await self.execute(
+                approval.intent,
+                approval.compute,
+                actor=f"approved:{by}",
+                output_type=approval.output_type,
+                parent=parent,
+            )
+        except Exception as error:
+            if waiting is not None and not waiting.status.terminal:
+                waiting.fail(f"approval resume failed: {error}")
+                self._build_checkpoint(waiting)
+                self._persist(waiting)
+            raise
+
+        if waiting is not None and not waiting.status.terminal:
             waiting.complete(result=resumed.result)
+            self._build_checkpoint(waiting)
+            self._persist(waiting)
         return resumed
 
     def _participant_compute(self, approval: Any) -> ComputeFn | None:
@@ -372,7 +402,7 @@ class ExecutionEngine:
     async def deny(
         self, execution_id: str, *, by: str = "human", reason: str = "denied"
     ) -> Execution | None:
-        """Deny a waiting execution; it fails with the denial reason."""
+        """Deny a waiting execution and persist its terminal failure."""
         from voodoo.runtime.human import ApprovalStatus
 
         approval = self.approvals.decide(
@@ -389,6 +419,8 @@ class ExecutionEngine:
         waiting = self.executions.get(execution_id)
         if waiting is not None:
             waiting.fail(f"denied by {by}: {reason}")
+            self._build_checkpoint(waiting)
+            self._persist(waiting)
         await self._emit(
             "human.denied",
             {"execution_id": execution_id, "by": by, "reason": reason},
@@ -460,24 +492,19 @@ class ExecutionEngine:
         )
 
         try:
-            # 1. Capability resolution
             for required in intent.requires:
                 self.capabilities.authorize(
                     required, context=ctx, execution_id=execution.id
                 )
             execution.mark_authorized()
 
-            # 2. Constraint pre-check
             self.constraints.enforce(ctx, execution_id=execution.id)
 
-            # 3. Compute
             execution.start()
             result = await self._run_compute(compute, ctx, output_type=output_type)
 
-            # 4. Record effects / state / resources + post-compute checks
             await self._record_result(execution, intent, result, ctx)
 
-            # 5. Complete intent + execution
             value = result.validated()
             if ctx.intent is not None:
                 ctx.intent.complete(result=value)
@@ -503,7 +530,6 @@ class ExecutionEngine:
                 output_type=output_type,
             )
 
-        # Record to existing telemetry store for continuity.
         self._record_telemetry(execution)
         return execution
 
@@ -517,15 +543,10 @@ class ExecutionEngine:
         """Record a compute result's effects, state changes and resources."""
         for effect in result.effects:
             effect.intent_id = intent.id
-            # Authorization context (Sprint 19, ROADMAP §55): record
-            # who triggered the effect, which capability authorized it,
-            # and what resource/scope it targets.
             if effect.actor is None:
                 effect.actor = ctx.actor
             if effect.capability_name is None and ctx.capabilities:
                 effect.capability_name = ctx.capabilities[0].name
-            # Idempotency key: stable per execution+effect so a resumed
-            # execution can safely skip already-completed effects (spec §15).
             if effect.idempotency_key is None:
                 effect.idempotency_key = f"{execution.id}:{effect.id}"
             execution.add_effect(effect)
@@ -547,10 +568,8 @@ class ExecutionEngine:
             execution.add_resources(result.resources)
             self.resources.account(result.resources, execution_id=execution.id)
 
-        # Checkpoint after state mutation / effects recorded (Sprint 4).
         self._build_checkpoint(execution)
 
-        # Post-compute constraint enforcement against accumulated usage.
         self.constraints.enforce(
             ctx,
             cost=execution.resources.cost or None,
@@ -577,8 +596,6 @@ class ExecutionEngine:
         if isinstance(exc, ApprovalRequired):
             execution.wait()
             self._build_checkpoint(execution)
-            # Register a resumable approval: approve() re-runs the compute
-            # under a child context carrying the decision.
             approval = self.approvals.create(
                 execution=execution,
                 capability=exc.context.get("capability"),
@@ -589,8 +606,6 @@ class ExecutionEngine:
                 output_type=output_type,
                 context=ctx,
             )
-            # Persist the pending approval so a restart can rehydrate it
-            # (spec §30 — decisions recorded as journal events on decide).
             self._persist_approval(approval)
             self._journal_approval_decision(
                 execution.id,
@@ -678,11 +693,9 @@ class ExecutionEngine:
         if parent is not None:
             ctx = parent.child(actor=actor)
             ctx.intent = intent
-            # narrow authority: child may only keep capabilities it holds
             return ctx
         ctx = ExecutionContext(actor=actor, intent=intent)
         ctx.engine = self
-        # inherit intent constraints/deadline
         for c in intent.constraints:
             ctx.constrain(c)
         if intent.deadline is not None:
@@ -718,7 +731,6 @@ class ExecutionEngine:
                 if out.output_type is None:
                     out.output_type = output_type
             else:
-                # bare return → wrap
                 latency = (time.time() - started) * 1000
                 out = ComputeResult(
                     value=out,
@@ -726,9 +738,6 @@ class ExecutionEngine:
                     resources=Resource(latency_ms=latency),
                 )
 
-            # Lift effects recorded on the context (e.g. tool calls made
-            # deep inside an Agent run) onto the compute result so they
-            # materialize on the Execution record.
             if ctx.effects:
                 seen = {e.id for e in out.effects}
                 out.effects.extend(e for e in ctx.effects if e.id not in seen)
