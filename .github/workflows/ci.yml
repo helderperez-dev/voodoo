@@ -39,10 +39,10 @@ jobs:
         run: uv sync --python 3.12 --all-extras --dev
 
       - name: 🧹 Ruff format check
-        run: uv run ruff format --check .
+        run: .venv/bin/ruff format --check .
 
       - name: 🔍 Ruff lint
-        run: uv run ruff check .
+        run: .venv/bin/ruff check .
 
   # ─────────────────────────────────────────────────────────────────────
   # Type check — architectural sprint protocol requires this to be green
@@ -68,7 +68,7 @@ jobs:
         run: uv sync --python 3.12 --all-extras --dev
 
       - name: 🔷 Run mypy
-        run: uv run mypy src/voodoo
+        run: .venv/bin/mypy src/voodoo
 
   # ─────────────────────────────────────────────────────────────────────
   # Lean package smoke test — base wheel must not require AI provider SDKs
@@ -186,8 +186,7 @@ jobs:
 
       - name: 🔎 Verify matrix interpreter
         run: |
-          uv run python - <<'PY'
-          import os
+          .venv/bin/python - <<'PY'
           import sys
 
           expected = "${{ matrix.python-version }}"
@@ -197,7 +196,7 @@ jobs:
           PY
 
       - name: 🧪 Run pytest suite
-        run: uv run pytest --tb=short
+        run: .venv/bin/pytest --tb=short
 
       - name: 📊 Upload test results
         if: always()
