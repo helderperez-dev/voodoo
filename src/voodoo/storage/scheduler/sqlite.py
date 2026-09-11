@@ -233,9 +233,7 @@ class SQLiteScheduleStore:
         return True
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        self._conn.close()
 
 
 def _cron_next(spec: str, now: datetime) -> datetime | None:
