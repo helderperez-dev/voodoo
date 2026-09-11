@@ -221,9 +221,17 @@ class Execution(BaseModel):
 
     @property
     def duration_seconds(self) -> float | None:
-        if self._started_ts is None or self._completed_ts is None:
-            return None
-        return self._completed_ts - self._started_ts
+        """Return execution duration both live and after persistence reload.
+
+        ``_started_ts``/``_completed_ts`` provide precise wall-clock timing for
+        a live process but are intentionally not serialized. Durable execution
+        records therefore fall back to the persisted UTC timestamps.
+        """
+        if self._started_ts is not None and self._completed_ts is not None:
+            return self._completed_ts - self._started_ts
+        if self.started_at is not None and self.completed_at is not None:
+            return max((self.completed_at - self.started_at).total_seconds(), 0.0)
+        return None
 
     @property
     def cost(self) -> float:
