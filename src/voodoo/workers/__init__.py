@@ -1,31 +1,29 @@
 """Voodoo worker runtime — the ``@task`` decorator.
 
-``@task`` turns an async function into a retried, timeout-bounded unit of
-work that records a telemetry span for every execution attempt.  Tasks can
-be awaited directly (inline) or enqueued onto the single-process queue
-(:mod:`voodoo.queue`) for background execution.
+``@task`` turns a function into a retried, timeout-bounded unit of work with a
+telemetry span for every attempt. Tasks can be awaited directly or enqueued on
+the configured :class:`~voodoo.storage.queue.VoodooQueue` provider.
 
-Single-process scope & distributed backend boundary
------------------------------------------------------
-Today both the queue and the task runtime live in a single process: the
-"broker" is an :class:`asyncio.Queue` and workers are :class:`asyncio.Task`
-objects.  The public surface here (``@task``, ``task.enqueue``) is the seam
-a future distributed backend (Redis/RQ, Celery, Dramatiq, …) can plug into
-without changing application code — only the ``enqueue``/``_run_worker``
-implementations in :mod:`voodoo.queue` and the registration below would be
-swapped.
+Inline and durable retry semantics
+----------------------------------
+When a task is awaited directly, retries happen in-process because there is no
+queue record to persist them. When ``task.enqueue(...)`` is used, the queue
+persists ``max_attempts`` and owns retry scheduling/backoff. Each worker claim
+runs exactly one function attempt; a failed attempt is returned to the durable
+queue, so the remaining retry budget survives process failure and restart.
+
+SQLite is the zero-infrastructure default. PostgreSQL and Redis providers can
+be selected through Voodoo configuration; the in-memory provider is explicitly
+ephemeral.
 
 ``@mesh.on`` → ``@task`` chain
 ------------------------------
-Stacking the decorators is the intended pattern::
+Stacking the decorators runs the task inline with its normal retry semantics::
 
     @mesh.on("lead.created")
     @task(retries=3, timeout=10)
     async def sync_crm(payload):
         ...
-
-``mesh.on`` registers the ``@task``-wrapped callable; when the event fires
-the task runs with retries, timeout and a telemetry span.
 """
 
 import asyncio
@@ -42,11 +40,7 @@ __all__ = ["task", "TaskError"]
 
 
 class TaskError(Exception):
-    """Structured error raised when a ``@task`` exhausts its retries.
-
-    The original exception is preserved on ``__cause__``; ``task_name``,
-    ``attempts`` and ``timeout`` describe the execution context.
-    """
+    """Structured error raised when a ``@task`` exhausts its retries."""
 
     def __init__(
         self,
@@ -71,7 +65,7 @@ async def _run_task(
     args: tuple,
     kwargs: dict,
 ) -> Any:
-    """Execute *func* with retries, timeout and a telemetry span per attempt."""
+    """Execute *func* with in-process retries, timeout, and attempt telemetry."""
     from voodoo.telemetry import telemetry_store
 
     is_async = inspect.iscoroutinefunction(func)
@@ -89,9 +83,9 @@ async def _run_task(
                 else:
                     result = await coro
             else:
-                # Sync tasks run inline; timeout is not enforced for sync code.
+                # Sync tasks run inline; timeout cannot pre-empt synchronous code.
                 result = func(*args, **kwargs)
-        except Exception as exc:  # noqa: BLE001 — re-raised below
+        except Exception as exc:  # noqa: BLE001 — converted to TaskError below
             last_exc = exc
             latency = (time.perf_counter() - start) * 1000
             telemetry_store.record_trace(f"task:{task_name}", latency, error=True)
@@ -109,7 +103,6 @@ async def _run_task(
                     attempts=attempt,
                     timeout=timeout,
                 ) from last_exc
-            # Exponential backoff before retrying.
             delay = backoff_base * (2 ** (attempt - 1))
             await asyncio.sleep(delay)
             continue
@@ -122,24 +115,25 @@ async def _run_task(
 def _register_task_worker(
     task_name: str,
     func: Callable,
-    retries: int,
     timeout: float | None,
     backoff_base: float,
 ) -> None:
-    """Register *func* as a background queue worker named *task_name*."""
-    from voodoo.workers.queue import _workers
+    """Register a one-attempt background worker for a durable task type."""
+    from voodoo.workers.queue import _worker_backoff, _workers
 
     async def worker(payload: Any) -> None:
-        await _run_task(func, task_name, retries, timeout, backoff_base, (payload,), {})
+        # Durable retries belong to VoodooQueue. A claim represents one attempt.
+        await _run_task(func, task_name, 0, timeout, backoff_base, (payload,), {})
 
     _workers[task_name] = worker
+    _worker_backoff[task_name] = backoff_base
 
 
-async def _enqueue_task(task_name: str, payload: Any) -> None:
-    """Enqueue *payload* as a durable task of type *task_name*."""
+async def _enqueue_task(task_name: str, payload: Any, max_attempts: int) -> None:
+    """Enqueue *payload* with a durable attempt budget."""
     from voodoo.workers.queue import enqueue
 
-    await enqueue(task_name, payload)
+    await enqueue(task_name, payload, max_attempts=max_attempts)
 
 
 def task(
@@ -153,11 +147,9 @@ def task(
     """Decorator adding retries, timeout and telemetry spans to a function.
 
     Usable bare (``@task``) or parametrised (``@task(retries=3, timeout=30)``).
-
-    The returned callable runs inline when awaited and also exposes
-    ``.enqueue(payload)`` to submit the work to the background queue.  The
-    task is registered as a queue worker so ``start_workers`` will consume
-    enqueued items.
+    Awaiting the wrapper retries locally. ``.enqueue(payload)`` persists the
+    same retry budget as ``max_attempts=retries + 1`` and lets the queue own
+    retry/recovery semantics across worker restarts.
     """
 
     def decorator(func: Callable) -> Callable:
@@ -175,11 +167,11 @@ def task(
         wrapper.is_task = True
 
         async def enqueue_method(payload: Any = None) -> None:
-            await _enqueue_task(task_name, payload)
+            await _enqueue_task(task_name, payload, retries + 1)
 
         wrapper.enqueue = enqueue_method
 
-        _register_task_worker(task_name, func, retries, timeout, backoff)
+        _register_task_worker(task_name, func, timeout, backoff)
         return wrapper
 
     if _func is not None and callable(_func):
