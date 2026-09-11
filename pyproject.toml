@@ -52,7 +52,6 @@ dependencies = [
     "pyyaml",
     "typer",
     "rich",
-    "openai",
     "aiofiles"
 ]
 

@@ -8,47 +8,22 @@
 
 Voodoo is a **programmable runtime for adaptive applications and operational
 systems**. Web applications, APIs, agents, background workers, realtime
-systems, MCP tools, data-driven applications, human workflows, distributed
-systems, and physical systems are different manifestations of the same runtime
-— they converge on one execution model.
+systems, MCP tools, data-driven applications, human workflows, and distributed
+systems are different manifestations of the same runtime — they converge on one
+execution model.
 
 **Built on:** Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python `asyncio`.
 
-**Zero-config by default** (SQLite + local filesystem). **Production-ready by configuration** (PostgreSQL, Redis, S3, OpenAI/Anthropic).
+**Zero-config by default** (SQLite + local filesystem). **Production-ready by configuration** (PostgreSQL, Redis, S3, and optional model providers).
 
 ---
 
 ## The Convergence Model
 
-Every subsystem — UI, API, Agent, Worker, Tool, MCP, Human, Device, Robot —
-flows through the same conceptual model. There is no independent execution
-model per subsystem.
+Every subsystem flows through the same conceptual model. There is no independent execution model per subsystem.
 
 ```text
-                    ENTITY
-                       │
-                       ▼
-                     STATE
-                       │
-                       ▼
-                    INTENT
-                       │
-                       ▼
-                 CAPABILITY
-                       │
-                       ▼
-                  EXECUTION
-                       │
-          ┌────────────┼────────────┐
-          │            │            │
-       COMPUTE       TIME      CONSTRAINT
-          │            │            │
-          └────────────┼────────────┘
-                       │
-                    EFFECT
-                       │
-                       ▼
-                     STATE
+Entity → State → Intent → Capability → Execution → Effect → State
 ```
 
 An **Entity** with **State** pursues an **Intent**, which resolves to a
@@ -62,279 +37,176 @@ is consumed), and **Constraint** (what must hold). The execution produces an
 ## Design Principles
 
 1. **Progressive complexity** — Start with the smallest executable application. Add capabilities when needed.
-2. **Minimal scaffold** — `voodoo new` produces only `app/page.py`. No empty directories, no placeholder files.
-3. **Lazy capabilities** — Database, storage, and workers initialize only when actually used.
+2. **One primary onboarding path** — `voodoo create` is the standard full-runtime scaffold; `voodoo new` is the intentionally minimal UI/routing scaffold.
+3. **Lazy capabilities** — Database, storage, workers, and optional provider SDKs initialize only when actually used.
 4. **AI as one Compute** — AI is not a separate subsystem; it is one class of Compute, never a fundamental primitive.
-5. **Capability-based security** — Explicit, composable, revocable permissions rather than implicit role-based access.
-6. **Observability everywhere** — Correlation IDs + telemetry as the sensory system.
-7. **Zero-config runtime** — `voodoo new` → `voodoo dev` → working app.
+5. **Capability-based security** — Explicit, composable, revocable permissions rather than implicit access.
+6. **Observability everywhere** — Correlation IDs + telemetry form the runtime's sensory system.
+7. **Zero-config runtime** — `voodoo create` → `voodoo dev` → working local runtime.
+8. **Meaningful executions only** — an `Execution` represents work worth observing, authorizing, recovering, accounting for, or reasoning about. Internal function calls, state reads, and implementation callbacks do not become executions merely because they occur inside Voodoo.
+9. **Adaptive behavior stays optional** — planner/supervisor features may enrich execution without making simple application paths depend on adaptive orchestration.
 
 ---
 
-## The Computational Model
-
-Voodoo's concepts live at different semantic levels (see
-[`docs/primitives.md`](docs/primitives.md)):
-
-### Core Ontology
+## Computational concepts
 
 | Concept | Purpose |
 |---|---|
 | **Entity** | Something with identity that participates in the system |
 | **State** | Current operational truth of an entity or system |
-| **Intent** | The desired outcome to achieve |
+| **Intent** | Desired outcome |
 | **Capability** | Ability + authorization to produce an effect under conditions |
-| **Effect** | A change produced by an execution |
-
-### Runtime
-
-| Concept | Purpose |
-|---|---|
-| **Execution** | The central runtime mechanism — every operation is one |
-
-### Execution Dimensions
-
-| Concept | Purpose |
-|---|---|
-| **Compute** | How the execution is performed (AI is one class) |
-| **Time** | Lifecycle and validity (deadline, timeout, schedule, retry) |
-| **Resource** | What is consumed (CPU, GPU, memory, tokens, energy) |
+| **Execution** | Durable/observable unit of meaningful runtime work |
+| **Effect** | Change produced by an execution |
+| **Compute** | How execution is performed; AI is one form |
+| **Time** | Deadline, timeout, schedule, retry and lifecycle |
+| **Resource** | CPU, memory, tokens or other consumed resources |
 | **Constraint** | Conditions that must hold |
 
-### Cross-Cutting Concepts
+Cross-cutting concepts are **Event**, **Identity**, **Telemetry**, and **Relationship**.
 
-**Event**, **Identity**, **Telemetry**, **Relationship**.
+### Choosing the right abstraction
 
-### Execution Model
+| Need | Use |
+|---|---|
+| UI-local mutable value | reactive `state()` |
+| Persistent business data | `Model` |
+| Long-term contextual recall | agent/runtime memory |
+| Browser interaction | `@event` |
+| Decoupled application notification | Mesh/event bus |
+| Retryable background work | `@task` |
+| Meaningful durable/observable operation | `Execution` |
+| LLM reasoning/tool loop | `Agent` |
+| Reusable callable action | `@tool` |
+| Authorization to produce an effect | `Capability` |
+| Human decision in an execution | HITL approval |
+| Work at a future time | Scheduler |
 
-```text
-Entity → State → Intent → Capability → Execution → Effect → State
-```
-
-```python
-from voodoo.primitives import State, Capability, Intent, Effect
-from voodoo.primitives import TimeSpec, ComputeSpec, Resource, Constraint
-```
-
----
-
-## System Layers
-
-```
-┌─────────────────────────────────────────────┐
-│              Primitives Layer                 │
-│  Entity, State, Intent, Capability, Effect   │
-│  Compute, Time, Resource, Constraint          │
-├─────────────────────────────────────────────┤
-│              Runtime Engine Layer             │
-│  ExecutionEngine (execute, delegate, recover) │
-│  ExecutionContext (trace, capabilities, ...)  │
-│  Execution (status, effects, cost, state)    │
-│  CapabilityResolver (allow/deny/approve)     │
-│  ConstraintEnforcer + ResourceAccountant     │
-│  Planner (capability → compute resolution)  │
-│  AdaptiveSupervisor (retry/fallback/budget)  │
-│  Human (ask_human, approve, deny)           │
-│  Persistence (SQLiteExecutionStore)         │
-├─────────────────────────────────────────────┤
-│                  UI Layer                     │
-│  Components (Div, Card, Button, ...)         │
-│  Reactive State (State, StateRenderer)       │
-│  WebSocket Transport (ws_manager, events)    │
-├─────────────────────────────────────────────┤
-│                  AI Layer                      │
-│  Agent (run, stream, tool calling)           │
-│  LLM Providers (OpenAI, Anthropic, Mock)     │
-│  Tool Registry (@tool, ToolSpec)             │
-├─────────────────────────────────────────────┤
-│               Realtime Layer                   │
-│  Voodoo Mesh (events, expose, WS nodes)      │
-│  MCP Server (SSE, tools/list, tools/call)    │
-├─────────────────────────────────────────────┤
-│               Worker Layer                    │
-│  @task (retries, timeout, telemetry)         │
-│  Async Queue (enqueue, start_workers)        │
-├─────────────────────────────────────────────┤
-│                Data Layer                      │
-│  Model / BaseModel (async CRUD)              │
-│  SQLite (aiosqlite) with RLS policies        │
-├─────────────────────────────────────────────┤
-│              Infrastructure                    │
-│  Auth (JWT, API keys, RBAC)                  │
-│  Security (CORS, CSRF, rate limit, headers)  │
-│  Telemetry (trace_id, metrics, spans)       │
-│  Config (voodoo.toml, env vars)              │
-└─────────────────────────────────────────────┘
-```
-
-### Layering Rules
-
-- **UI layer** doesn't import from `storage/` or `runtime/` internals.
-- **AI layer** doesn't import from `ui/` or `routing/`.
-- **Runtime layer** doesn't import provider SDKs directly.
-- **Primitives layer** has zero dependencies on other layers.
-- **Data layer** doesn't import from `ai/` or `mesh/`.
+The table is deliberately semantic: similar-looking primitives are not aliases. UI state is not business persistence; a tool is not a capability; an event is not automatically an execution.
 
 ---
 
-## Request Lifecycle
+## Layering rules
+
+- **UI** does not import storage/runtime internals.
+- **AI** does not import UI/routing.
+- **Runtime** does not import provider SDKs directly.
+- **Primitives** have zero dependencies on other Voodoo layers.
+- **Data** does not import AI or Mesh.
+- Optional infrastructure/provider SDKs stay behind lazy adapters and optional extras.
+
+---
+
+## Request lifecycle
 
 1. HTTP request enters the ASGI app.
-2. Middleware stack processes: SecurityHeaders → CORS → RateLimit → CSRF → Telemetry → I18n → Auth.
-3. TelemetryMiddleware assigns a `trace_id` (UUID).
-4. AuthMiddleware resolves user from token/API key/cookie.
-5. Routing dispatches to page handler or API endpoint.
-6. Handler runs, renders component tree to HTML.
-7. Response flows back through middleware.
+2. Middleware applies security, telemetry, i18n and auth concerns.
+3. Telemetry assigns a correlation/trace identifier.
+4. Auth resolves the caller when configured.
+5. Routing dispatches to a page or API handler.
+6. Runtime integration creates an `Execution` only when the configured boundary treats the operation as meaningful runtime work.
+7. The response flows back through middleware.
 
-## Reactive Loop
+## Reactive loop
 
-1. Browser sends event over WebSocket (`{"type": "event", "event": "increment", ...}`).
-2. Event handler mutates `State` cell.
-3. `StateRenderer` re-renders the page function.
-4. DOM patch broadcast to all WebSocket clients.
-5. Client swaps `outerHTML` of the target element.
+1. Browser sends an event over WebSocket.
+2. Event handler mutates a reactive state cell.
+3. `StateRenderer` re-renders the bound component/page.
+4. A DOM patch is broadcast.
+5. The browser applies the patch.
 
-## Agent Execution Loop
+Reactive reads/renders are not themselves durable executions.
 
+## Agent execution loop
+
+```text
+prompt → provider → native tool call? → execute tool → tool result → provider → final answer
 ```
-prompt → provider → tool call? → execute tool → feed result back → final answer
-```
 
-1. Agent builds messages from prompt + system_prompt + context.
-2. Provider (OpenAI/Anthropic/Mock) processes the messages.
-3. If the response contains a tool-call marker, the tool is invoked from the registry.
-4. The tool result is appended to messages and the loop continues.
-5. When no more tool calls are requested, the final answer is returned.
+1. Agent builds messages from prompt, system prompt, history and context.
+2. Provider returns normalized `ProviderResponse` / streaming `ProviderEvent` values.
+3. Native provider tool calls are normalized into `ToolCall` objects and invoked through the tool registry.
+4. Tool results are appended using the provider-compatible call/result identifiers and the loop continues.
+5. When no tool calls remain, the final response is returned.
+6. The legacy `[TOOL: ...]` text marker exists only as a compatibility/mock fallback; it is not the canonical provider protocol.
 
----
-
-## Correlation ID Propagation
-
-Every request gets a `trace_id` (UUID) via `ContextVar`. This ID propagates through:
-
-- HTTP request telemetry
-- Agent runs (recorded in `AgentRun.trace_id`)
-- Tool call telemetry
-- Queue items (stored in envelope, restored in worker)
-- Mesh event envelopes (`correlation_id` field)
+Provider SDKs are optional and lazily imported. A core installation can use the mock/runtime surfaces without installing third-party AI SDKs.
 
 ---
 
 ## Runtime Engine
 
-The `ExecutionEngine` is the unified execution model. Every meaningful operation — HTTP request, agent run, tool call, MCP dispatch, worker job, task, workflow step, human approval, event handler — produces an `Execution` record with:
+`ExecutionEngine` is the unified runtime mechanism. A meaningful operation can produce an `Execution` with:
 
-- `execution_id` / `trace_id` / `parent_execution_id` — full traceability
-- `status` — `created → planned → authorized → running → waiting → completed | failed | cancelled | timed_out`
-- `effects` — side effects recorded on the execution
-- `state_changes` — observable state transitions
-- `cost` / `duration_seconds` — resource accounting
-- `error` — structured error with execution context
+- `execution_id`, `trace_id`, `parent_execution_id`
+- lifecycle status (`created`, `planned`, `authorized`, `running`, `waiting`, terminal states)
+- effects and observable state changes
+- resource/cost/duration accounting
+- structured errors and recovery context
 
-### Execution Lifecycle
+### Execution boundary rule
 
-```
-created → planned → authorized → running → waiting → completed
-                    ↓              ↓         ↓
-                  failed        timed_out  cancelled
-```
+Create an `Execution` when at least one of these matters:
 
-### Intent → Capability → Execution → Effect → State
+- durability or crash recovery;
+- authorization/capability enforcement;
+- parent/child delegation and traceability;
+- effect/state-change recording;
+- resource/cost accounting;
+- retries, timeout, scheduling or human waiting;
+- operational observability at a user/business boundary.
 
-```python
-from voodoo.runtime import Intent, execute, Task, Workflow
+Do **not** create one for every helper call, state access, render pass, callback, or internal event. This keeps the execution graph useful rather than noisy.
 
-result = await execute(
-    Intent(name="qualify_customer", params={"customer_id": 123}),
-    compute=some_fn,
-)
-```
+### Human-in-the-loop
 
-### Human-in-the-Loop
-
-```python
-from voodoo.runtime import ask_human, ExecutionEngine
-
-engine = ExecutionEngine()
-
-# Raises ApprovalRequired — execution enters "waiting"
-# Approval persisted to execution_approvals table
-# voodoo recover restores pending approvals after crash
-```
+Human approval is a waiting state of the same execution model. Approval state is persisted so recoverable work can resume after a process restart.
 
 ---
 
-## Provider/Adapter System
+## Provider / adapter system
 
-Every infrastructure adapter implements a Protocol and declares boolean capability flags:
+Infrastructure implementations sit behind protocols so local defaults and production adapters share contracts.
 
-| Protocol | Implementations |
+| Protocol | Typical implementations |
 |---|---|
-| `VoodooDatabase` | SQLite (default), PostgreSQL |
-| `VoodooQueue` | In-memory (default), PostgreSQL, Redis |
-| `VoodooEventBus` | In-memory (default), PostgreSQL |
-| `VoodooObjectStore` | Local filesystem (default), S3/MinIO |
-| `VoodooCache` | In-memory (default), Redis |
+| `VoodooDatabase` | SQLite, PostgreSQL |
+| `VoodooQueue` | local/SQLite, PostgreSQL, Redis |
+| `VoodooEventBus` | local/SQLite, PostgreSQL |
+| `VoodooObjectStore` | local filesystem, S3-compatible |
+| `VoodooCache` | in-memory, Redis |
 
-### LLM Providers
-
-| Provider | Model format |
-|---|---|
-| Mock | `mock:default` |
-| OpenAI | `openai:gpt-4o` |
-| Anthropic | `anthropic:claude-3-5-sonnet` |
-| Gemini | `gemini:gemini-1.5-pro` |
-| Ollama | `ollama:llama3` |
+Model providers are resolved lazily from `provider:model` references. Third-party SDKs belong to the `ai` optional extra; the base runtime does not require them.
 
 ---
 
-## Module Map
+## Module responsibilities
 
-```
+```text
 src/voodoo/
-├── __init__.py          # Public API, __version__, deprecation shims
-├── core/               # App facade, routing, errors, events, state
-├── primitives/         # Core ontology + execution dimensions
-├── runtime/            # ExecutionEngine, context, planner, adaptive, human, persistence
-├── ai/                 # Agent, LLM providers, tool registry
-├── adapters/           # Provider registry, capability system, style adapters
-├── storage/            # Database, queue, events, execution, objects, cache adapters
-├── ui/                 # Component system, reactive state, styles, theme
-├── routing/            # Page registry, API routing
-├── mesh/               # Realtime event bus
-├── mcp/                # Model Context Protocol server/client
-├── workers/            # @task decorator, queue runtime
-├── data/               # Async ORM (BaseModel, Model)
-├── auth/               # JWT, passwords, users, guards, middleware
-├── security/           # CORS, CSRF, rate limit, security headers
-├── telemetry/          # Trace store, middleware, metrics
-├── cli/                # Typer CLI (new, dev, generate, inspect, recover, ...)
-├── config.py           # Config loading, env interpolation
-├── i18n.py             # Internationalization
-├── schedule.py         # Durable scheduler
-├── seo.py              # SEO/OpenGraph metadata
-└── status.py           # Health check endpoint
+├── core/        # application facade, routing-facing core, errors/events/state
+├── primitives/  # ontology and execution dimensions
+├── runtime/     # execution engine, planner/adaptive, human, persistence
+├── ai/          # agents, provider abstraction, tools
+├── adapters/    # adapter/capability integration
+├── storage/     # database, queue, events, execution, objects, cache adapters
+├── ui/          # components, reactive state, styles/themes
+├── routing/     # page/API routing
+├── mesh/        # realtime application communication
+├── mcp/         # MCP integration
+├── workers/     # background task runtime
+├── data/        # async ORM
+├── auth/        # identity/authentication/guards
+├── security/    # HTTP/application security middleware
+├── telemetry/   # traces, metrics and observability
+├── cli/         # create/new/dev/generate/inspect/recover/etc.
+├── config.py    # configuration and environment interpolation
+├── schedule.py  # durable scheduling
+└── status.py    # health/status endpoint
 ```
 
 ---
 
-## Further Reading
+## Further reading
 
-| Topic | Document |
-|---|---|
-| Full architecture guide | `docs/architecture.md` |
-| AI agent guidance | `.github/instructions/architecture.instructions.md` |
-| Runtime engine | `docs/runtime.md`, `.github/instructions/runtime.instructions.md` |
-| Provider system | `.github/instructions/providers.instructions.md` |
-| Durable persistence | `.github/instructions/execution.instructions.md` |
-| AI agents & tools | `docs/agents.md`, `.github/instructions/ai.instructions.md` |
-| Testing & contracts | `.github/instructions/testing.instructions.md` |
-| Primitives | `docs/primitives.md` |
-| Components | `docs/components.md` |
-| Mesh | `docs/mesh.md` |
-| MCP | `docs/mcp.md` |
-| Workers | `docs/workers.md` |
-| Data ORM | `docs/data.md` |
-| Auth | `docs/auth.md` |
-| Telemetry | `docs/telemetry.md` |
+The detailed guides under `docs/` are authoritative for individual subsystems. In particular see `docs/primitives.md`, `docs/execution-model.md`, `docs/runtime.md`, `docs/agents.md`, `docs/events.md`, `docs/mesh.md`, `docs/workers.md`, `docs/data.md`, `docs/hitl.md`, and `docs/telemetry.md`.
