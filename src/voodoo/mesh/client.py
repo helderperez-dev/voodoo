@@ -7,23 +7,26 @@ from typing import Any
 class MeshClient:
     def __init__(self, endpoint_url: str):
         self.endpoint_url = endpoint_url
-        self.ws = None
-        self._pending_requests: dict[str, asyncio.Future] = {}
-        self._receive_task = None
+        self.ws: Any | None = None
+        self._pending_requests: dict[str, asyncio.Future[Any]] = {}
+        self._receive_task: asyncio.Task[None] | None = None
 
-    async def _ensure_connected(self):
+    async def _ensure_connected(self) -> None:
         if self.ws is None or getattr(self.ws, "closed", True):
             import websockets
 
-            # Use large max_size to handle huge payloads
+            # Use large max_size to handle huge payloads.
             self.ws = await websockets.connect(self.endpoint_url, max_size=8388608)
             self._receive_task = asyncio.create_task(self._receive_loop())
 
-    async def _receive_loop(self):
+    async def _receive_loop(self) -> None:
         import websockets
 
+        ws = self.ws
+        if ws is None:
+            return
         try:
-            async for message in self.ws:
+            async for message in ws:
                 data = json.loads(message)
                 if "id" in data and data["id"] in self._pending_requests:
                     future = self._pending_requests.pop(data["id"])
@@ -37,15 +40,18 @@ class MeshClient:
         except Exception as e:
             print(f"MeshClient receive loop error: {e}")
 
-    async def call(self, name: str, **kwargs) -> Any:
+    async def call(self, name: str, **kwargs: Any) -> Any:
         """Invoke a remote function on the connected Mesh Node."""
         await self._ensure_connected()
-        msg_id = str(uuid.uuid4())
+        ws = self.ws
+        if ws is None:
+            raise RuntimeError("Mesh connection was not established")
 
-        future = asyncio.Future()
+        msg_id = str(uuid.uuid4())
+        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
         self._pending_requests[msg_id] = future
 
-        await self.ws.send(
+        await ws.send(
             json.dumps(
                 {
                     "jsonrpc": "2.0",
