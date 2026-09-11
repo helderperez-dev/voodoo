@@ -2,13 +2,15 @@
 
 **The programmable runtime for adaptive applications and operational systems.**
 
-Voodoo lets Python applications grow from a page or API into durable workers, agents, human approvals, realtime communication and production infrastructure without replacing the execution model underneath them.
+Voodoo lets Python applications grow from a page or API into durable workers, agents, human approvals, realtime communication and physical systems without replacing the execution model underneath them.
 
-> Composition over configuration. Python over DSLs. Adapters over lock-in. Explicit capabilities over unrestricted autonomy.
+At its north star, **Voodoo gives AI durable agency in software and a governed body in the physical world**: intelligence can perceive state, remember, decide, act through explicit capabilities, observe consequences, recover, and continue across software and device boundaries.
+
+> Composition over configuration. Python over DSLs. Adapters over lock-in. Explicit capabilities over ambient authority.
 
 ## Why Voodoo?
 
-Modern applications often assemble separate frameworks for HTTP, UI, persistence, queues, scheduling, AI, realtime communication and observability. Voodoo provides these as composable capabilities of one runtime.
+Modern applications often assemble separate frameworks for HTTP, UI, persistence, queues, scheduling, AI, realtime communication, observability and devices. Voodoo provides these as composable capabilities of one runtime.
 
 The central model is:
 
@@ -17,6 +19,15 @@ Entity → State → Intent → Capability → Execution → Effect → State
 ```
 
 An `Execution` is not every function call. It is meaningful work worth observing, authorizing, recovering, accounting for, waiting on, or reasoning about.
+
+For autonomous and embodied systems, the same model closes the loop:
+
+```text
+World → Event/State → Intent → AI/Compute → Capability → Execution
+      → Effect → Software/Human/Device → ACK/Observation → State ↺
+```
+
+Freedom to reason is not the same as unlimited authority to act. Voodoo makes useful autonomy possible by giving intelligent entities durable identity, memory, tools, time, execution and effects while making authority explicit and inspectable. See `docs/agency-and-embodiment.md`.
 
 ## Quick start
 
@@ -53,6 +64,7 @@ The core package does not install OpenAI, Anthropic, Gemini or Ollama SDKs. Prov
 | Authorization to produce an effect | `Capability` |
 | Human decision inside work | HITL approval |
 | Future/recurring work | Scheduler |
+| Physical observation and action | Edge Device + Event/Effect |
 
 See `docs/choosing-primitives.md` for the semantic boundaries between State, Model, Memory, events, tools, tasks, capabilities and executions.
 
@@ -89,10 +101,12 @@ For the broader UI → agent → tool → event → worker → database demonstr
 
 ## What makes Voodoo different
 
-- **One execution model.** APIs, agents, tools, workers and human workflows can participate in a traceable runtime rather than forming independent orchestration stacks.
+- **One execution model.** APIs, agents, tools, workers, humans and physical devices can participate in a traceable runtime rather than forming independent orchestration stacks.
 - **AI is one form of Compute.** Agents are powerful participants, not the foundation every application must depend on.
-- **Durable when it matters.** Executions, tasks, schedules and approvals can survive process restarts using local persistence by default.
+- **Agency is durable.** Identity, memory, executions, tasks, schedules and approvals can survive process restarts using local persistence by default.
+- **Action is capability-mediated.** Intelligent participants can be given real authority without relying on ambient, all-or-nothing privilege.
 - **Human-in-the-loop is native.** Waiting for approval is an execution lifecycle state, not an ad-hoc polling pattern.
+- **Physical systems use the same semantics.** Edge devices observe through events/state and act through effects/acknowledgements; they do not create a second runtime.
 - **Local-first, production-capable.** SQLite/local filesystem provide the default path; PostgreSQL, Redis and S3-compatible storage are adapters.
 - **Adaptive execution is optional.** Planner/supervisor capabilities are available when capability resolution, fallback or budget steering is useful; simple paths remain simple.
 - **Observability is part of the runtime.** Correlation and execution context connect meaningful work across boundaries.
@@ -107,7 +121,7 @@ Effect       change produced by an execution
 State        operational truth
 ```
 
-`Compute`, `Time`, `Resource`, and `Constraint` govern how an Execution happens. See `docs/primitives.md`, `docs/execution-model.md`, `ARCHITECTURE.md`, and `docs/runtime-consolidation.md`.
+`Compute`, `Time`, `Resource`, and `Constraint` govern how an Execution happens. See `docs/primitives.md`, `docs/execution-model.md`, `ARCHITECTURE.md`, `docs/runtime-consolidation.md`, and `docs/agency-and-embodiment.md`.
 
 ## Major capabilities
 
@@ -116,6 +130,8 @@ State        operational truth
 **Runtime:** ExecutionEngine, durable execution/checkpoints/recovery, workers/tasks, scheduler, event infrastructure, human approvals, capability security, telemetry and optional adaptive planning/supervision.
 
 **AI:** agents, native provider tool calling, `@tool`, MCP integration, memory, model/provider abstraction and config-driven OpenAI-compatible endpoints.
+
+**Physical systems:** Edge device identity/enrollment, HTTP/MQTT protocol boundary, device events/state, effect delivery/acknowledgement, reconnect semantics and idempotent physical action.
 
 **Infrastructure adapters:** PostgreSQL, Redis, S3-compatible object storage and OpenTelemetry are optional extras behind runtime contracts.
 
@@ -130,6 +146,9 @@ pip install "voodoo-framework[ai]"
 
 # Production adapters as needed
 pip install "voodoo-framework[postgres,redis,s3,otel]"
+
+# Edge MQTT transport
+pip install "voodoo-framework[edge]"
 
 # Development tools
 pip install "voodoo-framework[dev]"
@@ -181,11 +200,13 @@ Start here:
 - `docs/choosing-primitives.md` — which Voodoo abstraction to use
 - `docs/primitives.md` — computational model
 - `docs/execution-model.md` and `docs/runtime.md` — execution semantics
+- `docs/agency-and-embodiment.md` — north star for AI agency and physical systems
 - `docs/data.md` — Models and persistence
 - `docs/events.md` and `docs/mesh.md` — communication boundaries
 - `docs/workers.md` — background tasks
 - `docs/agents.md`, `docs/tools.md`, `docs/mcp.md` — AI/tool integration
 - `docs/hitl.md` — human approvals
+- `docs/edge/` — physical-device protocol and runtime boundary
 - `docs/telemetry.md` — observability
 - `docs/deployment.md` — production deployment
 - `ARCHITECTURE.md` — root architecture reference
