@@ -1,6 +1,6 @@
 # Voodoo Edge — Overview
 
-> **Protocol:** `voodoo-edge/v1` · **Sprint 23** · **Status:** Runtime edge-ready; ESP32 client not yet implemented.
+> **Protocol:** `voodoo-edge/v1` · **Sprint 23** · **Status:** Runtime edge-ready; ESP32 reference implementation is Sprint 24.
 
 ## What is Voodoo Edge?
 
@@ -9,6 +9,12 @@ physical and distributed participants — ESP32s, Raspberry Pis, robots,
 industrial controllers, browser runtimes — act as **first-class Voodoo
 Entities** in the same durable execution model as software agents, workers,
 and humans.
+
+Edge is the embodiment boundary of Voodoo's larger goal: give intelligent
+systems durable agency in software and a governed body in the physical world.
+See [`../agency-and-embodiment.md`](../agency-and-embodiment.md) for the north
+star and [`esp32-reference.md`](esp32-reference.md) for the Sprint 24 physical
+acceptance slice.
 
 Edge is **not** a second runtime:
 
@@ -19,16 +25,17 @@ Edge is **not** a second runtime:
 
 ## Why does it exist?
 
-Software, humans, and physical devices converge on one model:
+Software, humans, AI, and physical devices converge on one model:
 
 ```
-Device → Event → Voodoo Runtime → Execution → Effect → Device
+Device → Event/State → Voodoo Runtime → Execution → Effect → Device → ACK/State
 ```
 
 A temperature sensor's `temperature.changed` event can trigger an Intent, run
 as a normal Execution (with actor `device:<id>`), and produce an Effect
 (`relay.fan.control`) delivered back to the device — with capability checks,
-durable records, traceability, and idempotency at every step.
+durable records, traceability, idempotency, acknowledgement, and state
+reconciliation around the loop.
 
 ## Architecture
 
@@ -56,6 +63,8 @@ durable records, traceability, and idempotency at every step.
                      Voodoo Edge
                           │
                        Device
+                          │
+                    Physical world
 ```
 
 ## What runs where?
@@ -64,16 +73,17 @@ durable records, traceability, and idempotency at every step.
 |---|---|---|
 | Identity & credentials | Issues & stores (hashed) | Holds raw credential |
 | Authentication | Validates | Presents credential |
-| Capability authorization | Enforces | Advertises capabilities |
+| Capability authorization | Enforces | Advertises supported capabilities |
 | Executions | Runs & records | — |
 | Effects | Produces & tracks delivery | Receives & idempotently applies |
-| State | Canonical store (versioned) | Reports state |
-| Events | Ingests & routes | Emits |
+| State | Canonical store (versioned) | Observes/reports local state |
+| Events | Ingests & routes | Emits observations |
+| Acknowledgement | Correlates with effect/execution | Reports physical application result |
 
 ## Transports
 
 - **HTTP** — REST endpoints under `/v1/edge/*`. Easy to test with curl.
-- **MQTT** — versioned topic namespace `voodoo/v1/devices/{device_id}/...`. Requires the optional `voodoo[edge]` extra (paho-mqtt).
+- **MQTT** — versioned topic namespace `voodoo/v1/devices/{device_id}/...`. Requires the optional `voodoo-framework[edge]` extra (paho-mqtt).
 
 Both carry the **same message envelopes** and produce **identical runtime
 behavior** — proven by shared contract tests (`tests/contracts/test_edge_protocol.py`).
@@ -111,9 +121,20 @@ just mqtt-up
 | [state-synchronization.md](state-synchronization.md) | Versioning, stale rejection, reconciliation |
 | [reliability.md](reliability.md) | At-least-once delivery, idempotency |
 | [device-simulator.md](device-simulator.md) | The protocol-faithful test client |
+| [esp32-reference.md](esp32-reference.md) | Sprint 24 real-hardware reference and acceptance loop |
+| [../agency-and-embodiment.md](../agency-and-embodiment.md) | Architectural north star for AI agency + physical systems |
 
 ## Next phase
 
-Sprint 24 will implement `voodoo-edge-esp32` — the C++ reference client
-consuming this protocol. Sprint 23 delivers the protocol, gateway,
-simulator, and documentation that client will target.
+Sprint 24 implements the first official ESP32 reference participant consuming
+`voodoo-edge/v1`. Its acceptance path is deliberately physical and closed-loop:
+
+```text
+button → EVENT → Runtime Execution → authorized Effect → LED → ACK/state
+```
+
+The optional AI variant inserts an Agent/Policy into the decision path without
+changing the Edge or execution semantics. Once this works on real hardware,
+robotics, workshop automation, environmental control, vehicles, and other
+embodied systems can compose the same primitives rather than inventing a new
+runtime.
