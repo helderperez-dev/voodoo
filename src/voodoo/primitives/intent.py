@@ -47,8 +47,9 @@ class Intent(BaseModel):
     """An outcome the system is trying to accomplish.
 
     Semantics:
-        outcome    — `name` + `params` describe what to achieve
-        lifecycle  — `status` tracks progression through the state machine
+        outcome     — `name` + `params` describe what to achieve
+        description — human/model-readable explanation of the desired outcome
+        lifecycle   — `status` tracks progression through the state machine
         capability  — `requires` lists needed capabilities
         constraint  — `constraints` define execution limits
         temporal    — `deadline` for time-bounded execution
@@ -58,6 +59,7 @@ class Intent(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
+    description: str = ""
     params: dict[str, Any] = Field(default_factory=dict)
     status: IntentStatus = IntentStatus.CREATED
     deadline: datetime | None = None
@@ -170,6 +172,7 @@ class Intent(BaseModel):
         return {
             "id": self.id,
             "name": self.name,
+            "description": self.description,
             "status": self.status.value,
             "active": self.active,
             "expired": self.expired,
