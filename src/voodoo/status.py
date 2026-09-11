@@ -1,10 +1,10 @@
 from typing import Any
 
 import voodoo.workers.queue as worker_queue
-from voodoo.api import api
 from voodoo.components import Card, Div, Heading
 from voodoo.data import get_db
 from voodoo.i18n import _
+from voodoo.routing.api import api
 from voodoo.storage import storage
 
 
