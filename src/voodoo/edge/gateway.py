@@ -37,8 +37,13 @@ from voodoo.edge.models import (
     TransportKind,
 )
 from voodoo.edge.protocol import (
+    AuthPayload,
     EdgeMessage,
     EdgeMessageType,
+    EffectAckPayload,
+    EventPayload,
+    HelloPayload,
+    StateSyncPayload,
     decode_message,
     make_message,
 )
@@ -135,17 +140,15 @@ class DeviceGateway:
         This is the canonical way transports authenticate — direct calls
         to ``authenticate_device`` bypass session tracking. Returns
         ``(context, session)`` with the context registered for subsequent
-        messages.  On reconnect, stale contexts for the same device are
+        messages. On reconnect, stale contexts for the same device are
         evicted first.
         """
-
         ctx, session = await authenticate_device(
             self._store,
             credential,
             claimed_device_id=claimed_device_id,
             transport=transport,
         )
-        # Evict any stale contexts for this device (reconnect cleanup).
         stale_sids = [
             sid for sid, c in self._contexts.items() if c.device_id == ctx.device_id
         ]
@@ -173,13 +176,7 @@ class DeviceGateway:
         *,
         transport: TransportKind = TransportKind.HTTP,
     ) -> AuthenticatedDeviceContext:
-        """Authenticate a device credential without creating a session.
-
-        For stateless transports (HTTP) where each request carries its
-        own credential. Validates the credential, checks the device is
-        not revoked, and updates ``last_seen_at``. Returns the
-        authenticated context only — no session is persisted.
-        """
+        """Authenticate a device credential without creating a session."""
         ctx, _session = await authenticate_device(
             self._store,
             credential,
@@ -199,16 +196,9 @@ class DeviceGateway:
         transport: TransportKind = TransportKind.HTTP,
         context: AuthenticatedDeviceContext | None = None,
     ) -> EdgeMessage:
-        """Decode, validate, authenticate (if needed), and route a message.
-
-        ``context`` is a transport-authenticated context (e.g. resolved
-        from a credential header). AUTH messages authenticate themselves;
-        every other type requires either ``context`` or a session_id in
-        the payload matching an authenticated session.
-        """
+        """Decode, validate, authenticate (if needed), and route a message."""
         message = decode_message(raw)
 
-        # Resource limit: message size (EDGE §76).
         if self._config is not None:
             edge_cfg = getattr(self._config, "edge", None)
             if edge_cfg is not None:
@@ -222,14 +212,10 @@ class DeviceGateway:
                             f"Message size {raw_size} exceeds limit {max_size}"
                         )
 
-        # Protocol-version gate happens inside decode; re-check payload types.
         if message.type is EdgeMessageType.AUTH:
             return await self.handle_auth(message, transport=transport)
 
         ctx = context or await self._require_context(message)
-
-        # Identity validation: message device_id must match the
-        # authenticated context (EDGE §77).
         if message.device_id and message.device_id != ctx.device_id:
             raise DeviceIdMismatchError(
                 f"Message device_id '{message.device_id}' does not match "
@@ -252,13 +238,15 @@ class DeviceGateway:
     async def handle_auth(
         self, message: EdgeMessage, *, transport: TransportKind
     ) -> EdgeMessage:
-        payload = message.typed_payload()  # AuthPayload
+        payload = message.typed_payload()
+        if not isinstance(payload, AuthPayload):
+            raise InvalidMessageError("AUTH handler received a non-AUTH payload")
         ctx, session = await self.connect(
             payload.credential,
             claimed_device_id=payload.device_id or None,
             transport=transport,
         )
-        response = make_message(
+        return make_message(
             EdgeMessageType.AUTH,
             device_id=ctx.device_id,
             payload={
@@ -270,15 +258,15 @@ class DeviceGateway:
             correlation_id=message.message_id,
             trace_id=message.trace_id,
         )
-        return response
 
     async def handle_hello(
         self, message: EdgeMessage, ctx: AuthenticatedDeviceContext
     ) -> EdgeMessage:
-        payload = message.typed_payload()  # HelloPayload
+        payload = message.typed_payload()
+        if not isinstance(payload, HelloPayload):
+            raise InvalidMessageError("HELLO handler received a non-HELLO payload")
         device = await self._require_device(ctx.device_id)
 
-        # Update canonical capability set from the announcement (EDGE §13).
         if payload.capabilities:
             device.capabilities = list(
                 set(device.capabilities) | set(payload.capabilities)
@@ -306,21 +294,14 @@ class DeviceGateway:
     async def handle_event(
         self, message: EdgeMessage, ctx: AuthenticatedDeviceContext
     ) -> EdgeMessage:
-        """Ingest a device event (EDGE §19–§21).
-
-        Duplicate message_ids (protocol retries) are idempotent — the
-        first delivery wins and retries receive the **same** response
-        (replayed from the message log).  Telemetry events update state
-        without creating Executions; semantic events become Intents
-        executed by the engine.
-        """
-        payload = message.typed_payload()  # EventPayload
+        """Ingest a device event (EDGE §19–§21)."""
+        payload = message.typed_payload()
+        if not isinstance(payload, EventPayload):
+            raise InvalidMessageError("EVENT handler received a non-EVENT payload")
         if await self._store.seen_message(message.message_id):
-            # Idempotent duplicate: replay the original response.
             stored = await self._store.get_stored_response(message.message_id)
             if stored is not None:
                 return EdgeMessage.model_validate_json(stored)
-            # Fallback for messages logged before response storage existed.
             return make_message(
                 EdgeMessageType.EVENT,
                 device_id=ctx.device_id,
@@ -334,7 +315,6 @@ class DeviceGateway:
         full_name = (
             event_name if event_name.startswith("device.") else f"device.{event_name}"
         )
-
         await self._emit(
             "device.event",
             {
@@ -366,6 +346,7 @@ class DeviceGateway:
         execution_id: str | None = None
         if self._engine is not None:
             from voodoo.primitives.intent import Intent
+            from voodoo.runtime.engine import ComputeResult
 
             intent = Intent(
                 name=f"device:{event_name}",
@@ -376,8 +357,8 @@ class DeviceGateway:
                 },
             )
 
-            async def telemetry_only(ctx_: Any) -> dict[str, Any]:
-                return {"ingested": True, "event": event_name}
+            async def telemetry_only(ctx_: Any) -> ComputeResult:
+                return ComputeResult(value={"ingested": True, "event": event_name})
 
             execution = await self._engine.execute(
                 intent, telemetry_only, actor=f"device:{ctx.device_id}"
@@ -402,10 +383,13 @@ class DeviceGateway:
         self, message: EdgeMessage, ctx: AuthenticatedDeviceContext
     ) -> EdgeMessage:
         """Versioned state ingestion — stale writes rejected (EDGE §22–§24)."""
-        payload = message.typed_payload()  # StateSyncPayload
+        payload = message.typed_payload()
+        if not isinstance(payload, StateSyncPayload):
+            raise InvalidMessageError(
+                "STATE_SYNC handler received a non-STATE_SYNC payload"
+            )
         device = await self._require_device(ctx.device_id)
 
-        # Resource limit: state size (EDGE §76).
         if self._config is not None:
             edge_cfg = getattr(self._config, "edge", None)
             if edge_cfg is not None:
@@ -449,11 +433,14 @@ class DeviceGateway:
         self, message: EdgeMessage, ctx: AuthenticatedDeviceContext
     ) -> EdgeMessage:
         """Record a device's acknowledgement of a delivered effect."""
-        payload = message.typed_payload()  # EffectAckPayload
+        payload = message.typed_payload()
+        if not isinstance(payload, EffectAckPayload):
+            raise InvalidMessageError(
+                "EFFECT_ACK handler received a non-EFFECT_ACK payload"
+            )
         delivery = await self._store.get_effect_delivery(payload.effect_id)
         if delivery is None:
             raise EffectNotFoundError(f"Effect '{payload.effect_id}' not found")
-        # Device isolation: devices only ack their own effects (EDGE §77).
         if delivery.device_id != ctx.device_id:
             raise AuthorizationFailedError("Effect belongs to a different device")
 
@@ -482,7 +469,7 @@ class DeviceGateway:
         self, message: EdgeMessage, ctx: AuthenticatedDeviceContext
     ) -> EdgeMessage:
         """Update liveness — never creates an Execution (EDGE §30)."""
-        message.typed_payload()  # validates the heartbeat payload schema
+        message.typed_payload()
         await self._store.update_last_seen(ctx.device_id)
         device = await self._store.get_device(ctx.device_id)
         return make_message(
@@ -509,13 +496,7 @@ class DeviceGateway:
         capability: str,
         payload: dict[str, Any],
     ) -> EffectDelivery:
-        """Queue an effect for delivery to a device.
-
-        Enforces capability authorization at the runtime boundary
-        (EDGE §50) — a device without the required capability never
-        receives the effect.  The retry limit is read from
-        ``config.edge.max_effect_retries`` (default 3).
-        """
+        """Queue an effect for delivery to a device."""
         device = await self._require_device(device_id)
         if capability not in device.capabilities:
             raise AuthorizationFailedError(
@@ -525,7 +506,6 @@ class DeviceGateway:
                     "device_capabilities": device.capabilities,
                 },
             )
-        # Resource limit: pending effects per device (EDGE §76).
         if self._config is not None:
             edge_cfg = getattr(self._config, "edge", None)
             if edge_cfg is not None:
@@ -551,7 +531,6 @@ class DeviceGateway:
             payload=payload,
             max_retries=max_retries,
         )
-        # Idempotent on effect_id — duplicate submissions are no-ops.
         await self._store.add_effect_delivery(delivery)
         await self._emit(
             "device.effect.submitted",
@@ -567,20 +546,14 @@ class DeviceGateway:
     async def pending_effects(
         self, device_id: str, ctx: AuthenticatedDeviceContext
     ) -> list[EffectDelivery]:
-        """Retrieve and claim pending effects for a device.
-
-        Device isolation is enforced — a device can only list its own
-        effects.  Each effect is atomically claimed (``pending →
-        delivering``) so concurrent HTTP polls never receive the same
-        effect twice.
-        """
+        """Retrieve and claim pending effects for a device."""
         if device_id != ctx.device_id:
             raise AuthorizationFailedError("Devices may only list their own effects")
         deliveries = await self._store.pending_effects(device_id)
         claimed: list[EffectDelivery] = []
-        for d in deliveries:
-            if await self._store.claim_effect(device_id, d.effect_id):
-                claimed.append(d)
+        for delivery in deliveries:
+            if await self._store.claim_effect(device_id, delivery.effect_id):
+                claimed.append(delivery)
         await self._emit(
             "device.effect.delivered",
             {"device_id": device_id, "count": len(claimed)},
@@ -589,15 +562,11 @@ class DeviceGateway:
         return claimed
 
     async def retry_effects(self, device_id: str) -> int:
-        """Reset stale ``delivering`` effects back to ``pending`` for retry.
-
-        Returns the number of effects that were reset or marked as
-        ``delivery_failed`` (exceeded max retries).
-        """
+        """Reset stale delivering effects back to pending for retry."""
         stale = await self._store.stale_deliveries(device_id)
         retried = 0
-        for d in stale:
-            if await self._store.retry_effect(d.effect_id):
+        for delivery in stale:
+            if await self._store.retry_effect(delivery.effect_id):
                 retried += 1
         return retried
 
@@ -606,12 +575,7 @@ class DeviceGateway:
     # ------------------------------------------------------------------
 
     async def disconnect(self, session_id: str) -> None:
-        """Detach a session; the device entity remains valid (EDGE §7).
-
-        The context map may be empty when authentication happened out-of-
-        band (transport-level credential check), so the device status is
-        resolved through the persisted session when needed.
-        """
+        """Detach a session; the device entity remains valid (EDGE §7)."""
         ctx = self._contexts.pop(session_id, None)
         session = await self._store.get_session(session_id)
         await self._store.delete_session(session_id)
@@ -632,7 +596,6 @@ class DeviceGateway:
         """Revoke a device — credentials cascade-revoked (EDGE §49)."""
         revoked = await self._store.revoke_device(device_id)
         if revoked:
-            # Drop any live sessions for the revoked device.
             to_drop = [
                 sid for sid, ctx in self._contexts.items() if ctx.device_id == device_id
             ]
@@ -651,13 +614,7 @@ class DeviceGateway:
     async def _require_context(
         self, message: EdgeMessage
     ) -> AuthenticatedDeviceContext:
-        """Resolve the authenticated context for a non-AUTH message.
-
-        MQTT-style flows authenticate once (AUTH) then reference the
-        session by id in subsequent payloads. The device_id binding is
-        re-validated — a session can never act on behalf of another
-        device (EDGE §77).
-        """
+        """Resolve the authenticated context for a non-AUTH message."""
         session_id = str(message.payload.get("session_id", "") or "")
         if not session_id:
             raise AuthenticationFailedError(
