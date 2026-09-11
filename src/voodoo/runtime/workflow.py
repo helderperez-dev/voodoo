@@ -5,7 +5,7 @@ under the Voodoo runtime. It is *not* a separate execution engine: every
 strategy compiles into the same Intent → Capability → Execution → Effect →
 State pipeline via :class:`~voodoo.runtime.task.Task`.
 
-Supported strategies (implemented incrementally, per the spec order):
+Supported strategies:
 
     sequential
     parallel        (dependency-aware)
@@ -13,7 +13,7 @@ Supported strategies (implemented incrementally, per the spec order):
     iterative       (repeat until predicate / max iterations)
     delegated       (tasks delegate to sub-agents via child executions)
     hierarchical    (nested workflows)
-    adaptive        (planner-driven; future milestone)
+    adaptive        (planner-driven)
 
 ``Crew`` is intentionally **not** used — Voodoo-native terminology only.
 """
@@ -93,31 +93,75 @@ class Workflow:
 
     # -- topology ----------------------------------------------------------
 
+    def _validate_topology(self) -> None:
+        """Validate task identity, dependency membership, and acyclicity.
+
+        Task names are the workflow's durable result/dependency keys, so they
+        must be unique. Dependencies must point to tasks that actually belong
+        to this workflow. Cycles are rejected before any task executes instead
+        of silently falling back to declaration order or reporting a partially
+        executed parallel workflow as completed.
+        """
+        names = [task.name for task in self.tasks]
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        if duplicates:
+            raise ValueError(
+                "Workflow task names must be unique; duplicate(s): "
+                + ", ".join(duplicates)
+            )
+
+        members = {id(task) for task in self.tasks}
+        for task in self.tasks:
+            missing = [dep.name for dep in task.depends_on if id(dep) not in members]
+            if missing:
+                raise ValueError(
+                    f"Task {task.name!r} depends on task(s) not in this workflow: "
+                    + ", ".join(missing)
+                )
+
+        done: set[str] = set()
+        remaining = list(self.tasks)
+        while remaining:
+            ready = [
+                task
+                for task in remaining
+                if all(dep.name in done for dep in task.depends_on)
+            ]
+            if not ready:
+                cycle = ", ".join(task.name for task in remaining)
+                raise ValueError(f"Workflow dependency cycle detected among: {cycle}")
+            for task in ready:
+                done.add(task.name)
+                remaining.remove(task)
+
     def _topological_order(self) -> list[Task]:
-        """Return tasks in dependency order (Kahn's algorithm)."""
+        """Return tasks in dependency order using Kahn's algorithm."""
         order: list[Task] = []
         done: set[str] = set()
         remaining = list(self.tasks)
-        # guard against empty
         while remaining:
-            progressed = False
-            for task in list(remaining):
-                if all(d.name in done for d in task.depends_on):
-                    order.append(task)
-                    done.add(task.name)
-                    remaining.remove(task)
-                    progressed = True
-            if not progressed:
-                # cycle — fall back to declared order
-                order.extend(remaining)
-                break
+            ready = [
+                task
+                for task in remaining
+                if all(dep.name in done for dep in task.depends_on)
+            ]
+            if not ready:
+                # ``run`` validates first; keep this guard for callers of this
+                # private helper during maintenance/debugging.
+                cycle = ", ".join(task.name for task in remaining)
+                raise ValueError(f"Workflow dependency cycle detected among: {cycle}")
+            for task in ready:
+                order.append(task)
+                done.add(task.name)
+                remaining.remove(task)
         return order
 
     def _ready_tasks(self, done: set[str]) -> list[Task]:
         return [
-            t
-            for t in self.tasks
-            if t.name not in done and all(d.name in done for d in t.depends_on)
+            task
+            for task in self.tasks
+            if task.name not in done
+            and all(dependency.name in done for dependency in task.depends_on)
         ]
 
     # -- execution ---------------------------------------------------------
@@ -134,6 +178,12 @@ class Workflow:
         strategy = self.strategy
 
         try:
+            # Validate before any compute runs. A workflow with an ambiguous or
+            # impossible dependency graph must fail atomically at the topology
+            # boundary rather than execute a partial plan.
+            if strategy is not WorkflowStrategy.HIERARCHICAL:
+                self._validate_topology()
+
             if strategy is WorkflowStrategy.SEQUENTIAL:
                 await self._run_sequential(run, engine, parent, context)
             elif strategy is WorkflowStrategy.PARALLEL:
@@ -149,17 +199,18 @@ class Workflow:
             elif strategy is WorkflowStrategy.ADAPTIVE:
                 await self._run_adaptive(run, engine, parent, context)
             else:
-                # adaptive is a future milestone — fall back to sequential.
                 await self._run_sequential(run, engine, parent, context)
 
             run.status = "completed"
-        except Exception as e:  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             run.status = "failed"
-            run.error = str(e)
+            run.error = str(error)
+            if isinstance(error, WorkflowFailure):
+                raise
             raise WorkflowFailure(
-                f"Workflow '{self.name or self.id}' failed: {e}",
+                f"Workflow '{self.name or self.id}' failed: {error}",
                 context={"workflow_id": self.id, "strategy": strategy.value},
-            ) from e
+            ) from error
 
         await self._emit(
             "workflow.completed",
@@ -207,25 +258,32 @@ class Workflow:
         while len(done) < len(self.tasks):
             ready = self._ready_tasks(done)
             if not ready:
-                break
+                unfinished = ", ".join(
+                    task.name for task in self.tasks if task.name not in done
+                )
+                raise WorkflowFailure(
+                    f"Workflow cannot make progress; unresolved tasks: {unfinished}",
+                    context={"unfinished": unfinished},
+                )
             coros = [
                 task.run(context=ctx, engine=engine, parent=parent, results=results)
                 for task in ready
             ]
             executions = await asyncio.gather(*coros, return_exceptions=True)
-            for task, ex in zip(ready, executions, strict=True):
-                if isinstance(ex, Exception):
+            for task, execution in zip(ready, executions, strict=True):
+                if isinstance(execution, Exception):
                     run.task_statuses[task.name] = TaskStatus.FAILED.value
                     run.task_results[task.name] = None
                     raise WorkflowFailure(
-                        f"Task '{task.name}' failed: {ex}", context={"task": task.name}
+                        f"Task '{task.name}' failed: {execution}",
+                        context={"task": task.name},
                     )
-                run.executions.append(ex)
+                run.executions.append(execution)
                 run.task_statuses[task.name] = task.status.value
                 run.task_results[task.name] = task.result
                 results[task.name] = task.result
                 done.add(task.name)
-                engine.checkpoint(ex)
+                engine.checkpoint(execution)
                 if task.status is TaskStatus.FAILED:
                     raise WorkflowFailure(
                         f"Task '{task.name}' failed", context={"task": task.name}
@@ -281,7 +339,6 @@ class Workflow:
         )
         results: dict[str, Any] = dict(ctx or {})
         for task in self._topological_order():
-            # Each task runs as a child execution (delegation).
             child_parent = parent or ExecutionContext(actor="workflow")
             execution = await task.run(
                 context=ctx, engine=engine, parent=child_parent, results=results
@@ -301,7 +358,6 @@ class Workflow:
         await self._emit(
             "workflow.started", {"workflow_id": self.id, "strategy": "hierarchical"}
         )
-        # Treat nested Workflow objects in self.tasks as sub-workflows.
         results: dict[str, Any] = dict(ctx or {})
         for item in self.tasks:
             if isinstance(item, Workflow):
@@ -318,7 +374,7 @@ class Workflow:
                 run.task_results[item.name] = item.result
                 results[item.name] = item.result
 
-    # -- mesh --------------------------------------------------------------
+    # -- adaptive ----------------------------------------------------------
 
     async def _run_adaptive(
         self,
@@ -327,13 +383,7 @@ class Workflow:
         parent: ExecutionContext | None,
         ctx: dict | None,
     ) -> None:
-        """Adaptive strategy: build a Planner from the workflow's tasks and
-        let the :class:`AdaptiveSupervisor` steer execution step-by-step.
-
-        Each task's declared capabilities register it as a compute
-        participant; the planner resolves the sequence and the supervisor
-        records decisions on the run.
-        """
+        """Run the planner/supervisor strategy using declared task capabilities."""
         await self._emit(
             "workflow.started", {"workflow_id": self.id, "strategy": "adaptive"}
         )
@@ -376,11 +426,13 @@ class Workflow:
         intent = Intent(name=f"workflow:{self.name or self.id}", params=dict(ctx or {}))
         seen: set[str] = set()
         for task in self.tasks:
-            for cap in task.capabilities:
-                if cap not in seen:
-                    seen.add(cap)
-                    intent.require(cap)
+            for capability in task.capabilities:
+                if capability not in seen:
+                    seen.add(capability)
+                    intent.require(capability)
         return intent
+
+    # -- mesh --------------------------------------------------------------
 
     async def _emit(self, event: str, payload: dict[str, Any]) -> None:
         try:
@@ -397,5 +449,5 @@ class Workflow:
             "id": self.id,
             "name": self.name,
             "strategy": self.strategy.value,
-            "tasks": [t.describe() for t in self.tasks],
+            "tasks": [task.describe() for task in self.tasks],
         }
