@@ -1,9 +1,9 @@
 """Durable async queue & worker runtime.
 
 Workers poll a ``VoodooQueue`` provider (SQLite by default, memory optional)
-for claimable tasks. Each task is executed through the runtime engine; on
-success the task is completed, on failure it's retried with backoff until
-``max_attempts`` is exhausted.
+for claimable tasks. Each claimed task performs exactly one execution attempt.
+On failure the durable queue owns retry scheduling and backoff, so retry budget
+survives worker/process failure instead of living only in memory.
 
 The ``@queue`` decorator and ``enqueue``/``start_workers``/``stop_workers``
 functions form the public API; swapping the provider (see
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from voodoo.storage.queue import VoodooQueue
 
 _workers: dict[str, Callable] = {}
+_worker_backoff: dict[str, float] = {}
 _worker_tasks: list[asyncio.Task] = []
 _queue: VoodooQueue | None = None
 
@@ -38,10 +39,7 @@ def _get_provider() -> str:
 
 
 async def _get_queue() -> VoodooQueue:
-    """Resolve the active queue backend.
-
-    Resolved using the central ProviderRegistry and VoodooConfig (Spec §31).
-    """
+    """Resolve the active queue backend from central runtime configuration."""
     global _queue
     if _queue is not None:
         return _queue
@@ -56,7 +54,6 @@ async def _get_queue() -> VoodooQueue:
     if provider == "memory":
         _queue = registry.get_queue(cfg)
     else:
-        # SQLiteQueue requires a database
         db = _database
         if db is None:
             await get_db()
@@ -80,8 +77,18 @@ def queue(name: str):
     return decorator
 
 
-async def enqueue(name: str, payload: Any):
-    """Enqueue *payload* as a durable task of type *name*."""
+async def enqueue(
+    name: str,
+    payload: Any,
+    *,
+    max_attempts: int = 1,
+    idempotency_key: str | None = None,
+) -> None:
+    """Enqueue *payload* as a durable task of type *name*.
+
+    ``max_attempts`` is persisted by the queue provider. It therefore remains
+    authoritative across worker crashes and process restarts.
+    """
     from voodoo.telemetry import trace_id_var
 
     q = await _get_queue()
@@ -89,12 +96,13 @@ async def enqueue(name: str, payload: Any):
         name,
         payload,
         trace_id=trace_id_var.get(),
-        max_attempts=1,
+        max_attempts=max(1, max_attempts),
+        idempotency_key=idempotency_key,
     )
 
 
-async def _run_worker(name: str, worker_id: str):
-    """Poll the durable queue for tasks of type *name* and execute them."""
+async def _run_worker(name: str, worker_id: str) -> None:
+    """Poll the durable queue for tasks of type *name* and execute one attempt."""
     from voodoo.primitives.intent import Intent
     from voodoo.runtime.engine import engine as runtime_engine
     from voodoo.telemetry import trace_id_var
@@ -128,20 +136,25 @@ async def _run_worker(name: str, worker_id: str):
                         intent, compute, actor=f"worker:{name}", parent=ctx
                     )
                 await q.complete(task.id, worker_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.error("Error in worker %s task %d: %r", name, task.id, exc)
-                await q.fail(task.id, worker_id, str(exc))
+                await q.fail(
+                    task.id,
+                    worker_id,
+                    str(exc),
+                    backoff_base=_worker_backoff.get(name, 1.0),
+                )
             finally:
                 trace_id_var.reset(token)
         except asyncio.CancelledError:
             break
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.error("Worker %s poll loop error: %r", name, exc)
             await asyncio.sleep(1.0)
 
 
-async def _reaper():
-    """Background task that reclaims expired leases from dead workers."""
+async def _reaper() -> None:
+    """Reclaim expired leases from workers that died mid-attempt."""
     while True:
         try:
             q = await _get_queue()
@@ -150,25 +163,25 @@ async def _reaper():
                 logger.info("reclaimed %d expired task(s)", reclaimed)
         except asyncio.CancelledError:
             break
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.error("reaper error: %r", exc)
         await asyncio.sleep(5.0)
 
 
-async def start_workers():
+async def start_workers() -> None:
     """Start one poller per registered worker type plus a lease reaper."""
     for name in _workers:
         worker_id = f"{name}:{os.getpid()}"
-        task = asyncio.create_task(_run_worker(name, worker_id))
-        _worker_tasks.append(task)
+        worker_task = asyncio.create_task(_run_worker(name, worker_id))
+        _worker_tasks.append(worker_task)
     if _workers:
         _worker_tasks.append(asyncio.create_task(_reaper()))
 
 
-async def stop_workers():
-    """Cancel all worker tasks and reclaim any in-flight leases."""
-    for task in _worker_tasks:
-        task.cancel()
+async def stop_workers() -> None:
+    """Cancel all worker tasks; expired leases are reclaimed durably later."""
+    for worker_task in _worker_tasks:
+        worker_task.cancel()
     if _worker_tasks:
         await asyncio.gather(*_worker_tasks, return_exceptions=True)
     _worker_tasks.clear()
