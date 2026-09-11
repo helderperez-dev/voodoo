@@ -5,7 +5,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Allow manual runs from the Actions tab.
   workflow_dispatch:
 
 permissions:
@@ -37,13 +36,80 @@ jobs:
         run: uv python install 3.12
 
       - name: 📦 Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --python 3.12 --all-extras --dev
 
       - name: 🧹 Ruff format check
         run: uv run ruff format --check .
 
       - name: 🔍 Ruff lint
         run: uv run ruff check .
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Type check — architectural sprint protocol requires this to be green
+  # ─────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: 🔷 Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v7
+
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: 📦 Install dependencies
+        run: uv sync --python 3.12 --all-extras --dev
+
+      - name: 🔷 Run mypy
+        run: uv run mypy src/voodoo
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Lean package smoke test — base wheel must not require AI provider SDKs
+  # ─────────────────────────────────────────────────────────────────────
+  package-smoke:
+    name: 📦 Lean Package Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v7
+
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: 🏗️ Build wheel
+        run: uv build --wheel
+
+      - name: 🧪 Install base wheel in clean environment
+        run: |
+          uv venv --python 3.12 /tmp/voodoo-lean
+          uv pip install --python /tmp/voodoo-lean/bin/python dist/*.whl
+
+      - name: ✅ Verify lean core
+        run: |
+          /tmp/voodoo-lean/bin/python - <<'PY'
+          import importlib.util
+          import voodoo
+          from voodoo.ai.providers import get_provider
+
+          assert importlib.util.find_spec("openai") is None, "openai leaked into base install"
+          provider = get_provider("mock:test")
+          assert provider.name == "mock"
+          print(f"voodoo {voodoo.__version__}: lean core OK")
+          PY
 
   # ─────────────────────────────────────────────────────────────────────
   # Test — full pytest suite with service containers
@@ -57,13 +123,6 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
 
-    # PostgreSQL service container (Sprint 10): runs the database contract
-    # suite against a real server. The voodoo database provider itself talks
-    # to it over TCP on localhost:5432.
-    # MinIO service container (Sprint 12): runs the object store contract
-    # suite against a real S3-compatible server.
-    # Redis service container (Sprint 13): runs the queue + cache contract
-    # suites against a real server.
     services:
       postgres:
         image: postgres:16
@@ -80,8 +139,6 @@ jobs:
           --health-retries 5
       minio:
         image: minio/minio
-        # minio/minio:latest CMD is bare `minio` (prints help + exits), so the
-        # server must be started explicitly — same as `just minio-up`.
         command: server /data
         env:
           MINIO_ROOT_USER: minioadmin
@@ -104,15 +161,11 @@ jobs:
           --health-retries 5
 
     env:
-      # Makes tests/contracts/test_database_postgres.py run instead of skip.
       VOODOO_TEST_DATABASE_URL: postgresql://voodoo:voodoo@localhost:5432/voodoo_test
-      # Makes tests/contracts/test_objectstore_s3.py run instead of skip.
       VOODOO_TEST_S3_ENDPOINT: http://localhost:9000
       VOODOO_TEST_S3_BUCKET: voodoo-test
       VOODOO_TEST_S3_KEY: minioadmin
       VOODOO_TEST_S3_SECRET: minioadmin
-      # Makes tests/contracts/test_queue_redis.py + test_cache_redis.py run
-      # instead of skip.
       VOODOO_TEST_REDIS_URL: redis://localhost:6379/0
 
     steps:
@@ -128,8 +181,20 @@ jobs:
       - name: 🐍 Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: 📦 Install dependencies
-        run: uv sync --all-extras --dev
+      - name: 📦 Install dependencies for Python ${{ matrix.python-version }}
+        run: uv sync --python ${{ matrix.python-version }} --all-extras --dev
+
+      - name: 🔎 Verify matrix interpreter
+        run: |
+          uv run python - <<'PY'
+          import os
+          import sys
+
+          expected = "${{ matrix.python-version }}"
+          actual = f"{sys.version_info.major}.{sys.version_info.minor}"
+          assert actual == expected, f"expected Python {expected}, got {actual}"
+          print(f"Python matrix verified: {actual}")
+          PY
 
       - name: 🧪 Run pytest suite
         run: uv run pytest --tb=short
