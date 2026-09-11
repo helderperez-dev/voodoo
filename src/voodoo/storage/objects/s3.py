@@ -111,7 +111,7 @@ class S3ObjectStore:
 
     def _is_aws(self) -> bool:
         """True when the endpoint is real AWS S3 (virtual-hosted style)."""
-        return bool(self.endpoint) and "amazonaws.com" in self.endpoint
+        return self.endpoint is not None and "amazonaws.com" in self.endpoint
 
     def put(
         self, key: str, data: bytes, content_type: str = "application/octet-stream"
