@@ -89,9 +89,7 @@ class TimeSpec(BaseModel):
         delta = (self.deadline - datetime.now(UTC)).total_seconds()
         return max(delta, 0.0)
 
-    def to_schedule_record(
-        self, name: str, task_type: str
-    ) -> dict[str, Any] | None:
+    def to_schedule_record(self, name: str, task_type: str) -> dict[str, Any] | None:
         """Convert this TimeSpec into a schedule record (Sprint 5).
 
         Returns a dict with kind/spec/next_run_at for the scheduler.
