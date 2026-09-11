@@ -187,8 +187,6 @@ class LLMProvider(ABC):
     ) -> AsyncIterator[ProviderEvent]:
         """Yield normalized streaming events."""
         raise NotImplementedError
-        # pragma: no cover - abstract generator marker
-        yield  # type: ignore[unreachable]  # noqa: B018
 
     async def generate(
         self, messages: list[Message], **kwargs: Any
