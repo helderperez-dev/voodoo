@@ -171,7 +171,10 @@ def rls_policy(model_cls: type):
     return decorator
 
 
-_models: list[type] = []
+# ModelMeta registers arbitrary concrete classes dynamically. Their common
+# behavior (_create_table, CRUD methods) is supplied by the metaclass/base at
+# runtime, so Any is the honest type at this registry seam.
+_models: list[Any] = []
 
 #: Cascade registry: parent_table → [(child_table, fk_column)] (Sprint: ORM FK).
 _cascades: dict[str, list[tuple[str, str]]] = {}
@@ -232,11 +235,13 @@ def _register_foreign_keys(cls: type) -> None:
         return
     for col_name, col_type in hints.items():
         ref = getattr(col_type, "__origin__", None)
-        if isinstance(ref, _FKRef) or isinstance(col_type, _FKRef):
-            target = (col_type if isinstance(col_type, _FKRef) else ref).target
-            parent_table = _get_table_name(target)
-            child_table = _get_table_name(cls)
-            _cascades.setdefault(parent_table, []).append((child_table, col_name))
+        marker = col_type if isinstance(col_type, _FKRef) else ref
+        if not isinstance(marker, _FKRef):
+            continue
+        target = marker.target
+        parent_table = _get_table_name(target)
+        child_table = _get_table_name(cls)
+        _cascades.setdefault(parent_table, []).append((child_table, col_name))
 
 
 class BaseModel(metaclass=ModelMeta):
@@ -288,7 +293,7 @@ class BaseModel(metaclass=ModelMeta):
         db = await get_db()
         table_name = _get_table_name(cls)
         query = f"SELECT * FROM {table_name}"
-        params = []
+        params: list[Any] = []
 
         if user_context is None:
             try:
