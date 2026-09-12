@@ -24,7 +24,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from voodoo.primitives.intent import Intent
@@ -253,7 +253,10 @@ class Workflow:
             ]
             executions = await asyncio.gather(*coroutines, return_exceptions=True)
             for task, execution in zip(ready, executions, strict=True):
-                if isinstance(execution, Exception):
+                # gather(return_exceptions=True) is typed as Execution |
+                # BaseException. Narrow the full exception base so mypy and
+                # runtime behavior agree (CancelledError is a BaseException).
+                if isinstance(execution, BaseException):
                     run.task_statuses[task.name] = TaskStatus.FAILED.value
                     run.task_results[task.name] = None
                     raise WorkflowFailure(
@@ -372,7 +375,7 @@ class Workflow:
 
         planner = Planner(engine=engine)
         for task in self._topological_order():
-            kind = (
+            kind: Literal["human", "agent", "compute"] = (
                 "human"
                 if task.human
                 else ("agent" if task.agent is not None else "compute")
