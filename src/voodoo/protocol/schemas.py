@@ -293,14 +293,18 @@ class Execution(BaseModel):
         Conversion goes through JSON-friendly dictionaries instead of relying
         on Pydantic to coerce unrelated model classes implicitly.
         """
-        intent = Intent.model_validate(exec.intent.model_dump()) if exec.intent else None
+        intent = (
+            Intent.model_validate(exec.intent.model_dump()) if exec.intent else None
+        )
         compute = (
             ComputeSpec.model_validate(exec.compute.model_dump())
             if exec.compute is not None
             else None
         )
         resources = Resource.model_validate(exec.resources.model_dump())
-        effects = [Effect.model_validate(effect.model_dump()) for effect in exec.effects]
+        effects = [
+            Effect.model_validate(effect.model_dump()) for effect in exec.effects
+        ]
         state_changes = [
             state.model_dump() if hasattr(state, "model_dump") else dict(state)
             for state in exec.state_changes
@@ -363,7 +367,9 @@ class Execution(BaseModel):
             RuntimeEffect.model_validate(effect.model_dump(exclude={"schema_version"}))
             for effect in self.effects
         ]
-        state_changes = [RuntimeState.model_validate(state) for state in self.state_changes]
+        state_changes = [
+            RuntimeState.model_validate(state) for state in self.state_changes
+        ]
 
         return RuntimeExecution(
             id=self.id,
