@@ -163,6 +163,8 @@ class SQLiteEventBus:
         return count
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        # The store owns one connection for its lifetime; after close the
+        # instance is intentionally unusable. Keeping the attribute typed as
+        # sqlite3.Connection avoids a false optional state throughout the
+        # event-bus implementation.
+        self._conn.close()
