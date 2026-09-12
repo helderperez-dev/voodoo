@@ -215,8 +215,11 @@ class EdgeMQTTTransport:
             logger.error("MQTT connect rejected rc=%s", rc)
 
     def _on_disconnect(
-        self, client: Any, userdata: Any, flags: Any, rc: int, props: Any = None
+        self, client: Any, userdata: Any, flags: Any, rc: Any, props: Any = None
     ) -> None:
+        # Callback API v2 passes a ReasonCode object (and legacy paths may
+        # still expose an int). The transport only needs the lifecycle signal,
+        # so keep this optional-provider boundary intentionally generic.
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._connected.clear)
 
