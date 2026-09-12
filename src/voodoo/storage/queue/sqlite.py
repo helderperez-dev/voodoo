@@ -296,7 +296,8 @@ class SQLiteQueue:
         task_type: str | None = None,
         limit: int = 50,
     ) -> list[TaskRecord]:
-        clauses, params = [], []
+        clauses: list[str] = []
+        params: list[Any] = []
         if status is not None:
             clauses.append("status = ?")
             params.append(TaskStatus(status).value)
