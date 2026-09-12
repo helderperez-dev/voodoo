@@ -271,7 +271,12 @@ def _heading(props: dict[str, Any], theme: Theme) -> str:
     user = str(props.get("class_") or "")
     if "text-" in user:
         return ""
-    size = _HEADING_LEVELS.get(props.get("level"), "text-lg font-medium")
+    level = props.get("level")
+    size = (
+        _HEADING_LEVELS.get(level, "text-lg font-medium")
+        if isinstance(level, int)
+        else "text-lg font-medium"
+    )
     return f"{size} text-[var(--vd-color-text)]"
 
 
