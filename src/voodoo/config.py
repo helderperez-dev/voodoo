@@ -521,9 +521,7 @@ def _build_edge_config(file_data: dict[str, Any]) -> EdgeConfig:
         if "mqtt_enabled" in edge_data or "VOODOO_EDGE_MQTT_ENABLED" in os.environ
         else (bool(mqtt) or "MQTT_BROKER_URL" in os.environ),
         "mqtt_broker_url": mqtt.get("broker_url") or os.getenv("MQTT_BROKER_URL", ""),
-        "mqtt_port": int(
-            str(mqtt.get("port") or os.getenv("MQTT_PORT") or "1883")
-        ),
+        "mqtt_port": int(str(mqtt.get("port") or os.getenv("MQTT_PORT") or "1883")),
         "mqtt_tls": bool(mqtt.get("tls") or _env_flag("MQTT_TLS") or False),
         "mqtt_username": mqtt.get("username") or os.getenv("MQTT_USERNAME", ""),
         "mqtt_password": mqtt.get("password") or os.getenv("MQTT_PASSWORD", ""),
