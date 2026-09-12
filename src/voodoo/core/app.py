@@ -273,6 +273,10 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         # Startup — wire the durable execution store (Sprint 3 / Sprint 11).
         from voodoo.runtime.engine import engine as runtime_engine
 
+        # The concrete durable store is selected dynamically by configuration.
+        # Both implementations satisfy the engine's store seam, while keeping
+        # optional PostgreSQL imports out of the local SQLite default path.
+        store: Any
         provider = config.database.provider.lower()
         if provider == "postgres":
             # Sprint 11: run the durable execution store on PostgreSQL via the
