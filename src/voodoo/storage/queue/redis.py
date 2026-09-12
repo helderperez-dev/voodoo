@@ -43,6 +43,7 @@ from voodoo.storage.queue.interfaces import (
     TaskStatus,
 )
 
+_redis: Any
 try:
     import redis as _redis
 except ImportError:  # pragma: no cover - exercised when redis is absent
@@ -574,11 +575,12 @@ class RedisQueue:
         task_type: str | None = None,
         limit: int = 50,
     ) -> list[TaskRecord]:
+        ids: list[Any]
         if status is not None:
             status_val = TaskStatus(status).value
-            ids = await self._client.smembers(f"{self._ns}status:{status_val}")
+            ids = list(await self._client.smembers(f"{self._ns}status:{status_val}"))
         else:
-            ids = await self._client.zrevrange(f"{self._ns}all", 0, -1)
+            ids = list(await self._client.zrevrange(f"{self._ns}all", 0, -1))
         records: list[TaskRecord] = []
         for raw_id in ids:
             rec = await self._get_record(int(raw_id))
@@ -626,7 +628,8 @@ class RedisQueue:
         flat = await self._client.hgetall(f"{self._ns}task:{task_id}")
         if not flat:
             return None
-        return self._record_from_hash(flat)
+        normalized = {str(key): str(value) for key, value in flat.items()}
+        return self._record_from_hash(normalized)
 
     def _record_from_hash(self, h: dict[str, str]) -> TaskRecord:
         return TaskRecord(
