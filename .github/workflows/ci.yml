@@ -133,12 +133,14 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U voodoo"
+          --health-cmd "pg_isready -U voodoo -d voodoo_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
       minio:
-        image: minio/minio
+        # MinIO Community switched to source-only distribution; pin the last
+        # published community container used by MinIO's own compose example.
+        image: quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z
         command: server /data
         env:
           MINIO_ROOT_USER: minioadmin
