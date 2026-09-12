@@ -43,7 +43,7 @@ class I18n:
 
         # Support nested keys like "home.title"
         keys = key.split(".")
-        val = lang_dict
+        val: Any = lang_dict
         for k in keys:
             if isinstance(val, dict):
                 val = val.get(k)

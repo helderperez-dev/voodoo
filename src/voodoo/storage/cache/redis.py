@@ -17,10 +17,11 @@ from voodoo.adapters.capabilities import CacheCapabilities
 from voodoo.core.errors import ConfigurationError
 from voodoo.storage.cache.interfaces import VoodooCache
 
+redis_module: Any
 try:
-    import redis
+    import redis as redis_module
 except ImportError:  # pragma: no cover - exercised when redis is absent
-    redis = None
+    redis_module = None
 
 
 class RedisCache:
@@ -29,13 +30,13 @@ class RedisCache:
     provider = "redis"
 
     def __init__(self, url: str = "redis://localhost:6379/0") -> None:
-        if redis is None:
+        if redis_module is None:
             raise ConfigurationError(
                 "The redis cache provider requires the [redis] extra: "
                 "pip install 'voodoo-framework[redis]' (redis)."
             )
         self.url = url
-        self._client = redis.Redis.from_url(url, decode_responses=True)
+        self._client: Any = redis_module.Redis.from_url(url, decode_responses=True)
 
     def get(self, key: str, default: Any = None) -> Any:
         value = self._client.get(key)

@@ -387,7 +387,7 @@ def inspect_state(
     from voodoo.runtime import engine
 
     _load_app(app_str)
-    changes = []
+    changes: list[dict[str, Any]] = []
     for ex in engine.recent(200):
         for st in ex.state_changes:
             changes.append(
@@ -437,7 +437,7 @@ def inspect_capabilities(
 
         tool_perms = {
             spec.name: spec.permissions
-            for spec in default_registry.list_tools()
+            for spec in default_registry.all()
             if getattr(spec, "permissions", None)
         }
     except Exception:  # noqa: BLE001
@@ -474,7 +474,7 @@ def inspect_mesh(
     from voodoo.mesh import mesh
 
     _load_app(app_str)
-    data = {
+    data: dict[str, Any] = {
         "exposed": sorted(mesh.exposed_functions.keys()),
         "handlers": {e: len(h) for e, h in sorted(mesh.event_handlers.items())},
         "active_nodes": len(mesh.active_nodes),

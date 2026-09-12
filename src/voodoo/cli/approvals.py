@@ -198,13 +198,17 @@ def _decide(
             terminal.error(f"approval for execution '{execution_id}' not found")
         raise typer.Exit(1)
 
-    decide_fn = runtime_engine.approve if decision == "approve" else runtime_engine.deny
-    kwargs = {}
+    # Keep the two typed runtime APIs explicit. A dynamically selected
+    # callable plus **kwargs erases the distinct ``note``/``reason``
+    # contracts and makes both static checking and maintenance weaker.
     if decision == "approve":
-        kwargs["note"] = message
+        executed = asyncio.run(
+            runtime_engine.approve(execution_id, by=by, note=message)
+        )
     else:
-        kwargs["reason"] = message or "denied"
-    executed = asyncio.run(decide_fn(execution_id, by=by, **kwargs))
+        executed = asyncio.run(
+            runtime_engine.deny(execution_id, by=by, reason=message or "denied")
+        )
 
     if json_mode or terminal.is_json_mode():
         terminal.json_output(

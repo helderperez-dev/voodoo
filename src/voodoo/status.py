@@ -1,11 +1,11 @@
 from typing import Any
 
-from voodoo.api import api
+import voodoo.workers.queue as worker_queue
 from voodoo.components import Card, Div, Heading
 from voodoo.data import get_db
 from voodoo.i18n import _
+from voodoo.routing.api import api
 from voodoo.storage import storage
-from voodoo.workers.queue import _queues, _worker_tasks
 
 
 async def check_database() -> dict[str, Any]:
@@ -19,8 +19,8 @@ async def check_database() -> dict[str, Any]:
 
 async def check_queue() -> dict[str, Any]:
     try:
-        total_workers = len(_worker_tasks)
-        active_queues = len(_queues)
+        total_workers = len(worker_queue._worker_tasks)
+        active_queues = int(worker_queue._queue is not None)
         return {
             "status": "Operational" if total_workers > 0 else "Degraded",
             "workers": total_workers,

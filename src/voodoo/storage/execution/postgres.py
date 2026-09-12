@@ -44,7 +44,10 @@ class PostgresExecutionStore:
     def __init__(self, url: str) -> None:
         self.url = url
         self._lock = Lock()
-        self._conn: Any | None = None
+        # psycopg is an optional dependency imported lazily in _connect(), so
+        # keep this boundary dynamically typed instead of pretending the store
+        # can operate with a persistent None connection state.
+        self._conn: Any = None
         self._connect()
         self._migrate()
 
@@ -115,7 +118,6 @@ class PostgresExecutionStore:
     def append_event(
         self, execution_id: str, event_type: str, payload: dict[str, object]
     ) -> None:
-
         with self._lock, self._conn.cursor() as cur:
             cur.execute(
                 _translate(
@@ -177,7 +179,6 @@ class PostgresExecutionStore:
     # -- artifacts (Sprint 6, spec §46) ------------------------------------
 
     def record_artifact(self, artifact: dict[str, Any]) -> None:
-
         with self._lock, self._conn.cursor() as cur:
             cur.execute(
                 _translate(
@@ -203,6 +204,7 @@ class PostgresExecutionStore:
     def list_artifacts(
         self, execution_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
+        params: tuple[Any, ...]
         if execution_id is not None:
             sql = _translate(
                 "SELECT * FROM artifacts WHERE execution_id = %s "
@@ -235,7 +237,6 @@ class PostgresExecutionStore:
     # -- approvals (Sprint 4) ----------------------------------------------
 
     def save_approval(self, approval: Any) -> None:
-
         with self._lock, self._conn.cursor() as cur:
             cur.execute(
                 _translate(
@@ -295,7 +296,6 @@ class PostgresExecutionStore:
     # -- internals ---------------------------------------------------------
 
     def _upsert_materialized(self, execution: Execution) -> None:
-
         data = execution.model_dump(mode="json")
         with self._lock, self._conn.cursor() as cur:
             cur.execute(

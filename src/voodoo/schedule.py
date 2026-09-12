@@ -216,9 +216,7 @@ class Scheduler:
         return [dict(row) for row in rows]
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        self._conn.close()
 
 
 # Factory function for schedule_from_spec
@@ -247,7 +245,9 @@ def schedule_from_spec(
         except ValueError:
             return scheduler.cron(spec.schedule, task_type, payload, name=name)
     if spec.interval is not None:
-        return scheduler.every(spec.interval, task_type, payload, name=name)
+        return scheduler.every(
+            timedelta(seconds=spec.interval), task_type, payload, name=name
+        )
     if spec.deadline is not None:
         return scheduler.at(spec.deadline, task_type, payload, name=name)
     raise ValueError(

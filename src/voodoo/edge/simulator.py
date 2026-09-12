@@ -50,6 +50,10 @@ class SimulatorTransport(ABC):
     """Abstract transport the simulator uses — mirrors a real device."""
 
     @abstractmethod
+    def set_credential(self, credential: str) -> None:
+        """Install the device credential used by subsequent transport calls."""
+
+    @abstractmethod
     async def enroll(
         self, enrollment_key: str, firmware_version: str | None = None
     ) -> dict[str, Any]:
@@ -246,10 +250,7 @@ class DeviceSimulator:
         result = await self.transport.enroll(enrollment_key, firmware_version)
         self.device_id = result["device_id"]
         self.credential = result["credential"]
-        if isinstance(self.transport, HTTPSimulatorTransport):
-            self.transport.set_credential(self.credential)
-        else:
-            self.transport.set_credential(self.credential)
+        self.transport.set_credential(self.credential)
 
     async def connect(
         self, *, device_type: str = "esp32-sim", capabilities: list[str] | None = None

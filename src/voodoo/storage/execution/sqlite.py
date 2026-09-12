@@ -452,9 +452,7 @@ class SQLiteExecutionStore:
 
     def close(self) -> None:
         """Close the store's connection (used by tests and shutdown)."""
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        self._conn.close()
 
 
 def _status_event_type(status: ExecutionStatus) -> str:

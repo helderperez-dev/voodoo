@@ -222,6 +222,7 @@ class Intent(BaseModel):
     schema_version: int = Field(default=SCHEMA_VERSION, ge=1)
     id: str = Field(description="Unique intent ID (UUID4).")
     name: str = Field(description="Intent name (e.g. 'summarize', 'deploy').")
+    description: str = ""
     params: dict[str, Any] = Field(default_factory=dict)
     status: IntentStatus = IntentStatus.CREATED
     deadline: datetime | None = None
@@ -286,26 +287,41 @@ class Execution(BaseModel):
         cls,
         exec: Any,  # noqa: ANN401 — runtime.Execution
     ) -> Execution:
-        """Convert a runtime ``Execution`` to a protocol ``Execution``.
+        """Convert a runtime ``Execution`` to the protocol boundary explicitly.
 
-        Runtime ``State`` objects in ``state_changes`` are converted to dicts
-        via ``model_dump()`` so the protocol representation is JSON-safe.
+        Protocol and runtime models intentionally have separate Python types.
+        Conversion goes through JSON-friendly dictionaries instead of relying
+        on Pydantic to coerce unrelated model classes implicitly.
         """
+        intent = (
+            Intent.model_validate(exec.intent.model_dump()) if exec.intent else None
+        )
+        compute = (
+            ComputeSpec.model_validate(exec.compute.model_dump())
+            if exec.compute is not None
+            else None
+        )
+        resources = Resource.model_validate(exec.resources.model_dump())
+        effects = [
+            Effect.model_validate(effect.model_dump()) for effect in exec.effects
+        ]
+        state_changes = [
+            state.model_dump() if hasattr(state, "model_dump") else dict(state)
+            for state in exec.state_changes
+        ]
+
         return cls(
             id=exec.id,
             trace_id=exec.trace_id,
             parent_execution_id=exec.parent_execution_id,
             status=ExecutionStatus(exec.status.value),
-            intent=exec.intent,
+            intent=intent,
             actor=exec.actor,
-            compute=exec.compute,
+            compute=compute,
             capabilities=list(exec.capabilities),
-            resources=exec.resources,
-            effects=list(exec.effects),
-            state_changes=[
-                s.model_dump() if hasattr(s, "model_dump") else s
-                for s in exec.state_changes
-            ],
+            resources=resources,
+            effects=effects,
+            state_changes=state_changes,
             result=exec.result,
             error=exec.error,
             metadata=dict(exec.metadata),
@@ -316,26 +332,57 @@ class Execution(BaseModel):
         )
 
     def to_runtime_execution(self) -> Any:  # noqa: ANN401
-        """Convert this protocol ``Execution`` back to a runtime ``Execution``.
+        """Convert this protocol ``Execution`` back to runtime model types.
 
-        Requires ``voodoo.runtime.execution.Execution`` to be importable.
-        Uses a lazy import to avoid circular dependencies.
+        The protocol is a stable cross-language boundary; runtime entities are
+        behavior-rich Python models. Keeping the conversion explicit prevents
+        those two layers from silently becoming one implementation type.
         """
+        from voodoo.primitives.compute import ComputeSpec as RuntimeComputeSpec
+        from voodoo.primitives.effect import Effect as RuntimeEffect
+        from voodoo.primitives.intent import Intent as RuntimeIntent
+        from voodoo.primitives.resource import Resource as RuntimeResource
+        from voodoo.primitives.state import State as RuntimeState
         from voodoo.runtime.execution import Execution as RuntimeExecution
         from voodoo.runtime.execution import ExecutionStatus as RuntimeStatus
+
+        intent = (
+            RuntimeIntent.model_validate(
+                self.intent.model_dump(exclude={"schema_version"})
+            )
+            if self.intent is not None
+            else None
+        )
+        compute = (
+            RuntimeComputeSpec.model_validate(
+                self.compute.model_dump(exclude={"schema_version"})
+            )
+            if self.compute is not None
+            else None
+        )
+        resources = RuntimeResource.model_validate(
+            self.resources.model_dump(exclude={"schema_version"})
+        )
+        effects = [
+            RuntimeEffect.model_validate(effect.model_dump(exclude={"schema_version"}))
+            for effect in self.effects
+        ]
+        state_changes = [
+            RuntimeState.model_validate(state) for state in self.state_changes
+        ]
 
         return RuntimeExecution(
             id=self.id,
             trace_id=self.trace_id,
             parent_execution_id=self.parent_execution_id,
             status=RuntimeStatus(self.status.value),
-            intent=self.intent,
+            intent=intent,
             actor=self.actor,
-            compute=self.compute,
+            compute=compute,
             capabilities=list(self.capabilities),
-            resources=self.resources,
-            effects=list(self.effects),
-            state_changes=self.state_changes,
+            resources=resources,
+            effects=effects,
+            state_changes=state_changes,
             result=self.result,
             error=self.error,
             metadata=dict(self.metadata),

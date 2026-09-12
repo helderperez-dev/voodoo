@@ -161,15 +161,20 @@ def task(
                 func, task_name, retries, timeout, backoff, args, kwargs
             )
 
-        wrapper.task_name = task_name
-        wrapper.retries = retries
-        wrapper.timeout = timeout
-        wrapper.is_task = True
+        # functools.wraps preserves the callable signature, while @task also
+        # exposes runtime metadata/methods dynamically. Use an Any-typed alias
+        # for those deliberate decorator extensions so static typing does not
+        # mistake them for attributes declared by the original callable.
+        task_wrapper: Any = wrapper
+        task_wrapper.task_name = task_name
+        task_wrapper.retries = retries
+        task_wrapper.timeout = timeout
+        task_wrapper.is_task = True
 
         async def enqueue_method(payload: Any = None) -> None:
             await _enqueue_task(task_name, payload, retries + 1)
 
-        wrapper.enqueue = enqueue_method
+        task_wrapper.enqueue = enqueue_method
 
         _register_task_worker(task_name, func, timeout, backoff)
         return wrapper

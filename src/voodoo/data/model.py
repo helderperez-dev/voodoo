@@ -19,7 +19,7 @@ changes.
 
 from __future__ import annotations
 
-from typing import Any, get_type_hints
+from typing import Any, cast, get_type_hints
 
 from voodoo.data.base import BaseModel, _get_table_name, get_db
 
@@ -91,7 +91,11 @@ class Model(BaseModel):
     @classmethod
     async def all(cls, user_context: dict | None = None) -> list[Model]:
         """Return every row as model instances (alias of ``find_all``)."""
-        return await cls.find_all(user_context=user_context)
+        rows = await cls.find_all(user_context=user_context)
+        # BaseModel.find_all hydrates ``cls`` instances. For this facade,
+        # ``cls`` is always Model or a Model subclass, so preserve that
+        # narrower public return type for static consumers.
+        return cast(list[Model], rows)
 
     # ------------------------------------------------------------------
     # Fluent query API

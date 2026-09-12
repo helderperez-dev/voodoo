@@ -86,6 +86,11 @@ class MemoryQueue:
             self._order.append(tid)
             return rec
 
+    def _available_at(self, task_id: int) -> datetime:
+        available_at = self._tasks[task_id].available_at
+        assert available_at is not None
+        return available_at
+
     async def claim(
         self,
         worker: str,
@@ -99,8 +104,8 @@ class MemoryQueue:
                 tid
                 for tid in self._order
                 if self._tasks[tid].status in (TaskStatus.PENDING, TaskStatus.RETRYING)
-                and self._tasks[tid].available_at
-                and self._tasks[tid].available_at <= now
+                and self._tasks[tid].available_at is not None
+                and self._available_at(tid) <= now
                 and (types is None or self._tasks[tid].type in types)
             ]
             if not candidates:
@@ -108,7 +113,7 @@ class MemoryQueue:
             candidates.sort(
                 key=lambda t: (
                     -self._tasks[t].priority,
-                    self._tasks[t].available_at,
+                    self._available_at(t),
                     t,
                 )
             )
