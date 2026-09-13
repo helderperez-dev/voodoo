@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import pytest
 
 from voodoo.mesh import MeshNetwork, RemoteExecutionRequest
 from voodoo.mesh.client import MeshClient
+from voodoo.mesh.remote import RemoteExecutionOutcome
 from voodoo.mesh.session import InMemoryRemoteSessionRegistry
 from voodoo.primitives.capability import Capability
 from voodoo.runtime import ExecutionEngine
@@ -33,7 +35,6 @@ async def test_required_trusted_session_rejects_missing_token_before_execution()
     outcome = await net.execute_remote(
         RemoteExecutionRequest(operation="ping", actor="forged")
     )
-
     assert outcome.status == "rejected"
     assert outcome.error["type"] == "RemoteAuthenticationRequired"
     assert called is False
@@ -56,12 +57,9 @@ async def test_invalid_session_is_rejected_before_execution():
 
     outcome = await net.execute_remote(
         RemoteExecutionRequest(
-            operation="ping",
-            actor="forged",
-            session_token="vms_invalid",
+            operation="ping", actor="forged", session_token="vms_invalid"
         )
     )
-
     assert outcome.status == "rejected"
     assert outcome.error["type"] == "RemoteAuthenticationFailed"
     assert engine.executions == {}
@@ -98,7 +96,8 @@ async def test_authenticated_session_overrides_forged_actor_for_authority():
     assert execution.actor == "remote:robot-controller"
     assert execution.capabilities == ["robot.move"]
     assert execution.intent.params["_remote_actor"] == "robot-controller"
-    assert execution.intent.params["_remote_metadata"]["_trusted_session_id"] == principal.session_id
+    session_id = execution.intent.params["_remote_metadata"]["_trusted_session_id"]
+    assert session_id == principal.session_id
 
 
 @pytest.mark.asyncio
@@ -123,12 +122,9 @@ async def test_forged_actor_cannot_borrow_another_participants_grant():
 
     outcome = await net.execute_remote(
         RemoteExecutionRequest(
-            operation="robot.move",
-            actor="admin",
-            session_token=token,
+            operation="robot.move", actor="admin", session_token=token
         )
     )
-
     assert outcome.status == "failed"
     assert outcome.error["type"] == "CapabilityDenied"
     assert called is False
@@ -158,7 +154,6 @@ async def test_revoked_and_expired_sessions_are_rejected():
     expired = await net.execute_remote(
         RemoteExecutionRequest(operation="ping", session_token=expired_token)
     )
-
     assert revoked.status == "rejected"
     assert "revoked" in revoked.error["message"]
     assert expired.status == "rejected"
@@ -168,8 +163,7 @@ async def test_revoked_and_expired_sessions_are_rejected():
 
 def test_session_token_is_excluded_from_request_serialization():
     request = RemoteExecutionRequest(
-        operation="ping",
-        session_token="vms_super-secret",
+        operation="ping", session_token="vms_super-secret"
     )
     dumped = request.model_dump(mode="json")
     assert "session_token" not in dumped
@@ -188,19 +182,17 @@ async def test_mesh_client_sends_session_token_without_changing_claimed_actor_ap
             sent.append(data)
 
     client.ws = Socket()
-    task = __import__("asyncio").create_task(
+    task = asyncio.create_task(
         client.execute("ping", actor="display-label", request_id="req-auth")
     )
     while not sent:
-        await __import__("asyncio").sleep(0)
+        await asyncio.sleep(0)
 
     payload = json.loads(sent[0])
     assert payload["params"]["session_token"] == "vms_secret"
     assert payload["params"]["actor"] == "display-label"
 
     msg_id = payload["id"]
-    from voodoo.mesh.remote import RemoteExecutionOutcome
-
     client._pending_requests[msg_id].set_result(
         RemoteExecutionOutcome(request_id="req-auth", status="completed")
     )
