@@ -311,7 +311,7 @@ class MeshNetwork:
         message_id: Any,
         outcome: RemoteExecutionOutcome,
     ) -> None:
-        """Project a governed outcome onto the legacy JSON-RPC wire contract."""
+        """Send both structured Runtime truth and the legacy RPC projection."""
         if message_id is None:
             return
 
@@ -319,6 +319,7 @@ class MeshNetwork:
             "jsonrpc": "2.0",
             "id": message_id,
             "voodoo": outcome.transport_metadata(),
+            "outcome": outcome.model_dump(mode="json"),
         }
         if outcome.status == "completed":
             response["result"] = outcome.result
