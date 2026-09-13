@@ -6,7 +6,6 @@ Uses the deterministic mock provider so no network calls are needed.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -16,10 +15,6 @@ from voodoo.ai.providers import ProviderEvent, ProviderResponse, ToolCall
 from voodoo.ai.providers.mock import MockProvider
 from voodoo.tools import registry as tools_module
 from voodoo.tools.registry import ToolRegistry, build_spec
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 class ToolThenTextProvider(MockProvider):
@@ -98,9 +93,15 @@ class NativeToolCallProvider(MockProvider):
         )
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+class FailingProvider(MockProvider):
+    """Concrete provider double that fails without AsyncMock side effects."""
+
+    def __init__(self, message: str):
+        super().__init__(model="test")
+        self._message = message
+
+    async def complete(self, messages, **kwargs):
+        raise Exception(self._message)
 
 
 @pytest.fixture(autouse=True)
@@ -135,11 +136,6 @@ def _clean_telemetry():
     telemetry_store.metrics["tool_calls"].clear()
 
 
-# ---------------------------------------------------------------------------
-# Basic run
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_run_returns_agent_run_record():
     agent = Agent(model="mock:test")
@@ -159,7 +155,7 @@ async def test_run_has_token_accounting():
     result = await agent.run("hello world")
     assert result.tokens_in > 0
     assert result.tokens_out > 0
-    assert result.cost == 0.0  # mock provider cost is always zero
+    assert result.cost == 0.0
     assert "total_ms" in result.timings
     assert result.timings["total_ms"] >= 0
 
@@ -169,12 +165,11 @@ async def test_run_with_system_prompt():
     agent = Agent(model="mock:test", system_prompt="You are a pirate.")
     result = await agent.run("hello")
     assert result.status == "completed"
-    assert result.output  # non-empty
+    assert result.output
 
 
 @pytest.mark.asyncio
 async def test_run_with_history_prepends_turns():
-    # Multi-turn: prior turns are prepended before the new user message.
     agent = Agent(model="mock:test")
     seen: list[list[dict[str, Any]]] = []
     original_complete = agent.provider.complete
@@ -224,20 +219,14 @@ async def test_run_with_context():
     assert result.prompt == "hello"
 
 
-# ---------------------------------------------------------------------------
-# Stream
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_stream_yields_text_events():
     agent = Agent(model="mock:test")
     events = []
     async for event in agent.stream("hello"):
         events.append(event)
-
     text_events = [e for e in events if e.type == "text"]
-    assert len(text_events) > 0  # mock streams word-by-word
+    assert len(text_events) > 0
     completed = [e for e in events if e.type == "completed"]
     assert len(completed) == 1
     assert "Mock response to: hello" in completed[0].data["output"]
@@ -249,7 +238,6 @@ async def test_stream_event_types_are_normalized():
     events = []
     async for event in agent.stream("test"):
         events.append(event)
-
     valid_types = {
         "text",
         "tool_started",
@@ -268,37 +256,26 @@ async def test_stream_completed_has_tokens():
     events = []
     async for event in agent.stream("hello world"):
         events.append(event)
-
     completed = [e for e in events if e.type == "completed"][0]
     assert completed.data["tokens_in"] > 0
     assert completed.data["tokens_out"] > 0
 
 
-# ---------------------------------------------------------------------------
-# Tool calls
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_run_executes_tool_call_via_marker():
-    """Agent parses [TOOL: name] in the response and calls the registered tool."""
     registry = ToolRegistry()
 
     def greet(name: str) -> str:
         """Greet someone."""
         return f"Hello, {name}!"
 
-    spec = build_spec(greet, name="greet")
-    registry.register(spec)
-
+    registry.register(build_spec(greet, name="greet"))
     provider = ToolThenTextProvider(
         '[TOOL: greet] args: {"name": "World"}', "Greeting done"
     )
     agent = Agent(model="mock:test", tools=["greet"], registry=registry)
     agent.provider = provider
-
     result = await agent.run("greet the user")
-
     assert result.status == "completed"
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0]["name"] == "greet"
@@ -313,19 +290,15 @@ async def test_stream_executes_tool_call():
         """Fetch data."""
         return f"data:{query}"
 
-    spec = build_spec(fetch_data, name="fetch_data")
-    registry.register(spec)
-
+    registry.register(build_spec(fetch_data, name="fetch_data"))
     provider = ToolThenTextProvider(
         '[TOOL: fetch_data] args: {"query": "test"}', "Fetch done"
     )
     agent = Agent(model="mock:test", tools=["fetch_data"], registry=registry)
     agent.provider = provider
-
     events = []
     async for event in agent.stream("fetch"):
         events.append(event)
-
     tool_started = [e for e in events if e.type == "tool_started"]
     tool_finished = [e for e in events if e.type == "tool_finished"]
     assert len(tool_started) == 1
@@ -342,13 +315,10 @@ async def test_tool_call_records_latency():
         """Slow tool."""
         return "done"
 
-    spec = build_spec(slow_tool, name="slow_tool")
-    registry.register(spec)
-
+    registry.register(build_spec(slow_tool, name="slow_tool"))
     provider = ToolThenTextProvider("[TOOL: slow_tool] args: {}", "Done")
     agent = Agent(model="mock:test", tools=["slow_tool"], registry=registry)
     agent.provider = provider
-
     result = await agent.run("run it")
     assert len(result.tool_calls) == 1
     assert "latency_ms" in result.tool_calls[0]
@@ -357,33 +327,23 @@ async def test_tool_call_records_latency():
 
 @pytest.mark.asyncio
 async def test_tool_call_error_captured():
-    """If a tool raises, the error is captured in the tool_call record."""
     registry = ToolRegistry()
 
     def boom(x: str) -> str:
         """Always fails."""
         raise ValueError("boom")
 
-    spec = build_spec(boom, name="boom")
-    registry.register(spec)
-
+    registry.register(build_spec(boom, name="boom"))
     provider = ToolThenTextProvider('[TOOL: boom] args: {"x": "a"}', "Done")
     agent = Agent(model="mock:test", tools=["boom"], registry=registry)
     agent.provider = provider
-
     result = await agent.run("call it")
     assert len(result.tool_calls) == 1
     assert "error" in result.tool_calls[0]["result"]
 
 
-# ---------------------------------------------------------------------------
-# Native tool-call protocol
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_run_executes_native_tool_call():
-    """Agent consumes structured ``tool_calls`` (the native protocol)."""
     registry = ToolRegistry()
 
     def add(a: int, b: int) -> int:
@@ -391,13 +351,10 @@ async def test_run_executes_native_tool_call():
         return a + b
 
     registry.register(build_spec(add, name="add"))
-
     provider = NativeToolCallProvider("add", {"a": 2, "b": 3}, "Sum done")
     agent = Agent(model="mock:test", tools=["add"], registry=registry)
     agent.provider = provider
-
     result = await agent.run("add 2 and 3")
-
     assert result.status == "completed"
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0]["name"] == "add"
@@ -407,7 +364,6 @@ async def test_run_executes_native_tool_call():
 
 @pytest.mark.asyncio
 async def test_native_tool_call_builds_structured_follow_up():
-    """Native tool calls are echoed back in the provider's own format."""
     registry = ToolRegistry()
 
     def add(a: int, b: int) -> int:
@@ -415,11 +371,9 @@ async def test_native_tool_call_builds_structured_follow_up():
         return a + b
 
     registry.register(build_spec(add, name="add"))
-
     provider = NativeToolCallProvider("add", {"a": 1, "b": 1}, "Two")
     agent = Agent(model="mock:test", tools=["add"], registry=registry)
     agent.provider = provider
-
     captured: list[list[dict]] = []
     original_complete = agent.provider.complete
 
@@ -428,9 +382,7 @@ async def test_native_tool_call_builds_structured_follow_up():
         return await original_complete(messages, **kwargs)
 
     agent.provider.complete = spy  # type: ignore[method-assign]
-
     await agent.run("add 1 and 1")
-
     assert len(captured) == 2
     assistant = [m for m in captured[1] if m["role"] == "assistant"][0]
     assert assistant["tool_calls"][0]["id"] == "call_1"
@@ -442,7 +394,6 @@ async def test_native_tool_call_builds_structured_follow_up():
 
 @pytest.mark.asyncio
 async def test_multiple_tool_calls_in_one_run():
-    """Agent can chain multiple tool calls before reaching a final answer."""
     registry = ToolRegistry()
 
     def step1() -> str:
@@ -456,7 +407,6 @@ async def test_multiple_tool_calls_in_one_run():
     registry.register(build_spec(step1, name="step1"))
     registry.register(build_spec(step2, name="step2"))
 
-    # First call returns step1 marker, second returns step2 marker, third returns final
     class MultiStepProvider(MockProvider):
         def __init__(self):
             super().__init__(model="test")
@@ -480,16 +430,10 @@ async def test_multiple_tool_calls_in_one_run():
 
     agent = Agent(model="mock:test", tools=["step1", "step2"], registry=registry)
     agent.provider = MultiStepProvider()
-
     result = await agent.run("run steps")
     assert len(result.tool_calls) == 2
     assert result.tool_calls[0]["name"] == "step1"
     assert result.tool_calls[1]["name"] == "step2"
-
-
-# ---------------------------------------------------------------------------
-# Lifecycle
-# ---------------------------------------------------------------------------
 
 
 def test_agent_lifecycle_created_to_configured():
@@ -508,10 +452,7 @@ async def test_agent_lifecycle_transitions_to_completed():
 @pytest.mark.asyncio
 async def test_agent_lifecycle_error_on_provider_failure():
     agent = Agent(model="mock:test")
-    agent.provider = AsyncMock()
-    agent.provider.complete = AsyncMock(side_effect=Exception("provider down"))
-    agent.provider.name = "mock"
-
+    agent.provider = FailingProvider("provider down")
     result = await agent.run("test")
     assert result.status == "failed"
     assert result.error is not None
@@ -527,19 +468,12 @@ async def test_agent_lifecycle_error_on_stream_failure():
         yield ProviderEvent(type="error", data={"error": "stream broke"})
 
     agent.provider.stream = _bad_stream
-
     events = []
     async for event in agent.stream("test"):
         events.append(event)
-
     error_events = [e for e in events if e.type == "error"]
     assert len(error_events) >= 1
     assert agent.state == AgentState.failed
-
-
-# ---------------------------------------------------------------------------
-# Telemetry correlation
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -562,15 +496,11 @@ async def test_tool_call_records_telemetry():
         """Tool."""
         return "ok"
 
-    spec = build_spec(my_tool, name="my_tool")
-    registry.register(spec)
-
+    registry.register(build_spec(my_tool, name="my_tool"))
     provider = ToolThenTextProvider("[TOOL: my_tool] args: {}", "Done")
     agent = Agent(model="mock:test", tools=["my_tool"], registry=registry)
     agent.provider = provider
-
     await agent.run("run it")
-
     assert len(telemetry_store.metrics["tool_calls"]) >= 1
     assert telemetry_store.metrics["tool_calls"][-1]["tool"] == "my_tool"
 
@@ -586,11 +516,6 @@ async def test_agent_run_correlates_with_trace_id():
         assert result.trace_id == "test-trace-123"
     finally:
         trace_id_var.set(None)
-
-
-# ---------------------------------------------------------------------------
-# Mesh events
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -609,7 +534,6 @@ async def test_run_publishes_mesh_events():
 
     agent = Agent(model="mock:test")
     await agent.run("hello")
-
     event_names = [name for name, _ in received]
     assert "agent.started" in event_names
     assert "agent.completed" in event_names
@@ -635,15 +559,11 @@ async def test_run_publishes_tool_mesh_events():
         """Tool."""
         return "ok"
 
-    spec = build_spec(my_tool, name="my_tool")
-    registry.register(spec)
-
+    registry.register(build_spec(my_tool, name="my_tool"))
     provider = ToolThenTextProvider("[TOOL: my_tool] args: {}", "Done")
     agent = Agent(model="mock:test", tools=["my_tool"], registry=registry)
     agent.provider = provider
-
     await agent.run("run it")
-
     event_names = [name for name, _ in received]
     assert "agent.tool.started" in event_names
     assert "agent.tool.completed" in event_names
@@ -660,17 +580,9 @@ async def test_run_publishes_failed_mesh_event():
         received.append(("agent.failed", payload))
 
     agent = Agent(model="mock:test")
-    agent.provider = AsyncMock()
-    agent.provider.complete = AsyncMock(side_effect=Exception("kaboom"))
-    agent.provider.name = "mock"
-
+    agent.provider = FailingProvider("kaboom")
     await agent.run("test")
     assert any(name == "agent.failed" for name, _ in received)
-
-
-# ---------------------------------------------------------------------------
-# Exports
-# ---------------------------------------------------------------------------
 
 
 def test_agent_exported_from_voodoo():
