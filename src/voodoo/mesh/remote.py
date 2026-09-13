@@ -131,7 +131,9 @@ class ExposedOperation:
         if request.metadata:
             params["_remote_metadata"] = dict(request.metadata)
 
-        intent = Intent(name=self.intent_name or f"mesh.call:{self.name}", params=params)
+        intent = Intent(
+            name=self.intent_name or f"mesh.call:{self.name}", params=params
+        )
         if self.capability is not None:
             intent.require(self.capability)
         return intent
