@@ -72,6 +72,7 @@ def test_switch_uses_callable_binding_without_inline_js():
         assert 'role="switch"' in html
         assert 'aria-checked="true"' in html
         assert "data-vd-event-change=" in html
+        assert '<label class="vd-switch-track" for="' in html
         assert "onclick=" not in html
         assert "onchange=" not in html
     finally:
