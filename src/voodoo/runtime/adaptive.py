@@ -25,7 +25,7 @@ from voodoo.runtime.errors import (
     ExecutionTimeout,
     ResourceExceeded,
 )
-from voodoo.runtime.planner import ComputeParticipant, Plan, PlanStep, Planner
+from voodoo.runtime.planner import ComputeParticipant, Plan, Planner, PlanStep
 
 __all__ = [
     "SupervisorDecision",
