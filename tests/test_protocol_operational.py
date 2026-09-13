@@ -66,12 +66,16 @@ def test_goal_and_remote_execution_are_protocol_surface() -> None:
     )
 
     assert GoalRun.model_validate(run.model_dump(mode="json")).goal.id == "goal-1"
-    assert RemoteExecutionRequest.model_validate(
-        request.model_dump(mode="json")
-    ).idempotency_key == "idem-1"
-    assert RemoteExecutionOutcome.model_validate(
-        outcome.model_dump(mode="json")
-    ).status is RemoteOutcomeStatus.COMPLETED
+    assert (
+        RemoteExecutionRequest.model_validate(
+            request.model_dump(mode="json")
+        ).idempotency_key
+        == "idem-1"
+    )
+    assert (
+        RemoteExecutionOutcome.model_validate(outcome.model_dump(mode="json")).status
+        is RemoteOutcomeStatus.COMPLETED
+    )
 
 
 def test_schema_export_includes_post_sprint_24_runtime_semantics() -> None:
