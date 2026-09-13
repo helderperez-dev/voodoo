@@ -52,7 +52,7 @@ class RemoteExecutionRequest(BaseModel):
         params: Any,
         *,
         message_id: str | None = None,
-    ) -> "RemoteExecutionRequest":
+    ) -> RemoteExecutionRequest:
         """Normalize canonical or legacy Mesh JSON-RPC ``call`` parameters.
 
         Legacy callers send ``{"name": ..., "arguments": ...}``. New callers
@@ -163,7 +163,7 @@ class RemoteExecutionOutcome(BaseModel):
         execution: Execution,
         *,
         error: dict[str, Any] | None = None,
-    ) -> "RemoteExecutionOutcome":
+    ) -> RemoteExecutionOutcome:
         return cls(
             request_id=request.request_id,
             correlation_id=request.correlation_id,
@@ -181,7 +181,7 @@ class RemoteExecutionOutcome(BaseModel):
         *,
         error_type: str,
         message: str,
-    ) -> "RemoteExecutionOutcome":
+    ) -> RemoteExecutionOutcome:
         return cls(
             request_id=request.request_id,
             correlation_id=request.correlation_id,
