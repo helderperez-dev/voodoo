@@ -67,6 +67,12 @@ from voodoo.runtime.policy import (
     PolicyResult,
     PolicyRule,
 )
+from voodoo.runtime.store import (
+    StoreHealth,
+    StoreProvider,
+    StoreProviderError,
+    VoodooStoreProvider,
+)
 from voodoo.runtime.task import Task, TaskStatus
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
 from voodoo.runtime.world_execution import (
@@ -121,6 +127,10 @@ __all__ = [
     "ExecutionStore",
     "InMemoryExecutionStore",
     "JSONFileExecutionStore",
+    "StoreHealth",
+    "StoreProvider",
+    "StoreProviderError",
+    "VoodooStoreProvider",
     "ComputeParticipant",
     "Plan",
     "PlanStep",
