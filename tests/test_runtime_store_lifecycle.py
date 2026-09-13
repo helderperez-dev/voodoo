@@ -86,6 +86,40 @@ def test_store_config_from_mapping_preserves_provider_specific_extra() -> None:
     assert config.extra == {"region": "local-a"}
 
 
+def test_store_config_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VOODOO_STORE_PROVIDER", "fake")
+    monkeypatch.setenv("VOODOO_STORE_PATH", ".voodoo/env.vstore")
+    monkeypatch.setenv("VOODOO_STORE_ENABLED", "true")
+    monkeypatch.setenv("VOODOO_STORE_DURABILITY", "strict")
+    monkeypatch.setenv("VOODOO_STORE_REPAIR_TORN_TAIL", "false")
+
+    config = StoreConfig.from_mapping()
+
+    assert config.provider == "fake"
+    assert config.path == Path(".voodoo/env.vstore")
+    assert config.enabled is True
+    assert config.durability == "strict"
+    assert config.repair_torn_tail is False
+
+
+def test_store_mapping_wins_over_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VOODOO_STORE_PROVIDER", "env-provider")
+    monkeypatch.setenv("VOODOO_STORE_PATH", ".voodoo/env.vstore")
+    monkeypatch.setenv("VOODOO_STORE_ENABLED", "false")
+
+    config = StoreConfig.from_mapping(
+        {
+            "provider": "fake",
+            "path": ".voodoo/file.vstore",
+            "enabled": True,
+        }
+    )
+
+    assert config.provider == "fake"
+    assert config.path == Path(".voodoo/file.vstore")
+    assert config.enabled is True
+
+
 def test_registry_resolves_provider_without_leaking_native_binding() -> None:
     registry = _registry()
     config = StoreConfig(provider="fake", enabled=True)
