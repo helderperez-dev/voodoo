@@ -1,36 +1,27 @@
-"""Voodoo protocol — canonical entity schemas for cross-language interop.
+"""Voodoo protocol — stable semantic schemas for cross-language interop.
 
-This package defines the **stable semantic boundary** for the Voodoo runtime.
-Every entity is a Pydantic model with a ``schema_version`` field and full
-JSON Schema export support.
-
-Quick start::
-
-    from voodoo.protocol import Execution, Intent, SCHEMA_VERSION
-
-    intent = Intent(name="summarize", params={"text": "hello"})
-    execution = Execution(
-        id="exec-001",
-        trace_id="trace-001",
-        intent=intent,
-    )
-
-    # Serialize to JSON
-    data = execution.model_dump(mode="json")
-
-    # Round-trip
-    restored = Execution.model_validate(data)
-
-    # Export JSON Schema
-    from voodoo.protocol import export_json_schemas
-    schemas = export_json_schemas()
-
-See ``docs/protocol.md`` for the compatibility policy.
+The protocol is the boundary for participants that must understand Voodoo
+semantics without importing Python runtime internals. Sprint 27 extends the
+original entity set with World, Goal and governed remote-execution schemas.
 """
 
 from __future__ import annotations
 
 from .export import export_json_schemas, export_json_schemas_json, schema_for
+from .operational import (
+    OPERATIONAL_PROTOCOL_ENTITIES,
+    Entity,
+    Goal,
+    GoalIntentRun,
+    GoalRun,
+    GoalStatus,
+    Observation,
+    Relationship,
+    RemoteExecutionOutcome,
+    RemoteExecutionRequest,
+    RemoteOutcomeStatus,
+    WorldSnapshot,
+)
 from .schemas import (
     PROTOCOL_ENTITIES,
     SCHEMA_VERSION,
@@ -61,17 +52,15 @@ from .schemas import (
 )
 
 __all__ = [
-    # Schema metadata
     "SCHEMA_VERSION",
     "PROTOCOL_ENTITIES",
-    # Enums
+    "OPERATIONAL_PROTOCOL_ENTITIES",
     "ExecutionStatus",
     "IntentStatus",
     "EffectStatus",
     "TaskStatus",
     "ApprovalStatus",
     "ComputeKind",
-    # Core entities
     "Identity",
     "Capability",
     "Constraint",
@@ -90,7 +79,17 @@ __all__ = [
     "AgentEntity",
     "AgentRun",
     "MemoryEntry",
-    # Export
+    "Entity",
+    "Relationship",
+    "Observation",
+    "WorldSnapshot",
+    "GoalStatus",
+    "Goal",
+    "GoalIntentRun",
+    "GoalRun",
+    "RemoteOutcomeStatus",
+    "RemoteExecutionRequest",
+    "RemoteExecutionOutcome",
     "export_json_schemas",
     "export_json_schemas_json",
     "schema_for",
