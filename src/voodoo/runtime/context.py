@@ -3,12 +3,8 @@
 A single :class:`ExecutionContext` is created per top-level execution and
 propagated (via :func:`use_context` / :func:`current_context`) to every
 participant — Agent, Tool, Worker, Workflow, HTTP handler, Mesh handler,
-MCP, Effect — so they all share identity, correlation, authority, limits
-and cancellation.
-
-This replaces ad-hoc per-subsystem context systems with one coherent
-carrier, while still integrating with the existing ``trace_id_var``
-telemetry context variable.
+MCP, Effect — so they all share identity, correlation, authority, limits,
+world awareness and cancellation.
 """
 
 from __future__ import annotations
@@ -34,29 +30,21 @@ __all__ = [
     "new_trace_id",
 ]
 
-#: Context variable holding the active :class:`ExecutionContext`.
 _context_var: contextvars.ContextVar[ExecutionContext | None] = contextvars.ContextVar(
     "voodoo_execution_context", default=None
 )
 
 
 def new_trace_id() -> str:
-    """Generate a new trace id."""
     return str(uuid4())
 
 
 def current_context() -> ExecutionContext | None:
-    """Return the active execution context, if any."""
     return _context_var.get()
 
 
 @asynccontextmanager
 async def use_context(ctx: ExecutionContext) -> AsyncIterator[ExecutionContext]:
-    """Activate ``ctx`` for the duration of the ``async with`` block.
-
-    Also mirrors ``ctx.trace_id`` onto the existing ``trace_id_var`` so
-    legacy telemetry/mesh code keeps correlating correctly.
-    """
     from voodoo.telemetry import trace_id_var
 
     token = _context_var.set(ctx)
@@ -74,12 +62,10 @@ async def use_context(ctx: ExecutionContext) -> AsyncIterator[ExecutionContext]:
 class ExecutionContext:
     """The single shared execution context.
 
-    Carries everything the runtime needs to govern a single execution:
-    identity/correlation, the originating intent, granted capabilities,
-    constraints, resource budgets, a deadline, and a cancellation flag.
-
-    Mutations to ``capabilities`` / ``constraints`` during execution are
-    intentional — delegation narrows authority, retries add constraints.
+    World access is read/query oriented by default. A participant may report
+    observed consequences through :meth:`observe`, which automatically carries
+    trace/execution lineage. Issuing an Effect never mutates world state by
+    itself; evidence must come back as an Observation.
     """
 
     execution_id: str = field(default_factory=lambda: str(uuid4()))
@@ -96,19 +82,11 @@ class ExecutionContext:
     deadline: datetime | None = None
     cancelled: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    #: The engine governing this execution (set by the engine on build;
-    #: enables child executions to run on the same engine).
     engine: Any | None = None
-
-    # -- derivation --------------------------------------------------------
+    world: Any | None = None
+    target_entity_id: str | None = None
 
     def child(self, actor: str | None = None) -> ExecutionContext:
-        """Create a child context for a delegated/sub execution.
-
-        The child inherits the trace id and a narrowed view of the parent's
-        capabilities/constraints. It records ``parent_execution_id`` so the
-        execution graph stays traceable.
-        """
         return ExecutionContext(
             execution_id=str(uuid4()),
             trace_id=self.trace_id,
@@ -126,16 +104,14 @@ class ExecutionContext:
             metadata=dict(self.metadata),
             deadline=self.deadline,
             engine=self.engine,
+            world=self.world,
+            target_entity_id=self.target_entity_id,
         )
 
-    # -- authority ---------------------------------------------------------
-
     def grant(self, capability: Capability) -> None:
-        """Add a capability to this context."""
         self.capabilities.append(capability)
 
     def has_capability(self, name: str, *, scope: str | None = None) -> bool:
-        """Whether a valid capability with ``name`` (and optional scope) is held."""
         for cap in self.capabilities:
             if cap.name != name or not cap.valid:
                 continue
@@ -145,24 +121,50 @@ class ExecutionContext:
         return False
 
     def constrain(self, constraint: Constraint) -> None:
-        """Add a constraint to this context."""
         self.constraints.append(constraint)
 
-    # -- effects -----------------------------------------------------------
-
     def add_effect(self, effect: Effect) -> None:
-        """Record an effect produced inside this execution.
-
-        The engine lifts context effects onto the :class:`Execution` when
-        the compute participant finishes, so tool calls made deep inside
-        an Agent run still appear in the execution record.
-        """
         self.effects.append(effect)
 
-    # -- temporal ----------------------------------------------------------
+    def world_snapshot(self, entity_id: str | None = None) -> Any | None:
+        """Return a current WorldSnapshot for the target/selected entity."""
+        if self.world is None:
+            return None
+        target = entity_id or self.target_entity_id
+        if target is None:
+            return None
+        try:
+            return self.world.snapshot(target)
+        except KeyError:
+            return None
+
+    def observe(
+        self,
+        entity_id: str,
+        property: str,
+        value: Any,
+        *,
+        source: str,
+        confidence: float = 1.0,
+        metadata: dict[str, Any] | None = None,
+        observation_id: str | None = None,
+    ) -> Any:
+        """Report evidence to the attached WorldModel with automatic lineage."""
+        if self.world is None:
+            raise RuntimeError("execution context has no WorldModel attached")
+        return self.world.observe(
+            entity_id,
+            property,
+            value,
+            source=source,
+            confidence=confidence,
+            trace_id=self.trace_id,
+            execution_id=self.execution_id,
+            metadata=metadata,
+            observation_id=observation_id,
+        )
 
     def with_deadline(self, seconds: float) -> ExecutionContext:
-        """Set a deadline ``seconds`` from now."""
         self.deadline = datetime.now(UTC) + timedelta(seconds=seconds)
         return self
 
@@ -178,13 +180,8 @@ class ExecutionContext:
             return None
         return max((self.deadline - datetime.now(UTC)).total_seconds(), 0.0)
 
-    # -- cancellation ------------------------------------------------------
-
     def cancel(self) -> None:
-        """Mark this execution (and its children) as cancelled."""
         self.cancelled = True
-
-    # -- inspectability ----------------------------------------------------
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -199,4 +196,6 @@ class ExecutionContext:
             "deadline_expired": self.deadline_expired,
             "remaining_seconds": self.remaining_seconds,
             "cancelled": self.cancelled,
+            "world_attached": self.world is not None,
+            "target_entity_id": self.target_entity_id,
         }
