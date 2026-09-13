@@ -21,7 +21,6 @@ from voodoo.edge.models import AuthenticatedDeviceContext, Device, TransportKind
 from voodoo.edge.protocol import EdgeMessage, EdgeMessageType
 from voodoo.edge.store import InMemoryDeviceStore
 from voodoo.primitives.capability import Capability
-from voodoo.primitives.intent import Intent
 from voodoo.runtime import (
     AdaptiveSupervisor,
     ComputeParticipant,
@@ -64,8 +63,8 @@ async def run_canary() -> dict[str, Any]:
         ctx,
     )
 
-    # 2. The runtime can govern the capability independently of the device's
-    # advertised implementation capability.
+    # 2. Runtime authority is registered separately from the device's advertised
+    # implementation capability.
     engine.capabilities.register(Capability(name="cooling.set"))
     planner = Planner(engine=engine)
 
@@ -86,16 +85,11 @@ async def run_canary() -> dict[str, Any]:
             kind="compute",
             capabilities=["cooling.set"],
             compute=set_cooling,
-            metadata={
-                "entity_id": device.entity_id,
-                "when": {"temperature": 34.0},
-                "priority": 10,
-            },
+            metadata={"entity_id": device.entity_id, "priority": 10},
         )
     )
     supervisor = AdaptiveSupervisor(planner, engine=engine)
     goals = GoalRuntime(supervisor, world=world)
-    snapshot = world.snapshot(device.entity_id)
 
     goal = Goal(
         name="keep-lab-safe",
@@ -103,13 +97,7 @@ async def run_canary() -> dict[str, Any]:
         target_entity_id=device.entity_id,
         requires=["cooling.set"],
     )
-    run = await goals.achieve(
-        goal,
-        context={
-            "world": dict(snapshot.entity.properties),
-            "target_entity_id": device.entity_id,
-        },
-    )
+    run = await goals.achieve(goal)
     if run.status.value != "completed":
         raise RuntimeError(run.error or f"goal stopped as {run.status.value}")
 
