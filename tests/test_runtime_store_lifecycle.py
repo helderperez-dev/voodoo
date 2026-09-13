@@ -133,7 +133,7 @@ def test_runtime_store_owns_single_provider_lifecycle() -> None:
 
     assert first is second
     assert isinstance(first, FakeProvider)
-    assert first.open_calls == 2
+    assert first.open_calls == 1
     assert runtime_store.started is True
     assert runtime_store.health() == StoreHealth(
         provider="fake",
