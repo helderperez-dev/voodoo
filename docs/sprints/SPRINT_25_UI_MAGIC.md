@@ -1,6 +1,7 @@
 # Sprint 25 — Voodoo UI Magic
 
-> Status: WIP
+> Status: Complete
+> Completed: 2026-09-13
 > Theme: Python expresses intent; Voodoo owns browser mechanics.
 > Purpose: Make Voodoo application development feel unusually elegant while the default visual result remains exceptionally polished.
 
@@ -59,7 +60,9 @@ There must be:
 9. **Progressive complexity.** Simple usage stays simple; escape hatches exist behind explicit APIs.
 10. **One component model.** Do not create a parallel frontend framework beside `Component`.
 
-## Current gaps found in code
+## Original gaps identified before implementation
+
+The list below records the baseline that motivated Sprint 25. It is intentionally historical; the completion state and merge evidence are tracked in `SPRINT_25_PROGRESS.md`.
 
 - `Button(on_click=...)` accepts a string and renders an inline `onclick` JavaScript expression.
 - `@event` registers handlers by function name in a global string-keyed registry.
@@ -320,6 +323,12 @@ Sprint 25 is complete when all of the following are true:
 - An acceptance app demonstrates the complete experience with minimal Python.
 - Existing string event APIs remain temporarily compatible or have an explicit migration path.
 - CI, type checks and relevant interaction tests are green.
+
+## Completion evidence
+
+The final acceptance application is `examples/ui_magic/main.py` and its executable acceptance suite is `tests/test_ui_magic_acceptance.py`.
+
+The final milestone was merged through PR #40 after Ruff format, Ruff lint, Python 3.12, Python 3.13 and CodeQL all passed. Merge history for every milestone is recorded in `SPRINT_25_PROGRESS.md`.
 
 ## North-star developer experience
 
