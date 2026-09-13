@@ -1,9 +1,5 @@
 """Voodoo runtime — the unified execution model.
 
-This package makes the computational model *operational*.
-Every meaningful operation is represented as an Execution produced by a
-single ExecutionEngine walking the operational model:
-
     World → Goal → Intent → Capability → Policy → Execution → Effect → Observation
 """
 
@@ -43,6 +39,7 @@ from voodoo.runtime.goal import (
     GoalRuntime,
     GoalStatus,
 )
+from voodoo.runtime.goal_store import GoalStore, SQLiteGoalStore
 from voodoo.runtime.graph import ExecutionGraph, ExecutionNode
 from voodoo.runtime.human import (
     Approval,
@@ -73,21 +70,73 @@ from voodoo.runtime.world_execution import (
 )
 
 __all__ = [
-    "Execution", "ExecutionStatus", "ExecutionContext", "current_context", "use_context",
-    "ExecutionEngine", "engine", "ComputeFn", "ComputeResult",
-    "CapabilityResolver", "Resolution", "PolicyDecision", "PolicyEngine", "PolicyRequest",
-    "PolicyResult", "PolicyRule", "ConstraintEnforcer", "Decision", "ResourceAccountant",
-    "ExecutionError", "CapabilityDenied", "ConstraintViolation", "ResourceExceeded",
-    "ExecutionTimeout", "ExecutionCancelled", "ToolExecutionError", "AgentExecutionError",
-    "ValidationError", "ApprovalRequired", "WorkflowFailure", "Task", "TaskStatus",
-    "Workflow", "WorkflowRun", "WorkflowStrategy", "ExecutionGraph", "ExecutionNode",
-    "Approval", "ApprovalStatus", "ApprovalRegistry", "Human", "ask_human",
-    "ExecutionStore", "InMemoryExecutionStore", "JSONFileExecutionStore",
-    "ComputeParticipant", "Plan", "PlanStep", "Planner", "AdaptiveRun",
-    "AdaptiveSupervisor", "SupervisorDecision", "SupervisorConfig",
-    "Goal", "GoalStatus", "GoalIntentRun", "GoalRun", "GoalRuntime", "GoalDecomposer",
-    "bind_world", "world_aware", "resolve_target_entity_id",
-    "execute", "register_capability", "grant",
+    "Execution",
+    "ExecutionStatus",
+    "ExecutionContext",
+    "current_context",
+    "use_context",
+    "ExecutionEngine",
+    "engine",
+    "ComputeFn",
+    "ComputeResult",
+    "CapabilityResolver",
+    "Resolution",
+    "PolicyDecision",
+    "PolicyEngine",
+    "PolicyRequest",
+    "PolicyResult",
+    "PolicyRule",
+    "ConstraintEnforcer",
+    "Decision",
+    "ResourceAccountant",
+    "ExecutionError",
+    "CapabilityDenied",
+    "ConstraintViolation",
+    "ResourceExceeded",
+    "ExecutionTimeout",
+    "ExecutionCancelled",
+    "ToolExecutionError",
+    "AgentExecutionError",
+    "ValidationError",
+    "ApprovalRequired",
+    "WorkflowFailure",
+    "Task",
+    "TaskStatus",
+    "Workflow",
+    "WorkflowRun",
+    "WorkflowStrategy",
+    "ExecutionGraph",
+    "ExecutionNode",
+    "Approval",
+    "ApprovalStatus",
+    "ApprovalRegistry",
+    "Human",
+    "ask_human",
+    "ExecutionStore",
+    "InMemoryExecutionStore",
+    "JSONFileExecutionStore",
+    "ComputeParticipant",
+    "Plan",
+    "PlanStep",
+    "Planner",
+    "AdaptiveRun",
+    "AdaptiveSupervisor",
+    "SupervisorDecision",
+    "SupervisorConfig",
+    "Goal",
+    "GoalStatus",
+    "GoalIntentRun",
+    "GoalRun",
+    "GoalRuntime",
+    "GoalDecomposer",
+    "GoalStore",
+    "SQLiteGoalStore",
+    "bind_world",
+    "world_aware",
+    "resolve_target_entity_id",
+    "execute",
+    "register_capability",
+    "grant",
 ]
 
 
@@ -100,7 +149,6 @@ async def execute(
     output_type: type | None = None,
     parent: ExecutionContext | None = None,
 ) -> Execution:
-    """Execute an intent through the default runtime engine."""
     return await engine.execute(
         intent,
         compute,
@@ -112,10 +160,8 @@ async def execute(
 
 
 def register_capability(capability: Capability) -> None:
-    """Register a capability template with the default engine."""
     engine.capabilities.register(capability)
 
 
 def grant(context: ExecutionContext, capability: Capability) -> None:
-    """Grant a capability to an in-flight execution context."""
     context.grant(capability)
