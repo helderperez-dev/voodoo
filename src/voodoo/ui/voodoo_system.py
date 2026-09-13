@@ -194,9 +194,7 @@ class ApprovalCard(Component):
             or _read(approval, "message")
             or "Human approval required."
         )
-        capability = _read(approval, "capability") or _read(
-            approval, "capability_name"
-        )
+        capability = _read(approval, "capability") or _read(approval, "capability_name")
         actions: list[Component] = []
         if on_deny is not None:
             actions.append(
