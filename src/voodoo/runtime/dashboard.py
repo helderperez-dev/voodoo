@@ -30,9 +30,7 @@ def runtime_dashboard(
             return JSONResponse(inspector.snapshot())
 
         app.starlette.routes.append(Route(path, dashboard, methods=["GET"]))
-        app.starlette.routes.append(
-            Route(f"{path}/api", runtime_json, methods=["GET"])
-        )
+        app.starlette.routes.append(Route(f"{path}/api", runtime_json, methods=["GET"]))
 
     return plugin
 
