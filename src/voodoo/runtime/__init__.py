@@ -68,10 +68,16 @@ from voodoo.runtime.policy import (
     PolicyRule,
 )
 from voodoo.runtime.store import (
+    DEFAULT_STORE_PATH,
+    RuntimeStore,
+    StoreConfig,
     StoreHealth,
     StoreProvider,
     StoreProviderError,
+    StoreProviderRegistry,
     VoodooStoreProvider,
+    create_store_provider,
+    store_registry,
 )
 from voodoo.runtime.task import Task, TaskStatus
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
@@ -127,10 +133,16 @@ __all__ = [
     "ExecutionStore",
     "InMemoryExecutionStore",
     "JSONFileExecutionStore",
+    "DEFAULT_STORE_PATH",
+    "StoreConfig",
     "StoreHealth",
     "StoreProvider",
     "StoreProviderError",
+    "StoreProviderRegistry",
+    "RuntimeStore",
     "VoodooStoreProvider",
+    "create_store_provider",
+    "store_registry",
     "ComputeParticipant",
     "Plan",
     "PlanStep",
