@@ -34,6 +34,10 @@ const voodoo = {
 
     valueOf: function(el) {
         if (!el) return null;
+        const explicit = el.getAttribute && el.getAttribute('data-vd-value');
+        if (explicit !== null && explicit !== undefined) {
+            try { return JSON.parse(explicit); } catch (_) { return explicit; }
+        }
         if (el.tagName === 'FORM') {
             return Object.fromEntries(new FormData(el).entries());
         }
@@ -100,7 +104,6 @@ const voodoo = {
         const scrollY = window.scrollY;
 
         if (id === 'root') {
-            // StateRenderer may send a root wrapper for backwards compatibility.
             const template = document.createElement('template');
             template.innerHTML = html.trim();
             const candidate = template.content.firstElementChild;
@@ -204,13 +207,47 @@ const voodoo = {
         });
     },
 
+    setupCommandBars: function() {
+        document.querySelectorAll('[data-vd-command-bar]').forEach(function(bar) {
+            if (bar.dataset.vdWired) return;
+            bar.dataset.vdWired = '1';
+            const input = bar.querySelector('input[name="command"]');
+            const button = bar.querySelector('[data-vd-command-submit]');
+            const binding = bar.dataset.vdCommandBinding;
+            const submit = function() {
+                if (!binding || !input) return;
+                voodoo.sendEvent(binding, input.id || null, input.value, 'submit');
+            };
+            if (input) {
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submit();
+                    }
+                });
+            }
+            if (button) button.addEventListener('click', submit);
+        });
+    },
+
     setupBehaviors: function() {
         this.setupChatBehaviors();
+        this.setupCommandBars();
     }
 };
 
 function eventBinding(el, type) {
     return el && el.getAttribute ? el.getAttribute(`data-vd-event-${type}`) : null;
+}
+
+function dispatchClickBinding(bound) {
+    if (!bound) return;
+    voodoo.sendEvent(
+        eventBinding(bound, 'click'),
+        bound.id || null,
+        voodoo.valueOf(bound),
+        'click'
+    );
 }
 
 // One delegated listener per browser event type. Components therefore never
@@ -224,9 +261,7 @@ document.addEventListener('click', function(e) {
     }
 
     const bound = e.target.closest && e.target.closest('[data-vd-event-click]');
-    if (bound) {
-        voodoo.sendEvent(eventBinding(bound, 'click'), bound.id || null, voodoo.valueOf(bound), 'click');
-    }
+    if (bound) dispatchClickBinding(bound);
 
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const link = e.target.closest && e.target.closest('a[href]');
@@ -235,6 +270,18 @@ document.addEventListener('click', function(e) {
     if (url.origin !== window.location.origin || url.hash && url.pathname === window.location.pathname) return;
     e.preventDefault();
     voodoo.navigate(url.href);
+});
+
+// Non-native interactive surfaces (for example selectable DataTable rows)
+// receive keyboard activation without application-side JavaScript.
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const bound = e.target.closest && e.target.closest('[data-vd-event-click]');
+    if (!bound) return;
+    const tag = bound.tagName;
+    if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    e.preventDefault();
+    dispatchClickBinding(bound);
 });
 
 document.addEventListener('change', function(e) {
