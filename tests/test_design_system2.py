@@ -1,5 +1,5 @@
 from voodoo.adapters.voodoo_css import VoodooCSSAdapter
-from voodoo.ui import Button, Field, Input, Popover, Skeleton, Switch, Tooltip
+from voodoo.ui import Button, Field, Input, Page, Popover, Skeleton, Switch, Tooltip
 from voodoo.ui.rendering import render_page
 from voodoo.ui.styles import current_adapter, set_style_adapter
 
@@ -76,6 +76,17 @@ def test_skeleton_preserves_layout_without_semantic_noise():
         html = Skeleton(lines=3, width="12rem").render()
         assert 'aria-hidden="true"' in html
         assert html.count("vd-skeleton-line") >= 3
+    finally:
+        set_style_adapter(original)
+
+
+def test_page_exposes_density_as_semantic_api():
+    original = _with_native_adapter()
+    try:
+        compact = Page("Dense", density="compact").render()
+        comfortable = Page("Calm").render()
+        assert 'data-vd-density="compact"' in compact
+        assert "data-vd-density" not in comfortable
     finally:
         set_style_adapter(original)
 
