@@ -1,9 +1,4 @@
-"""Server-side rendering: full HTML documents from component trees.
-
-Sitemap/robots generation lives in ``voodoo.core.sitemap`` (SEO concern, not
-rendering). This module owns the HTML document shell, the client runtime
-(``voodoo/static/client.js``), and the active theme's ``custom.css``.
-"""
+"""Server-side rendering: full HTML documents from component trees."""
 
 import os
 from typing import Any
@@ -12,7 +7,6 @@ _client_js_cache: str | None = None
 
 
 def _read_optional(path: str) -> str:
-    """Read a file if it exists; return ``""`` otherwise."""
     try:
         with open(path, encoding="utf-8") as f:
             return f.read()
@@ -51,15 +45,11 @@ def render_page(component: Any, seo: Any = None) -> str:
         elif isinstance(second, SEO):
             seo = second
             component = first
-
     if seo is None:
         seo = SEO()
 
     seo_config = config.seo
-    html_content = (
-        component.render() if isinstance(component, Component) else str(component)
-    )
-
+    html_content = component.render() if isinstance(component, Component) else str(component)
     client_js = _get_client_js()
     project_styles = _get_project_styles()
     css_vars = default_theme.to_css_variables()
@@ -68,31 +58,27 @@ def render_page(component: Any, seo: Any = None) -> str:
     from voodoo.ui.styles import current_adapter
     from voodoo.ui.styles.product import generate_product_css
     from voodoo.ui.styles.system import generate_design_system_css
+    from voodoo.ui.styles.voodoo_system import generate_voodoo_system_css
 
     adapter = current_adapter()
     is_voodoo_css = isinstance(adapter, VoodooCSSAdapter)
-
     if is_voodoo_css:
         component_css = generate_component_css(default_theme)
         design_system_css = generate_design_system_css(default_theme)
         product_css = generate_product_css(default_theme)
+        voodoo_system_css = generate_voodoo_system_css(default_theme)
         head_scripts = ""
         body_classes = "min-h-screen antialiased"
     else:
         tailwind_config = default_theme.to_tailwind_config()
-        component_css = ""
-        design_system_css = ""
-        product_css = ""
+        component_css = design_system_css = product_css = voodoo_system_css = ""
         head_scripts = f"""
         <script src="https://cdn.tailwindcss.com"></script>
-        <script>
-            tailwind.config = {tailwind_config};
-        </script>
+        <script>tailwind.config = {tailwind_config};</script>
         """
         body_classes = (
             "bg-[var(--vd-color-background)] text-[var(--vd-color-text)] "
-            "min-h-screen antialiased "
-            "selection:bg-[var(--vd-color-secondary)] selection:text-white"
+            "min-h-screen antialiased selection:bg-[var(--vd-color-secondary)] selection:text-white"
         )
 
     mode = default_theme.mode or "dark"
@@ -105,8 +91,7 @@ def render_page(component: Any, seo: Any = None) -> str:
     var m = document.cookie.match(/(?:^|;\\s*)voodoo_theme=([^;]+)/);
     var resolved = m ? m[1] : mode;
     if (resolved === "system") {{
-        resolved = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
-            ? "dark" : "light";
+        resolved = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }}
     document.documentElement.classList.toggle("dark", resolved === "dark");
 }})();
@@ -152,27 +137,16 @@ def render_page(component: Any, seo: Any = None) -> str:
             ::-webkit-scrollbar-track {{ background: transparent; }}
             ::-webkit-scrollbar-thumb {{ background: var(--vd-color-surface); border-radius: 4px; border: 1px solid var(--vd-color-border); }}
             ::-webkit-scrollbar-thumb:hover {{ background: var(--vd-color-text-muted); }}
-
-            /* Stable primitive component layer */
             {component_css}
-
-            /* Voodoo Design System 2 */
             {design_system_css}
-
-            /* Reusable product patterns */
             {product_css}
-
-            /* Project theme customization */
+            {voodoo_system_css}
             {project_styles}
         </style>
     </head>
     <body class="{body_classes}">
-        <div id="root">
-            {html_content}
-        </div>
-        <script>
-            {client_js}
-        </script>
+        <div id="root">{html_content}</div>
+        <script>{client_js}</script>
     </body>
     </html>
     """
