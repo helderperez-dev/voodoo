@@ -5,9 +5,10 @@ while the public ``Agent`` adds runtime-truth guarantees: canonical Execution
 failure propagation, execution lineage, and agent-scoped episodic memory.
 """
 
-from voodoo.ai.agent_legacy import AgentEvent, AgentRun, AgentState
+from voodoo.ai.agent_legacy import AgentEvent, AgentRun
+from voodoo.ai.agent_legacy import AgentState as AgentState
 from voodoo.ai.agent_runtime_truth import RuntimeTruthAgent
 
 Agent = RuntimeTruthAgent
 
-__all__ = ["Agent", "AgentRun", "AgentEvent"]
+__all__ = ["Agent", "AgentRun", "AgentEvent", "AgentState"]
