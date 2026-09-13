@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from examples.operational_closed_loop.main import run_canary
+from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
+from voodoo.runtime import AdaptiveSupervisor, ExecutionEngine, Goal, GoalRuntime
 from voodoo.runtime.planner import ComputeParticipant, Planner, PlanningContext
+from voodoo.world import Entity, WorldModel
 
 
 def test_world_aware_planner_uses_explicit_operational_context() -> None:
@@ -57,6 +60,62 @@ def test_world_aware_planner_rejects_context_mismatch() -> None:
     plan = planner.plan(intent, context={"world": {"temperature": 20.0}})
 
     assert plan.unresolved == ["cooling.set"]
+
+
+async def test_goal_runtime_automatically_plans_from_latest_world() -> None:
+    world = WorldModel()
+    world.put_entity(Entity(id="device:lab", type="device"))
+    world.observe("device:lab", "temperature", 34.0, source="sensor")
+
+    engine = ExecutionEngine()
+    engine.capabilities.register(Capability(name="cooling.set"))
+    planner = Planner(engine=engine)
+    calls: list[str] = []
+
+    def remote(ctx):
+        calls.append("remote")
+        return "remote"
+
+    def local(ctx):
+        calls.append("local")
+        return "local"
+
+    planner.register(
+        ComputeParticipant(
+            name="remote-controller",
+            kind="compute",
+            capabilities=["cooling.set"],
+            compute=remote,
+            metadata={"priority": 1},
+        )
+    )
+    planner.register(
+        ComputeParticipant(
+            name="local-controller",
+            kind="compute",
+            capabilities=["cooling.set"],
+            compute=local,
+            metadata={
+                "entity_id": "device:lab",
+                "when": {"temperature": 34.0},
+            },
+        )
+    )
+    runtime = GoalRuntime(AdaptiveSupervisor(planner, engine=engine), world=world)
+
+    run = await runtime.achieve(
+        Goal(
+            name="cool-lab",
+            target_entity_id="device:lab",
+            requires=["cooling.set"],
+        )
+    )
+
+    assert run.status.value == "completed"
+    assert run.result == "local"
+    assert calls == ["local"]
+    assert run.context["world"]["temperature"] == 34.0
+    assert run.context["world_observations"]["temperature"]["source"] == "sensor"
 
 
 async def test_operational_closed_loop_canary() -> None:
