@@ -1,16 +1,29 @@
-"""The Voodoo UI system: component model, library, and style adapters.
+"""The Voodoo UI system: component model, library, interaction runtime, and styles.
 
-Import the component library from here::
+New application code should import components from this module. Interactive
+components accept Python callables directly and keep browser mechanics inside
+Voodoo::
 
-    from voodoo.ui import Button, Card, Page, Stack, Link
+    from voodoo.ui import Button
 
-Styling is pluggable — swap the CSS framework without touching components::
+    async def save():
+        ...
 
-    from voodoo.ui import set_style_adapter, NoopAdapter
-    set_style_adapter(NoopAdapter())
+    Button("Save", on_click=save)
 """
 
 from voodoo.ui.component import Component, Html, escape, tone_to_color_var
+from voodoo.ui.interactive import (
+    Button,
+    Checkbox,
+    Composer,
+    Form,
+    Input,
+    Radio,
+    Select,
+    Textarea,
+    ThemeToggle,
+)
 from voodoo.ui.library import (
     A,
     Address,
@@ -22,14 +35,11 @@ from voodoo.ui.library import (
     Badge,
     Box,
     Brand,
-    Button,
     Card,
     ChatBox,
     ChatMessage,
-    Checkbox,
     Chip,
     CodeBlock,
-    Composer,
     Container,
     CTABand,
     Dialog,
@@ -41,14 +51,12 @@ from voodoo.ui.library import (
     Figure,
     Flex,
     Footer,
-    Form,
     Grid,
     Header,
     Heading,
     Hero,
     Icon,
     Img,
-    Input,
     Label,
     Link,
     LinkArrow,
@@ -66,10 +74,8 @@ from voodoo.ui.library import (
     Page,
     PageHero,
     Paragraph,
-    Radio,
     RegisterForm,
     Section,
-    Select,
     Sidebar,
     Stack,
     Stat,
@@ -77,8 +83,6 @@ from voodoo.ui.library import (
     StreamingText,
     Table,
     Text,
-    Textarea,
-    ThemeToggle,
     Time,
     UserBadge,
 )
@@ -142,7 +146,6 @@ __all__ = [
     "Table",
     "List",
     "ListItem",
-    "ChatBox",
     "Sidebar",
     # Semantic structure
     "Nav",
