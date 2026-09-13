@@ -5,8 +5,9 @@ from typing import Any
 
 
 class MeshClient:
-    def __init__(self, endpoint_url: str):
+    def __init__(self, endpoint_url: str, *, credential: str | None = None):
         self.endpoint_url = endpoint_url
+        self.credential = credential
         self.ws = None
         self._pending_requests: dict[str, asyncio.Future] = {}
         self._structured_requests: set[str] = set()
@@ -16,7 +17,6 @@ class MeshClient:
         if self.ws is None or getattr(self.ws, "closed", True):
             import websockets
 
-            # Use large max_size to handle huge payloads
             self.ws = await websockets.connect(self.endpoint_url, max_size=8388608)
             self._receive_task = asyncio.create_task(self._receive_loop())
 
@@ -59,6 +59,11 @@ class MeshClient:
         except Exception as e:
             print(f"MeshClient receive loop error: {e}")
 
+    def _credential_params(self) -> dict[str, str]:
+        if self.credential is None:
+            return {}
+        return {"credential": self.credential}
+
     async def call(self, name: str, **kwargs) -> Any:
         """Invoke a remote function using the legacy raw-result contract."""
         await self._ensure_connected()
@@ -72,7 +77,11 @@ class MeshClient:
                 {
                     "jsonrpc": "2.0",
                     "method": "call",
-                    "params": {"name": name, "arguments": kwargs},
+                    "params": {
+                        "name": name,
+                        "arguments": kwargs,
+                        **self._credential_params(),
+                    },
                     "id": msg_id,
                 }
             )
@@ -94,10 +103,10 @@ class MeshClient:
     ):
         """Execute remotely and return the canonical structured Voodoo outcome.
 
-        Unlike :meth:`call`, this method does not collapse WAITING or FAILED
-        executions into generic RPC success/error semantics. The caller gets a
-        ``RemoteExecutionOutcome`` whose ``status`` mirrors canonical Execution
-        truth and can decide what to do next.
+        ``actor`` remains for compatibility with unauthenticated Mesh nodes.
+        When the receiving node configures a participant resolver, credential
+        evidence is resolved first and the authenticated identity replaces this
+        asserted actor label before authority evaluation.
         """
         await self._ensure_connected()
         msg_id = str(uuid.uuid4())
@@ -112,6 +121,7 @@ class MeshClient:
             "arguments": arguments or {},
             "actor": actor,
             "request_id": stable_request_id,
+            **self._credential_params(),
         }
         if correlation_id is not None:
             params["correlation_id"] = correlation_id
