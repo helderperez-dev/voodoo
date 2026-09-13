@@ -33,6 +33,7 @@ from voodoo.mcp import mcp
 from voodoo.mesh.client import MeshClient
 from voodoo.mesh.remote import (
     ExposedOperation,
+    RemoteAuthorityRegistry,
     RemoteExecutionOutcome,
     RemoteExecutionRequest,
 )
@@ -77,6 +78,7 @@ class MeshNetwork:
         bus: VoodooEventBus | None = None,
         *,
         execution_engine: Any | None = None,
+        remote_authority: RemoteAuthorityRegistry | None = None,
     ):
         if bus is None:
             from voodoo.adapters.registry import registry
@@ -85,6 +87,7 @@ class MeshNetwork:
         else:
             self.bus = bus
         self.execution_engine = execution_engine
+        self.remote_authority = remote_authority or RemoteAuthorityRegistry()
         self.node_id = str(uuid.uuid4())
         self.peers: set[str] = set()
         self.active_agents: dict[str, Any] = {}
@@ -95,6 +98,18 @@ class MeshNetwork:
         self.event_handlers: dict[str, list[Callable]] = {}
         self.active_nodes: list[WebSocket] = []
         self.subscriptions: set[str] = set()
+
+    def grant_remote(self, actor: str, *capabilities: Any) -> None:
+        """Assign remote authority on the receiving node.
+
+        This is intentionally server-side configuration. A remote request cannot
+        grant itself capabilities by adding fields to the network payload.
+        """
+        self.remote_authority.grant(actor, *capabilities)
+
+    def revoke_remote(self, actor: str, *capability_names: str) -> None:
+        """Revoke server-side authority from one remote participant."""
+        self.remote_authority.revoke(actor, *capability_names)
 
     def expose(
         self,
@@ -251,6 +266,7 @@ class MeshNetwork:
 
         engine = self._runtime_engine()
         intent = operation.intent_for(request)
+        granted_capabilities = self.remote_authority.names_for(request.actor)
 
         async def compute(ctx):
             result = operation.func(**request.arguments)
@@ -263,6 +279,7 @@ class MeshNetwork:
                 intent,
                 compute,
                 actor=request.runtime_actor,
+                capabilities=granted_capabilities,
             )
             return RemoteExecutionOutcome.from_execution(request, execution)
         except Exception as error:  # Runtime errors carry canonical lineage.
@@ -396,5 +413,6 @@ __all__ = [
     "mesh",
     "RemoteExecutionRequest",
     "RemoteExecutionOutcome",
+    "RemoteAuthorityRegistry",
     "ExposedOperation",
 ]
