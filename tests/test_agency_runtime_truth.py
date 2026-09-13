@@ -4,10 +4,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from voodoo.agents.registry import InMemoryAgentRegistry
 from voodoo.ai.agent import Agent
 from voodoo.ai.providers import ProviderResponse, ToolCall
 from voodoo.ai.providers.mock import MockProvider
-from voodoo.agents.registry import InMemoryAgentRegistry
 from voodoo.memory.interfaces import InMemoryMemoryStore, MemoryLayer
 from voodoo.runtime.engine import ExecutionEngine
 from voodoo.runtime.errors import AgentExecutionError
