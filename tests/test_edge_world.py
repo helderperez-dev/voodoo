@@ -128,7 +128,11 @@ async def test_effect_ack_only_changes_world_when_evidence_is_reported() -> None
         type=EdgeMessageType.EFFECT_ACK,
         message_id="msg-ack-1",
         device_id=device.device_id,
-        payload={"effect_id": "effect-1", "execution_id": "exec-1", "status": "completed"},
+        payload={
+            "effect_id": "effect-1",
+            "execution_id": "exec-1",
+            "status": "completed",
+        },
     )
     await gateway.handle_effect_ack(no_evidence, _context(device))
     entity = world.entity(device.entity_id)
