@@ -69,6 +69,7 @@ from voodoo.runtime.policy import (
 )
 from voodoo.runtime.task import Task, TaskStatus
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
+from voodoo.runtime.world_execution import bind_world, resolve_target_entity_id, world_aware
 
 __all__ = [
     # core
@@ -132,6 +133,10 @@ __all__ = [
     "AdaptiveSupervisor",
     "SupervisorDecision",
     "SupervisorConfig",
+    # world-aware execution
+    "bind_world",
+    "world_aware",
+    "resolve_target_entity_id",
     # convenience
     "execute",
     "register_capability",
