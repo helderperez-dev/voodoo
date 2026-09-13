@@ -1,9 +1,8 @@
 """UI component system tests — component contract, adapters, escaping, theme.
 
 These pin the component contract: one render path, adapter-driven classes,
-byte-compatible legacy defaults (under TailwindAdapter), semantic
-variant/size props, HTML escaping, css={} prop, tone prop, and new
-components (Stack, Box, Link).
+semantic interaction bindings, variant/size props, HTML escaping, css={} prop,
+tone prop, and high-level components.
 """
 
 import pytest
@@ -30,14 +29,9 @@ from voodoo.ui import (
 from voodoo.ui.component import Html, tone_to_color_var
 from voodoo.ui.styles import current_adapter
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 
 @pytest.fixture
 def tailwind_adapter():
-    """Use TailwindAdapter for byte-compat golden render tests."""
     original = current_adapter()
     set_style_adapter(TailwindAdapter())
     yield
@@ -46,42 +40,29 @@ def tailwind_adapter():
 
 @pytest.fixture
 def voodoo_css_adapter():
-    """Use VoodooCSSAdapter for VoodooCSS-specific tests."""
     original = current_adapter()
     set_style_adapter(VoodooCSSAdapter())
     yield
     set_style_adapter(original)
 
 
-# ---------------------------------------------------------------------------
-# Byte-compatible legacy golden renders (Tailwind adapter)
-# ---------------------------------------------------------------------------
-
-
-def test_button_default_matches_legacy(tailwind_adapter):
+def test_button_default_uses_semantic_interaction_binding(tailwind_adapter):
     btn = Button("Click Me", id="btn-1", on_click="my_action")
-    assert btn.render() == (
-        '<button id="btn-1" onclick="voodoo.sendEvent(\'my_action\', this.id, this.value)"'
-        ' class="inline-flex items-center justify-center rounded-md text-sm font-medium'
-        " transition-colors focus-visible:outline-none focus-visible:ring-1"
-        " focus-visible:ring-[var(--vd-color-primary)] disabled:pointer-events-none"
-        " disabled:opacity-50 bg-[var(--vd-color-text)] text-[var(--vd-color-surface)]"
-        ' hover:bg-[var(--vd-color-text)]/90 h-9 px-4 py-2">Click Me</button>'
-    )
+    rendered = btn.render()
+    assert rendered.startswith('<button id="btn-1" type="button"')
+    assert 'data-vd-event-click="my_action"' in rendered
+    assert "onclick=" not in rendered
+    assert "inline-flex" in rendered
+    assert "Click Me" in rendered
 
 
-def test_input_default_matches_legacy(tailwind_adapter):
+def test_input_default_uses_semantic_interaction_binding(tailwind_adapter):
     inp = Input(id="inp-1", on_change="input_changed", type="text")
-    assert inp.render() == (
-        '<input id="inp-1" type="text" '
-        "onchange=\"voodoo.sendEvent('input_changed', this.id, this.value)\" "
-        'class="flex h-9 w-full rounded-md border border-[var(--vd-color-border)] '
-        "bg-transparent px-3 py-1 text-sm shadow-sm transition-colors "
-        "file:border-0 file:bg-transparent file:text-sm file:font-medium "
-        "placeholder:text-[var(--vd-color-text-muted)] focus-visible:outline-none "
-        "focus-visible:ring-1 focus-visible:ring-[var(--vd-color-primary)] "
-        'disabled:cursor-not-allowed disabled:opacity-50" />'
-    )
+    rendered = inp.render()
+    assert rendered.startswith('<input id="inp-1" type="text"')
+    assert 'data-vd-event-change="input_changed"' in rendered
+    assert "onchange=" not in rendered
+    assert "rounded-md" in rendered
 
 
 def test_card_default_matches_legacy(tailwind_adapter):
@@ -153,11 +134,6 @@ def test_div_plain():
 def test_text_plain():
     text = Text("Span Text", id="txt-1")
     assert text.render() == '<span id="txt-1">Span Text</span>'
-
-
-# ---------------------------------------------------------------------------
-# Semantic variant / size props (Tailwind adapter)
-# ---------------------------------------------------------------------------
 
 
 def test_button_variant_primary(tailwind_adapter):
@@ -236,11 +212,6 @@ def test_link_component(tailwind_adapter):
     assert "var(--vd-color-primary)" in rendered
 
 
-# ---------------------------------------------------------------------------
-# VoodooCSS adapter (default)
-# ---------------------------------------------------------------------------
-
-
 def test_voodoo_css_button_default(voodoo_css_adapter):
     btn = Button("Save", id="b1")
     rendered = btn.render()
@@ -286,17 +257,12 @@ def test_voodoo_css_link(voodoo_css_adapter):
     assert "vd-link" in rendered
 
 
-# ---------------------------------------------------------------------------
-# Style adapter swap
-# ---------------------------------------------------------------------------
-
-
 def test_adapter_swap_to_noop():
     original = current_adapter()
     try:
         set_style_adapter(NoopAdapter())
         btn = Button("Click", id="b1")
-        assert btn.render() == '<button id="b1">Click</button>'
+        assert btn.render() == '<button id="b1" type="button">Click</button>'
 
         card = Card("Body", id="c1", class_="custom-card")
         assert card.render() == '<div id="c1" class="custom-card">Body</div>'
@@ -316,11 +282,6 @@ def test_adapter_swap_to_tailwind():
         set_style_adapter(original)
 
 
-# ---------------------------------------------------------------------------
-# HTML escaping
-# ---------------------------------------------------------------------------
-
-
 def test_text_children_escaped():
     div = Div("<script>alert('xss')</script>", id="d1")
     rendered = div.render()
@@ -334,20 +295,17 @@ def test_attribute_values_escaped():
     assert "<img" not in rendered
 
 
-def test_event_handler_not_escaped():
+def test_event_binding_is_data_not_inline_code():
     btn = Button("Go", id="b1", on_click="my_action")
     rendered = btn.render()
-    assert "voodoo.sendEvent('my_action', this.id, this.value)" in rendered
+    assert 'data-vd-event-click="my_action"' in rendered
+    assert "onclick=" not in rendered
+    assert "voodoo.sendEvent" not in rendered
 
 
 def test_html_escape_hatch():
     raw = Html("<b>bold</b>")
     assert raw.render() == "<b>bold</b>"
-
-
-# ---------------------------------------------------------------------------
-# css={} prop (inline styles)
-# ---------------------------------------------------------------------------
 
 
 def test_css_prop_renders_inline_style():
@@ -367,11 +325,6 @@ def test_css_prop_underscore_to_hyphen():
     div = Div("Hi", id="d1", css={"border_radius": "8px"})
     rendered = div.render()
     assert "border-radius: 8px" in rendered
-
-
-# ---------------------------------------------------------------------------
-# tone prop (semantic colors)
-# ---------------------------------------------------------------------------
 
 
 def test_text_tone_muted():
@@ -416,11 +369,6 @@ def test_tone_to_color_var():
     assert tone_to_color_var("default") == ""
 
 
-# ---------------------------------------------------------------------------
-# New components (Stack, Box, Link)
-# ---------------------------------------------------------------------------
-
-
 def test_stack_renders_as_flex_col(tailwind_adapter):
     stack = Stack(Text("A"), Text("B"), gap="lg", id="s1")
     rendered = stack.render()
@@ -448,11 +396,6 @@ def test_link_renders(tailwind_adapter):
     rendered = link.render()
     assert 'href="/docs"' in rendered
     assert "var(--vd-color-primary)" in rendered
-
-
-# ---------------------------------------------------------------------------
-# Theme semantic tokens
-# ---------------------------------------------------------------------------
 
 
 def test_theme_has_semantic_tokens():
@@ -511,11 +454,6 @@ def test_theme_shadows_tokens():
 
     shadows = ThemeShadows()
     assert "0 1px 2px" in shadows.sm
-
-
-# ---------------------------------------------------------------------------
-# Auth components (rebuilt via composition)
-# ---------------------------------------------------------------------------
 
 
 def test_login_form_composed():
