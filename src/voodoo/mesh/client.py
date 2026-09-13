@@ -5,8 +5,9 @@ from typing import Any
 
 
 class MeshClient:
-    def __init__(self, endpoint_url: str):
+    def __init__(self, endpoint_url: str, *, session_token: str | None = None):
         self.endpoint_url = endpoint_url
+        self.session_token = session_token
         self.ws = None
         self._pending_requests: dict[str, asyncio.Future] = {}
         self._structured_requests: set[str] = set()
@@ -16,7 +17,6 @@ class MeshClient:
         if self.ws is None or getattr(self.ws, "closed", True):
             import websockets
 
-            # Use large max_size to handle huge payloads
             self.ws = await websockets.connect(self.endpoint_url, max_size=8388608)
             self._receive_task = asyncio.create_task(self._receive_loop())
 
@@ -63,12 +63,16 @@ class MeshClient:
         future = asyncio.get_running_loop().create_future()
         self._pending_requests[msg_id] = future
 
+        params: dict[str, Any] = {"name": name, "arguments": kwargs}
+        if self.session_token is not None:
+            params["session_token"] = self.session_token
+
         await self.ws.send(
             json.dumps(
                 {
                     "jsonrpc": "2.0",
                     "method": "call",
-                    "params": {"name": name, "arguments": kwargs},
+                    "params": params,
                     "id": msg_id,
                 }
             )
@@ -82,19 +86,14 @@ class MeshClient:
         *,
         arguments: dict[str, Any] | None = None,
         actor: str = "anonymous",
+        session_token: str | None = None,
         request_id: str | None = None,
         correlation_id: str | None = None,
         parent_execution_id: str | None = None,
         target_entity_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ):
-        """Execute remotely and return the canonical structured Voodoo outcome.
-
-        Unlike :meth:`call`, this method does not collapse WAITING or FAILED
-        executions into generic RPC success/error semantics. The caller gets a
-        ``RemoteExecutionOutcome`` whose ``status`` mirrors canonical Execution
-        truth and can decide what to do next.
-        """
+        """Execute remotely and return the canonical structured Voodoo outcome."""
         await self._ensure_connected()
         msg_id = str(uuid.uuid4())
         stable_request_id = request_id or msg_id
@@ -109,6 +108,9 @@ class MeshClient:
             "actor": actor,
             "request_id": stable_request_id,
         }
+        trusted_token = session_token or self.session_token
+        if trusted_token is not None:
+            params["session_token"] = trusted_token
         if correlation_id is not None:
             params["correlation_id"] = correlation_id
         if parent_execution_id is not None:

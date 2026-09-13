@@ -4,15 +4,10 @@ This module is deliberately transport-independent. WebSocket/JSON-RPC is only
 one carrier for a :class:`RemoteExecutionRequest`; the semantic request is
 normalized before it is allowed to reach application compute.
 
-Sprint 26.1/26.2 does **not** claim authenticated remote identity. ``actor`` is
-an asserted participant label until the trusted participant/session seam lands.
-The runtime-facing actor is therefore namespaced as ``remote:<actor>`` so an
-unverified network claim cannot be confused with a local actor identity.
-
-Sprint 26.3 adds a server-side authority registry. Network payloads may identify
-an asserted actor but they never carry authoritative capability grants. Those
-are assigned by the receiving Voodoo node and injected into the canonical
-ExecutionContext before capability/policy evaluation.
+Remote ``actor`` remains a claim until a trusted-session adapter resolves the
+opaque ``session_token``. When a trusted principal is available, the receiving
+node replaces the claimed actor with the authenticated identity before replay,
+authority, Policy and Execution evaluation.
 """
 
 from __future__ import annotations
@@ -32,7 +27,7 @@ REMOTE_SCHEMA_VERSION = 1
 
 
 def normalize_remote_actor(actor: str) -> str:
-    """Normalize an asserted participant label to the runtime remote namespace."""
+    """Normalize a participant label to the runtime remote namespace."""
     normalized = actor.strip() or "anonymous"
     if normalized.startswith("remote:"):
         return normalized
@@ -42,9 +37,9 @@ def normalize_remote_actor(actor: str) -> str:
 class RemoteExecutionRequest(BaseModel):
     """Transport-independent request to execute one exposed Mesh operation.
 
-    Unknown transport fields are intentionally ignored. In particular, a
-    caller cannot self-authorize by adding fields such as ``capabilities`` to
-    the wire payload; authority is resolved exclusively by the receiving node.
+    Unknown transport fields are ignored. Capability lists are never accepted
+    as authority. ``session_token`` is opaque authentication material consumed
+    by the receiving node; it is not copied into Intent params or telemetry.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -54,6 +49,7 @@ class RemoteExecutionRequest(BaseModel):
     operation: str = Field(min_length=1)
     arguments: dict[str, Any] = Field(default_factory=dict)
     actor: str = Field(default="anonymous", min_length=1)
+    session_token: str | None = Field(default=None, exclude=True)
     correlation_id: str | None = None
     parent_execution_id: str | None = None
     target_entity_id: str | None = None
@@ -61,7 +57,6 @@ class RemoteExecutionRequest(BaseModel):
 
     @property
     def runtime_actor(self) -> str:
-        """Return an explicitly untrusted runtime actor label for this request."""
         return normalize_remote_actor(self.actor)
 
     @classmethod
@@ -71,12 +66,7 @@ class RemoteExecutionRequest(BaseModel):
         *,
         message_id: str | None = None,
     ) -> RemoteExecutionRequest:
-        """Normalize canonical or legacy Mesh JSON-RPC ``call`` parameters.
-
-        Legacy callers send ``{"name": ..., "arguments": ...}``. New callers
-        may send ``operation`` plus lineage/actor metadata. In both cases the
-        result is the same semantic request before application code is touched.
-        """
+        """Normalize canonical or legacy Mesh JSON-RPC ``call`` parameters."""
         if not isinstance(params, dict):
             raise ValueError("Mesh call params must be an object")
 
@@ -103,6 +93,11 @@ class RemoteExecutionRequest(BaseModel):
             operation=operation.strip(),
             arguments=dict(arguments),
             actor=str(actor),
+            session_token=(
+                str(params["session_token"])
+                if params.get("session_token") is not None
+                else None
+            ),
             correlation_id=(
                 str(params["correlation_id"])
                 if params.get("correlation_id") is not None
@@ -124,19 +119,11 @@ class RemoteExecutionRequest(BaseModel):
 
 @dataclass
 class RemoteAuthorityRegistry:
-    """Server-side capability assignment for remote participants.
-
-    This is an authority seam, not an authentication system. Until Sprint 26.6
-    binds actor labels to trusted sessions, grants are keyed by the asserted
-    actor label. The important invariant introduced here is that grants can
-    only originate on the receiving node; network request fields are never
-    converted into runtime capabilities.
-    """
+    """Server-side capability assignment for remote participants."""
 
     _grants: dict[str, dict[str, Capability]] = field(default_factory=dict)
 
     def grant(self, actor: str, *capabilities: str | Capability) -> None:
-        """Grant one or more capabilities to a remote participant."""
         key = normalize_remote_actor(actor)
         bucket = self._grants.setdefault(key, {})
         for item in capabilities:
@@ -144,7 +131,6 @@ class RemoteAuthorityRegistry:
             bucket[capability.name] = capability
 
     def revoke(self, actor: str, *capability_names: str) -> None:
-        """Revoke named grants; with no names, revoke every grant for actor."""
         key = normalize_remote_actor(actor)
         if not capability_names:
             self._grants.pop(key, None)
@@ -158,12 +144,10 @@ class RemoteAuthorityRegistry:
             self._grants.pop(key, None)
 
     def replace(self, actor: str, capabilities: Iterable[str | Capability]) -> None:
-        """Replace the complete server-side authority set for one participant."""
         self.revoke(actor)
         self.grant(actor, *tuple(capabilities))
 
     def capabilities_for(self, actor: str) -> list[Capability]:
-        """Return currently valid capability grants for an actor."""
         bucket = self._grants.get(normalize_remote_actor(actor), {})
         return [cap.model_copy(deep=True) for cap in bucket.values() if cap.valid]
 
@@ -188,18 +172,16 @@ class ExposedOperation:
     description: str | None = None
 
     def intent_for(self, request: RemoteExecutionRequest) -> Intent:
-        """Build the canonical Intent used by the Runtime for this request."""
         params: dict[str, Any] = {
             "arguments": dict(request.arguments),
             "_remote_request_id": request.request_id,
-            "_remote_actor_asserted": request.actor,
+            "_remote_actor": request.actor,
         }
         if request.correlation_id is not None:
             params["_remote_correlation_id"] = request.correlation_id
         if request.parent_execution_id is not None:
             params["_remote_parent_execution_id"] = request.parent_execution_id
         if request.target_entity_id is not None:
-            # Existing contextual Policy resolves this key before compute.
             params["_target_entity_id"] = request.target_entity_id
         if request.metadata:
             params["_remote_metadata"] = dict(request.metadata)
@@ -213,12 +195,7 @@ class ExposedOperation:
 
 
 class RemoteExecutionOutcome(BaseModel):
-    """Protocol projection of one governed remote request.
-
-    ``Execution`` remains the source of truth. This object only carries enough
-    information for the transport/client boundary to correlate the request with
-    the canonical runtime lifecycle.
-    """
+    """Protocol projection of canonical Execution truth for one remote request."""
 
     schema_version: int = Field(default=REMOTE_SCHEMA_VERSION, ge=1)
     request_id: str
@@ -263,7 +240,6 @@ class RemoteExecutionOutcome(BaseModel):
         )
 
     def transport_metadata(self) -> dict[str, Any]:
-        """Small JSON-safe metadata projection for compatibility transports."""
         return {
             "schema_version": self.schema_version,
             "request_id": self.request_id,
