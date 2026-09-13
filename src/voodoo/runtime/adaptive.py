@@ -350,7 +350,7 @@ class AdaptiveSupervisor:
         """Execute a goal with bounded, step-local adaptive behavior."""
         run = AdaptiveRun(intent=intent)
         context = dict(context or {})
-        plan = plan or self.planner.plan(intent)
+        plan = plan or self.planner.plan(intent, context=context)
 
         if self.config.max_iterations <= 0:
             run.status = "failed"
