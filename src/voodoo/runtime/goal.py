@@ -1,14 +1,8 @@
-"""Goal-driven operational runtime.
+"""Goal-driven operational runtime with durable checkpoints.
 
-A Goal is a durable-friendly statement of desired outcome. It is intentionally
-above Intent: a Goal may decompose into multiple Intents, each of which is still
-planned and executed through the existing AdaptiveSupervisor/ExecutionEngine.
-
-    World → Goal → Intent(s) → Plan → Execution → Effect → Observation → World
-
-GoalRuntime does not create another execution engine. It coordinates the
-existing runtime and records the relationship between a long-lived objective
-and the adaptive executions used to pursue it.
+A Goal sits above Intent and may span many canonical Executions. GoalRuntime
+coordinates existing AdaptiveSupervisor/ExecutionEngine semantics; persistence
+only checkpoints orchestration state so process restarts do not erase agency.
 """
 
 from __future__ import annotations
@@ -23,6 +17,8 @@ from uuid import uuid4
 
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.adaptive import AdaptiveRun, AdaptiveSupervisor
+from voodoo.runtime.execution import ExecutionStatus
+from voodoo.runtime.goal_store import GoalStore
 from voodoo.runtime.world_execution import bind_world
 
 __all__ = [
@@ -50,17 +46,11 @@ class GoalStatus(StrEnum):
 
     @property
     def terminal(self) -> bool:
-        return self in {
-            GoalStatus.COMPLETED,
-            GoalStatus.FAILED,
-            GoalStatus.CANCELLED,
-        }
+        return self in {GoalStatus.COMPLETED, GoalStatus.FAILED, GoalStatus.CANCELLED}
 
 
 @dataclass
 class Goal:
-    """A desired operational outcome that may require multiple Intents."""
-
     name: str
     objective: str = ""
     target_entity_id: str | None = None
@@ -97,17 +87,18 @@ class Goal:
             "objective": self.objective,
             "target_entity_id": self.target_entity_id,
             "requires": list(self.requires),
+            "metadata": dict(self.metadata),
             "status": self.status.value,
             "intent_ids": list(self.intent_ids),
-            "has_result": self.result is not None,
+            "result": self.result,
             "error": self.error,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
 
 
 @dataclass
 class GoalIntentRun:
-    """One Intent pursued on behalf of a Goal."""
-
     intent_id: str
     intent_name: str
     status: str
@@ -130,14 +121,26 @@ class GoalIntentRun:
             decisions=list(run.decisions),
         )
 
+    def describe(self) -> dict[str, Any]:
+        return {
+            "intent_id": self.intent_id,
+            "intent_name": self.intent_name,
+            "status": self.status,
+            "execution_id": self.execution_id,
+            "trace_id": self.trace_id,
+            "result": self.result,
+            "error": self.error,
+            "decisions": list(self.decisions),
+        }
+
 
 @dataclass
 class GoalRun:
-    """Inspectable attempt to achieve a Goal."""
-
     goal: Goal
+    planned_intents: list[Intent] = field(default_factory=list)
     intent_runs: list[GoalIntentRun] = field(default_factory=list)
     current_index: int = 0
+    context: dict[str, Any] = field(default_factory=dict)
     started_at: datetime = field(default_factory=_now)
     completed_at: datetime | None = None
 
@@ -156,20 +159,12 @@ class GoalRun:
     def describe(self) -> dict[str, Any]:
         return {
             "goal": self.goal.describe(),
-            "current_index": self.current_index,
-            "intent_runs": [
-                {
-                    "intent_id": item.intent_id,
-                    "intent_name": item.intent_name,
-                    "status": item.status,
-                    "execution_id": item.execution_id,
-                    "trace_id": item.trace_id,
-                    "result": item.result,
-                    "error": item.error,
-                    "decisions": list(item.decisions),
-                }
-                for item in self.intent_runs
+            "planned_intents": [
+                intent.model_dump(mode="json") for intent in self.planned_intents
             ],
+            "current_index": self.current_index,
+            "context": dict(self.context),
+            "intent_runs": [item.describe() for item in self.intent_runs],
             "started_at": self.started_at.isoformat(),
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
@@ -179,16 +174,18 @@ GoalDecomposer = Callable[[Goal, Any | None], list[Intent] | Awaitable[list[Inte
 
 
 class GoalRuntime:
-    """Coordinate Goal → Intent(s) over the existing adaptive runtime."""
+    """Coordinate durable Goal → Intent(s) over the existing adaptive runtime."""
 
     def __init__(
         self,
         supervisor: AdaptiveSupervisor,
         *,
         world: Any | None = None,
+        store: GoalStore | None = None,
     ) -> None:
         self.supervisor = supervisor
         self.world = world
+        self.store = store
         self.runs: dict[str, GoalRun] = {}
         if world is not None:
             bind_world(self.supervisor.engine, world)
@@ -201,7 +198,6 @@ class GoalRuntime:
         decomposer: GoalDecomposer | None = None,
         context: dict[str, Any] | None = None,
     ) -> GoalRun:
-        """Pursue a Goal through one or more canonical Intents."""
         if goal.status.terminal:
             raise ValueError(f"goal {goal.id} is already terminal: {goal.status.value}")
 
@@ -211,38 +207,128 @@ class GoalRuntime:
             goal.fail("goal produced no intents")
             run = GoalRun(goal=goal, completed_at=_now())
             self.runs[goal.id] = run
+            self._persist(run)
             return run
 
         self._prepare_intents(goal, planned)
-        run = GoalRun(goal=goal)
-        self.runs[goal.id] = run
-        goal.transition(GoalStatus.RUNNING)
-
         base_context = dict(context or {})
-        base_context["goal_id"] = goal.id
-        base_context["goal_name"] = goal.name
+        base_context.update({"goal_id": goal.id, "goal_name": goal.name})
         if goal.target_entity_id is not None:
             base_context["target_entity_id"] = goal.target_entity_id
 
-        for index, intent in enumerate(planned):
+        run = GoalRun(
+            goal=goal,
+            planned_intents=list(planned),
+            context=base_context,
+        )
+        self.runs[goal.id] = run
+        goal.transition(GoalStatus.RUNNING)
+        self._persist(run)
+        return await self._continue(run)
+
+    async def resume(self, goal_id: str) -> GoalRun:
+        """Resume a persisted Goal from its last safe orchestration checkpoint."""
+        run = self.runs.get(goal_id)
+        if run is None:
+            if self.store is None:
+                raise KeyError(goal_id)
+            payload = self.store.load(goal_id)
+            if payload is None:
+                raise KeyError(goal_id)
+            run = self._restore(payload)
+            self.runs[goal_id] = run
+
+        if run.goal.status.terminal:
+            return run
+
+        if run.goal.status is GoalStatus.WAITING:
+            if not self._reconcile_waiting(run):
+                self._persist(run)
+                return run
+
+        run.goal.transition(GoalStatus.RUNNING)
+        self._persist(run)
+        return await self._continue(run)
+
+    def recover(self) -> list[GoalRun]:
+        """Reload unfinished Goal runs after process restart without executing them."""
+        if self.store is None:
+            return []
+        recovered: list[GoalRun] = []
+        for payload in self.store.load_unfinished():
+            run = self._restore(payload)
+            self.runs[run.goal.id] = run
+            recovered.append(run)
+        return recovered
+
+    async def _continue(self, run: GoalRun) -> GoalRun:
+        for index in range(run.current_index, len(run.planned_intents)):
+            intent = run.planned_intents[index]
             run.current_index = index
-            adaptive = await self.supervisor.run(intent, context=base_context)
+            self._persist(run)
+            adaptive = await self.supervisor.run(intent, context=run.context)
             record = GoalIntentRun.from_adaptive(intent, adaptive)
+            if adaptive.status == "waiting" and record.execution_id is None:
+                record.execution_id = self._find_waiting_execution(intent.id)
             run.intent_runs.append(record)
 
             if adaptive.status == "waiting":
-                goal.transition(GoalStatus.WAITING)
+                run.goal.transition(GoalStatus.WAITING)
+                self._persist(run)
                 return run
             if adaptive.status != "completed":
-                goal.fail(adaptive.error or f"intent {intent.name} failed")
+                run.goal.fail(adaptive.error or f"intent {intent.name} failed")
                 run.completed_at = _now()
+                self._persist(run)
                 return run
 
-        results = [item.result for item in run.intent_runs]
-        goal.complete(results[-1] if len(results) == 1 else results)
-        run.current_index = len(planned)
+            run.current_index = index + 1
+            self._persist(run)
+
+        results = [item.result for item in run.intent_runs if item.status == "completed"]
+        run.goal.complete(results[-1] if len(results) == 1 else results)
+        run.current_index = len(run.planned_intents)
         run.completed_at = _now()
+        self._persist(run)
         return run
+
+    def _reconcile_waiting(self, run: GoalRun) -> bool:
+        if not run.intent_runs:
+            return False
+        record = run.intent_runs[-1]
+        if record.status != "waiting" or record.execution_id is None:
+            return False
+        execution = self.supervisor.engine.executions.get(record.execution_id)
+        if execution is None:
+            return False
+        if execution.status is ExecutionStatus.WAITING:
+            return False
+        if execution.status is ExecutionStatus.COMPLETED:
+            record.status = "completed"
+            record.result = execution.result
+            record.error = None
+            run.current_index += 1
+            return True
+        if execution.status.terminal:
+            record.status = "failed"
+            record.error = execution.error or "waiting execution did not complete"
+            run.goal.fail(record.error)
+            run.completed_at = _now()
+        return False
+
+    def _find_waiting_execution(self, intent_id: str) -> str | None:
+        for execution in reversed(list(self.supervisor.engine.executions.values())):
+            if (
+                execution.intent is not None
+                and execution.intent.id == intent_id
+                and execution.status is ExecutionStatus.WAITING
+            ):
+                return execution.id
+        return None
+
+    def _persist(self, run: GoalRun) -> None:
+        if self.store is not None:
+            self.store.save(run.goal.id, run.describe())
 
     async def _decompose(
         self,
@@ -255,7 +341,6 @@ class GoalRuntime:
             if inspect.isawaitable(result):
                 result = await result
             return list(result)
-
         intent = Intent(
             name=goal.name,
             description=goal.objective,
@@ -283,3 +368,37 @@ class GoalRuntime:
             if goal.target_entity_id is not None:
                 intent.params.setdefault("entity_id", goal.target_entity_id)
             goal.intent_ids.append(intent.id)
+
+    @staticmethod
+    def _restore(payload: dict[str, Any]) -> GoalRun:
+        raw_goal = payload["goal"]
+        goal = Goal(
+            id=raw_goal["id"],
+            name=raw_goal["name"],
+            objective=raw_goal.get("objective", ""),
+            target_entity_id=raw_goal.get("target_entity_id"),
+            requires=list(raw_goal.get("requires", [])),
+            metadata=dict(raw_goal.get("metadata", {})),
+            status=GoalStatus(raw_goal["status"]),
+            intent_ids=list(raw_goal.get("intent_ids", [])),
+            result=raw_goal.get("result"),
+            error=raw_goal.get("error"),
+            created_at=datetime.fromisoformat(raw_goal["created_at"]),
+            updated_at=datetime.fromisoformat(raw_goal["updated_at"]),
+        )
+        intent_runs = [GoalIntentRun(**item) for item in payload.get("intent_runs", [])]
+        return GoalRun(
+            goal=goal,
+            planned_intents=[
+                Intent.model_validate(item) for item in payload.get("planned_intents", [])
+            ],
+            intent_runs=intent_runs,
+            current_index=int(payload.get("current_index", 0)),
+            context=dict(payload.get("context", {})),
+            started_at=datetime.fromisoformat(payload["started_at"]),
+            completed_at=(
+                datetime.fromisoformat(payload["completed_at"])
+                if payload.get("completed_at")
+                else None
+            ),
+        )
