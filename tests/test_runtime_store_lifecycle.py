@@ -101,7 +101,9 @@ def test_registry_resolves_provider_without_leaking_native_binding() -> None:
 def test_registry_rejects_unknown_provider_with_available_names() -> None:
     registry = _registry()
 
-    with pytest.raises(ConfigurationError, match="Unknown Store provider 'missing'") as exc:
+    with pytest.raises(
+        ConfigurationError, match="Unknown Store provider 'missing'"
+    ) as exc:
         registry.create(StoreConfig(provider="missing"))
 
     assert "fake" in str(exc.value)
@@ -116,7 +118,9 @@ def test_registry_rejects_empty_registration_name() -> None:
 
 def test_runtime_store_disabled_does_not_create_or_open_provider() -> None:
     registry = _registry()
-    runtime_store = RuntimeStore(StoreConfig(provider="fake", enabled=False), registry=registry)
+    runtime_store = RuntimeStore(
+        StoreConfig(provider="fake", enabled=False), registry=registry
+    )
 
     assert runtime_store.start() is None
     assert runtime_store.provider is None
@@ -126,7 +130,9 @@ def test_runtime_store_disabled_does_not_create_or_open_provider() -> None:
 
 def test_runtime_store_owns_single_provider_lifecycle() -> None:
     registry = _registry()
-    runtime_store = RuntimeStore(StoreConfig(provider="fake", enabled=True), registry=registry)
+    runtime_store = RuntimeStore(
+        StoreConfig(provider="fake", enabled=True), registry=registry
+    )
 
     first = runtime_store.start()
     second = runtime_store.start()
@@ -152,7 +158,9 @@ def test_runtime_store_owns_single_provider_lifecycle() -> None:
 
 def test_runtime_store_stop_is_idempotent() -> None:
     registry = _registry()
-    runtime_store = RuntimeStore(StoreConfig(provider="fake", enabled=True), registry=registry)
+    runtime_store = RuntimeStore(
+        StoreConfig(provider="fake", enabled=True), registry=registry
+    )
 
     provider = runtime_store.start()
     assert isinstance(provider, FakeProvider)
