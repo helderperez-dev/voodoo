@@ -4,20 +4,9 @@ Mesh is the single realtime channel for the framework. Local events fire
 immediately on registered handlers; remote events are serialized over
 WebSocket connections using a JSON-RPC 2.0 envelope.
 
-The boundary between local and remote is explicit:
-
-* **Local events** fire on in-process handlers immediately (zero serialization).
-  Use ``emit()`` / ``on()`` for subsystem coupling. Handlers still enter the
-  canonical :class:`~voodoo.runtime.engine.ExecutionEngine`.
-* **Remote events** are serialized as JSON and sent to connected WebSocket
-  nodes. They carry an envelope (id, ts, source, correlation_id).
-* **Remote calls** are normalized into a semantic request and then enter the
-  same ExecutionEngine used by local runtime work. Transport connectivity is
-  never an alternate execution lifecycle.
-
-All event names must be **namespaced** (e.g. ``"agent.started"`` not
-``"started"``). This prevents collisions across subsystems and makes the
-event surface discoverable.
+Remote execution always enters the canonical Runtime. Authentication and
+authority remain separate: a session establishes *who* is speaking, while the
+server-side authority registry establishes *what* that participant may do.
 """
 
 import asyncio
@@ -43,6 +32,7 @@ from voodoo.mesh.replay import (
     RemoteReplayStore,
     request_fingerprint,
 )
+from voodoo.mesh.session import RemoteAuthenticationError, RemoteAuthenticator
 from voodoo.storage.events import VoodooEventBus
 
 
@@ -86,6 +76,8 @@ class MeshNetwork:
         execution_engine: Any | None = None,
         remote_authority: RemoteAuthorityRegistry | None = None,
         replay_store: RemoteReplayStore | None = None,
+        remote_authenticator: RemoteAuthenticator | None = None,
+        require_trusted_remote: bool = False,
     ):
         if bus is None:
             from voodoo.adapters.registry import registry
@@ -96,6 +88,8 @@ class MeshNetwork:
         self.execution_engine = execution_engine
         self.remote_authority = remote_authority or RemoteAuthorityRegistry()
         self.replay_store = replay_store or InMemoryRemoteReplayStore()
+        self.remote_authenticator = remote_authenticator
+        self.require_trusted_remote = require_trusted_remote
         self._remote_request_locks: dict[str, asyncio.Lock] = {}
         self.node_id = str(uuid.uuid4())
         self.peers: set[str] = set()
@@ -210,6 +204,53 @@ class MeshNetwork:
             except Exception as e:  # noqa: BLE001
                 print(f"Local mesh event handler error: {e}")
 
+    def _authenticate_remote(
+        self, request: RemoteExecutionRequest
+    ) -> tuple[RemoteExecutionRequest | None, RemoteExecutionOutcome | None]:
+        """Bind a wire request to trusted server-side identity before authority."""
+        token = request.session_token
+        if token is None:
+            if self.require_trusted_remote:
+                return None, RemoteExecutionOutcome.rejected(
+                    request,
+                    error_type="RemoteAuthenticationRequired",
+                    message="trusted remote session is required",
+                )
+            return request, None
+
+        if self.remote_authenticator is None:
+            return None, RemoteExecutionOutcome.rejected(
+                request,
+                error_type="RemoteAuthenticationUnavailable",
+                message="remote session token was supplied but no authenticator is configured",
+            )
+
+        try:
+            principal = self.remote_authenticator.authenticate(token)
+        except RemoteAuthenticationError as error:
+            return None, RemoteExecutionOutcome.rejected(
+                request,
+                error_type="RemoteAuthenticationFailed",
+                message=str(error),
+            )
+        except Exception as error:  # adapter failure stays outside Execution
+            return None, RemoteExecutionOutcome.rejected(
+                request,
+                error_type="RemoteAuthenticationFailed",
+                message=str(error),
+            )
+
+        metadata = dict(request.metadata)
+        metadata["_trusted_session_id"] = principal.session_id
+        trusted = request.model_copy(
+            update={
+                "actor": principal.actor,
+                "session_token": None,
+                "metadata": metadata,
+            }
+        )
+        return trusted, None
+
     def _replayed_outcome(
         self, request: RemoteExecutionRequest
     ) -> RemoteExecutionOutcome | None:
@@ -227,8 +268,6 @@ class MeshNetwork:
         if outcome.execution_id is None:
             return outcome
 
-        # Replay storage remembers request identity. Canonical Execution remains
-        # authoritative for lifecycle changes after WAITING/HITL resume.
         execution = self._runtime_engine().get(outcome.execution_id)
         if execution is None or execution.status.value == outcome.status:
             return outcome
@@ -250,16 +289,23 @@ class MeshNetwork:
     async def execute_remote(
         self, request: RemoteExecutionRequest
     ) -> RemoteExecutionOutcome:
-        """Execute one request once and replay its canonical outcome on duplicates."""
-        lock = self._remote_request_locks.setdefault(request.request_id, asyncio.Lock())
+        """Authenticate, authorize and execute one remote request canonically."""
+        trusted_request, authentication_failure = self._authenticate_remote(request)
+        if authentication_failure is not None:
+            return authentication_failure
+        assert trusted_request is not None
+
+        lock = self._remote_request_locks.setdefault(
+            trusted_request.request_id, asyncio.Lock()
+        )
         async with lock:
-            replayed = self._replayed_outcome(request)
+            replayed = self._replayed_outcome(trusted_request)
             if replayed is not None:
                 return replayed
 
-            outcome = await self._execute_remote_once(request)
+            outcome = await self._execute_remote_once(trusted_request)
             if outcome.execution_id is not None:
-                self.replay_store.save(request, outcome)
+                self.replay_store.save(trusted_request, outcome)
             return outcome
 
     async def _execute_remote_once(
@@ -323,9 +369,11 @@ class MeshNetwork:
                 message=structured_error.get("message", str(error)),
             )
 
-    async def connect(self, endpoint_url: str):
-        """Connect to another Mesh Node."""
-        return MeshClient(endpoint_url)
+    async def connect(
+        self, endpoint_url: str, *, session_token: str | None = None
+    ) -> MeshClient:
+        """Connect to another Mesh node with optional trusted-session material."""
+        return MeshClient(endpoint_url, session_token=session_token)
 
     async def _send_remote_outcome(
         self,
