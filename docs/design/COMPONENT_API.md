@@ -10,7 +10,9 @@ A Voodoo component is not a thin HTML wrapper. It is a product-level abstraction
 The common path should read like application intent:
 
 ```python
-async def deploy(): ...
+async def deploy():
+    ...
+
 
 Button("Deploy", on_click=deploy, loading=deploying.get())
 ```
@@ -69,6 +71,7 @@ Structure:
 - `description`
 - `hint`
 - `placeholder`
+- `submit`
 
 ## Composition examples
 
@@ -83,6 +86,18 @@ Field(
     required=True,
 )
 ```
+
+### Form action
+
+```python
+Form(
+    Field("Device name", Input(name="name")),
+    on_submit=enroll_device,
+    submit="Enroll",
+)
+```
+
+`submit="Enroll"` is intentionally semantic. Voodoo owns the browser-specific submit button type and event transport. Applications that need a custom action layout can still compose an explicit `Button(type="submit")` as an escape hatch.
 
 ### Switch
 
