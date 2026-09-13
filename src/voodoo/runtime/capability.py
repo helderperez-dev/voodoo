@@ -10,6 +10,11 @@ Given an actor, an intent and a requested operation, the resolver decides:
 Capability possession is necessary but no longer always sufficient. When a
 contextual policy engine is attached, the granted capability is evaluated
 against actor, intent, target entity and current world state before compute.
+
+Remote actors are intentionally stricter than local/default resolution. A
+``remote:*`` actor may only exercise capabilities explicitly present on its
+ExecutionContext. A globally registered capability is a template/known
+authority, not an ambient grant to every network participant.
 """
 
 from __future__ import annotations
@@ -86,6 +91,16 @@ class CapabilityResolver:
             return Resolution.REQUIRES_APPROVAL
         return Resolution.ALLOWED
 
+    @staticmethod
+    def _requires_explicit_context(context: ExecutionContext | None) -> bool:
+        """Whether ambient registry grants must not authorize this actor.
+
+        Remote participants cross a trust boundary. Their authority must be
+        injected into the ExecutionContext by the receiving node. This keeps
+        capability registration separate from capability possession.
+        """
+        return context is not None and context.actor.startswith("remote:")
+
     def _resolve_sensitive(
         self,
         name: str,
@@ -96,6 +111,8 @@ class CapabilityResolver:
         """Resolve a sensitive capability — requires explicit grant."""
         if context is not None and context.has_capability(name, scope=scope):
             return self._check_approval(name)
+        if self._requires_explicit_context(context):
+            return Resolution.DENIED
         cap = self.capabilities.get(name)
         if cap is not None and cap.valid:
             if scope is not None and cap.scope is not None and cap.scope != scope:
@@ -113,6 +130,8 @@ class CapabilityResolver:
         """Resolve a standard capability — normal registry rules."""
         if context is not None and context.has_capability(name, scope=scope):
             return self._check_approval(name)
+        if self._requires_explicit_context(context):
+            return Resolution.DENIED
         cap = self.capabilities.get(name)
         if cap is None or not cap.valid:
             return Resolution.DENIED
