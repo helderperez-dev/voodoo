@@ -150,6 +150,9 @@ PR #41. CI validated Ruff format/lint, Python 3.12, Python 3.13 and CodeQL.
 
 **Status: PLANNING**
 
+Detailed execution plan:
+[`docs/sprints/SPRINT_26_TRUSTED_DISTRIBUTED_RUNTIME.md`](docs/sprints/SPRINT_26_TRUSTED_DISTRIBUTED_RUNTIME.md)
+
 ## Why this is next
 
 The Runtime, World Model, Goal/Intent lifecycle, policy boundary and Edge
@@ -259,5 +262,7 @@ For every implementation sprint:
   Agency/World implementation plan.
 - [`docs/sprints/SPRINT_25_UI_MAGIC.md`](docs/sprints/SPRINT_25_UI_MAGIC.md) — UI
   Magic architecture and acceptance criteria.
+- [`docs/sprints/SPRINT_26_TRUSTED_DISTRIBUTED_RUNTIME.md`](docs/sprints/SPRINT_26_TRUSTED_DISTRIBUTED_RUNTIME.md) —
+  distributed execution architecture and implementation slices.
 - Repository Git history — detailed legacy Sprint 1–23 tracker that preceded
   this reconciliation.
