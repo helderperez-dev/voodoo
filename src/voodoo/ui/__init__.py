@@ -1,15 +1,7 @@
 """The Voodoo UI system: component model, library, interaction runtime, and styles.
 
-New application code should import components from this module. Interactive
-components accept Python callables directly and keep browser mechanics inside
-Voodoo::
-
-    from voodoo.ui import Button
-
-    async def save():
-        ...
-
-    Button("Save", on_click=save)
+Application code expresses product intent in Python. Voodoo owns browser
+mechanics, reactive transport, accessibility defaults and visual coherence.
 """
 
 from voodoo.ui.component import Component, Html, escape, tone_to_color_var
@@ -106,29 +98,38 @@ from voodoo.ui.styles import (
     current_adapter,
     set_style_adapter,
 )
+from voodoo.ui.voodoo_system import (
+    AgentStatus,
+    ApprovalCard,
+    CapabilityList,
+    DeviceCard,
+    EdgeNode,
+    ExecutionStatus,
+    ExecutionTimeline,
+    ObservationFeed,
+    PolicyDecision,
+    RuntimeStatus,
+    TelemetryPanel,
+    WorldEntityInspector,
+)
 
 __all__ = [
-    # Component model
     "Component",
     "Html",
     "UIEvent",
     "escape",
     "tone_to_color_var",
-    # Style adapters
     "StyleAdapter",
     "NoopAdapter",
     "set_style_adapter",
     "current_adapter",
-    # Icons & Markdown
     "Icon",
     "Markdown",
-    # Chat primitives
     "MessageList",
     "ChatMessage",
     "StreamingText",
     "Composer",
     "ChatBox",
-    # Layout
     "Div",
     "Flex",
     "Stack",
@@ -136,7 +137,6 @@ __all__ = [
     "Box",
     "Container",
     "Page",
-    # Core elements
     "A",
     "Link",
     "Button",
@@ -151,7 +151,6 @@ __all__ = [
     "Popover",
     "Tooltip",
     "Skeleton",
-    # Forms
     "Form",
     "Field",
     "Label",
@@ -162,7 +161,6 @@ __all__ = [
     "Checkbox",
     "Radio",
     "Switch",
-    # Product components
     "StatusBadge",
     "Metric",
     "EmptyState",
@@ -173,12 +171,23 @@ __all__ = [
     "InspectorPanel",
     "LogViewer",
     "CommandBar",
-    # Collections
+    # Voodoo operational system components
+    "RuntimeStatus",
+    "AgentStatus",
+    "DeviceCard",
+    "ExecutionStatus",
+    "ExecutionTimeline",
+    "ApprovalCard",
+    "WorldEntityInspector",
+    "ObservationFeed",
+    "CapabilityList",
+    "PolicyDecision",
+    "EdgeNode",
+    "TelemetryPanel",
     "Table",
     "List",
     "ListItem",
     "Sidebar",
-    # Semantic structure
     "Nav",
     "Header",
     "Footer",
@@ -192,7 +201,6 @@ __all__ = [
     "Paragraph",
     "Time",
     "Img",
-    # Chrome
     "Navbar",
     "NavLink",
     "Brand",
@@ -208,7 +216,6 @@ __all__ = [
     "BackLink",
     "FeatureCard",
     "LinkArrow",
-    # Auth UI
     "LoginForm",
     "RegisterForm",
     "UserBadge",
