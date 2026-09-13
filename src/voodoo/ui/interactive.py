@@ -63,6 +63,14 @@ class Button(Component):
 
 
 class Form(Component):
+    """Semantic form surface with optional generated submit action.
+
+    ``submit="Save"`` is the happy path for the common case. Voodoo creates a
+    correctly typed submit button so application code does not need to know the
+    browser's ``type="submit"`` mechanic. Custom submit controls remain possible
+    by composing an explicit :class:`Button` in ``children``.
+    """
+
     tag = "form"
     style = "form"
 
@@ -70,8 +78,15 @@ class Form(Component):
         self,
         *children: Any,
         on_submit: EventHandler | None = None,
+        submit: str | None = None,
+        submit_variant: str = "primary",
         **kwargs: Any,
     ) -> None:
+        if submit is not None:
+            children = (
+                *children,
+                Button(submit, type="submit", variant=submit_variant),
+            )
         super().__init__(*children, **kwargs)
         _event_attr(self, "submit", on_submit)
 
