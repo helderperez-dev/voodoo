@@ -166,7 +166,9 @@ class GoalRun:
             "context": dict(self.context),
             "intent_runs": [item.describe() for item in self.intent_runs],
             "started_at": self.started_at.isoformat(),
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
         }
 
 
@@ -285,7 +287,9 @@ class GoalRuntime:
             run.current_index = index + 1
             self._persist(run)
 
-        results = [item.result for item in run.intent_runs if item.status == "completed"]
+        results = [
+            item.result for item in run.intent_runs if item.status == "completed"
+        ]
         run.goal.complete(results[-1] if len(results) == 1 else results)
         run.current_index = len(run.planned_intents)
         run.completed_at = _now()
@@ -390,7 +394,8 @@ class GoalRuntime:
         return GoalRun(
             goal=goal,
             planned_intents=[
-                Intent.model_validate(item) for item in payload.get("planned_intents", [])
+                Intent.model_validate(item)
+                for item in payload.get("planned_intents", [])
             ],
             intent_runs=intent_runs,
             current_index=int(payload.get("current_index", 0)),
