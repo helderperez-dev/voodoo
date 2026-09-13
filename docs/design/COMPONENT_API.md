@@ -10,8 +10,7 @@ A Voodoo component is not a thin HTML wrapper. It is a product-level abstraction
 The common path should read like application intent:
 
 ```python
-async def deploy():
-    ...
+async def deploy(): ...
 
 
 Button("Deploy", on_click=deploy, loading=deploying.get())
