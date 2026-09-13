@@ -296,7 +296,6 @@ class TestSQLiteMemoryStore:
         entry_id = entry.id
         store.close()
 
-        # Reopen — data must survive.
         store2 = SQLiteMemoryStore(db_path)
         loaded = store2.read(entry_id)
         assert loaded is not None
@@ -320,8 +319,6 @@ class TestSQLiteMemoryStore:
     def test_fts_availability(self, db_path: Path) -> None:
         """Check that FTS5 is available (most Python builds include it)."""
         store = SQLiteMemoryStore(db_path)
-        # We don't assert True here — some minimal builds lack FTS5.
-        # The store should work either way (FTS or LIKE fallback).
         assert isinstance(store._has_fts, bool)
         store.close()
 
@@ -339,7 +336,6 @@ class TestAgentMemory:
         from voodoo.ai.agent import Agent
 
         agent = Agent(model="mock:test", tools=[])
-        # memory is lazily created
         assert agent.memory is not None
         assert hasattr(agent.memory, "write")
         assert hasattr(agent.memory, "search")
@@ -360,12 +356,13 @@ class TestAgentMemory:
 
         agent = Agent(model="mock:test", tools=[])
         run = await agent.run("What is 2+2?")
-        # Episodic memory should be written
-        entries = agent.memory.list_entries(entity_id="agent")
+        entries = agent.memory.list_entries(entity_id=agent.agent_id)
         assert len(entries) >= 1
         episodic = [e for e in entries if e.layer == MemoryLayer.EPISODIC]
         assert len(episodic) >= 1
-        assert episodic[0].source_execution_id == run.run_id
+        assert episodic[0].entity_id == agent.agent_id
+        assert episodic[0].source_execution_id is None
+        assert episodic[0].metadata["run_id"] == run.run_id
         assert "agent-run" in episodic[0].tags
 
     @pytest.mark.asyncio
@@ -376,11 +373,11 @@ class TestAgentMemory:
         events = []
         async for event in agent.stream("Hello"):
             events.append(event)
-        # Episodic memory should be written
-        entries = agent.memory.list_entries(entity_id="agent")
+        entries = agent.memory.list_entries(entity_id=agent.agent_id)
         assert len(entries) >= 1
         episodic = [e for e in entries if e.layer == MemoryLayer.EPISODIC]
         assert len(episodic) >= 1
+        assert episodic[0].entity_id == agent.agent_id
 
     @pytest.mark.asyncio
     async def test_agent_custom_memory_store(self) -> None:
@@ -398,7 +395,7 @@ class TestAgentMemory:
 
         agent = Agent(model="mock:test", tools=[])
         await agent.run("Tell me about Python")
-        results = agent.memory.search("Python", entity_id="agent")
+        results = agent.memory.search("Python", entity_id=agent.agent_id)
         assert len(results) >= 1
 
 
