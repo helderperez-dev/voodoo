@@ -7,6 +7,7 @@ on the binding directly.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from importlib import import_module
@@ -31,6 +32,20 @@ __all__ = [
 DEFAULT_STORE_PATH = Path(".voodoo/application.vstore")
 
 
+def _parse_bool(value: Any, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return bool(value)
+
+
 class StoreProviderError(VoodooError):
     """Runtime Store provider lifecycle or verification failure."""
 
@@ -39,10 +54,10 @@ class StoreProviderError(VoodooError):
 class StoreConfig:
     """Provider-neutral Store configuration owned by the Runtime.
 
-    ``enabled`` intentionally remains ``False`` during Sprint 28.1. The next
-    slice makes Voodoo Store the application default only after packaging and
-    compatibility behavior are wired. Keeping the switch explicit here lets
-    the lifecycle land before changing existing 2.x defaults.
+    ``enabled`` intentionally remains ``False`` until the ``voodoo-store``
+    Python distribution is available as a normal framework dependency. The
+    provider/path already point at the Sprint 28 target defaults so activation
+    does not require another architecture change.
     """
 
     provider: str = "voodoo"
@@ -54,6 +69,7 @@ class StoreConfig:
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any] | None = None) -> StoreConfig:
+        """Resolve Store config with explicit mapping > env > target defaults."""
         data = dict(value or {})
         known = {
             "provider",
@@ -62,12 +78,29 @@ class StoreConfig:
             "durability",
             "repair_torn_tail",
         }
+        provider = data.get("provider") or os.getenv("VOODOO_STORE_PROVIDER") or "voodoo"
+        path = data.get("path") or os.getenv("VOODOO_STORE_PATH") or DEFAULT_STORE_PATH
+        enabled_value = (
+            data["enabled"]
+            if "enabled" in data
+            else os.getenv("VOODOO_STORE_ENABLED")
+        )
+        durability = (
+            data.get("durability")
+            or os.getenv("VOODOO_STORE_DURABILITY")
+            or "data"
+        )
+        repair_value = (
+            data["repair_torn_tail"]
+            if "repair_torn_tail" in data
+            else os.getenv("VOODOO_STORE_REPAIR_TORN_TAIL")
+        )
         return cls(
-            provider=str(data.get("provider") or "voodoo"),
-            path=Path(data.get("path") or DEFAULT_STORE_PATH),
-            enabled=bool(data.get("enabled", False)),
-            durability=str(data.get("durability") or "data"),
-            repair_torn_tail=bool(data.get("repair_torn_tail", True)),
+            provider=str(provider),
+            path=Path(path),
+            enabled=_parse_bool(enabled_value, default=False),
+            durability=str(durability),
+            repair_torn_tail=_parse_bool(repair_value, default=True),
             extra={key: item for key, item in data.items() if key not in known},
         )
 
@@ -290,8 +323,8 @@ class RuntimeStore:
 
     Construction does not open files or import the native Store binding. The
     provider is created/opened only when ``start`` is called and the Store is
-    enabled. This is the seam the application lifespan will adopt when Sprint
-    28.2 turns Store-backed infrastructure on by default.
+    enabled. This is the seam the application lifespan adopts when Store-backed
+    infrastructure is enabled.
     """
 
     def __init__(
