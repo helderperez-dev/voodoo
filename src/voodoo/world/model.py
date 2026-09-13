@@ -142,7 +142,9 @@ class WorldModel:
         entity = self._require_entity(entity_id)
         previous = self.history(entity_id, property)
         if observation_id is not None:
-            duplicate = next((item for item in previous if item.id == observation_id), None)
+            duplicate = next(
+                (item for item in previous if item.id == observation_id), None
+            )
             if duplicate is not None:
                 return duplicate
         latest = previous[-1] if previous else None
