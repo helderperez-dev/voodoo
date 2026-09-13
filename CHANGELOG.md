@@ -1,5 +1,48 @@
 # Changelog
 
+## [2.6.2] — 2026-09-12
+
+### Fixed — Runtime durability hardening
+
+Patch release consolidating four correctness fixes that make durable
+execution semantics airtight across the runtime, workers, and HITL
+flows. No new features — behavior changes are strictly bug fixes.
+
+- **Durable HITL decisions are terminal** (`runtime`) — Once a HITL
+  approval is approved/rejected, the decision now persists as a
+  terminal state and cannot be re-decided. Resume lineage is preserved,
+  so a restarted process recovering a workflow mid-approval restores
+  the correct decision state instead of re-prompting or accepting a
+  conflicting second decision. Approval resume orchestration is now
+  isolated in its own code path. (`d771c1b`)
+- **Queued retries are durable** (`workers`) — The retry budget is now
+  owned by the durable queue rather than in-memory worker state: a task
+  that exhausts retries does so persistently, and decorator retry
+  policies are persisted alongside the task so a crashed/restarted
+  worker resumes with the same budget. Worker-death no longer resets or
+  re-runs exhausted retries. (`814f1fc`)
+- **Durable timing & workflow topology** (`runtime`) — Execution
+  duration is preserved after persistence/recovery (recovered
+  executions report their original timing, not zero). Workflows now
+  reject invalid dependency graphs (cycles, unknown dependencies) at
+  construction time with a clear error instead of deadlocking or
+  silently mis-orchestrating. (`c0d86e7`)
+- **Packaging: AI SDKs stay optional** (`packaging`) — `openai` removed
+  from base dependencies (restores architectural invariant #2: no new
+  required dependencies; provider SDKs live in optional extras).
+  (`6ab911c`)
+
+### Changed — Documentation
+
+- Consolidated runtime documentation: `ARCHITECTURE.md` and `README.md`
+  rewritten to make runtime claims and onboarding precise; new
+  `docs/choosing-primitives.md` (canonical primitive selection guide)
+  and `docs/runtime-consolidation.md` (consolidation invariants);
+  clarified the execution boundary and agent protocol. (`6ab911c`)
+
+**Full suite:** 1340 passed, 0 failed (SQLite + PostgreSQL + Redis +
+MinIO/S3 + MQTT contracts), ruff clean.
+
 ## [2.6.1] — 2026-08-30
 
 ### Added — Sprint 23.1: Edge Hardening & Runtime Integration
