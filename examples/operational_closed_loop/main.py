@@ -43,7 +43,7 @@ async def run_canary() -> dict[str, Any]:
         name="Lab cooling controller",
         capabilities=["cooling.set"],
     )
-    await store.add_device(device)
+    await store.register_device(device)
     ctx = AuthenticatedDeviceContext(
         device_id=device.device_id,
         device_type=device.type,
