@@ -138,8 +138,6 @@ class Planner:
         self._approval_capabilities: set[str] = set()
         self.ranker = ranker
 
-    # -- registration ------------------------------------------------------
-
     def register(self, participant: ComputeParticipant) -> None:
         """Register a compute participant."""
         self.participants[participant.name] = participant
@@ -147,8 +145,6 @@ class Planner:
     def require_approval(self, capability: str) -> None:
         """Mark a capability as needing human approval."""
         self._approval_capabilities.add(capability)
-
-    # -- resolution --------------------------------------------------------
 
     @staticmethod
     def _world_get(world: Mapping[str, Any], path: str) -> Any:
@@ -198,25 +194,26 @@ class Planner:
 
         Authority still comes from capability/policy enforcement in the runtime.
         Planning context only ranks participants that already advertise the
-        required capability.
+        required capability. Equal candidates retain registration order so
+        existing deterministic primary/fallback semantics stay stable.
         """
         context = context or PlanningContext()
-        ranked: list[tuple[float, ComputeParticipant]] = []
-        for participant in self.participants.values():
+        ranked: list[tuple[float, int, ComputeParticipant]] = []
+        for order, participant in enumerate(self.participants.values()):
             if capability not in participant.capabilities:
                 continue
             score = self._operational_score(participant, context)
             if score == float("-inf"):
                 continue
-            ranked.append((score, participant))
+            ranked.append((score, order, participant))
         return [
             participant
-            for _, participant in sorted(
+            for _, _, participant in sorted(
                 ranked,
                 key=lambda item: (
                     -item[0],
-                    len(item[1].capabilities),
-                    item[1].name,
+                    len(item[2].capabilities),
+                    item[1],
                 ),
             )
         ]
