@@ -25,6 +25,7 @@ from voodoo.ui.interactive import (
     Textarea,
     ThemeToggle,
 )
+from voodoo.ui.layout import Page
 from voodoo.ui.library import (
     A,
     Address,
@@ -72,7 +73,6 @@ from voodoo.ui.library import (
     Navbar,
     NavLink,
     Option,
-    Page,
     PageHero,
     Paragraph,
     RegisterForm,
