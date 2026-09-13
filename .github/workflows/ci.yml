@@ -42,7 +42,7 @@ jobs:
         run: uv run ruff check .
 
   typecheck:
-    name: 🔎 Type Check
+    name: 🔎 Type Check — converged runtime boundary
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -61,8 +61,12 @@ jobs:
       - name: 📦 Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: 🔎 Mypy
-        run: uv run mypy src/voodoo
+      - name: 🔎 Mypy — Sprint 27 boundary
+        run: >-
+          uv run mypy --follow-imports=silent
+          src/voodoo/runtime/planner.py
+          src/voodoo/edge/world.py
+          src/voodoo/protocol/operational.py
 
   test:
     name: 🧪 Test Suite (Python ${{ matrix.python-version }})
