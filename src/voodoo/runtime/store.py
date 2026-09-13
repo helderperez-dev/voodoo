@@ -317,7 +317,8 @@ class RuntimeStore:
             return None
         if self._provider is None:
             self._provider = create_store_provider(self.config, registry=self._registry)
-        self._provider.open()
+        if not self._provider.opened:
+            self._provider.open()
         return self._provider
 
     def stop(self) -> None:
