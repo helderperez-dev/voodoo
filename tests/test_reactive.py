@@ -185,14 +185,17 @@ def test_counter_app_full_flow_via_websocket(make_app):
 
 @pytest.mark.asyncio
 async def test_page_render_auto_binds_state(make_app):
-    """Regression (browser-facing): serving a @page that reads state cells
-    auto-binds them to the state renderer — set() inside an @event handler
-    then patches the page over WS with no explicit bind() in user code.
+    """Serving a page that reads State auto-binds it to the renderer.
 
-    This is the loop examples/ai_agent, examples/realtime, and the
-    `voodoo create` scaffold depend on (vd.event → handler → set → patch).
+    The event handler only mutates State. It does not call ``rerender``. The
+    browser receives the resulting patch automatically, proving the complete
+    zero-manual-rerender loop in isolation from other tests.
     """
     count = state(0)
+
+    @event
+    async def reactive_auto_increment(element_id, value):
+        count.set(count.get() + 1)
 
     @page("/")
     def reactive_auto_home():
@@ -207,7 +210,7 @@ async def test_page_render_auto_binds_state(make_app):
                 json.dumps(
                     {
                         "type": "event",
-                        "event": "reactive_ws_increment",
+                        "event": "reactive_auto_increment",
                         "id": "btn-1",
                     }
                 )
@@ -215,8 +218,6 @@ async def test_page_render_auto_binds_state(make_app):
             msg = json.loads(ws.receive_text())
             assert msg["type"] == "patch"
             assert msg["id"] == "root"
-            # The root patch must keep the #root container (client swaps
-            # outerHTML — an unwrapped patch would delete it after patch #1).
             assert msg["html"].startswith('<div id="root">')
             assert "Count: 1" in msg["html"]
 
@@ -224,9 +225,7 @@ async def test_page_render_auto_binds_state(make_app):
 
 
 def test_websocket_event_without_id_and_value(make_app):
-    """Regression: `vd.event('name')` with no element id sends a WS message
-    without id/value keys (JSON.stringify drops undefined) — dispatch must
-    tolerate both missing (the `voodoo create` scaffold uses this form)."""
+    """Legacy ``vd.event('name')`` messages without id/value stay tolerated."""
     from voodoo import Button
 
     marker = state("initial")
@@ -247,10 +246,7 @@ def test_websocket_event_without_id_and_value(make_app):
         assert "initial" in response.text
 
         with client.websocket_connect("/_voodoo_ws") as ws:
-            # No "id"/"value" keys at all — the scaffold's wire format.
-            ws.send_text(
-                json.dumps({"type": "event", "event": "reactive_no_id"})
-            )
+            ws.send_text(json.dumps({"type": "event", "event": "reactive_no_id"}))
             msg = json.loads(ws.receive_text())
             assert msg["type"] == "patch"
             assert "updated" in msg["html"]
@@ -259,25 +255,20 @@ def test_websocket_event_without_id_and_value(make_app):
 
 
 def test_client_js_exposes_vd_facade():
-    """Regression: the client runtime must define window.vd.event — Button
-    onclick handlers in docs, examples, and the scaffold call vd.event(...)."""
+    """The legacy window.vd facade remains available during migration."""
     import voodoo
 
-    client_js_path = (
-        Path(voodoo.__file__).parent / "static" / "client.js"
-    )
+    client_js_path = Path(voodoo.__file__).parent / "static" / "client.js"
     src = client_js_path.read_text(encoding="utf-8")
     assert "window.vd" in src
     assert "event:" in src
-    # The full client API stays available under window.voodoo.
     assert "window.voodoo" in src
     assert "sendEvent" in src
 
 
 @pytest.mark.asyncio
 async def test_state_set_triggers_bound_rerender(monkeypatch):
-    """Binding cells to a renderer makes State.set schedule a patch — the
-    reactive loop without explicit rerender() calls in handlers."""
+    """State.set schedules a patch without explicit rerender calls."""
     from voodoo.ui.state import StateRenderer
     from voodoo.ui.state import state as ui_state
 
@@ -299,11 +290,9 @@ async def test_state_set_triggers_bound_rerender(monkeypatch):
         state_mod.StateRenderer, "_broadcast_patch", staticmethod(mock_broadcast)
     )
 
-    # Simulate the event-loop context of a running handler.
     import asyncio
 
     count.set(42)
-    # The subscription schedules create_task on the running loop; let it run.
     await asyncio.sleep(0)
 
     assert count.get() == 42
@@ -340,4 +329,4 @@ async def test_state_unbind_stops_rerender(monkeypatch):
 
     count.set(99)
     await asyncio.sleep(0)
-    assert broadcasted == []  # unsubscribed — no patch
+    assert broadcasted == []

@@ -1,12 +1,12 @@
 """Compatibility shim — the component library lives in :mod:`voodoo.ui`.
 
-``voodoo.components`` remains importable for existing apps and docs; new
-code should import from ``voodoo.ui`` or the ``voodoo`` top level. Rendering
-and styling now flow through the component base in :mod:`voodoo.ui.component`
-and the active style adapter (see :mod:`voodoo.adapters.tailwind`).
+``voodoo.components`` remains importable for existing apps and docs; new code
+should import from ``voodoo.ui`` or the ``voodoo`` top level. Importing through
+the public UI module ensures compatibility users receive the same Python-first
+interactive components as new applications.
 """
 
-from voodoo.ui.library import (
+from voodoo.ui import (
     A,
     Address,
     Article,

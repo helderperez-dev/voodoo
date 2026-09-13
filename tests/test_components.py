@@ -23,11 +23,6 @@ def _use_tailwind_adapter():
     set_style_adapter(original)
 
 
-# ---------------------------------------------------------------------------
-# New UI primitives (Phase 4 — less-code initiative)
-# ---------------------------------------------------------------------------
-
-
 class TestIcon:
     def test_renders_curated_svg(self):
         from voodoo.ui import Icon
@@ -37,14 +32,13 @@ class TestIcon:
         assert html.startswith("<svg")
         assert "currentColor" in html
         assert html.rstrip().endswith("</svg>")
-        # The send glyph (paper plane) path is present.
         assert "M22 2 11 13" in html
 
     def test_unknown_icon_renders_placeholder(self):
         from voodoo.ui import Icon
 
         html = Icon("does-not-exist").render()
-        assert "<circle" in html  # neutral dot, no raise
+        assert "<circle" in html
 
     def test_size_and_label(self):
         from voodoo.ui import Icon
@@ -156,22 +150,23 @@ def test_div():
     assert div.render() == '<div id="d1">Content</div>'
 
 
-def test_button():
+def test_button_uses_semantic_event_binding():
     btn = Button("Click Me", id="btn-1", on_click="my_action")
     html = btn.render()
-    assert (
-        html
-        == '<button id="btn-1" onclick="voodoo.sendEvent(\'my_action\', this.id, this.value)" class="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--vd-color-primary)] disabled:pointer-events-none disabled:opacity-50 bg-[var(--vd-color-text)] text-[var(--vd-color-surface)] hover:bg-[var(--vd-color-text)]/90 h-9 px-4 py-2">Click Me</button>'
-    )
+    assert 'id="btn-1"' in html
+    assert 'type="button"' in html
+    assert 'data-vd-event-click="my_action"' in html
+    assert "onclick=" not in html
+    assert "Click Me" in html
 
 
-def test_input():
+def test_input_uses_semantic_event_binding():
     inp = Input(id="inp-1", on_change="input_changed", type="text")
     html = inp.render()
-    assert (
-        html
-        == '<input id="inp-1" type="text" onchange="voodoo.sendEvent(\'input_changed\', this.id, this.value)" class="flex h-9 w-full rounded-md border border-[var(--vd-color-border)] bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[var(--vd-color-text-muted)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--vd-color-primary)] disabled:cursor-not-allowed disabled:opacity-50" />'
-    )
+    assert 'id="inp-1"' in html
+    assert 'type="text"' in html
+    assert 'data-vd-event-change="input_changed"' in html
+    assert "onchange=" not in html
 
 
 def test_card():
@@ -233,7 +228,6 @@ def test_auth_components():
     from voodoo.auth import AuthUser
     from voodoo.components import AuthGuard, LoginForm, RegisterForm, UserBadge
 
-    # LoginForm
     login_form = LoginForm(action="/login", csrf_token="csrf_123")
     rendered_login = login_form.render()
     assert 'action="/login"' in rendered_login
@@ -241,18 +235,15 @@ def test_auth_components():
     assert 'name="username"' in rendered_login
     assert 'name="password"' in rendered_login
 
-    # RegisterForm
     reg_form = RegisterForm(action="/register", title="Join Us")
     rendered_reg = reg_form.render()
     assert 'action="/register"' in rendered_reg
     assert "Join Us" in rendered_reg
     assert 'name="email"' in rendered_reg
 
-    # UserBadge - unauthenticated
     badge_anon = UserBadge(user=None)
     assert "Sign In" in badge_anon.render()
 
-    # UserBadge - authenticated
     user = AuthUser(
         id=1,
         email="admin@voodoo.dev",
@@ -265,15 +256,12 @@ def test_auth_components():
     assert "admin" in rendered_badge
     assert "AD" in rendered_badge
 
-    # AuthGuard - unauthenticated
     guard_anon = AuthGuard("Secret Vault", user=None, fallback="Please Login")
     assert guard_anon.render() == "Please Login"
 
-    # AuthGuard - authenticated with matching role
     guard_ok = AuthGuard("Secret Vault", user=user, required_roles=["admin"])
     assert "Secret Vault" in guard_ok.render()
 
-    # AuthGuard - role mismatch
     user_viewer = AuthUser(
         id=2, email="viewer@voodoo.dev", role="viewer", is_authenticated=True
     )

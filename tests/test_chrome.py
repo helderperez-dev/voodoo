@@ -34,7 +34,6 @@ from voodoo.ui.styles.theme import Theme, set_theme
 
 @pytest.fixture
 def voodoo_css_adapter():
-    """Use VoodooCSSAdapter (the default) for these tests."""
     original = current_adapter()
     set_style_adapter(VoodooCSSAdapter())
     yield
@@ -43,17 +42,11 @@ def voodoo_css_adapter():
 
 @pytest.fixture(autouse=True)
 def _restore_theme():
-    """Restore the global default theme after each test (no cross-test leak)."""
     from voodoo.ui.styles.theme import default_theme
 
     original = default_theme
     yield
     set_theme(original)
-
-
-# ---------------------------------------------------------------------------
-# Component rendering
-# ---------------------------------------------------------------------------
 
 
 def test_navbar_and_navlink(voodoo_css_adapter):
@@ -75,11 +68,12 @@ def test_navbar_not_sticky(voodoo_css_adapter):
     assert "vd-navbar--sticky" not in html
 
 
-def test_theme_toggle_switches_dark_class(voodoo_css_adapter):
+def test_theme_toggle_uses_framework_action_without_inline_js(voodoo_css_adapter):
     html = ThemeToggle().render()
     assert "vd-theme-toggle" in html
-    assert "classList.toggle('dark')" in html
-    assert "voodoo_theme" in html
+    assert 'data-vd-action="toggle-theme"' in html
+    assert "onclick=" not in html
+    assert "classList.toggle" not in html
     assert "vd-theme-toggle-sun" in html
     assert "vd-theme-toggle-moon" in html
 
@@ -114,11 +108,6 @@ def test_cta_backlink_featurecard_linkarrow(voodoo_css_adapter):
     assert "vd-back-link" in BackLink("Back", href="/").render()
     assert "vd-feature-card" in FeatureCard("x").render()
     assert "vd-link-arrow" in LinkArrow("More", href="/docs").render()
-
-
-# ---------------------------------------------------------------------------
-# CSS coverage
-# ---------------------------------------------------------------------------
 
 
 def test_chrome_css_generated():
