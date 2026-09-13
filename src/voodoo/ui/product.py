@@ -75,7 +75,9 @@ class _StatusDot(Component):
     auto_id = False
 
     def __init__(self, *, tone: str) -> None:
-        super().__init__(class_=f"vd-status-dot vd-status-dot--{tone}", aria_hidden="true")
+        super().__init__(
+            class_=f"vd-status-dot vd-status-dot--{tone}", aria_hidden="true"
+        )
 
 
 class Metric(Component):
@@ -318,7 +320,9 @@ class Timeline(Component):
 
     style = "timeline"
 
-    def __init__(self, *events: Component, label: str = "Timeline", **kwargs: Any) -> None:
+    def __init__(
+        self, *events: Component, label: str = "Timeline", **kwargs: Any
+    ) -> None:
         super().__init__(*events, **kwargs)
         self.attrs["role"] = "list"
         self.attrs["aria-label"] = label
