@@ -94,11 +94,12 @@ class Switch(Component):
     ) -> None:
         super().__init__(**kwargs)
         input_id = f"{self.id}-input" if self.id else f"vd-switch-{uuid4().hex[:8]}"
+        aria_checked = "true" if checked else "false"
         attrs = [
             f'id="{escape(input_id)}"',
             'type="checkbox"',
             'role="switch"',
-            f'aria-checked="{"true" if checked else "false"}"',
+            f'aria-checked="{aria_checked}"',
             'class="vd-switch-input"',
         ]
         if checked:
@@ -121,7 +122,7 @@ class Switch(Component):
                 f"{description_html}</label>"
             )
         self._markup = (
-            f'<input {" ".join(attrs)}>'
+            f"<input {' '.join(attrs)}>"
             f'<span class="vd-switch-track" aria-hidden="true">'
             f'<span class="vd-switch-thumb"></span></span>{label_html}'
         )
