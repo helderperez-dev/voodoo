@@ -248,9 +248,7 @@ def test_websocket_event_without_id_and_value(make_app):
 
         with client.websocket_connect("/_voodoo_ws") as ws:
             # No "id"/"value" keys at all — the scaffold's wire format.
-            ws.send_text(
-                json.dumps({"type": "event", "event": "reactive_no_id"})
-            )
+            ws.send_text(json.dumps({"type": "event", "event": "reactive_no_id"}))
             msg = json.loads(ws.receive_text())
             assert msg["type"] == "patch"
             assert "updated" in msg["html"]
@@ -263,9 +261,7 @@ def test_client_js_exposes_vd_facade():
     onclick handlers in docs, examples, and the scaffold call vd.event(...)."""
     import voodoo
 
-    client_js_path = (
-        Path(voodoo.__file__).parent / "static" / "client.js"
-    )
+    client_js_path = Path(voodoo.__file__).parent / "static" / "client.js"
     src = client_js_path.read_text(encoding="utf-8")
     assert "window.vd" in src
     assert "event:" in src
