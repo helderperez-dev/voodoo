@@ -222,7 +222,30 @@ class MeshNetwork:
                 error_type="RemoteReplayConflict",
                 message="request_id was already used for a different remote request",
             )
-        return record.outcome.model_copy(deep=True)
+
+        outcome = record.outcome.model_copy(deep=True)
+        if outcome.execution_id is None:
+            return outcome
+
+        # Replay storage remembers request identity. Canonical Execution remains
+        # authoritative for lifecycle changes after WAITING/HITL resume.
+        execution = self._runtime_engine().get(outcome.execution_id)
+        if execution is None or execution.status.value == outcome.status:
+            return outcome
+
+        error = None
+        if execution.failed:
+            error = {
+                "type": "ExecutionFailed",
+                "message": execution.error or "execution failed",
+            }
+        refreshed = RemoteExecutionOutcome.from_execution(
+            request,
+            execution,
+            error=error,
+        )
+        self.replay_store.save(request, refreshed)
+        return refreshed
 
     async def execute_remote(
         self, request: RemoteExecutionRequest
