@@ -68,6 +68,7 @@ def render_page(component: Any, seo: Any = None) -> str:
     from voodoo.ui.styles import current_adapter
     from voodoo.ui.styles.product import generate_product_css
     from voodoo.ui.styles.system import generate_design_system_css
+    from voodoo.ui.styles.voodoo_system import generate_voodoo_system_css
 
     adapter = current_adapter()
     is_voodoo_css = isinstance(adapter, VoodooCSSAdapter)
@@ -76,6 +77,7 @@ def render_page(component: Any, seo: Any = None) -> str:
         component_css = generate_component_css(default_theme)
         design_system_css = generate_design_system_css(default_theme)
         product_css = generate_product_css(default_theme)
+        voodoo_system_css = generate_voodoo_system_css(default_theme)
         head_scripts = ""
         body_classes = "min-h-screen antialiased"
     else:
@@ -83,6 +85,7 @@ def render_page(component: Any, seo: Any = None) -> str:
         component_css = ""
         design_system_css = ""
         product_css = ""
+        voodoo_system_css = ""
         head_scripts = f"""
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
@@ -161,6 +164,9 @@ def render_page(component: Any, seo: Any = None) -> str:
 
             /* Reusable product patterns */
             {product_css}
+
+            /* Canonical Voodoo runtime/system concepts */
+            {voodoo_system_css}
 
             /* Project theme customization */
             {project_styles}
