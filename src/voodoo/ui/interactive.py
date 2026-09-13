@@ -19,7 +19,9 @@ from voodoo.ui.library import Icon, Text
 EventHandler = Callable[..., Any] | str
 
 
-def _event_attr(component: Component, event_type: str, handler: EventHandler | None) -> None:
+def _event_attr(
+    component: Component, event_type: str, handler: EventHandler | None
+) -> None:
     if handler is not None:
         component.attrs[f"data-vd-event-{event_type}"] = bind_event(handler)
 
