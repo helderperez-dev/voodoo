@@ -1,5 +1,15 @@
 from voodoo.adapters.voodoo_css import VoodooCSSAdapter
-from voodoo.ui import Button, Field, Input, Page, Popover, Skeleton, Switch, Tooltip
+from voodoo.ui import (
+    Button,
+    Field,
+    Form,
+    Input,
+    Page,
+    Popover,
+    Skeleton,
+    Switch,
+    Tooltip,
+)
 from voodoo.ui.rendering import render_page
 from voodoo.ui.styles import current_adapter, set_style_adapter
 
@@ -26,6 +36,27 @@ def test_field_wires_label_hint_and_error_accessibly():
         assert 'aria-invalid="true"' in html
         assert 'role="alert"' in html
         assert "Enter a valid email" in html
+    finally:
+        set_style_adapter(original)
+
+
+def test_form_generates_semantic_submit_action():
+    original = _with_native_adapter()
+
+    async def enroll(value):
+        return value
+
+    try:
+        html = Form(
+            Field("Device name", Input(name="name")),
+            on_submit=enroll,
+            submit="Enroll",
+        ).render()
+        assert "data-vd-event-submit=" in html
+        assert 'type="submit"' in html
+        assert "Enroll" in html
+        assert "onsubmit=" not in html
+        assert "onclick=" not in html
     finally:
         set_style_adapter(original)
 
