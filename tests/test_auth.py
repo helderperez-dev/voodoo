@@ -1,12 +1,10 @@
-import asyncio
-
+import httpx
 import pytest
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
-from starlette.testclient import TestClient
 
 from voodoo.auth import (
     AuthMiddleware,
@@ -30,7 +28,7 @@ from voodoo.auth import (
     verify_password,
 )
 from voodoo.config import config
-from voodoo.data import BaseModel, init_db, rls_policy
+from voodoo.data import BaseModel, close_db, init_db, rls_policy
 
 
 def test_password_hashing():
@@ -60,15 +58,12 @@ def test_jwt_token_generation_and_verification():
     assert "exp" in decoded
     assert "iat" in decoded
 
-    # Tampered signature
     with pytest.raises(InvalidTokenError):
         decode_access_token(token + "tampered", secret_key=secret)
 
-    # Wrong secret key
     with pytest.raises(InvalidTokenError):
         decode_access_token(token, secret_key="wrong-secret")
 
-    # Expired token
     expired_token = create_access_token(
         payload, expires_delta_seconds=-10, secret_key=secret
     )
@@ -89,7 +84,7 @@ def test_api_key_generation_and_verification():
 def test_secret_key_generation():
     key = generate_secret_key(32)
     assert isinstance(key, str)
-    assert len(key) == 64  # 32 bytes in hex = 64 chars
+    assert len(key) == 64
 
 
 def test_auth_user_class():
@@ -121,7 +116,6 @@ async def test_user_database_model(tmp_path):
     config.db_path = db_file
     await init_db(db_file)
 
-    # Create user
     user, raw_key = await User.create_user(
         email="alice@example.com",
         password="AliceSecurePassword!1",
@@ -134,28 +128,23 @@ async def test_user_database_model(tmp_path):
     assert user.role == "admin"
     assert raw_key.startswith("vd_live_")
 
-    # Authenticate by email
     authed_by_email = await User.authenticate(
         "alice@example.com", "AliceSecurePassword!1"
     )
     assert authed_by_email is not None
     assert authed_by_email.id == user.id
 
-    # Authenticate by username
     authed_by_uname = await User.authenticate("alice", "AliceSecurePassword!1")
     assert authed_by_uname is not None
     assert authed_by_uname.id == user.id
 
-    # Failed auth
     failed = await User.authenticate("alice@example.com", "WrongPassword")
     assert failed is None
 
-    # Find by API key
     by_key = await User.find_by_api_key(raw_key)
     assert by_key is not None
     assert by_key.id == user.id
 
-    # Convert to AuthUser
     auth_user = user.to_auth_user()
     assert auth_user.is_authenticated is True
     assert auth_user.role == "admin"
@@ -177,19 +166,18 @@ def test_cookie_helpers():
     assert "Max-Age=0" in cookie_header2 or "expires=" in cookie_header2.lower()
 
 
-def test_auth_middleware_and_guards(tmp_path):
+@pytest.mark.asyncio
+async def test_auth_middleware_and_guards(tmp_path):
+    """Exercise DB-backed auth without crossing event-loop ownership boundaries."""
     db_file = str(tmp_path / "test_auth_mw.db")
     config.db_path = db_file
-    asyncio.run(init_db(db_file))
+    await init_db(db_file)
 
-    # Pre-create user in DB
-    created_user, api_key = asyncio.run(
-        User.create_user(
-            email="bob@example.com",
-            password="BobPassword123!",
-            username="bob",
-            role="editor",
-        )
+    created_user, api_key = await User.create_user(
+        email="bob@example.com",
+        password="BobPassword123!",
+        username="bob",
+        role="editor",
     )
 
     @require_auth()
@@ -204,42 +192,49 @@ def test_auth_middleware_and_guards(tmp_path):
     async def m2m_endpoint(request: Request, user: AuthUser):
         return JSONResponse({"api_ok": True, "auth_type": user.auth_type})
 
-    routes = [
-        Route("/protected", protected_endpoint, methods=["GET"]),
-        Route("/admin", admin_only_endpoint, methods=["GET"]),
-        Route("/m2m", m2m_endpoint, methods=["GET"]),
-    ]
-
-    app = Starlette(routes=routes, middleware=[Middleware(AuthMiddleware)])
-    client = TestClient(app)
-
-    # 1. Unauthenticated request to /protected
-    r1 = client.get("/protected")
-    assert r1.status_code == 401
-
-    # 2. Authenticated via Bearer JWT token
-    token = create_access_token(
-        {"sub": created_user.id, "username": "bob", "role": "editor"}
+    app = Starlette(
+        routes=[
+            Route("/protected", protected_endpoint, methods=["GET"]),
+            Route("/admin", admin_only_endpoint, methods=["GET"]),
+            Route("/m2m", m2m_endpoint, methods=["GET"]),
+        ],
+        middleware=[Middleware(AuthMiddleware)],
     )
-    r2 = client.get("/protected", headers={"Authorization": f"Bearer {token}"})
-    assert r2.status_code == 200
-    assert r2.json()["message"] == "Hello bob"
-    assert r2.json()["role"] == "editor"
 
-    # 3. Role check failed: bob is editor, not admin
-    r3 = client.get("/admin", headers={"Authorization": f"Bearer {token}"})
-    assert r3.status_code == 403
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as client:
+            r1 = await client.get("/protected")
+            assert r1.status_code == 401
 
-    # 4. Authenticated via API Key header
-    r4 = client.get("/m2m", headers={"X-API-Key": api_key})
-    assert r4.status_code == 200
-    assert r4.json()["api_ok"] is True
-    assert r4.json()["auth_type"] == "api_key"
+            token = create_access_token(
+                {"sub": created_user.id, "username": "bob", "role": "editor"}
+            )
+            r2 = await client.get(
+                "/protected", headers={"Authorization": f"Bearer {token}"}
+            )
+            assert r2.status_code == 200
+            assert r2.json()["message"] == "Hello bob"
+            assert r2.json()["role"] == "editor"
 
-    # 5. Authenticated via session cookie
-    r5 = client.get("/protected", cookies={config.auth.cookie_name: token})
-    assert r5.status_code == 200
-    assert r5.json()["message"] == "Hello bob"
+            r3 = await client.get(
+                "/admin", headers={"Authorization": f"Bearer {token}"}
+            )
+            assert r3.status_code == 403
+
+            r4 = await client.get("/m2m", headers={"X-API-Key": api_key})
+            assert r4.status_code == 200
+            assert r4.json()["api_ok"] is True
+            assert r4.json()["auth_type"] == "api_key"
+
+            client.cookies.set(config.auth.cookie_name, token)
+            r5 = await client.get("/protected")
+            assert r5.status_code == 200
+            assert r5.json()["message"] == "Hello bob"
+    finally:
+        await close_db()
 
 
 @pytest.mark.asyncio
@@ -270,7 +265,6 @@ async def test_rls_auto_user_context(tmp_path):
     doc2.owner_id = 2
     await doc2.insert()
 
-    # Set current_user context var as Alice
     alice_auth = AuthUser(id=1, email="alice@test.com", is_authenticated=True)
     t = current_user.set(alice_auth)
     try:
