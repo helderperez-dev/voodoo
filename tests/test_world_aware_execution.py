@@ -73,7 +73,7 @@ async def test_effect_does_not_become_observed_world_truth():
     async def command_motor(ctx):
         return ComputeResult(
             value="commanded",
-            effects=[Effect(name="motor.drive", payload={"speed": 0.5})],
+            effects=[Effect(name="motor.drive")],
         )
 
     execution = await engine.execute(
