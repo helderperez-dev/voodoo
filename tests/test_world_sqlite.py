@@ -114,12 +114,8 @@ def test_relationship_queries_survive_restart(tmp_path):
 
     reopened = SQLiteWorldStore(str(path))
     recovered = WorldModel(reopened)
-    outbound = recovered.relationships(
-        "agent-1", predicate="controls", direction="out"
-    )
-    inbound = recovered.relationships(
-        "robot-1", predicate="controls", direction="in"
-    )
+    outbound = recovered.relationships("agent-1", predicate="controls", direction="out")
+    inbound = recovered.relationships("robot-1", predicate="controls", direction="in")
     assert [relationship.id for relationship in outbound] == ["rel-1"]
     assert [relationship.id for relationship in inbound] == ["rel-1"]
     reopened.close()
