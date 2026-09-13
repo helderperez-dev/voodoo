@@ -6,13 +6,14 @@ Resolution is deterministic-first: an exact capability match chooses the
 most specific participant, secondary matches become fallbacks, and
 approval-gated capabilities surface as ``requires_approval`` steps.
 
-The resulting :class:`Plan` drives execution: ``WorkflowStrategy.ADAPTIVE``
-and :class:`~voodoo.runtime.adaptive.AdaptiveSupervisor` consume it.
+Sprint 27 adds a bounded operational context seam. The planner may rank
+otherwise-authorized participants using explicit World/runtime context, but it
+does not grant authority and it does not delegate policy decisions to AI.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -21,6 +22,8 @@ from voodoo.runtime.workflow import WorkflowStrategy
 
 __all__ = [
     "ParticipantKind",
+    "PlanningContext",
+    "ParticipantRanker",
     "ComputeParticipant",
     "PlanStep",
     "Plan",
@@ -28,6 +31,40 @@ __all__ = [
 ]
 
 ParticipantKind = Literal["agent", "compute", "tool", "worker", "human", "workflow"]
+
+
+@dataclass(frozen=True)
+class PlanningContext:
+    """Structured operational context used only for participant selection.
+
+    ``world`` is a JSON-friendly projection supplied by the caller (normally a
+    target entity's current properties). It is evidence/context, never an
+    authority grant. ``prior_results`` lets bounded replanning prefer a compute
+    participant based on already-observed execution results.
+    """
+
+    goal_id: str | None = None
+    target_entity_id: str | None = None
+    world: Mapping[str, Any] = field(default_factory=dict)
+    prior_results: Mapping[str, Any] = field(default_factory=dict)
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any] | None) -> PlanningContext:
+        if value is None:
+            return cls()
+        raw_world = value.get("world") or value.get("world_state") or {}
+        raw_results = value.get("upstream") or value.get("prior_results") or {}
+        return cls(
+            goal_id=value.get("goal_id"),
+            target_entity_id=value.get("target_entity_id"),
+            world=raw_world if isinstance(raw_world, Mapping) else {},
+            prior_results=raw_results if isinstance(raw_results, Mapping) else {},
+            metadata=value,
+        )
+
+
+ParticipantRanker = Callable[["ComputeParticipant", PlanningContext], float]
 
 
 @dataclass
@@ -42,6 +79,8 @@ class ComputeParticipant:
     compute: Callable[..., Any] | None = None
     #: agent instance to run (kind == "agent")
     agent: Any | None = None
+    #: explicit operational selection hints; never an authority grant
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -86,12 +125,18 @@ class Plan:
 
 
 class Planner:
-    """Deterministic capability → compute resolution."""
+    """Deterministic capability → compute resolution with bounded context ranking."""
 
-    def __init__(self, engine: Any | None = None) -> None:
+    def __init__(
+        self,
+        engine: Any | None = None,
+        *,
+        ranker: ParticipantRanker | None = None,
+    ) -> None:
         self.engine = engine
         self.participants: dict[str, ComputeParticipant] = {}
         self._approval_capabilities: set[str] = set()
+        self.ranker = ranker
 
     # -- registration ------------------------------------------------------
 
@@ -105,20 +150,81 @@ class Planner:
 
     # -- resolution --------------------------------------------------------
 
-    def _match(self, capability: str) -> list[ComputeParticipant]:
-        """Participants able to satisfy a capability, most-specific first.
+    @staticmethod
+    def _world_get(world: Mapping[str, Any], path: str) -> Any:
+        node: Any = world
+        for part in path.split("."):
+            if not isinstance(node, Mapping) or part not in node:
+                return None
+            node = node[part]
+        return node
 
-        "Most-specific" = the participant with the fewest other
-        capabilities (narrowest authority) wins, so a dedicated tool is
-        preferred over a general-purpose agent.
+    def _operational_score(
+        self, participant: ComputeParticipant, context: PlanningContext
+    ) -> float:
+        """Score explicit deterministic operational hints.
+
+        Supported metadata:
+        - ``available=False`` makes a participant ineligible.
+        - ``entity_id`` prefers a participant colocated with the target entity.
+        - ``when`` is a mapping of dotted World property paths to exact expected
+          values. A mismatch makes the participant ineligible.
+        - ``priority`` is a numeric tie-breaker.
         """
-        matches = [
-            p for p in self.participants.values() if capability in p.capabilities
-        ]
-        return sorted(matches, key=lambda p: len(p.capabilities))
+        metadata = participant.metadata
+        if metadata.get("available") is False:
+            return float("-inf")
+        conditions = metadata.get("when") or {}
+        if isinstance(conditions, Mapping):
+            for path, expected in conditions.items():
+                if self._world_get(context.world, str(path)) != expected:
+                    return float("-inf")
+        score = float(metadata.get("priority", 0.0) or 0.0)
+        if (
+            context.target_entity_id
+            and metadata.get("entity_id") == context.target_entity_id
+        ):
+            score += 100.0
+        if self.ranker is not None:
+            score += float(self.ranker(participant, context))
+        return score
 
-    def _pick_strategy(self, intent: Intent) -> WorkflowStrategy:
-        matched = [self._match(c) for c in intent.requires]
+    def _match(
+        self,
+        capability: str,
+        context: PlanningContext | None = None,
+    ) -> list[ComputeParticipant]:
+        """Participants able to satisfy a capability, best candidate first.
+
+        Authority still comes from capability/policy enforcement in the runtime.
+        Planning context only ranks participants that already advertise the
+        required capability.
+        """
+        context = context or PlanningContext()
+        ranked: list[tuple[float, ComputeParticipant]] = []
+        for participant in self.participants.values():
+            if capability not in participant.capabilities:
+                continue
+            score = self._operational_score(participant, context)
+            if score == float("-inf"):
+                continue
+            ranked.append((score, participant))
+        return [
+            participant
+            for _, participant in sorted(
+                ranked,
+                key=lambda item: (
+                    -item[0],
+                    len(item[1].capabilities),
+                    item[1].name,
+                ),
+            )
+        ]
+
+    def _pick_strategy(
+        self, intent: Intent, context: PlanningContext | None = None
+    ) -> WorkflowStrategy:
+        matched = [self._match(c, context) for c in intent.requires]
         kinds = {m[0].kind for m in matched if m}
         if "human" in kinds:
             return WorkflowStrategy.SEQUENTIAL
@@ -126,12 +232,26 @@ class Planner:
             return WorkflowStrategy.PARALLEL
         return WorkflowStrategy.SEQUENTIAL
 
-    def plan(self, intent: Intent, *, strategy: WorkflowStrategy | None = None) -> Plan:
-        """Resolve an intent to a plan: strategy + one step per capability."""
-        plan = Plan(intent=intent, strategy=strategy or self._pick_strategy(intent))
+    def plan(
+        self,
+        intent: Intent,
+        *,
+        strategy: WorkflowStrategy | None = None,
+        context: PlanningContext | Mapping[str, Any] | None = None,
+    ) -> Plan:
+        """Resolve an intent to a plan using explicit operational context."""
+        planning_context = (
+            context
+            if isinstance(context, PlanningContext)
+            else PlanningContext.from_mapping(context)
+        )
+        plan = Plan(
+            intent=intent,
+            strategy=strategy or self._pick_strategy(intent, planning_context),
+        )
 
         for capability in intent.requires:
-            matches = self._match(capability)
+            matches = self._match(capability, planning_context)
             if not matches:
                 plan.unresolved.append(capability)
                 plan.decisions.append(f"{capability} -> unresolved")
@@ -160,6 +280,7 @@ class Planner:
                     "name": p.name,
                     "kind": p.kind,
                     "capabilities": p.capabilities,
+                    "metadata": dict(p.metadata),
                 }
                 for p in self.participants.values()
             ],
