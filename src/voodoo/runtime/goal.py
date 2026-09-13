@@ -171,7 +171,9 @@ class GoalRun:
                 for item in self.intent_runs
             ],
             "started_at": self.started_at.isoformat(),
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
         }
 
 
