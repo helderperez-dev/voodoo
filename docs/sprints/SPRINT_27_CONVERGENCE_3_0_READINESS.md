@@ -1,11 +1,11 @@
 # Sprint 27 — Runtime Convergence & 3.0 Readiness
 
-**Status:** ACTIVE
+**Status:** COMPLETE · closed 2026-09-13
 
 ## Purpose
 
-Sprint 27 closes the architectural/product gaps found in the post-Sprint-26
-review. It is a convergence sprint, not feature accumulation.
+Sprint 27 closed the architectural/product gaps found in the post-Sprint-26
+review. It was a convergence sprint, not feature accumulation.
 
 > **Voodoo is the programmable runtime for adaptive applications and operational systems.**
 
@@ -14,10 +14,22 @@ World → Observation → Goal → Intent → Plan → Capability + Policy
      → Execution → Effect → Participant → ACK → Observation → World
 ```
 
-Sprint 27 is complete only when that loop is represented by runtime contracts,
-tests, examples, protocol schemas, documentation and release-quality gates.
+The loop is now represented by runtime contracts, tests, examples, protocol
+schemas, documentation and release-quality gates.
 
-## Architectural invariants
+## Completion evidence
+
+- Integration PR: **#52**
+- Squash merge: **`e73a718eb90830bc0594a28be3443d13375089c3`**
+- Ruff format/lint: **PASS**
+- Enforced mypy convergence boundary: **PASS**
+- Python 3.12 full service-backed suite: **PASS**
+- Python 3.13 full service-backed suite: **PASS**
+- CodeQL: **PASS**
+- Operational closed-loop acceptance: **PASS**
+- Project-owned `RuntimeWarning` / unhandled-thread warning gates: **PASS**
+
+## Architectural invariants preserved
 
 1. Exactly one Voodoo Runtime and one canonical `Execution` lifecycle.
 2. AI is Compute, never a privileged authority boundary.
@@ -28,13 +40,13 @@ tests, examples, protocol schemas, documentation and release-quality gates.
 7. Remote/physical work enters the same authorization/execution path as local work.
 8. Local-first remains the default.
 9. Protocol schemas are the semantic boundary for non-Python participants.
-10. The public developer surface should become more coherent as internals grow.
+10. The public developer surface becomes more coherent as internals grow.
 
 ## 27.1 — Edge → World semantic ingestion
 
-**Implementation:** in progress on PR #52.
+**Status: DONE**
 
-Deliver:
+Delivered:
 
 - optional World-aware Edge gateway;
 - stable device → World entity identity;
@@ -45,14 +57,11 @@ Deliver:
 - duplicate-safe observation IDs;
 - stale evidence retained without regressing projection.
 
-Definition of Done: a simulated device updates World state through the normal
-Edge path and the resulting evidence remains traceable to its source.
-
 ## 27.2 — World-aware Goal/planning convergence
 
-**Implementation:** in progress on PR #52.
+**Status: DONE**
 
-Deliver:
+Delivered:
 
 - structured `PlanningContext`;
 - deterministic context-aware participant ranking;
@@ -61,47 +70,46 @@ Deliver:
 - `AdaptiveSupervisor` passes runtime context to Planner automatically;
 - `GoalRuntime` refreshes target World state before each Intent;
 - prior results available to later bounded planning decisions;
-- compatibility for existing no-context Planner calls.
+- compatibility for existing no-context Planner calls;
+- equal ranked candidates preserve registration order and existing fallback semantics.
 
-This does **not** invent an unconstrained autonomous/symbolic planner. Rich goal
-decomposition and cognitive strategy remain a later intelligence layer.
+This intentionally does **not** invent an unconstrained autonomous/symbolic
+planner. Rich goal decomposition remains a later intelligence layer.
 
 ## 27.3 — Protocol convergence
 
-**Implementation:** in progress on PR #52.
+**Status: DONE**
 
-The original protocol omitted semantic concepts added in Sprints 24–26.
-Sprint 27 adds protocol models for:
+The stable protocol boundary now includes the semantic concepts introduced by
+Sprints 24–26:
 
 - `Entity`, `Relationship`, `Observation`, `WorldSnapshot`;
 - `Goal`, Goal status/run records;
 - `RemoteExecutionRequest` and `RemoteExecutionOutcome`.
 
-This is additive to the existing wire contracts, so Sprint 27 does **not** bump
-`SCHEMA_VERSION` solely for the presence of new entity families. Breaking shape
-changes to an existing entity still require an explicit version bump.
-
-Definition of Done: non-Python participants can represent World evidence and
-governed remote work without importing Python runtime classes.
+The public protocol registry and JSON Schema export now describe the same
+complete canonical surface. The change is additive, so existing entity shapes
+did not require a breaking schema-version bump.
 
 ## 27.4 — Public API and developer-experience convergence
 
-**Implementation:** in progress on PR #52.
+**Status: DONE**
 
-- define `docs/public-api-3.md`;
-- preserve 2.x compatibility instead of silently shrinking `voodoo.__all__`;
-- make subsystem namespaces canonical for catalogs (`voodoo.ui`,
+- `docs/public-api-3.md` defines the 3.0 namespace/import law;
+- 2.x compatibility is preserved instead of silently shrinking `voodoo.__all__`;
+- subsystem namespaces are canonical for catalogs (`voodoo.ui`,
   `voodoo.runtime`, `voodoo.world`, `voodoo.edge`, `voodoo.protocol`);
-- update README/examples to teach canonical imports;
-- reserve actual package-root contraction for a deliberate 3.0 migration.
+- README/examples teach canonical imports;
+- actual package-root contraction remains a deliberate 3.0 migration rather
+  than an accidental breaking change.
 
 ## 27.5 — Canonical examples and executable canary
 
-**Implementation:** in progress on PR #52.
+**Status: DONE**
 
-- update stale AI SaaS example to Python-callable UI actions;
-- remove fake MCP participation claims;
-- add zero-infrastructure `examples/operational_closed_loop` canary:
+- modernized the AI SaaS example to Python-callable UI actions;
+- removed fake MCP-chain claims;
+- added zero-infrastructure `examples/operational_closed_loop` canary:
 
 ```text
 simulated device → Edge → Observation → World → Goal/Intent
@@ -109,49 +117,46 @@ simulated device → Edge → Observation → World → Goal/Intent
   → ACK/evidence → Observation → World
 ```
 
-- acceptance test proves World remains unchanged by the Effect itself and only
-  changes when device evidence is returned;
-- operational inspection must use real Runtime/World sources of truth rather
-  than invented counters.
+The acceptance proves that issuing an Effect does not mutate World truth; only
+returned evidence does.
 
 ## 27.6 — Documentation and repository truth
 
-**Implementation:** in progress on PR #52.
+**Status: DONE for repository-controlled truth**
 
-- reconcile `ROADMAP.md`, `SPRINT_PLAN.md`, README and protocol docs;
-- remove obsolete statements such as Entity not existing or Sprint 15 being next;
-- document cognitive Memory, fleet, SDK and Cloud work as future rather than implemented;
-- update CHANGELOG before closure;
-- repository description/topics should become:
-  - description: `The programmable runtime for adaptive applications and operational systems — software, AI, humans, distributed nodes and physical systems in one execution model.`
-  - suggested topics: `python`, `runtime`, `durable-execution`, `agents`,
-    `world-model`, `distributed-systems`, `edge`, `reactive`, `async`, `mcp`.
+- reconciled `ROADMAP.md`, `SPRINT_PLAN.md`, README and protocol docs;
+- removed obsolete sprint/entity statements;
+- documented cognitive Memory, fleet, SDK and Cloud work as future initiatives;
+- canonical public repository description/topics are documented below.
 
-The current GitHub connector exposes repository metadata read access but no
-repository-metadata mutation action. Therefore the description/topics change is
-an explicit repository-setting action outside code; it is not represented as a
-fake code change.
+Desired repository metadata:
+
+- description: `The programmable runtime for adaptive applications and operational systems — software, AI, humans, distributed nodes and physical systems in one execution model.`
+- topics: `python`, `runtime`, `durable-execution`, `agents`, `world-model`,
+  `distributed-systems`, `edge`, `reactive`, `async`, `mcp`.
+
+The available GitHub connector has read-only repository-metadata access, so this
+single host-level setting cannot be mutated from the implementation workflow.
+It does not affect runtime or release readiness and remains an explicit manual
+GitHub repository-setting action.
 
 ## 27.7 — Release-quality gate and warning-zero baseline
 
-**Implementation:** active.
+**Status: DONE**
 
-Sprint 26 exposed existing project-owned async/resource warnings and showed that
-strict mypy configuration existed without an enforced CI boundary.
+Delivered:
 
-Deliver:
+- invalid pytest asyncio marking cleanup;
+- CI gates project-owned `RuntimeWarning` and pytest unhandled-thread warnings;
+- removed the AsyncMock coroutine leak exposed by the stricter gate;
+- fixed aiosqlite event-loop ownership in test lifecycle paths instead of
+  suppressing the warning;
+- enforced mypy on the converged semantic boundary;
+- preserved historical full-repository mypy debt as explicit debt rather than
+  pretending it disappeared;
+- Ruff, Python 3.12/3.13 and CodeQL all green.
 
-- remove invalid pytest asyncio marking;
-- gate `RuntimeWarning` and pytest unhandled-thread warnings in CI;
-- investigate/fix owned aiosqlite/AsyncMock lifecycle warnings exposed by that gate;
-- enforce mypy on the newly converged Sprint 27 semantic boundary;
-- keep the historical full-repository mypy debt explicit rather than pretending
-  278 pre-existing errors were solved by configuration suppression;
-- expand the typed boundary in subsequent hardening work instead of silently
-  claiming the entire legacy repository is strict-typed;
-- Ruff format/lint, Python 3.12/3.13 and CodeQL must remain green.
-
-The enforced Sprint 27 type boundary is initially:
+Current enforced typed boundary begins with:
 
 ```text
 runtime/planner.py
@@ -159,41 +164,41 @@ edge/world.py
 protocol/operational.py
 ```
 
-Definition of Done: new convergence code is type-gated and project-owned runtime
-warning classes fail CI.
-
 ## 27.8 — Sprint closure / next-phase readiness
 
-Before closing Sprint 27:
+**Status: DONE**
+
+Verified before integration merge:
 
 - full service-backed Python 3.12/3.13 suite green;
 - CodeQL green;
-- operational closed-loop canary acceptance green;
+- operational closed-loop acceptance green;
 - duplicate/evidence semantics green;
 - protocol export/round-trip green;
 - public import compatibility verified;
-- docs contain no known stale sprint state;
-- `SPRINT_PLAN.md` marks DONE only after implementation evidence is merged.
+- repository documentation reconciled;
+- convergence code type-gated.
 
 ## Explicitly deferred beyond Sprint 27
 
-These are product/scale/intelligence initiatives, not unresolved Sprint 27
-correctness gaps:
+These are future product/scale/intelligence initiatives, not unresolved Sprint
+27 correctness gaps:
 
 - production PKI/OIDC/mTLS identity platform;
 - cognitive Memory consolidation/reflection/belief strategies;
+- richer goal decomposition and mission planning;
 - generated full TypeScript/Go/Rust SDK families;
 - fleet scheduler and large multi-device mission orchestration;
 - production Voodoo Cloud/control plane;
 - large physical robot reference implementation;
 - distributed consensus/global exactly-once claims.
 
-The semantic seams required by those systems must be stable when Sprint 27
-closes.
+The semantic seams required by those systems are now stable enough for the next
+architectural review.
 
-## Sprint 27 completion test
+## Completion statement
 
-Sprint 27 is DONE only when this statement is demonstrably true:
+Sprint 27 demonstrates this statement in executable tests and examples:
 
 > A Voodoo system can observe a changing operational world, pursue a durable
 > goal, choose already-authorized compute using current World context, execute
@@ -201,3 +206,7 @@ Sprint 27 is DONE only when this statement is demonstrably true:
 > evidence back into World state, preserve lineage across protocol boundaries,
 > survive duplicate/restart conditions, and teach that architecture consistently
 > through its API, examples and documentation.
+
+**Next action:** perform a post-convergence architectural/product review and
+select the next phase from implementation truth. No Sprint 28 is selected by
+this closure document.

@@ -5,7 +5,7 @@ Source architecture: [`ROADMAP.md`](ROADMAP.md).
 This file is the **current source of truth for implementation progress**.
 Detailed historical plans live in Git history and under `docs/sprints/`.
 
-> Updated 2026-09-13 during Sprint 27 — Runtime Convergence & 3.0 Readiness.
+> Updated 2026-09-13 after Sprint 27 — Runtime Convergence & 3.0 Readiness.
 
 ## North Star
 
@@ -39,8 +39,11 @@ Core laws:
 | Sprint 24 — Agency Foundation | **DONE** |
 | Sprint 25 — UI Magic | **DONE** |
 | Sprint 26 — Trusted Distributed Execution Fabric | **DONE** |
-| Sprint 27 — Runtime Convergence & 3.0 Readiness | **ACTIVE** |
+| Sprint 27 — Runtime Convergence & 3.0 Readiness | **DONE** |
+| Sprint 27 integration merge | **`e73a718e` · PR #52** |
 | Release checkpoint | `main` remains ahead of published v2.6.2; release is a separate operation |
+| Next implementation sprint | **NOT SELECTED** |
+| Next action | **Post-convergence architecture/product review** |
 
 Sprint completion and public release state are intentionally separate.
 
@@ -117,15 +120,17 @@ Implementation path: PRs #43–#46, #49–#50.
 
 # Sprint 27 — Runtime Convergence & 3.0 Readiness
 
-**Status: ACTIVE**
+**Status: DONE · closed 2026-09-13**
 
-Execution plan:
+Completion record:
 [`docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md`](docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md)
 
-Sprint 27 exists to connect the mature pieces already present rather than add
-unrelated surface area.
+Integration evidence: **PR #52 · squash merge `e73a718eb90830bc0594a28be3443d13375089c3`**.
 
-Target closed loop:
+Sprint 27 connected the mature runtime pieces rather than adding unrelated
+surface area.
+
+Closed loop now represented and acceptance-tested:
 
 ```text
 World
@@ -152,42 +157,59 @@ Observation
 
 | Slice | Goal | State |
 |---|---|---|
-| 27.1 | Edge → World semantic evidence ingestion | **IN IMPLEMENTATION** |
-| 27.2 | World-aware Goal/planning convergence | **IN IMPLEMENTATION** |
-| 27.3 | Protocol convergence for World/Goal/distributed semantics | **IN IMPLEMENTATION** |
-| 27.4 | 3.0 public API / import law | **IN IMPLEMENTATION** |
-| 27.5 | Canonical examples + operational closed-loop canary | **IN IMPLEMENTATION** |
-| 27.6 | Documentation/repository truth reconciliation | **IN IMPLEMENTATION** |
-| 27.7 | Warning-zero/type-check release-quality gate | **TODO** |
-| 27.8 | Final acceptance, tracker closure and next-phase review | **TODO** |
+| 27.1 | Edge → World semantic evidence ingestion | **DONE** |
+| 27.2 | World-aware Goal/planning convergence | **DONE** |
+| 27.3 | Protocol convergence for World/Goal/distributed semantics | **DONE** |
+| 27.4 | 3.0 public API / import law | **DONE** |
+| 27.5 | Canonical examples + operational closed-loop canary | **DONE** |
+| 27.6 | Documentation/repository truth reconciliation | **DONE** |
+| 27.7 | Warning-zero/type-check release-quality gate | **DONE** |
+| 27.8 | Final acceptance, tracker closure and next-phase review | **DONE** |
 
-### Definition of Done
+### Completion evidence
 
-Sprint 27 is complete only when a Voodoo system can:
+- Ruff format/lint: **PASS**
+- enforced mypy convergence boundary: **PASS**
+- full Python 3.12 suite with PostgreSQL, MinIO/S3 and Redis: **PASS**
+- full Python 3.13 suite with PostgreSQL, MinIO/S3 and Redis: **PASS**
+- CodeQL: **PASS**
+- operational closed-loop canary: **PASS**
+- Protocol export/round-trip: **PASS**
+- project-owned runtime/unhandled-thread warning gates: **PASS**
 
-1. ingest device evidence through Edge into the World Model;
-2. preserve source/time/trace/execution lineage and duplicate safety;
-3. use explicit operational World context while choosing already-authorized
-   compute participants;
-4. pursue a durable Goal through the canonical Runtime;
-5. issue Effects without confusing attempted action with observed truth;
-6. close the loop through device ACK/evidence → Observation → World;
-7. expose World/Goal/remote semantics through the language-neutral Protocol;
-8. teach the current callable-UI/runtime semantics through canonical examples;
-9. present one truthful architecture across README, Roadmap and sprint docs;
-10. pass the release-quality gates for formatting, lint, Python 3.12/3.13,
-    security analysis and an explicit type-check boundary.
+### What Sprint 27 deliberately did not claim
 
-### Explicit next-phase work, not Sprint 27 correctness gaps
+The following are future product/scale/intelligence initiatives, not open
+Sprint 27 correctness defects:
 
 - production PKI/OIDC/mTLS identity platform;
+- cognitive Memory consolidation/reflection/belief strategies;
+- richer autonomous goal decomposition / mission planning;
 - generated full TypeScript/Go/Rust SDK families;
 - fleet scheduling / large multi-device mission orchestration;
-- production cloud control plane;
+- production Voodoo Cloud/control plane;
 - large physical robot reference implementation;
-- distributed consensus or global exactly-once claims.
+- distributed consensus/global exactly-once semantics.
 
-The semantic seams for those systems must be stable before Sprint 27 closes.
+The runtime and protocol seams required to evaluate those directions are now in
+place.
+
+---
+
+## Next checkpoint — post-convergence review
+
+No Sprint 28 is selected by this tracker yet.
+
+The next review should answer from the merged implementation:
+
+1. what is now mature enough to release;
+2. what the smallest coherent 3.0 public surface should be;
+3. which remaining subsystem is the highest-leverage next investment;
+4. whether the next proof should prioritize a physical ESP32 canary, richer
+   operational intelligence, SDK interoperability or release consolidation;
+5. what must be hardened before cutting a release beyond v2.6.2.
+
+Only after that review should the next sprint be named.
 
 ---
 
