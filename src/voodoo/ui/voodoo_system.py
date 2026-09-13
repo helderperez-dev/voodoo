@@ -12,7 +12,7 @@ from typing import Any
 
 from voodoo.ui.component import Component
 from voodoo.ui.interactive import Button
-from voodoo.ui.library import Heading, Stack, Text
+from voodoo.ui.library import Heading, Text
 from voodoo.ui.product import (
     EmptyState,
     EventRow,
@@ -105,11 +105,15 @@ class DeviceCard(Component):
         super().__init__(**kwargs)
         device_id = _identifier(device, "device")
         name = _read(device, "name") or device_id
-        status = _read(device, "connection_state") or _read(device, "status") or "unknown"
+        status = (
+            _read(device, "connection_state") or _read(device, "status") or "unknown"
+        )
         capabilities = _read(device, "capabilities", []) or []
         last_seen = _read(device, "last_seen_at") or _read(device, "updated_at")
         self.children = (
-            _SystemHeading(str(name), StatusBadge(str(getattr(status, "value", status)))),
+            _SystemHeading(
+                str(name), StatusBadge(str(getattr(status, "value", status)))
+            ),
             Text(device_id, class_="vd-system-id"),
             _SystemFacts(
                 _Fact("Capabilities", len(capabilities)),
@@ -127,7 +131,11 @@ class ExecutionStatus(Component):
         super().__init__(**kwargs)
         execution_id = _identifier(execution, "execution")
         status = _status(execution)
-        intent_name = _nested(execution, "intent", "name") or _read(execution, "intent") or "Execution"
+        intent_name = (
+            _nested(execution, "intent", "name")
+            or _read(execution, "intent")
+            or "Execution"
+        )
         duration = _read(execution, "duration_seconds")
         self.children = (
             _SystemHeading(str(intent_name), StatusBadge(status)),
@@ -147,7 +155,11 @@ class ExecutionTimeline(Timeline):
     def __init__(self, executions: Iterable[Any], **kwargs: Any) -> None:
         rows: list[EventRow] = []
         for execution in executions:
-            intent = _nested(execution, "intent", "name") or _read(execution, "intent") or "Execution"
+            intent = (
+                _nested(execution, "intent", "name")
+                or _read(execution, "intent")
+                or "Execution"
+            )
             created = _read(execution, "created_at") or _read(execution, "started_at")
             rows.append(
                 EventRow(
@@ -174,14 +186,28 @@ class ApprovalCard(Component):
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
-        approval_id = _identifier(approval, str(_read(approval, "approval_id", "approval")))
-        reason = _read(approval, "reason") or _read(approval, "message") or "Human approval required."
-        capability = _read(approval, "capability") or _read(approval, "capability_name")
+        approval_id = _identifier(
+            approval, str(_read(approval, "approval_id", "approval"))
+        )
+        reason = (
+            _read(approval, "reason")
+            or _read(approval, "message")
+            or "Human approval required."
+        )
+        capability = _read(approval, "capability") or _read(
+            approval, "capability_name"
+        )
         actions: list[Component] = []
         if on_deny is not None:
-            actions.append(Button("Deny", on_click=on_deny, variant="ghost", value=approval_id))
+            actions.append(
+                Button("Deny", on_click=on_deny, variant="ghost", value=approval_id)
+            )
         if on_approve is not None:
-            actions.append(Button("Approve", on_click=on_approve, variant="primary", value=approval_id))
+            actions.append(
+                Button(
+                    "Approve", on_click=on_approve, variant="primary", value=approval_id
+                )
+            )
         self.children = (
             _SystemHeading("Approval required", StatusBadge("waiting")),
             Text(str(reason), class_="vd-system-description"),
@@ -209,12 +235,20 @@ class WorldEntityInspector(Component):
             _SystemHeading(str(entity_type).title(), StatusBadge("active")),
             Text(entity_id, class_="vd-system-id"),
             _SystemFacts(
-                _Fact("Relationships", relation_count if relation_count is not None else "—"),
-                _Fact("Observations", observation_count if observation_count is not None else "—"),
+                _Fact(
+                    "Relationships",
+                    relation_count if relation_count is not None else "—",
+                ),
+                _Fact(
+                    "Observations",
+                    observation_count if observation_count is not None else "—",
+                ),
             ),
             _PropertyList(*property_rows)
             if property_rows
-            else EmptyState("No observed properties", "This entity has no projected properties yet."),
+            else EmptyState(
+                "No observed properties", "This entity has no projected properties yet."
+            ),
         )
 
 
@@ -224,7 +258,11 @@ class ObservationFeed(Timeline):
     def __init__(self, observations: Iterable[Any], **kwargs: Any) -> None:
         rows: list[EventRow] = []
         for observation in observations:
-            property_name = _read(observation, "property") or _read(observation, "key") or "Observation"
+            property_name = (
+                _read(observation, "property")
+                or _read(observation, "key")
+                or "Observation"
+            )
             value = _read(observation, "value")
             source = _read(observation, "source")
             confidence = _read(observation, "confidence")
@@ -256,7 +294,11 @@ class CapabilityList(Component):
         for capability in capabilities:
             name = _read(capability, "name") or str(capability)
             items.append(_Capability(str(name)))
-        self.children = tuple(items) if items else (Text("No capabilities", class_="vd-system-meta"),)
+        self.children = (
+            tuple(items)
+            if items
+            else (Text("No capabilities", class_="vd-system-meta"),)
+        )
 
 
 class PolicyDecision(Component):
@@ -266,7 +308,12 @@ class PolicyDecision(Component):
 
     def __init__(self, decision: Any, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        outcome = _read(decision, "decision") or _read(decision, "outcome") or _read(decision, "status") or "unknown"
+        outcome = (
+            _read(decision, "decision")
+            or _read(decision, "outcome")
+            or _read(decision, "status")
+            or "unknown"
+        )
         raw = str(getattr(outcome, "value", outcome)).lower()
         reason = _read(decision, "reason") or _read(decision, "explanation")
         capability = _read(decision, "capability")
