@@ -8,25 +8,46 @@ Sprint 26.1/26.2 does **not** claim authenticated remote identity. ``actor`` is
 an asserted participant label until the trusted participant/session seam lands.
 The runtime-facing actor is therefore namespaced as ``remote:<actor>`` so an
 unverified network claim cannot be confused with a local actor identity.
+
+Sprint 26.3 adds a server-side authority registry. Network payloads may identify
+an asserted actor but they never carry authoritative capability grants. Those
+are assigned by the receiving Voodoo node and injected into the canonical
+ExecutionContext before capability/policy evaluation.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.execution import Execution
 
 REMOTE_SCHEMA_VERSION = 1
 
 
+def normalize_remote_actor(actor: str) -> str:
+    """Normalize an asserted participant label to the runtime remote namespace."""
+    normalized = actor.strip() or "anonymous"
+    if normalized.startswith("remote:"):
+        return normalized
+    return f"remote:{normalized}"
+
+
 class RemoteExecutionRequest(BaseModel):
-    """Transport-independent request to execute one exposed Mesh operation."""
+    """Transport-independent request to execute one exposed Mesh operation.
+
+    Unknown transport fields are intentionally ignored. In particular, a
+    caller cannot self-authorize by adding fields such as ``capabilities`` to
+    the wire payload; authority is resolved exclusively by the receiving node.
+    """
+
+    model_config = ConfigDict(extra="ignore")
 
     schema_version: int = Field(default=REMOTE_SCHEMA_VERSION, ge=1)
     request_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
@@ -41,10 +62,7 @@ class RemoteExecutionRequest(BaseModel):
     @property
     def runtime_actor(self) -> str:
         """Return an explicitly untrusted runtime actor label for this request."""
-        actor = self.actor.strip() or "anonymous"
-        if actor.startswith("remote:"):
-            return actor
-        return f"remote:{actor}"
+        return normalize_remote_actor(self.actor)
 
     @classmethod
     def from_jsonrpc(
@@ -102,6 +120,61 @@ class RemoteExecutionRequest(BaseModel):
             ),
             metadata=dict(raw_metadata),
         )
+
+
+@dataclass
+class RemoteAuthorityRegistry:
+    """Server-side capability assignment for remote participants.
+
+    This is an authority seam, not an authentication system. Until Sprint 26.6
+    binds actor labels to trusted sessions, grants are keyed by the asserted
+    actor label. The important invariant introduced here is that grants can
+    only originate on the receiving node; network request fields are never
+    converted into runtime capabilities.
+    """
+
+    _grants: dict[str, dict[str, Capability]] = field(default_factory=dict)
+
+    def grant(self, actor: str, *capabilities: str | Capability) -> None:
+        """Grant one or more capabilities to a remote participant."""
+        key = normalize_remote_actor(actor)
+        bucket = self._grants.setdefault(key, {})
+        for item in capabilities:
+            capability = item if isinstance(item, Capability) else Capability(name=item)
+            bucket[capability.name] = capability
+
+    def revoke(self, actor: str, *capability_names: str) -> None:
+        """Revoke named grants; with no names, revoke every grant for actor."""
+        key = normalize_remote_actor(actor)
+        if not capability_names:
+            self._grants.pop(key, None)
+            return
+        bucket = self._grants.get(key)
+        if bucket is None:
+            return
+        for name in capability_names:
+            bucket.pop(name, None)
+        if not bucket:
+            self._grants.pop(key, None)
+
+    def replace(self, actor: str, capabilities: Iterable[str | Capability]) -> None:
+        """Replace the complete server-side authority set for one participant."""
+        self.revoke(actor)
+        self.grant(actor, *tuple(capabilities))
+
+    def capabilities_for(self, actor: str) -> list[Capability]:
+        """Return currently valid capability grants for an actor."""
+        bucket = self._grants.get(normalize_remote_actor(actor), {})
+        return [cap.model_copy(deep=True) for cap in bucket.values() if cap.valid]
+
+    def names_for(self, actor: str) -> list[str]:
+        return sorted(cap.name for cap in self.capabilities_for(actor))
+
+    def describe(self) -> dict[str, list[str]]:
+        return {
+            actor: sorted(cap.name for cap in bucket.values() if cap.valid)
+            for actor, bucket in sorted(self._grants.items())
+        }
 
 
 @dataclass(frozen=True)
@@ -205,5 +278,7 @@ __all__ = [
     "REMOTE_SCHEMA_VERSION",
     "RemoteExecutionRequest",
     "RemoteExecutionOutcome",
+    "RemoteAuthorityRegistry",
     "ExposedOperation",
+    "normalize_remote_actor",
 ]
