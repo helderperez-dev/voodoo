@@ -5,6 +5,7 @@ Tests the canonical counter app: state + @event → re-render → WS patch.
 
 import importlib
 import json
+from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
@@ -180,6 +181,97 @@ def test_counter_app_full_flow_via_websocket(make_app):
 # ---------------------------------------------------------------------------
 # Auto re-render (Phase 4 — State.set triggers bound rerender, zero JS)
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_page_render_auto_binds_state(make_app):
+    """Regression (browser-facing): serving a @page that reads state cells
+    auto-binds them to the state renderer — set() inside an @event handler
+    then patches the page over WS with no explicit bind() in user code.
+
+    This is the loop examples/ai_agent, examples/realtime, and the
+    `voodoo create` scaffold depend on (vd.event → handler → set → patch).
+    """
+    count = state(0)
+
+    @page("/")
+    def reactive_auto_home():
+        return Text(f"Count: {count.get()}", id="count-display")
+
+    with TestClient(make_app()) as client:
+        response = client.get("/")
+        assert "Count: 0" in response.text
+
+        with client.websocket_connect("/_voodoo_ws") as ws:
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "event",
+                        "event": "reactive_ws_increment",
+                        "id": "btn-1",
+                    }
+                )
+            )
+            msg = json.loads(ws.receive_text())
+            assert msg["type"] == "patch"
+            assert msg["id"] == "root"
+            # The root patch must keep the #root container (client swaps
+            # outerHTML — an unwrapped patch would delete it after patch #1).
+            assert msg["html"].startswith('<div id="root">')
+            assert "Count: 1" in msg["html"]
+
+    state_renderer.unbind("root")
+
+
+def test_websocket_event_without_id_and_value(make_app):
+    """Regression: `vd.event('name')` with no element id sends a WS message
+    without id/value keys (JSON.stringify drops undefined) — dispatch must
+    tolerate both missing (the `voodoo create` scaffold uses this form)."""
+    from voodoo import Button
+
+    marker = state("initial")
+
+    @event
+    async def reactive_no_id(element_id, value):
+        marker.set("updated")
+
+    @page("/")
+    def reactive_no_id_home():
+        return Stack(
+            Text(marker.get(), id="marker"),
+            Button("Go", onclick="vd.event('reactive_no_id')"),
+        )
+
+    with TestClient(make_app()) as client:
+        response = client.get("/")
+        assert "initial" in response.text
+
+        with client.websocket_connect("/_voodoo_ws") as ws:
+            # No "id"/"value" keys at all — the scaffold's wire format.
+            ws.send_text(
+                json.dumps({"type": "event", "event": "reactive_no_id"})
+            )
+            msg = json.loads(ws.receive_text())
+            assert msg["type"] == "patch"
+            assert "updated" in msg["html"]
+
+    state_renderer.unbind("root")
+
+
+def test_client_js_exposes_vd_facade():
+    """Regression: the client runtime must define window.vd.event — Button
+    onclick handlers in docs, examples, and the scaffold call vd.event(...)."""
+    import voodoo
+
+    client_js_path = (
+        Path(voodoo.__file__).parent / "static" / "client.js"
+    )
+    src = client_js_path.read_text(encoding="utf-8")
+    assert "window.vd" in src
+    assert "event:" in src
+    # The full client API stays available under window.voodoo.
+    assert "window.voodoo" in src
+    assert "sendEvent" in src
 
 
 @pytest.mark.asyncio

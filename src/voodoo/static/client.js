@@ -150,3 +150,20 @@ document.addEventListener("DOMContentLoaded", () => {
     voodoo.setupChatBehaviors();
 });
 window.voodoo = voodoo;
+
+// "vd" facade — the short public alias used by Button onclick handlers in
+// docs, examples, and the `voodoo create` scaffold:
+//     onclick="vd.event('increment', 'count-display', 1)"
+// Signature: vd.event(name, elementId, ...values) — extra args are passed
+// through to the server handler's `value` (arrays stay arrays, single values
+// pass as-is, omitted value passes undefined).
+window.vd = {
+    event: function(name, elementId, value) {
+        // Extra arguments beyond `value` are forwarded as an array so handlers
+        // can receive multiple payloads: vd.event('move', 'board', x, y).
+        if (arguments.length > 3) {
+            value = Array.prototype.slice.call(arguments, 3);
+        }
+        voodoo.sendEvent(name, elementId, value);
+    },
+};

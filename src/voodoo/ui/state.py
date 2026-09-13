@@ -20,6 +20,34 @@ _state_context: contextvars.ContextVar[dict[str, Any] | None] = contextvars.Cont
     "voodoo_state_context", default=None
 )
 
+#: Render-time tracking of state cells read during the current page render
+#: (spec: reactive loop — @page renders must record which cells they read so
+#: StateRenderer can auto-bind them without developer-written bind() calls).
+_rendered_cells: contextvars.ContextVar[list[State] | None] = contextvars.ContextVar(
+    "voodoo_rendered_cells", default=None
+)
+
+
+def start_render_tracking() -> list[State]:
+    """Begin tracking state reads for the current render. Returns the list."""
+    cells: list[State] = []
+    _rendered_cells.set(cells)
+    return cells
+
+
+def stop_render_tracking() -> list[State]:
+    """End tracking and return the cells read during the render."""
+    cells = _rendered_cells.get()
+    _rendered_cells.set(None)
+    return cells or []
+
+
+def _track_read(cell: State) -> None:
+    """Record a cell read (called from State.get during page renders)."""
+    cells = _rendered_cells.get()
+    if cells is not None and cell not in cells:
+        cells.append(cell)
+
 
 class State:
     """An observable value cell.
@@ -44,6 +72,7 @@ class State:
     # -- read / write --------------------------------------------------------
 
     def get(self) -> Any:
+        _track_read(self)
         return self._value
 
     def set(self, value: Any) -> None:
@@ -169,6 +198,10 @@ class StateRenderer:
             result = await result
 
         html = self._render_component(result)
+        # Keep #root present across patches: the client swaps outerHTML, so an
+        # unwrapped patch would remove the container div after the first patch.
+        if element_id == "root":
+            html = f'<div id="root">{html}</div>'
         await self._broadcast_patch(element_id, html)
         return html
 

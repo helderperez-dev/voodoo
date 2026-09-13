@@ -91,9 +91,30 @@ async def call_page(func: Callable[..., Any], request: Request) -> Response:
                     pass
             kwargs[param] = val
 
-    result = func(**kwargs)
-    if inspect.iscoroutine(result):
-        result = await result
+    # Track state reads during the render so the StateRenderer can auto-bind
+    # the cells this page depends on — the "zero JS" reactive loop (spec §
+    # reactive): set() inside an @event handler then re-renders and patches
+    # the page subtree without any explicit bind() call in user code.
+    from voodoo.ui.state import (
+        start_render_tracking,
+        state_renderer,
+        stop_render_tracking,
+    )
+
+    start_render_tracking()
+    try:
+        result = func(**kwargs)
+        if inspect.iscoroutine(result):
+            result = await result
+        cells = stop_render_tracking()
+    except BaseException:
+        stop_render_tracking()  # reset tracking; keep prior bindings intact
+        raise
+
+    # Re-render with the same kwargs (path params, request, user) so pages
+    # like `/users/{id}` restore faithfully on state changes.
+    render_kwargs = dict(kwargs)
+    state_renderer.bind("root", lambda: func(**render_kwargs), cells=cells)
 
     return render_page_result(result)
 

@@ -72,12 +72,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             print(f"WS Received: {data}")
             msg = json.loads(data)
             if msg.get("type") == "event":
-                handler = event_handlers.get(msg["event"])
+                handler = event_handlers.get(msg.get("event"))
                 if handler:
+                    # id/value are optional — `vd.event('name')` with no
+                    # element id omits both keys (JSON.stringify drops
+                    # undefined), so tolerate missing fields here.
                     if inspect.iscoroutinefunction(handler):
-                        await handler(msg["id"], msg["value"])
+                        await handler(msg.get("id"), msg.get("value"))
                     else:
-                        handler(msg["id"], msg["value"])
+                        handler(msg.get("id"), msg.get("value"))
     except WebSocketDisconnect as e:
         # 1000 = Normal Closure, 1001 = Going Away (e.g. page reload)
         if getattr(e, "code", None) not in (1000, 1001):
