@@ -20,6 +20,7 @@ All event names must be **namespaced** (e.g. ``"agent.started"`` not
 event surface discoverable.
 """
 
+import asyncio
 import inspect
 import json
 import time
@@ -36,6 +37,11 @@ from voodoo.mesh.remote import (
     RemoteAuthorityRegistry,
     RemoteExecutionOutcome,
     RemoteExecutionRequest,
+)
+from voodoo.mesh.replay import (
+    InMemoryRemoteReplayStore,
+    RemoteReplayStore,
+    request_fingerprint,
 )
 from voodoo.storage.events import VoodooEventBus
 
@@ -79,6 +85,7 @@ class MeshNetwork:
         *,
         execution_engine: Any | None = None,
         remote_authority: RemoteAuthorityRegistry | None = None,
+        replay_store: RemoteReplayStore | None = None,
     ):
         if bus is None:
             from voodoo.adapters.registry import registry
@@ -88,23 +95,19 @@ class MeshNetwork:
             self.bus = bus
         self.execution_engine = execution_engine
         self.remote_authority = remote_authority or RemoteAuthorityRegistry()
+        self.replay_store = replay_store or InMemoryRemoteReplayStore()
+        self._remote_request_locks: dict[str, asyncio.Lock] = {}
         self.node_id = str(uuid.uuid4())
         self.peers: set[str] = set()
         self.active_agents: dict[str, Any] = {}
-        # Compatibility registry: callers may still inspect the raw callable.
         self.exposed_functions: dict[str, Callable] = {}
-        # Canonical semantic registration used by remote execution ingress.
         self.exposed_operations: dict[str, ExposedOperation] = {}
         self.event_handlers: dict[str, list[Callable]] = {}
         self.active_nodes: list[WebSocket] = []
         self.subscriptions: set[str] = set()
 
     def grant_remote(self, actor: str, *capabilities: Any) -> None:
-        """Assign remote authority on the receiving node.
-
-        This is intentionally server-side configuration. A remote request cannot
-        grant itself capabilities by adding fields to the network payload.
-        """
+        """Assign remote authority on the receiving node."""
         self.remote_authority.grant(actor, *capabilities)
 
     def revoke_remote(self, actor: str, *capability_names: str) -> None:
@@ -118,17 +121,7 @@ class MeshNetwork:
         capability: str | None = None,
         intent_name: str | None = None,
     ):
-        """Expose a function to Mesh and MCP with runtime operation metadata.
-
-        Existing ``@mesh.expose()`` and ``@mesh.expose(name="...")`` usage
-        remains compatible. ``capability`` declares an Intent requirement; the
-        existing ExecutionEngine capability/policy boundary decides whether it
-        may run.
-
-        Sprint 26.1/26.2 normalizes asserted remote actor identity but does not
-        yet claim transport authentication. Authentication/session resolution
-        is a later Sprint 26 slice.
-        """
+        """Expose a function to Mesh and MCP with runtime operation metadata."""
 
         def decorator(func: Callable):
             func_name = name or func.__name__
@@ -140,20 +133,13 @@ class MeshNetwork:
                 intent_name=intent_name,
                 description=func.__doc__,
             )
-
-            # Preserve the existing MCP bridge. Mesh remote calls themselves
-            # no longer invoke this callable directly.
             mcp.tool(name=func_name, description=func.__doc__)(func)
-
             return func
 
         return decorator
 
     def on(self, event: str):
-        """Decorator to register a handler for a Mesh event.
-
-        Event names must be namespaced (e.g. ``"agent.started"``).
-        """
+        """Decorator to register a handler for a Mesh event."""
         _validate_namespace(event)
 
         def decorator(func: Callable):
@@ -165,13 +151,7 @@ class MeshNetwork:
         return decorator
 
     async def broadcast(self, event: str, payload: Any):
-        """Broadcast an event to all connected Mesh nodes and local handlers.
-
-        Events must be namespaced (e.g. ``"agent.started"``). The event is
-        wrapped in a standard envelope with id, ts, source, correlation_id
-        before being sent to remote nodes. Local handlers receive the raw
-        payload (the envelope is for the remote boundary only).
-        """
+        """Broadcast an event to all connected Mesh nodes and local handlers."""
         _validate_namespace(event)
 
         envelope = _make_envelope(event, payload)
@@ -183,14 +163,12 @@ class MeshNetwork:
             }
         )
 
-        # Send to all connected nodes (remote boundary)
         for node in self.active_nodes:
             try:
                 await node.send_text(message)
             except Exception:  # noqa: BLE001
                 pass
 
-        # Also trigger locally via the bus (local boundary)
         self.bus.publish(
             event, payload, source="voodoo", correlation_id=envelope["correlation_id"]
         )
@@ -208,13 +186,7 @@ class MeshNetwork:
         return runtime_engine
 
     async def _fire_local(self, event: str, payload: Any):
-        """Fire local handlers for an event (no remote fan-out).
-
-        Each handler executes through the Voodoo runtime engine as an
-        Execution (intent ``mesh:{event}``). When the broadcast happens
-        inside another execution, the handler becomes a child execution of
-        it (shared trace, ``parent_execution_id`` link).
-        """
+        """Fire local handlers for an event (no remote fan-out)."""
         if event not in self.event_handlers:
             return
 
@@ -222,8 +194,6 @@ class MeshNetwork:
         from voodoo.runtime.context import current_context
 
         parent = current_context()
-        # Run on the engine that owns the current execution (when inside one),
-        # otherwise use the explicitly injected engine or global Runtime.
         engine = (
             parent.engine if parent is not None else None
         ) or self._runtime_engine()
@@ -240,19 +210,40 @@ class MeshNetwork:
             except Exception as e:  # noqa: BLE001
                 print(f"Local mesh event handler error: {e}")
 
+    def _replayed_outcome(
+        self, request: RemoteExecutionRequest
+    ) -> RemoteExecutionOutcome | None:
+        record = self.replay_store.get(request.request_id)
+        if record is None:
+            return None
+        if record.fingerprint != request_fingerprint(request):
+            return RemoteExecutionOutcome.rejected(
+                request,
+                error_type="RemoteReplayConflict",
+                message="request_id was already used for a different remote request",
+            )
+        return record.outcome.model_copy(deep=True)
+
     async def execute_remote(
         self, request: RemoteExecutionRequest
     ) -> RemoteExecutionOutcome:
-        """Execute one normalized remote request through the canonical Runtime.
+        """Execute one request once and replay its canonical outcome on duplicates."""
+        lock = self._remote_request_locks.setdefault(request.request_id, asyncio.Lock())
+        async with lock:
+            replayed = self._replayed_outcome(request)
+            if replayed is not None:
+                return replayed
 
-        Unknown operations are rejected before an Execution is created.
-        Application failures remain canonical failed Executions and their
-        execution/trace identity is projected back to the caller.
-        """
+            outcome = await self._execute_remote_once(request)
+            if outcome.execution_id is not None:
+                self.replay_store.save(request, outcome)
+            return outcome
+
+    async def _execute_remote_once(
+        self, request: RemoteExecutionRequest
+    ) -> RemoteExecutionOutcome:
         operation = self.exposed_operations.get(request.operation)
         if operation is None:
-            # Compatibility for callers that populated exposed_functions
-            # directly before Sprint 26 operation metadata existed.
             func = self.exposed_functions.get(request.operation)
             if func is not None:
                 operation = ExposedOperation(name=request.operation, func=func)
@@ -282,7 +273,7 @@ class MeshNetwork:
                 capabilities=granted_capabilities,
             )
             return RemoteExecutionOutcome.from_execution(request, execution)
-        except Exception as error:  # Runtime errors carry canonical lineage.
+        except Exception as error:
             from voodoo.runtime.errors import ExecutionError
 
             execution = None
@@ -320,14 +311,7 @@ class MeshNetwork:
         message_id: Any,
         outcome: RemoteExecutionOutcome,
     ) -> None:
-        """Project a governed outcome onto the legacy JSON-RPC wire contract.
-
-        ``MeshClient.call()`` historically returns the raw application result,
-        so completed calls keep that behavior. Canonical Voodoo execution
-        identity is attached as an additive ``voodoo`` metadata member. Sprint
-        26.5 can evolve the client-facing lifecycle contract without breaking
-        this compatibility path.
-        """
+        """Project a governed outcome onto the legacy JSON-RPC wire contract."""
         if message_id is None:
             return
 
@@ -365,7 +349,7 @@ class MeshNetwork:
                             params,
                             message_id=str(msg_id) if msg_id is not None else None,
                         )
-                    except Exception as error:  # validation/protocol failure
+                    except Exception as error:
                         if msg_id is not None:
                             await websocket.send_text(
                                 json.dumps(
@@ -386,7 +370,6 @@ class MeshNetwork:
                     )
 
                 elif method == "event":
-                    # params may be a full envelope or legacy {event, payload}
                     if isinstance(params, dict) and "event" in params:
                         event_name = params.get("event")
                         payload = params.get("payload")
