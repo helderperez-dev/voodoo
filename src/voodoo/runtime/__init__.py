@@ -69,10 +69,13 @@ from voodoo.runtime.policy import (
 )
 from voodoo.runtime.task import Task, TaskStatus
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
-from voodoo.runtime.world_execution import bind_world, resolve_target_entity_id, world_aware
+from voodoo.runtime.world_execution import (
+    bind_world,
+    resolve_target_entity_id,
+    world_aware,
+)
 
 __all__ = [
-    # core
     "Execution",
     "ExecutionStatus",
     "ExecutionContext",
@@ -82,7 +85,6 @@ __all__ = [
     "engine",
     "ComputeFn",
     "ComputeResult",
-    # enforcement
     "CapabilityResolver",
     "Resolution",
     "PolicyDecision",
@@ -93,7 +95,6 @@ __all__ = [
     "ConstraintEnforcer",
     "Decision",
     "ResourceAccountant",
-    # errors
     "ExecutionError",
     "CapabilityDenied",
     "ConstraintViolation",
@@ -105,26 +106,21 @@ __all__ = [
     "ValidationError",
     "ApprovalRequired",
     "WorkflowFailure",
-    # orchestration
     "Task",
     "TaskStatus",
     "Workflow",
     "WorkflowRun",
     "WorkflowStrategy",
-    # graph
     "ExecutionGraph",
     "ExecutionNode",
-    # human-in-the-loop
     "Approval",
     "ApprovalStatus",
     "ApprovalRegistry",
     "Human",
     "ask_human",
-    # persistence / recovery
     "ExecutionStore",
     "InMemoryExecutionStore",
     "JSONFileExecutionStore",
-    # planning / adaptive
     "ComputeParticipant",
     "Plan",
     "PlanStep",
@@ -133,11 +129,9 @@ __all__ = [
     "AdaptiveSupervisor",
     "SupervisorDecision",
     "SupervisorConfig",
-    # world-aware execution
     "bind_world",
     "world_aware",
     "resolve_target_entity_id",
-    # convenience
     "execute",
     "register_capability",
     "grant",
