@@ -1,21 +1,10 @@
 """Voodoo runtime — the unified execution model.
 
 This package makes the computational model *operational*.
-Every meaningful operation (HTTP request, Agent run, Task, Workflow task,
-Tool invocation, MCP call, Worker job, Human approval, Event handler) is
-represented as an :class:`~voodoo.runtime.execution.Execution` produced by
-a single :class:`~voodoo.runtime.engine.ExecutionEngine` walking:
+Every meaningful operation is represented as an Execution produced by a
+single ExecutionEngine walking the operational model:
 
-    Intent → Capability → Policy → Execution → Effect → State → Mesh
-
-The developer surface stays small:
-
-    from voodoo.runtime import Intent, execute, Task, Workflow, Agent
-    from voodoo.primitives import Capability, Constraint, Resource
-
-        result = await execute(Intent("qualify_customer", customer_id=123))
-
-Simple at the surface. Deep underneath.
+    World → Goal → Intent → Capability → Policy → Execution → Effect → Observation
 """
 
 from __future__ import annotations
@@ -46,6 +35,14 @@ from voodoo.runtime.errors import (
     WorkflowFailure,
 )
 from voodoo.runtime.execution import Execution, ExecutionStatus
+from voodoo.runtime.goal import (
+    Goal,
+    GoalDecomposer,
+    GoalIntentRun,
+    GoalRun,
+    GoalRuntime,
+    GoalStatus,
+)
 from voodoo.runtime.graph import ExecutionGraph, ExecutionNode
 from voodoo.runtime.human import (
     Approval,
@@ -129,6 +126,12 @@ __all__ = [
     "AdaptiveSupervisor",
     "SupervisorDecision",
     "SupervisorConfig",
+    "Goal",
+    "GoalStatus",
+    "GoalIntentRun",
+    "GoalRun",
+    "GoalRuntime",
+    "GoalDecomposer",
     "bind_world",
     "world_aware",
     "resolve_target_entity_id",
