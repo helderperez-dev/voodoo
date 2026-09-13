@@ -22,8 +22,8 @@ from .operational import (
     RemoteOutcomeStatus,
     WorldSnapshot,
 )
+from .schemas import PROTOCOL_ENTITIES as CORE_PROTOCOL_ENTITIES
 from .schemas import (
-    PROTOCOL_ENTITIES as CORE_PROTOCOL_ENTITIES,
     SCHEMA_VERSION,
     AgentEntity,
     AgentRun,
