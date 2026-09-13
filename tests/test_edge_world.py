@@ -21,7 +21,7 @@ def _context(device: Device) -> AuthenticatedDeviceContext:
 async def test_state_sync_projects_observations_into_world() -> None:
     store = InMemoryDeviceStore()
     device = Device(device_id="device_sensor", type="esp32")
-    await store.add_device(device)
+    await store.register_device(device)
     world = WorldModel()
     gateway = WorldAwareDeviceGateway(store, ExecutionEngine(), world=world)
 
@@ -49,7 +49,7 @@ async def test_state_sync_projects_observations_into_world() -> None:
 async def test_semantic_event_ingests_only_explicit_observations() -> None:
     store = InMemoryDeviceStore()
     device = Device(device_id="device_motion", type="esp32")
-    await store.add_device(device)
+    await store.register_device(device)
     world = WorldModel()
     engine = ExecutionEngine()
     gateway = WorldAwareDeviceGateway(store, engine, world=world)
@@ -84,7 +84,7 @@ async def test_semantic_event_ingests_only_explicit_observations() -> None:
 async def test_duplicate_event_does_not_duplicate_world_evidence() -> None:
     store = InMemoryDeviceStore()
     device = Device(device_id="device_dup", type="esp32")
-    await store.add_device(device)
+    await store.register_device(device)
     world = WorldModel()
     gateway = WorldAwareDeviceGateway(store, ExecutionEngine(), world=world)
     ctx = _context(device)
@@ -113,7 +113,7 @@ async def test_effect_ack_only_changes_world_when_evidence_is_reported() -> None
         type="esp32",
         capabilities=["relay.control"],
     )
-    await store.add_device(device)
+    await store.register_device(device)
     world = WorldModel()
     gateway = WorldAwareDeviceGateway(store, ExecutionEngine(), world=world)
     await gateway.submit_effect(
