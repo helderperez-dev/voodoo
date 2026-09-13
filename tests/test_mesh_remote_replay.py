@@ -170,9 +170,7 @@ async def test_sqlite_replay_detects_conflict_after_restart(tmp_path):
 
     store_b = SQLiteRemoteReplayStore(path)
     net_b = MeshNetwork(execution_engine=ExecutionEngine(), replay_store=store_b)
-    conflict = await net_b.execute_remote(
-        _request("req-conflict-restart", value=999)
-    )
+    conflict = await net_b.execute_remote(_request("req-conflict-restart", value=999))
     store_b.close()
 
     assert conflict.status == "rejected"
