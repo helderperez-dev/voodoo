@@ -110,6 +110,12 @@ body {
     box-shadow: none;
 }
 
+/* Form */
+.vd-form {
+    display: grid;
+    gap: var(--vd-space-md);
+}
+
 /* Field */
 .vd-field { display: grid; gap: var(--vd-space-sm); }
 .vd-field-label {
