@@ -209,7 +209,9 @@ class MeshNetwork:
         parent = current_context()
         # Run on the engine that owns the current execution (when inside one),
         # otherwise use the explicitly injected engine or global Runtime.
-        engine = (parent.engine if parent is not None else None) or self._runtime_engine()
+        engine = (
+            parent.engine if parent is not None else None
+        ) or self._runtime_engine()
         for handler in self.event_handlers[event]:
             intent = Intent(name=f"mesh:{event}", params={"payload": payload})
 
