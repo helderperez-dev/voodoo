@@ -88,18 +88,30 @@ class CapabilityResolver:
         if policy_result.decision is PolicyDecision.DENY:
             return Resolution.DENIED
         if policy_result.decision is PolicyDecision.REQUIRE_APPROVAL:
+            if self._is_approved(name, context):
+                return Resolution.ALLOWED
             return Resolution.REQUIRES_APPROVAL
         return Resolution.ALLOWED
 
     @staticmethod
     def _requires_explicit_context(context: ExecutionContext | None) -> bool:
-        """Whether ambient registry grants must not authorize this actor.
-
-        Remote participants cross a trust boundary. Their authority must be
-        injected into the ExecutionContext by the receiving node. This keeps
-        capability registration separate from capability possession.
-        """
+        """Whether ambient registry grants must not authorize this actor."""
         return context is not None and context.actor.startswith("remote:")
+
+    @staticmethod
+    def _is_approved(name: str, context: ExecutionContext | None) -> bool:
+        """Whether durable HITL already approved this exact capability.
+
+        The engine writes this marker only while resuming an approved waiting
+        execution. It satisfies REQUIRE_APPROVAL, but never overrides DENY.
+        """
+        if context is None:
+            return False
+        return (
+            context.metadata.get("approval") == "approved"
+            and context.metadata.get("approved_capability") == name
+            and context.has_capability(name)
+        )
 
     def _resolve_sensitive(
         self,
@@ -110,14 +122,14 @@ class CapabilityResolver:
     ) -> Resolution:
         """Resolve a sensitive capability — requires explicit grant."""
         if context is not None and context.has_capability(name, scope=scope):
-            return self._check_approval(name)
+            return self._check_approval(name, context)
         if self._requires_explicit_context(context):
             return Resolution.DENIED
         cap = self.capabilities.get(name)
         if cap is not None and cap.valid:
             if scope is not None and cap.scope is not None and cap.scope != scope:
                 return Resolution.DENIED
-            return self._check_approval(name)
+            return self._check_approval(name, context)
         return Resolution.DENIED
 
     def _resolve_standard(
@@ -129,7 +141,7 @@ class CapabilityResolver:
     ) -> Resolution:
         """Resolve a standard capability — normal registry rules."""
         if context is not None and context.has_capability(name, scope=scope):
-            return self._check_approval(name)
+            return self._check_approval(name, context)
         if self._requires_explicit_context(context):
             return Resolution.DENIED
         cap = self.capabilities.get(name)
@@ -137,10 +149,12 @@ class CapabilityResolver:
             return Resolution.DENIED
         if scope is not None and cap.scope is not None and cap.scope != scope:
             return Resolution.DENIED
-        return self._check_approval(name)
+        return self._check_approval(name, context)
 
-    def _check_approval(self, name: str) -> Resolution:
-        if name in self.approval_capabilities:
+    def _check_approval(
+        self, name: str, context: ExecutionContext | None = None
+    ) -> Resolution:
+        if name in self.approval_capabilities and not self._is_approved(name, context):
             return Resolution.REQUIRES_APPROVAL
         return Resolution.ALLOWED
 

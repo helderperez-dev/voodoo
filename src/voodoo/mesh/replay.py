@@ -70,16 +70,17 @@ class InMemoryRemoteReplayStore:
         request: RemoteExecutionRequest,
         outcome: RemoteExecutionOutcome,
     ) -> ReplayRecord:
+        fingerprint = request_fingerprint(request)
+        existing = self._records.get(request.request_id)
+        if existing is not None and existing.fingerprint != fingerprint:
+            raise ValueError("remote request_id replay conflict")
         record = ReplayRecord(
             request_id=request.request_id,
-            fingerprint=request_fingerprint(request),
+            fingerprint=fingerprint,
             outcome=outcome.model_copy(deep=True),
         )
-        existing = self._records.get(request.request_id)
-        if existing is not None:
-            if existing.fingerprint != record.fingerprint:
-                raise ValueError("remote request_id replay conflict")
-            return existing
+        # The request identity is immutable, but its projected Execution outcome
+        # may move from WAITING to COMPLETED/FAILED after durable resume.
         self._records[request.request_id] = record
         return record
 
@@ -129,14 +130,16 @@ class SQLiteRemoteReplayStore:
     ) -> ReplayRecord:
         fingerprint = request_fingerprint(request)
         existing = self.get(request.request_id)
-        if existing is not None:
-            if existing.fingerprint != fingerprint:
-                raise ValueError("remote request_id replay conflict")
-            return existing
+        if existing is not None and existing.fingerprint != fingerprint:
+            raise ValueError("remote request_id replay conflict")
 
         self._connection.execute(
-            "INSERT INTO mesh_remote_replay(request_id, fingerprint, outcome_json) "
-            "VALUES (?, ?, ?)",
+            """
+            INSERT INTO mesh_remote_replay(request_id, fingerprint, outcome_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(request_id) DO UPDATE SET
+                outcome_json = excluded.outcome_json
+            """,
             (
                 request.request_id,
                 fingerprint,

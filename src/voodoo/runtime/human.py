@@ -53,14 +53,7 @@ class Approval:
     reason: str | None = None
     id: str = field(default_factory=lambda: str(uuid4()))
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-    #: Registered participant name — the durable handle to what re-runs
-    #: once approved (resolved through the engine's planner registry;
-    #: Sprint 18). Takes precedence over the live ``compute`` callable
-    #: when resuming after a restart.
     participant: str | None = None
-
-    # resumable payload — what to re-run once approved
     intent: Intent | None = None
     compute: ComputeFn | None = None
     output_type: type | None = None
@@ -145,6 +138,10 @@ class ApprovalRegistry:
         approval.decided_by = by
         approval.decided_at = datetime.now(UTC)
         approval.reason = reason
+        if status is ApprovalStatus.APPROVED and approval.context is not None:
+            approval.context.metadata["approval"] = ApprovalStatus.APPROVED.value
+            if approval.capability is not None:
+                approval.context.metadata["approved_capability"] = approval.capability
         return approval
 
 
@@ -174,5 +171,4 @@ def ask_human(question: str, *, capability: str | None = None) -> ComputeFn:
     return human_compute
 
 
-#: Class alias matching the spec's "Compute = Human" vocabulary.
 Human = ask_human
