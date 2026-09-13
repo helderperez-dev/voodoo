@@ -6,6 +6,7 @@ The inspector is read-only. It projects the runtime's existing sources of truth
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any
@@ -35,7 +36,7 @@ class OperationalRuntime:
         execution_statuses = Counter(item.status.value for item in executions)
         goal_statuses = Counter(run.goal.status.value for run in goal_runs)
 
-        return {
+        payload = {
             "summary": {
                 "executions": len(execution_rows),
                 "active_executions": sum(
@@ -60,6 +61,7 @@ class OperationalRuntime:
             "policy": self.engine.capabilities.policy.describe(),
             "capabilities": self.engine.capabilities.describe(),
         }
+        return json.loads(json.dumps(payload, default=str))
 
     def _entities(self) -> list[dict[str, Any]]:
         if self.world is None:
