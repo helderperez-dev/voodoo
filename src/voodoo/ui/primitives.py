@@ -123,8 +123,9 @@ class Switch(Component):
             )
         self._markup = (
             f"<input {' '.join(attrs)}>"
-            f'<span class="vd-switch-track" aria-hidden="true">'
-            f'<span class="vd-switch-thumb"></span></span>{label_html}'
+            f'<label class="vd-switch-track" for="{escape(input_id)}">'
+            f'<span class="vd-switch-thumb" aria-hidden="true"></span></label>'
+            f"{label_html}"
         )
 
     def render(self) -> str:
