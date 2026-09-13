@@ -19,7 +19,13 @@ from voodoo import App, page, state, Agent, tool, Model, task
 from voodoo.ui import Button, Card, Stack, DataTable, RuntimeStatus
 
 # Runtime / agency
-from voodoo.runtime import ExecutionEngine, Planner, AdaptiveSupervisor, Goal, GoalRuntime
+from voodoo.runtime import (
+    ExecutionEngine,
+    Planner,
+    AdaptiveSupervisor,
+    Goal,
+    GoalRuntime,
+)
 
 # Operational world
 from voodoo.world import Entity, Relationship, Observation, WorldModel
