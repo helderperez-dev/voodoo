@@ -111,5 +111,7 @@ class InMemoryWorldStore:
             if observation.entity_id == entity_id
             and (property is None or observation.property == property)
         ]
-        observations.sort(key=lambda observation: (observation.observed_at, observation.id))
+        observations.sort(
+            key=lambda observation: (observation.observed_at, observation.id)
+        )
         return [deepcopy(observation) for observation in observations]
