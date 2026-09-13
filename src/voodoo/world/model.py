@@ -8,6 +8,7 @@ queries useful to planners, policies, agents, and Edge adapters.
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 
 from voodoo.world.models import Entity, Observation, Relationship, WorldSnapshot
@@ -54,13 +55,21 @@ class WorldModel:
         """Create a typed directed relationship between two known entities."""
         self._require_entity(source_id)
         self._require_entity(target_id)
-        relationship = Relationship(
-            id=relationship_id or Relationship(source_id, predicate, target_id).id,
-            source_id=source_id,
-            predicate=predicate,
-            target_id=target_id,
-            metadata=dict(metadata or {}),
-        )
+        if relationship_id is None:
+            relationship = Relationship(
+                source_id=source_id,
+                predicate=predicate,
+                target_id=target_id,
+                metadata=dict(metadata or {}),
+            )
+        else:
+            relationship = Relationship(
+                id=relationship_id,
+                source_id=source_id,
+                predicate=predicate,
+                target_id=target_id,
+                metadata=dict(metadata or {}),
+            )
         self.store.put_relationship(relationship)
         return deepcopy(relationship)
 
@@ -116,7 +125,7 @@ class WorldModel:
         *,
         source: str,
         confidence: float = 1.0,
-        observed_at=None,
+        observed_at: datetime | None = None,
         trace_id: str | None = None,
         execution_id: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -126,12 +135,16 @@ class WorldModel:
         """Append evidence and project it onto current state when it is current.
 
         Stale evidence is retained in history but does not overwrite a newer
-        projected value. ``force_projection`` is explicit escape hatch for
+        projected value. ``force_projection`` is an explicit escape hatch for
         reconciliation/import tooling and should not be used for normal device
         telemetry.
         """
         entity = self._require_entity(entity_id)
         previous = self.history(entity_id, property)
+        if observation_id is not None:
+            duplicate = next((item for item in previous if item.id == observation_id), None)
+            if duplicate is not None:
+                return duplicate
         latest = previous[-1] if previous else None
 
         kwargs: dict[str, Any] = {
