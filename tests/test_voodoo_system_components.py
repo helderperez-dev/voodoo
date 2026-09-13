@@ -118,7 +118,11 @@ def test_approval_card_wires_python_actions_semantically():
 
     try:
         html = ApprovalCard(
-            {"id": "ap-1", "reason": "Refund needs review", "capability": "refund.issue"},
+            {
+                "id": "ap-1",
+                "reason": "Refund needs review",
+                "capability": "refund.issue",
+            },
             on_approve=approve,
             on_deny=deny,
         ).render()
@@ -168,7 +172,11 @@ def test_observation_capability_policy_and_telemetry_components():
         assert "world.read" in caps
         assert "device.command" in caps
         decision = PolicyDecision(
-            {"decision": "waiting", "reason": "Human approval required", "capability": "refund.issue"}
+            {
+                "decision": "waiting",
+                "reason": "Human approval required",
+                "capability": "refund.issue",
+            }
         ).render()
         assert "Human approval required" in decision
         telemetry = TelemetryPanel({"cpu_usage": "12%", "latency_ms": 8}).render()
