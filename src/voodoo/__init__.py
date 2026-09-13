@@ -1,9 +1,12 @@
 """Voodoo — the programmable runtime for adaptive applications and
 operational systems.
 
-The public API is intentionally small (~40 names). Everything else lives in
-its defining submodule (e.g. ``voodoo.auth``, ``voodoo.seo``) and legacy
-top-level imports resolve through a deprecation shim (PEP 562).
+During the 2.x line this package root remains a compatibility/happy-path facade.
+Catalog-style APIs live in their defining namespaces (for example ``voodoo.ui``,
+``voodoo.runtime``, ``voodoo.world``, ``voodoo.edge`` and ``voodoo.protocol``).
+See ``docs/public-api-3.md`` for the canonical 3.0 import law. Legacy top-level
+imports continue to resolve through compatibility/deprecation shims rather than
+being silently removed during a minor release.
 
 The computational model — the fundamental ontology from which all
 higher-level capabilities emerge — lives in ``voodoo.primitives``:

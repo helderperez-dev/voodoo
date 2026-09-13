@@ -217,6 +217,7 @@ class GoalRuntime:
         base_context.update({"goal_id": goal.id, "goal_name": goal.name})
         if goal.target_entity_id is not None:
             base_context["target_entity_id"] = goal.target_entity_id
+        self._refresh_world_context(goal, base_context)
 
         run = GoalRun(
             goal=goal,
@@ -249,6 +250,7 @@ class GoalRuntime:
                 return run
 
         run.goal.transition(GoalStatus.RUNNING)
+        self._refresh_world_context(run.goal, run.context)
         self._persist(run)
         return await self._continue(run)
 
@@ -267,6 +269,15 @@ class GoalRuntime:
         for index in range(run.current_index, len(run.planned_intents)):
             intent = run.planned_intents[index]
             run.current_index = index
+            # Each Intent is planned against the latest observed World projection,
+            # not a stale snapshot captured at Goal creation time.
+            self._refresh_world_context(run.goal, run.context)
+            if run.intent_runs:
+                run.context["prior_results"] = {
+                    item.intent_id: item.result
+                    for item in run.intent_runs
+                    if item.status == "completed"
+                }
             self._persist(run)
             adaptive = await self.supervisor.run(intent, context=run.context)
             record = GoalIntentRun.from_adaptive(intent, adaptive)
@@ -295,6 +306,23 @@ class GoalRuntime:
         run.completed_at = _now()
         self._persist(run)
         return run
+
+    def _refresh_world_context(self, goal: Goal, context: dict[str, Any]) -> None:
+        """Refresh the JSON-friendly World projection used by bounded planning."""
+        snapshot = self._snapshot(goal.target_entity_id)
+        if snapshot is None:
+            context.pop("world", None)
+            return
+        context["world"] = dict(snapshot.entity.properties)
+        context["world_observations"] = {
+            key: {
+                "source": observation.source,
+                "confidence": observation.confidence,
+                "observed_at": observation.observed_at.isoformat(),
+                "execution_id": observation.execution_id,
+            }
+            for key, observation in snapshot.latest_observations.items()
+        }
 
     def _reconcile_waiting(self, run: GoalRun) -> bool:
         if not run.intent_runs:

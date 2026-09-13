@@ -1,4 +1,3 @@
-import asyncio
 import os
 
 import pytest
@@ -35,38 +34,32 @@ def _reset_queue_state():
     from voodoo.workers import queue as worker_mod
 
     worker_mod._queue = None
-    # Cancel any tasks left from a previous test
-    for t in worker_mod._worker_tasks:
-        t.cancel()
+    for task in worker_mod._worker_tasks:
+        task.cancel()
     worker_mod._worker_tasks.clear()
     yield
-    for t in worker_mod._worker_tasks:
-        t.cancel()
+    for task in worker_mod._worker_tasks:
+        task.cancel()
     worker_mod._worker_tasks.clear()
     worker_mod._queue = None
 
 
-@pytest.fixture(autouse=True)
-def _close_db_after_test():
-    """Close any lazily-opened database connection after each test.
+@pytest_asyncio.fixture(autouse=True)
+async def _close_db_after_test():
+    """Close lazily-opened async DB resources before the test loop is torn down.
 
-    aiosqlite runs each connection on a dedicated non-daemon thread; a
-    connection left open would keep the pytest process alive at
-    interpreter shutdown. Reads of ``voodoo.data._db_connection`` forward
-    to ``voodoo.data.base`` via PEP 562 — never *assign* through the
-    package, that would create a stale shadow global (there is no module
-    ``__setattr__`` in Python).
+    aiosqlite owns a worker thread whose futures are bound to the event loop
+    that opened the connection. Closing it later with ``asyncio.run`` creates a
+    second loop and can leave the worker trying to report into an already-closed
+    one. Keeping cleanup in an async fixture guarantees teardown happens while
+    pytest's owning loop is still alive. Starlette lifespan shutdown normally
+    clears the same globals first, making this a no-op for TestClient tests.
     """
     yield
     from voodoo.data import base
 
     if base._db_connection is not None:
-        try:
-            asyncio.run(voodoo.data.close_db())
-        except Exception:
-            # Best-effort cleanup; never fail a test here
-            base._db_connection = None
-            base._database = None
+        await voodoo.data.close_db()
 
 
 @pytest.fixture
@@ -84,14 +77,14 @@ def app(monkeypatch):
 
 @pytest.fixture
 def client(app):
-    """Fixture to provide a Starlette TestClient with context manager (triggers startup/shutdown)."""
-    with TestClient(app) as c:
-        yield c
+    """Provide a TestClient whose context manager runs startup and shutdown."""
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest_asyncio.fixture
 async def test_db():
-    """Fixture to initialize an in-memory database for data tests without starting the app."""
+    """Initialize an in-memory database for data tests without starting the app."""
     await voodoo.data.init_db(":memory:")
     db = await voodoo.data.get_db()
     yield db

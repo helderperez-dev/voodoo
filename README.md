@@ -2,21 +2,39 @@
 
 **The programmable runtime for adaptive applications and operational systems.**
 
-Voodoo lets Python applications grow from a page or API into durable workers, agents, human approvals, realtime communication and production infrastructure without replacing the execution model underneath them.
+Voodoo lets a Python application start as a page or API and grow into durable
+workers, agents, human approvals, distributed participants and physical-device
+workflows without replacing the execution model underneath it.
 
 > Composition over configuration. Python over DSLs. Adapters over lock-in. Explicit capabilities over unrestricted autonomy.
 
 ## Why Voodoo?
 
-Modern applications often assemble separate frameworks for HTTP, UI, persistence, queues, scheduling, AI, realtime communication and observability. Voodoo provides these as composable capabilities of one runtime.
-
-The central model is:
+Modern systems often assemble separate frameworks for HTTP, UI, persistence,
+queues, scheduling, AI, realtime communication, workflow execution,
+observability and devices. Voodoo provides a common runtime model so those
+pieces can converge when the application actually needs them.
 
 ```text
 Entity → State → Intent → Capability → Execution → Effect → State
 ```
 
-An `Execution` is not every function call. It is meaningful work worth observing, authorizing, recovering, accounting for, waiting on, or reasoning about.
+`Compute`, `Time`, `Resource` and `Constraint` govern Execution. AI is one form
+of Compute, not a second runtime.
+
+An `Execution` is not every function call. It is meaningful work worth
+observing, authorizing, recovering, accounting for, waiting on or reasoning
+about.
+
+For operational systems Voodoo also keeps attempted action and observed reality
+separate:
+
+```text
+Effect != Observation
+```
+
+An Effect records what the runtime tried to do. An Observation records evidence
+about what actually happened in the World.
 
 ## Quick start
 
@@ -27,9 +45,8 @@ cd my_app
 voodoo dev
 ```
 
-Open `http://localhost:8000`. The default path requires no external database, queue or object store.
-
-`voodoo create` is the primary onboarding path and scaffolds the local runtime. If you deliberately want only the smallest UI/routing scaffold, use `voodoo new`.
+Open `http://localhost:8000`. The default path requires no external database,
+queue or object store.
 
 AI provider SDKs are optional:
 
@@ -37,28 +54,31 @@ AI provider SDKs are optional:
 pip install "voodoo-framework[ai]"
 ```
 
-The core package does not install OpenAI, Anthropic, Gemini or Ollama SDKs. Providers are resolved lazily when used.
+The core package does not install OpenAI, Anthropic, Gemini or Ollama SDKs.
+Providers are resolved lazily when used.
 
-## Start simple, add runtime capabilities when they matter
+## Start simple
 
 | You need | Voodoo primitive |
 |---|---|
 | UI-local mutable value | `state()` |
 | Persistent business data | `Model` |
-| Browser interaction | `@event` |
+| Browser interaction | Python-callable UI event/action |
 | Decoupled application notification | Mesh / event bus |
 | Retryable background work | `@task` |
 | Meaningful durable/observable work | `Execution` |
 | LLM reasoning and tool use | `Agent` + `@tool` |
 | Authorization to produce an effect | `Capability` |
 | Human decision inside work | HITL approval |
+| Operational identity/evidence | `Entity` + `Observation` + `WorldModel` |
+| Durable desired outcome | `Goal` + `GoalRuntime` |
+| External physical participant | Edge / `DeviceGateway` |
 | Future/recurring work | Scheduler |
 
-See `docs/choosing-primitives.md` for the semantic boundaries between State, Model, Memory, events, tools, tasks, capabilities and executions.
+See `docs/choosing-primitives.md` for semantic boundaries between State, Model,
+Memory, events, tools, tasks, capabilities and executions.
 
-## A small AI + data + event example
-
-Install the `ai` extra for real providers, or use `mock:*` locally. This example intentionally claims only the chain it executes: **Agent → Tool → Model → Mesh**.
+## Small AI + data + event example
 
 ```python
 from voodoo import Agent, Model, tool
@@ -85,44 +105,104 @@ async def notify(payload):
 agent = Agent(model="mock:test", tools=["create_lead"])
 ```
 
-For the broader UI → agent → tool → event → worker → database demonstration, run `examples/ai_saas/main.py`. Tools registered with `@tool` are also available to Voodoo's MCP integration; that exposure is a separate integration boundary rather than a fake step inserted into the local call chain.
+The local chain is exactly what it says: Agent → Tool → Model → Mesh. Tools may
+also be exposed through MCP, but MCP is a separate interoperability boundary,
+not a fake step inserted into every tool call.
+
+## Operational closed loop
+
+Sprint 27 adds a zero-infrastructure canary proving the deeper runtime model:
+
+```text
+simulated device
+  → Edge
+  → Observation
+  → World
+  → Goal / Intent
+  → context-aware Planner
+  → Capability + Policy
+  → Execution
+  → Effect
+  → device
+  → ACK / observed evidence
+  → Observation
+  → World
+```
+
+Run it with:
+
+```bash
+python examples/operational_closed_loop/main.py
+```
+
+The World does not change merely because an Effect was sent. It changes only
+when the simulated device reports observed evidence back through the Edge
+boundary.
 
 ## What makes Voodoo different
 
-- **One execution model.** APIs, agents, tools, workers and human workflows can participate in a traceable runtime rather than forming independent orchestration stacks.
-- **AI is one form of Compute.** Agents are powerful participants, not the foundation every application must depend on.
-- **Durable when it matters.** Executions, tasks, schedules and approvals can survive process restarts using local persistence by default.
-- **Human-in-the-loop is native.** Waiting for approval is an execution lifecycle state, not an ad-hoc polling pattern.
-- **Local-first, production-capable.** SQLite/local filesystem provide the default path; PostgreSQL, Redis and S3-compatible storage are adapters.
-- **Adaptive execution is optional.** Planner/supervisor capabilities are available when capability resolution, fallback or budget steering is useful; simple paths remain simple.
-- **Observability is part of the runtime.** Correlation and execution context connect meaningful work across boundaries.
+- **One execution model.** APIs, agents, tools, workers, humans, remote nodes and
+  devices can converge on one traceable runtime instead of independent
+  orchestration stacks.
+- **World-aware operational state.** `Entity`, `Relationship`, `Observation` and
+  `WorldModel` represent changing operational reality with provenance.
+- **Governed agency.** Goal/Intent planning can use current World context, but
+  authority still flows through Capability and Policy.
+- **AI is Compute.** Agents are powerful participants, not ambient authority.
+- **Durable when it matters.** Executions, tasks, schedules, Goals and approvals
+  have persistence/recovery seams.
+- **Human-in-the-loop is native.** Waiting is an execution lifecycle state.
+- **Distributed without a second runtime.** Remote work re-enters the same
+  ExecutionEngine, capability and policy boundary.
+- **Physical participants use the same semantics.** Edge devices report
+  evidence and receive Effects without owning a DeviceExecutionEngine.
+- **Local-first, production-capable.** SQLite/local filesystem provide the
+  default path; PostgreSQL, Redis and S3-compatible storage are adapters.
+- **Observability is structural.** Trace/execution lineage connects meaningful
+  work, Effects and resulting Observations.
 
-## Computational model
+## Canonical import model
 
-```text
-Intent       desired outcome
-Capability   ability + authorization to produce an effect
-Execution    meaningful unit of runtime work
-Effect       change produced by an execution
-State        operational truth
+The 2.x package root remains a compatibility facade. New code should use the
+namespace that owns the concept:
+
+```python
+from voodoo import App, Agent, Model, page, state, task, tool
+from voodoo.ui import Button, Card, DataTable
+from voodoo.runtime import ExecutionEngine, Goal, GoalRuntime, Planner
+from voodoo.world import Entity, Observation, WorldModel
+from voodoo.edge import DeviceGateway, WorldAwareDeviceGateway
+from voodoo.protocol import WorldSnapshot, RemoteExecutionRequest
 ```
 
-`Compute`, `Time`, `Resource`, and `Constraint` govern how an Execution happens. See `docs/primitives.md`, `docs/execution-model.md`, `ARCHITECTURE.md`, and `docs/runtime-consolidation.md`.
+See `docs/public-api-3.md` for the 3.0 import law and 2.x compatibility policy.
 
 ## Major capabilities
 
-**Application:** server-rendered/reactive Python UI, routing/APIs, design system/themes, SEO, async ORM, auth and security middleware.
+**Application:** server-rendered/reactive Python UI, routing/APIs, design
+system/themes, SEO, async ORM, auth and security middleware.
 
-**Runtime:** ExecutionEngine, durable execution/checkpoints/recovery, workers/tasks, scheduler, event infrastructure, human approvals, capability security, telemetry and optional adaptive planning/supervision.
+**Runtime:** ExecutionEngine, durable checkpoints/recovery, workers/tasks,
+scheduler, event infrastructure, human approvals, capability security,
+contextual Policy, Goal Runtime and bounded adaptive planning/supervision.
 
-**AI:** agents, native provider tool calling, `@tool`, MCP integration, memory, model/provider abstraction and config-driven OpenAI-compatible endpoints.
+**World:** stable entities, relationships, append-only observations, durable
+World storage and reasoning/policy snapshots.
 
-**Infrastructure adapters:** PostgreSQL, Redis, S3-compatible object storage and OpenTelemetry are optional extras behind runtime contracts.
+**AI:** agents, native provider tool calling, `@tool`, MCP integration, Memory,
+model/provider abstraction and config-driven OpenAI-compatible endpoints.
+
+**Distributed/Edge:** governed remote execution, replay/idempotency, distributed
+WAITING/HITL, device identity/auth, HTTP/MQTT Edge semantics, effect delivery,
+ACKs and Edge → World evidence convergence.
+
+**Infrastructure adapters:** PostgreSQL, Redis, S3-compatible object storage and
+OpenTelemetry are optional extras behind runtime contracts.
 
 ## Installation
 
 ```bash
-# Core runtime — no third-party AI provider SDKs
+# Core runtime
 pip install voodoo-framework
 
 # Model providers
@@ -131,21 +211,20 @@ pip install "voodoo-framework[ai]"
 # Production adapters as needed
 pip install "voodoo-framework[postgres,redis,s3,otel]"
 
+# Edge MQTT adapter when needed
+pip install "voodoo-framework[edge]"
+
 # Development tools
 pip install "voodoo-framework[dev]"
 ```
 
-Other supported installation paths include Homebrew (`brew tap helderperez-dev/voodoo && brew install voodoo`), `uv tool install voodoo-framework`, and `pipx install voodoo-framework`.
-
-Verify with:
-
-```bash
-voodoo version
-```
+Other supported installation paths include Homebrew, `uv tool install
+voodoo-framework`, and `pipx install voodoo-framework`.
 
 ## Configuration
 
-Voodoo is zero-config locally. Add `voodoo.yaml` when you need explicit providers:
+Voodoo is zero-config locally. Add `voodoo.yaml` only when you need explicit
+providers:
 
 ```yaml
 database:
@@ -162,34 +241,21 @@ runtime:
   run_api_through_runtime: true
 ```
 
-AI configuration is opt-in and requires the corresponding optional SDK:
-
-```yaml
-ai:
-  provider: openai
-  model: gpt-4o
-  api_key: "${OPENAI_API_KEY}"
-```
-
-Environment variables use the `VOODOO_*` convention. See `.env.example` for the full reference.
-
 ## Documentation
 
 Start here:
 
 - `docs/hello_world.md` — first application
-- `docs/choosing-primitives.md` — which Voodoo abstraction to use
+- `docs/choosing-primitives.md` — which abstraction to use
 - `docs/primitives.md` — computational model
 - `docs/execution-model.md` and `docs/runtime.md` — execution semantics
-- `docs/data.md` — Models and persistence
-- `docs/events.md` and `docs/mesh.md` — communication boundaries
-- `docs/workers.md` — background tasks
 - `docs/agents.md`, `docs/tools.md`, `docs/mcp.md` — AI/tool integration
 - `docs/hitl.md` — human approvals
-- `docs/telemetry.md` — observability
-- `docs/deployment.md` — production deployment
+- `docs/protocol.md` — language-neutral semantic boundary
+- `docs/public-api-3.md` — canonical 3.0 import model
 - `ARCHITECTURE.md` — root architecture reference
-- `docs/runtime-consolidation.md` — invariants that keep the runtime coherent
+- `ROADMAP.md` — long-range architectural direction
+- `SPRINT_PLAN.md` — implementation source of truth
 
 ## Examples
 
@@ -200,16 +266,19 @@ Start here:
 | `examples/realtime/` | realtime communication |
 | `examples/ai_agent/` | agent/tool application |
 | `examples/ai_saas/` | UI + Agent + Tool + Mesh + Worker + Model |
-
-The examples are intentionally progressive. Applications do not need to adopt the complete runtime surface at once.
+| `examples/ui_magic/` | current callable UI / Design System acceptance app |
+| `examples/operational_closed_loop/` | Edge → World → Goal → Execution → Effect → evidence canary |
 
 ## Project status
 
-Voodoo is beta software. The repository's `SPRINT_PLAN.md` is the source of truth for implementation progress; `ROADMAP.md` describes longer-term direction. Public API and behavior should be treated with beta-level compatibility expectations until a stable release policy is declared.
+Voodoo is beta software. `SPRINT_PLAN.md` is the implementation source of truth
+and `ROADMAP.md` is the architectural source of truth. Sprint completion and a
+published package release are intentionally separate operations.
 
 ## Contributing and security
 
-See `CONTRIBUTING.md` for the development workflow, `SECURITY.md` for vulnerability reporting, and `CODE_OF_CONDUCT.md` for community expectations.
+See `CONTRIBUTING.md` for development workflow, `SECURITY.md` for vulnerability
+reporting and `CODE_OF_CONDUCT.md` for community expectations.
 
 ## License
 

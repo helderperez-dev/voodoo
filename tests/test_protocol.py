@@ -42,10 +42,6 @@ from voodoo.protocol import (
     schema_for,
 )
 
-# ---------------------------------------------------------------------------
-# Fixtures — minimal valid instances for every entity
-# ---------------------------------------------------------------------------
-
 
 def _make_identity() -> Identity:
     return Identity(id="id-1", kind="agent")
@@ -171,7 +167,6 @@ def _make_memory_entry() -> MemoryEntry:
     )
 
 
-# Map entity name → factory for parametrized tests
 _ENTITY_FACTORIES: dict[str, callable] = {
     "Identity": _make_identity,
     "Capability": _make_capability,
@@ -194,13 +189,8 @@ _ENTITY_FACTORIES: dict[str, callable] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Round-trip tests
-# ---------------------------------------------------------------------------
-
-
 class TestRoundTrip:
-    """Every entity must survive serialize → deserialize without data loss."""
+    """Every legacy/core entity must survive serialize → deserialize."""
 
     @pytest.mark.parametrize("name", sorted(_ENTITY_FACTORIES.keys()))
     def test_round_trip(self, name: str) -> None:
@@ -212,7 +202,6 @@ class TestRoundTrip:
 
     @pytest.mark.parametrize("name", sorted(_ENTITY_FACTORIES.keys()))
     def test_json_string_round_trip(self, name: str) -> None:
-        """Serialize to JSON string and back — tests full JSON compat."""
         factory = _ENTITY_FACTORIES[name]
         original = factory()
         json_str = original.model_dump_json()
@@ -220,13 +209,8 @@ class TestRoundTrip:
         assert restored == original
 
 
-# ---------------------------------------------------------------------------
-# Schema version tests
-# ---------------------------------------------------------------------------
-
-
 class TestSchemaVersion:
-    """Every entity carries a schema_version field."""
+    """Every core entity carries a schema_version field."""
 
     @pytest.mark.parametrize("name", sorted(_ENTITY_FACTORIES.keys()))
     def test_schema_version_present(self, name: str) -> None:
@@ -243,14 +227,7 @@ class TestSchemaVersion:
         assert instance.schema_version >= 1
 
 
-# ---------------------------------------------------------------------------
-# Enum tests
-# ---------------------------------------------------------------------------
-
-
 class TestEnums:
-    """All enums must have expected members."""
-
     def test_execution_status_values(self) -> None:
         expected = {
             "created",
@@ -306,13 +283,8 @@ class TestEnums:
         assert {s.value for s in ComputeKind} == expected
 
 
-# ---------------------------------------------------------------------------
-# JSON Schema export tests
-# ---------------------------------------------------------------------------
-
-
 class TestJsonSchemaExport:
-    """export_json_schemas must produce valid, complete schema dicts."""
+    """Schema export must cover the complete public protocol boundary."""
 
     def test_export_returns_all_entities(self) -> None:
         schemas = export_json_schemas()
@@ -342,35 +314,34 @@ class TestJsonSchemaExport:
             schema_for("NonExistentEntity")
 
     def test_schema_for_all_entities(self) -> None:
-        """Every entity in PROTOCOL_ENTITIES must be retrievable by name."""
         for name in PROTOCOL_ENTITIES:
             schema = schema_for(name)
             assert schema["title"] == name
 
 
-# ---------------------------------------------------------------------------
-# PROTOCOL_ENTITIES registry tests
-# ---------------------------------------------------------------------------
-
-
 class TestProtocolEntities:
     """PROTOCOL_ENTITIES must be complete and consistent."""
 
-    def test_all_factories_registered(self) -> None:
+    def test_all_core_factories_registered(self) -> None:
         for name in _ENTITY_FACTORIES:
             assert name in PROTOCOL_ENTITIES, f"{name} not in PROTOCOL_ENTITIES"
 
-    def test_registry_count(self) -> None:
-        assert len(PROTOCOL_ENTITIES) == 18
+    def test_registry_contains_converged_operational_surface(self) -> None:
+        assert {
+            "Entity",
+            "Relationship",
+            "Observation",
+            "WorldSnapshot",
+            "Goal",
+            "GoalIntentRun",
+            "GoalRun",
+            "RemoteExecutionRequest",
+            "RemoteExecutionOutcome",
+        } <= set(PROTOCOL_ENTITIES)
 
     def test_registry_values_are_classes(self) -> None:
         for name, cls in PROTOCOL_ENTITIES.items():
             assert hasattr(cls, "model_dump"), f"{name} is not a Pydantic model"
-
-
-# ---------------------------------------------------------------------------
-# JSON-friendly serialization tests
-# ---------------------------------------------------------------------------
 
 
 class TestJsonFriendly:
@@ -381,7 +352,6 @@ class TestJsonFriendly:
         factory = _ENTITY_FACTORIES[name]
         instance = factory()
         data = instance.model_dump(mode="json")
-        # Must not raise
         json_str = json.dumps(data)
         assert isinstance(json_str, str)
 

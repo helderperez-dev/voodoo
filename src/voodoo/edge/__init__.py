@@ -12,6 +12,14 @@ and device state uses standard State semantics.
 
     store = SQLiteDeviceStore("data/devices.db")
     gateway = DeviceGateway(store, engine)
+
+Bind the Edge boundary to the World Model when physical evidence should become
+first-class observations::
+
+    from voodoo.edge import WorldAwareDeviceGateway
+    from voodoo.world import WorldModel
+
+    gateway = WorldAwareDeviceGateway(store, engine, world=WorldModel())
 """
 
 from __future__ import annotations
@@ -73,6 +81,7 @@ from voodoo.edge.store import (
     InMemoryDeviceStore,
     SQLiteDeviceStore,
 )
+from voodoo.edge.world import EdgeWorldBridge, WorldAwareDeviceGateway
 
 __all__ = [
     # Protocol identity
@@ -109,6 +118,8 @@ __all__ = [
     "rotate_device_credential",
     # Gateway
     "DeviceGateway",
+    "WorldAwareDeviceGateway",
+    "EdgeWorldBridge",
     # Errors
     "EdgeError",
     "error_response",
