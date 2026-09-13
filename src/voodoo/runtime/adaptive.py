@@ -271,9 +271,7 @@ class AdaptiveSupervisor:
         if compute is None:
             run.status = "failed"
             run.error = f"step {participant.name} has no compute"
-            self._record(
-                run, SupervisorDecision.FAIL, run.error, step=participant.name
-            )
+            self._record(run, SupervisorDecision.FAIL, run.error, step=participant.name)
             return None
 
         step_intent = self._step_intent(
@@ -337,9 +335,7 @@ class AdaptiveSupervisor:
         except (ExecutionError, ExecutionTimeout, CapabilityDenied) as error:
             run.status = "failed"
             run.error = str(error)
-            self._record(
-                run, SupervisorDecision.FAIL, str(error), step=fallback.name
-            )
+            self._record(run, SupervisorDecision.FAIL, str(error), step=fallback.name)
             return False
         return execution is not None and run.status != "failed"
 
@@ -373,7 +369,9 @@ class AdaptiveSupervisor:
             if participant is None:
                 run.status = "failed"
                 run.error = f"unknown participant: {step.participant}"
-                self._record(run, SupervisorDecision.FAIL, run.error, step=step.participant)
+                self._record(
+                    run, SupervisorDecision.FAIL, run.error, step=step.participant
+                )
                 return run
 
             run.steps.append(step.participant)
@@ -462,7 +460,9 @@ class AdaptiveSupervisor:
                 except ExecutionError as error:
                     if (
                         retries < self.config.max_retries
-                        and self.engine.constraints.retry_hint(intent=intent, error=error)
+                        and self.engine.constraints.retry_hint(
+                            intent=intent, error=error
+                        )
                     ):
                         retries += 1
                         self._record(
