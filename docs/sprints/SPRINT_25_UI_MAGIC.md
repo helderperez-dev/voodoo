@@ -21,8 +21,10 @@ Canonical example:
 ```python
 count = state(0)
 
+
 async def increment():
     count += 1
+
 
 @page("/")
 def home():
@@ -78,8 +80,8 @@ Make direct Python callables the primary interaction API.
 ### Target API
 
 ```python
-async def save():
-    ...
+async def save(): ...
+
 
 Button("Save", on_click=save)
 ```
@@ -87,8 +89,8 @@ Button("Save", on_click=save)
 Payload-aware handlers:
 
 ```python
-async def search(value: str):
-    ...
+async def search(value: str): ...
+
 
 Input(on_change=search)
 ```
@@ -330,8 +332,10 @@ from voodoo.ui import Button, Heading, Page, Stack, Text
 app = App()
 count = state(0)
 
+
 async def increment():
     count.set(count.get() + 1)
+
 
 @page("/")
 def home():
@@ -342,6 +346,7 @@ def home():
             Button("Increment", on_click=increment),
         )
     )
+
 
 app.run()
 ```
