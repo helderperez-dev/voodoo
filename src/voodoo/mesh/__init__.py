@@ -135,9 +135,7 @@ class MeshNetwork:
     async def broadcast(self, event: str, payload: Any):
         _validate_namespace(event)
         envelope = _make_envelope(event, payload)
-        message = json.dumps(
-            {"jsonrpc": "2.0", "method": "event", "params": envelope}
-        )
+        message = json.dumps({"jsonrpc": "2.0", "method": "event", "params": envelope})
         for node in self.active_nodes:
             try:
                 await node.send_text(message)
