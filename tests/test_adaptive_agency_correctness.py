@@ -201,8 +201,8 @@ async def test_previous_step_outputs_reach_following_agent():
         )
     )
 
-    intent = Intent(name="explain-weather").require("data.fetch").require(
-        "data.explain"
+    intent = (
+        Intent(name="explain-weather").require("data.fetch").require("data.explain")
     )
     run = await AdaptiveSupervisor(planner, engine=engine).run(intent)
 
