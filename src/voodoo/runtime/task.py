@@ -145,15 +145,10 @@ class Task:
                 return execution
             except ExecutionTimeout as e:
                 last_error = e
-                # retry with a fresh intent (same params)
                 intent = self._build_intent(params)
             except ExecutionError as e:
                 from voodoo.runtime.errors import ApprovalRequired
 
-                # Human approval is not a retryable failure: the execution is
-                # left `waiting` and resumed by engine.approve(). Record the
-                # waiting state on the task and propagate so the caller
-                # observes the pending approval.
                 if isinstance(e, ApprovalRequired):
                     if e.execution_id is not None:
                         self.execution = engine.get(e.execution_id)
@@ -169,7 +164,6 @@ class Task:
     # -- internals ---------------------------------------------------------
 
     def _build_intent(self, params: dict[str, Any]) -> Intent:
-        """Compile this task's constraints/capabilities/deadline onto an Intent."""
         intent = Intent(name=self.name, params=params)
         for c in self.constraints:
             intent.constrain(c)
@@ -180,7 +174,6 @@ class Task:
         return intent
 
     def _skip(self, parent: ExecutionContext | None) -> Execution:
-        """Produce a completed no-op execution for a skipped condition."""
         self.status = TaskStatus.SKIPPED
         intent = Intent(name=self.name, params={"skipped": True})
         skipped = Execution(
@@ -209,12 +202,13 @@ class Task:
 
             async def agent_compute(ctx: ExecutionContext) -> ComputeResult:
                 prompt = self.description or self.name
-                upstream = (
-                    results.get("_upstream", {}) if isinstance(results, dict) else {}
-                )
+                upstream = dict(results)
                 if upstream:
                     prompt = f"{prompt}\n\nUpstream results: {upstream}"
-                run = await agent.run(prompt, context=dict(ctx.state))
+                agent_context = dict(ctx.state)
+                if upstream:
+                    agent_context["upstream"] = upstream
+                run = await agent.run(prompt, context=agent_context)
                 value = run.output
                 if output_type is not None and hasattr(output_type, "model_validate"):
                     try:
