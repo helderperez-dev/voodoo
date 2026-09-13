@@ -13,6 +13,7 @@ Voodoo::
 """
 
 from voodoo.ui.component import Component, Html, escape, tone_to_color_var
+from voodoo.ui.events import UIEvent
 from voodoo.ui.interactive import (
     Button,
     Checkbox,
@@ -97,6 +98,7 @@ __all__ = [
     # Component model
     "Component",
     "Html",
+    "UIEvent",
     "escape",
     "tone_to_color_var",
     # Style adapters
