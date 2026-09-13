@@ -152,7 +152,9 @@ class CapabilityResolver:
                 },
             )
         if resolution is Resolution.REQUIRES_APPROVAL:
-            reason = policy.reason if policy and policy.reason else "human approval required"
+            reason = (
+                policy.reason if policy and policy.reason else "human approval required"
+            )
             raise ApprovalRequired(
                 f"Capability '{name}' requires human approval: {reason}",
                 execution_id=execution_id,
