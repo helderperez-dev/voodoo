@@ -59,10 +59,11 @@ class InMemoryWorldStore:
         return deepcopy(entity) if entity is not None else None
 
     def list_entities(self, *, entity_type: str | None = None) -> list[Entity]:
-        entities = self._entities.values()
-        if entity_type is not None:
-            entities = (e for e in entities if e.type == entity_type)
-        return [deepcopy(e) for e in entities]
+        return [
+            deepcopy(entity)
+            for entity in self._entities.values()
+            if entity_type is None or entity.type == entity_type
+        ]
 
     def put_relationship(self, relationship: Relationship) -> None:
         self._relationships[relationship.id] = deepcopy(relationship)
