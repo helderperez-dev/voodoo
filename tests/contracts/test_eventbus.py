@@ -77,7 +77,6 @@ class EventBusContractTests:
         def handler(event: dict[str, Any]) -> None:
             received.append(event)
 
-        # Publish some events
         self.bus.publish("test.replay", {"n": 1})
         self.bus.publish("test.replay", {"n": 2})
         self.bus.publish("test.replay", {"n": 3})
@@ -87,7 +86,6 @@ class EventBusContractTests:
             assert count == 3
             assert len(received) == 3
         else:
-            # Non-durable buses keep no replayable log.
             assert count == 0
             assert len(received) == 0
 
@@ -108,9 +106,6 @@ class EventBusContractTests:
         assert isinstance(caps.provider, str)
 
 
-# Concrete test classes for each implementation
-
-
 class TestLocalEventBusContract(EventBusContractTests):
     @pytest.fixture(autouse=True)
     def setup_bus(self) -> None:
@@ -121,7 +116,6 @@ class TestLocalEventBusContract(EventBusContractTests):
         self.bus._handlers.clear()
 
 
-@pytest.mark.asyncio
 class TestSQLiteEventBusContract(EventBusContractTests):
     @pytest.fixture(autouse=True)
     def setup_bus(self, tmp_path) -> None:
