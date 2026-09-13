@@ -20,6 +20,7 @@ from voodoo.runtime.adaptive import (
 from voodoo.runtime.capability import CapabilityResolver, Resolution
 from voodoo.runtime.constraint import ConstraintEnforcer, Decision, ResourceAccountant
 from voodoo.runtime.context import ExecutionContext, current_context, use_context
+from voodoo.runtime.dashboard import runtime_dashboard
 from voodoo.runtime.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
 from voodoo.runtime.errors import (
     AgentExecutionError,
@@ -52,6 +53,7 @@ from voodoo.runtime.human import (
     Human,
     ask_human,
 )
+from voodoo.runtime.operations import OperationalRuntime
 from voodoo.runtime.persistence import (
     ExecutionStore,
     InMemoryExecutionStore,
@@ -135,6 +137,8 @@ __all__ = [
     "GoalDecomposer",
     "GoalStore",
     "SQLiteGoalStore",
+    "OperationalRuntime",
+    "runtime_dashboard",
     "bind_world",
     "world_aware",
     "resolve_target_entity_id",
