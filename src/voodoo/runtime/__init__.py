@@ -6,7 +6,7 @@ Tool invocation, MCP call, Worker job, Human approval, Event handler) is
 represented as an :class:`~voodoo.runtime.execution.Execution` produced by
 a single :class:`~voodoo.runtime.engine.ExecutionEngine` walking:
 
-    Intent → Capability → Execution → Effect → State → Mesh
+    Intent → Capability → Policy → Execution → Effect → State → Mesh
 
 The developer surface stays small:
 
@@ -60,6 +60,13 @@ from voodoo.runtime.persistence import (
     JSONFileExecutionStore,
 )
 from voodoo.runtime.planner import ComputeParticipant, Plan, Planner, PlanStep
+from voodoo.runtime.policy import (
+    PolicyDecision,
+    PolicyEngine,
+    PolicyRequest,
+    PolicyResult,
+    PolicyRule,
+)
 from voodoo.runtime.task import Task, TaskStatus
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
 
@@ -77,6 +84,11 @@ __all__ = [
     # enforcement
     "CapabilityResolver",
     "Resolution",
+    "PolicyDecision",
+    "PolicyEngine",
+    "PolicyRequest",
+    "PolicyResult",
+    "PolicyRule",
     "ConstraintEnforcer",
     "Decision",
     "ResourceAccountant",
@@ -136,12 +148,7 @@ async def execute(
     output_type: type | None = None,
     parent: ExecutionContext | None = None,
 ) -> Execution:
-    """Execute an intent through the default runtime engine.
-
-    The canonical entry point:
-
-        result = await execute(Intent("qualify_customer", customer_id=123))
-    """
+    """Execute an intent through the default runtime engine."""
     return await engine.execute(
         intent,
         compute,
