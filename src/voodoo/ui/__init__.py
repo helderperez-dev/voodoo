@@ -88,6 +88,18 @@ from voodoo.ui.library import (
     UserBadge,
 )
 from voodoo.ui.primitives import Field, Popover, Skeleton, Switch, Tooltip
+from voodoo.ui.product import (
+    Column,
+    CommandBar,
+    DataTable,
+    EmptyState,
+    EventRow,
+    InspectorPanel,
+    LogViewer,
+    Metric,
+    StatusBadge,
+    Timeline,
+)
 from voodoo.ui.styles import (
     NoopAdapter,
     StyleAdapter,
@@ -150,6 +162,17 @@ __all__ = [
     "Checkbox",
     "Radio",
     "Switch",
+    # Product components
+    "StatusBadge",
+    "Metric",
+    "EmptyState",
+    "Column",
+    "DataTable",
+    "EventRow",
+    "Timeline",
+    "InspectorPanel",
+    "LogViewer",
+    "CommandBar",
     # Collections
     "Table",
     "List",

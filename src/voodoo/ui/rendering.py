@@ -8,7 +8,6 @@ rendering). This module owns the HTML document shell, the client runtime
 import os
 from typing import Any
 
-# In-memory cache for client.js to prevent disk I/O on every request
 _client_js_cache: str | None = None
 
 
@@ -32,31 +31,18 @@ def _get_client_js() -> str:
 
 
 def _get_project_styles() -> str:
-    """Return the active theme's custom CSS (``.voodoo/theme/custom.css``).
-
-    The theme preset resolver caches this on activation; render_page injects
-    it after the framework CSS so themes can add chrome the token set does not
-    model.
-    """
     from voodoo.ui.styles.presets import get_active_custom_css
 
     return get_active_custom_css()
 
 
 def render_page(component: Any, seo: Any = None) -> str:
-    """
-    Renders a full HTML page with the given component tree and optional SEO metadata.
-
-    Args:
-        component: A Component instance, a string, or a tuple of (SEO, Component) / (Component, SEO).
-        seo: An optional SEO instance with page-level metadata.
-    """
+    """Render a complete HTML document for a Voodoo component tree."""
     from voodoo.config import config
     from voodoo.seo import SEO
     from voodoo.ui.component import Component
     from voodoo.ui.styles.theme import default_theme
 
-    # Handle tuple if passed directly as component
     if isinstance(component, tuple) and len(component) == 2:
         first, second = component
         if isinstance(first, SEO):
@@ -66,12 +52,10 @@ def render_page(component: Any, seo: Any = None) -> str:
             seo = second
             component = first
 
-    # Use provided SEO or create defaults
     if seo is None:
         seo = SEO()
 
     seo_config = config.seo
-
     html_content = (
         component.render() if isinstance(component, Component) else str(component)
     )
@@ -80,9 +64,9 @@ def render_page(component: Any, seo: Any = None) -> str:
     project_styles = _get_project_styles()
     css_vars = default_theme.to_css_variables()
 
-    # Detect active adapter to include the right CSS runtime
     from voodoo.adapters.voodoo_css import VoodooCSSAdapter, generate_component_css
     from voodoo.ui.styles import current_adapter
+    from voodoo.ui.styles.product import generate_product_css
     from voodoo.ui.styles.system import generate_design_system_css
 
     adapter = current_adapter()
@@ -91,12 +75,14 @@ def render_page(component: Any, seo: Any = None) -> str:
     if is_voodoo_css:
         component_css = generate_component_css(default_theme)
         design_system_css = generate_design_system_css(default_theme)
+        product_css = generate_product_css(default_theme)
         head_scripts = ""
         body_classes = "min-h-screen antialiased"
     else:
         tailwind_config = default_theme.to_tailwind_config()
         component_css = ""
         design_system_css = ""
+        product_css = ""
         head_scripts = f"""
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
@@ -109,9 +95,6 @@ def render_page(component: Any, seo: Any = None) -> str:
             "selection:bg-[var(--vd-color-secondary)] selection:text-white"
         )
 
-    # Resolve light/dark/system once. The persisted cookie override and the
-    # prefers-color-scheme fallback are applied by an inline script that runs
-    # before the stylesheet, avoiding a flash of the wrong theme.
     mode = default_theme.mode or "dark"
     if mode not in ("dark", "light", "system"):
         mode = "dark"
@@ -129,24 +112,17 @@ def render_page(component: Any, seo: Any = None) -> str:
 }})();
 </script>"""
 
-    # --- SEO: Build <head> content ---
     page_lang = seo.lang or seo_config.default_lang or "en"
     page_title = seo.title
-
-    # Meta tags (description, robots, canonical, OG, Twitter, GEO author/dates, hreflang)
     meta_tags = seo.render_meta_tags(
         site_name=seo_config.site_name,
         base_url=seo_config.base_url,
         default_og_image=seo_config.default_og_image,
     )
-
-    # Structured data (JSON-LD)
     structured_data = seo.render_structured_data(
         site_name=seo_config.site_name,
         base_url=seo_config.base_url,
     )
-
-    # Generator meta tag
     generator_tag = (
         '<meta name="generator" content="Voodoo Framework">'
         if seo_config.generator_meta
@@ -177,13 +153,16 @@ def render_page(component: Any, seo: Any = None) -> str:
             ::-webkit-scrollbar-thumb {{ background: var(--vd-color-surface); border-radius: 4px; border: 1px solid var(--vd-color-border); }}
             ::-webkit-scrollbar-thumb:hover {{ background: var(--vd-color-text-muted); }}
 
-            /* Voodoo component CSS (when using VoodooCSS adapter) */
+            /* Stable primitive component layer */
             {component_css}
 
-            /* Design System 2 semantic override layer */
+            /* Voodoo Design System 2 */
             {design_system_css}
 
-            /* Theme custom CSS (.voodoo/theme/custom.css) */
+            /* Reusable product patterns */
+            {product_css}
+
+            /* Project theme customization */
             {project_styles}
         </style>
     </head>
