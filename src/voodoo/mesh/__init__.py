@@ -1,24 +1,4 @@
-"""Mesh Network — local-first event bus with governed remote execution.
-
-Mesh is the single realtime channel for the framework. Local events fire
-immediately on registered handlers; remote events are serialized over
-WebSocket connections using a JSON-RPC 2.0 envelope.
-
-The boundary between local and remote is explicit:
-
-* **Local events** fire on in-process handlers immediately (zero serialization).
-  Use ``emit()`` / ``on()`` for subsystem coupling. Handlers still enter the
-  canonical :class:`~voodoo.runtime.engine.ExecutionEngine`.
-* **Remote events** are serialized as JSON and sent to connected WebSocket
-  nodes. They carry an envelope (id, ts, source, correlation_id).
-* **Remote calls** are normalized into a semantic request and then enter the
-  same ExecutionEngine used by local runtime work. Transport connectivity is
-  never an alternate execution lifecycle.
-
-All event names must be **namespaced** (e.g. ``"agent.started"`` not
-``"started"``). This prevents collisions across subsystems and makes the
-event surface discoverable.
-"""
+"""Mesh Network — local-first event bus with governed remote execution."""
 
 import asyncio
 import inspect
@@ -31,6 +11,12 @@ from typing import Any
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from voodoo.mcp import mcp
+from voodoo.mesh.auth import (
+    ParticipantAuthenticationError,
+    ParticipantEvidence,
+    ParticipantIdentity,
+    ParticipantResolver,
+)
 from voodoo.mesh.client import MeshClient
 from voodoo.mesh.remote import (
     ExposedOperation,
@@ -69,7 +55,6 @@ def _make_envelope(
 
 
 def _validate_namespace(event: str) -> None:
-    """Enforce that event names are namespaced (contain a dot)."""
     if "." not in event:
         raise ValueError(
             f"Mesh event {event!r} must be namespaced (e.g. 'agent.started', not 'started')."
@@ -86,6 +71,7 @@ class MeshNetwork:
         execution_engine: Any | None = None,
         remote_authority: RemoteAuthorityRegistry | None = None,
         replay_store: RemoteReplayStore | None = None,
+        participant_resolver: ParticipantResolver | None = None,
     ):
         if bus is None:
             from voodoo.adapters.registry import registry
@@ -96,6 +82,7 @@ class MeshNetwork:
         self.execution_engine = execution_engine
         self.remote_authority = remote_authority or RemoteAuthorityRegistry()
         self.replay_store = replay_store or InMemoryRemoteReplayStore()
+        self.participant_resolver = participant_resolver
         self._remote_request_locks: dict[str, asyncio.Lock] = {}
         self.node_id = str(uuid.uuid4())
         self.peers: set[str] = set()
@@ -107,11 +94,9 @@ class MeshNetwork:
         self.subscriptions: set[str] = set()
 
     def grant_remote(self, actor: str, *capabilities: Any) -> None:
-        """Assign remote authority on the receiving node."""
         self.remote_authority.grant(actor, *capabilities)
 
     def revoke_remote(self, actor: str, *capability_names: str) -> None:
-        """Revoke server-side authority from one remote participant."""
         self.remote_authority.revoke(actor, *capability_names)
 
     def expose(
@@ -121,8 +106,6 @@ class MeshNetwork:
         capability: str | None = None,
         intent_name: str | None = None,
     ):
-        """Expose a function to Mesh and MCP with runtime operation metadata."""
-
         def decorator(func: Callable):
             func_name = name or func.__name__
             self.exposed_functions[func_name] = func
@@ -139,7 +122,6 @@ class MeshNetwork:
         return decorator
 
     def on(self, event: str):
-        """Decorator to register a handler for a Mesh event."""
         _validate_namespace(event)
 
         def decorator(func: Callable):
@@ -151,31 +133,22 @@ class MeshNetwork:
         return decorator
 
     async def broadcast(self, event: str, payload: Any):
-        """Broadcast an event to all connected Mesh nodes and local handlers."""
         _validate_namespace(event)
-
         envelope = _make_envelope(event, payload)
         message = json.dumps(
-            {
-                "jsonrpc": "2.0",
-                "method": "event",
-                "params": envelope,
-            }
+            {"jsonrpc": "2.0", "method": "event", "params": envelope}
         )
-
         for node in self.active_nodes:
             try:
                 await node.send_text(message)
             except Exception:  # noqa: BLE001
                 pass
-
         self.bus.publish(
             event, payload, source="voodoo", correlation_id=envelope["correlation_id"]
         )
         await self._fire_local(event, payload)
 
     async def emit(self, event: str, payload: Any):
-        """Alias for :meth:`broadcast` — the canonical local event emission."""
         await self.broadcast(event, payload)
 
     def _runtime_engine(self):
@@ -186,10 +159,8 @@ class MeshNetwork:
         return runtime_engine
 
     async def _fire_local(self, event: str, payload: Any):
-        """Fire local handlers for an event (no remote fan-out)."""
         if event not in self.event_handlers:
             return
-
         from voodoo.primitives.intent import Intent
         from voodoo.runtime.context import current_context
 
@@ -210,6 +181,40 @@ class MeshNetwork:
             except Exception as e:  # noqa: BLE001
                 print(f"Local mesh event handler error: {e}")
 
+    async def resolve_participant(
+        self,
+        params: Any,
+        *,
+        transport: str = "websocket",
+        peer: str | None = None,
+    ) -> ParticipantIdentity | None:
+        """Resolve transport evidence before authority or application compute.
+
+        A node with no configured resolver remains in the documented legacy
+        asserted-actor compatibility mode. Once a resolver is configured, the
+        payload actor is never used as identity.
+        """
+        if self.participant_resolver is None:
+            return None
+        if not isinstance(params, dict):
+            raise ParticipantAuthenticationError("remote params must be an object")
+        evidence = ParticipantEvidence(
+            credential=params.get("credential"),
+            transport=transport,
+            peer=peer,
+        )
+        return await self.participant_resolver.resolve(evidence)
+
+    @staticmethod
+    def bind_participant(
+        request: RemoteExecutionRequest,
+        participant: ParticipantIdentity | None,
+    ) -> RemoteExecutionRequest:
+        """Bind immutable resolved identity to the normalized semantic request."""
+        if participant is None:
+            return request
+        return request.model_copy(update={"actor": participant.participant_id})
+
     def _replayed_outcome(
         self, request: RemoteExecutionRequest
     ) -> RemoteExecutionOutcome | None:
@@ -222,17 +227,12 @@ class MeshNetwork:
                 error_type="RemoteReplayConflict",
                 message="request_id was already used for a different remote request",
             )
-
         outcome = record.outcome.model_copy(deep=True)
         if outcome.execution_id is None:
             return outcome
-
-        # Replay storage remembers request identity. Canonical Execution remains
-        # authoritative for lifecycle changes after WAITING/HITL resume.
         execution = self._runtime_engine().get(outcome.execution_id)
         if execution is None or execution.status.value == outcome.status:
             return outcome
-
         error = None
         if execution.failed:
             error = {
@@ -250,13 +250,11 @@ class MeshNetwork:
     async def execute_remote(
         self, request: RemoteExecutionRequest
     ) -> RemoteExecutionOutcome:
-        """Execute one request once and replay its canonical outcome on duplicates."""
         lock = self._remote_request_locks.setdefault(request.request_id, asyncio.Lock())
         async with lock:
             replayed = self._replayed_outcome(request)
             if replayed is not None:
                 return replayed
-
             outcome = await self._execute_remote_once(request)
             if outcome.execution_id is not None:
                 self.replay_store.save(request, outcome)
@@ -270,7 +268,6 @@ class MeshNetwork:
             func = self.exposed_functions.get(request.operation)
             if func is not None:
                 operation = ExposedOperation(name=request.operation, func=func)
-
         if operation is None:
             return RemoteExecutionOutcome.rejected(
                 request,
@@ -300,9 +297,8 @@ class MeshNetwork:
             from voodoo.runtime.errors import ExecutionError
 
             execution = None
-            structured_error: dict[str, Any]
             if isinstance(error, ExecutionError):
-                structured_error = error.describe()
+                structured_error: dict[str, Any] = error.describe()
                 if error.execution_id is not None:
                     execution = engine.get(error.execution_id)
             else:
@@ -310,7 +306,6 @@ class MeshNetwork:
                     "type": type(error).__name__,
                     "message": str(error),
                 }
-
             if execution is not None:
                 return RemoteExecutionOutcome.from_execution(
                     request,
@@ -323,9 +318,8 @@ class MeshNetwork:
                 message=structured_error.get("message", str(error)),
             )
 
-    async def connect(self, endpoint_url: str):
-        """Connect to another Mesh Node."""
-        return MeshClient(endpoint_url)
+    async def connect(self, endpoint_url: str, *, credential: str | None = None):
+        return MeshClient(endpoint_url, credential=credential)
 
     async def _send_remote_outcome(
         self,
@@ -334,10 +328,8 @@ class MeshNetwork:
         message_id: Any,
         outcome: RemoteExecutionOutcome,
     ) -> None:
-        """Send both structured Runtime truth and the legacy RPC projection."""
         if message_id is None:
             return
-
         response: dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": message_id,
@@ -354,36 +346,54 @@ class MeshNetwork:
             response["error"] = error.get("message", str(error))
         await websocket.send_text(json.dumps(response, default=str))
 
+    async def _send_protocol_error(
+        self,
+        websocket: WebSocket,
+        *,
+        message_id: Any,
+        error: Exception,
+    ) -> None:
+        if message_id is None:
+            return
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": message_id,
+                    "error": str(error),
+                }
+            )
+        )
+
     async def _handle_websocket(self, websocket: WebSocket):  # noqa: C901
-        """The Starlette WebSocket endpoint for the Mesh Node."""
         await websocket.accept()
         self.active_nodes.append(websocket)
         try:
             while True:
                 data = await websocket.receive_text()
                 msg = json.loads(data)
-
                 method = msg.get("method")
                 params = msg.get("params", {})
                 msg_id = msg.get("id")
 
                 if method == "call":
                     try:
+                        participant = await self.resolve_participant(
+                            params,
+                            transport="websocket",
+                            peer=str(getattr(websocket, "client", "") or "") or None,
+                        )
                         request = RemoteExecutionRequest.from_jsonrpc(
                             params,
                             message_id=str(msg_id) if msg_id is not None else None,
                         )
+                        request = self.bind_participant(request, participant)
                     except Exception as error:
-                        if msg_id is not None:
-                            await websocket.send_text(
-                                json.dumps(
-                                    {
-                                        "jsonrpc": "2.0",
-                                        "id": msg_id,
-                                        "error": str(error),
-                                    }
-                                )
-                            )
+                        await self._send_protocol_error(
+                            websocket,
+                            message_id=msg_id,
+                            error=error,
+                        )
                         continue
 
                     outcome = await self.execute_remote(request)
@@ -400,7 +410,6 @@ class MeshNetwork:
                     else:
                         event_name = None
                         payload = None
-
                     if event_name:
                         await self._fire_local(event_name, payload)
 
@@ -422,4 +431,8 @@ __all__ = [
     "RemoteExecutionOutcome",
     "RemoteAuthorityRegistry",
     "ExposedOperation",
+    "ParticipantAuthenticationError",
+    "ParticipantEvidence",
+    "ParticipantIdentity",
+    "ParticipantResolver",
 ]
