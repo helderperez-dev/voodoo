@@ -40,12 +40,16 @@ class MeshClient:
                     outcome_payload = data.get("outcome")
                     if outcome_payload is None:
                         future.set_exception(
-                            RuntimeError("remote response did not include structured outcome")
+                            RuntimeError(
+                                "remote response did not include structured outcome"
+                            )
                         )
                         continue
                     from voodoo.mesh.remote import RemoteExecutionOutcome
 
-                    future.set_result(RemoteExecutionOutcome.model_validate(outcome_payload))
+                    future.set_result(
+                        RemoteExecutionOutcome.model_validate(outcome_payload)
+                    )
                 elif "error" in data:
                     future.set_exception(Exception(data["error"]))
                 else:
