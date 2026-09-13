@@ -177,9 +177,7 @@ class VoodooStoreProvider:
             "file_bytes": getattr(report, "file_bytes", None),
             "valid_bytes": getattr(report, "valid_bytes", None),
             "records": getattr(report, "records", None),
-            "committed_transactions": getattr(
-                report, "committed_transactions", None
-            ),
+            "committed_transactions": getattr(report, "committed_transactions", None),
             "pending_transactions": getattr(report, "pending_transactions", None),
             "keys": getattr(report, "keys", None),
             "has_torn_tail": getattr(report, "has_torn_tail", None),
