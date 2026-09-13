@@ -83,17 +83,20 @@ def render_page(component: Any, seo: Any = None) -> str:
     # Detect active adapter to include the right CSS runtime
     from voodoo.adapters.voodoo_css import VoodooCSSAdapter, generate_component_css
     from voodoo.ui.styles import current_adapter
+    from voodoo.ui.styles.system import generate_design_system_css
 
     adapter = current_adapter()
     is_voodoo_css = isinstance(adapter, VoodooCSSAdapter)
 
     if is_voodoo_css:
         component_css = generate_component_css(default_theme)
+        design_system_css = generate_design_system_css(default_theme)
         head_scripts = ""
         body_classes = "min-h-screen antialiased"
     else:
         tailwind_config = default_theme.to_tailwind_config()
         component_css = ""
+        design_system_css = ""
         head_scripts = f"""
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
@@ -176,6 +179,9 @@ def render_page(component: Any, seo: Any = None) -> str:
 
             /* Voodoo component CSS (when using VoodooCSS adapter) */
             {component_css}
+
+            /* Design System 2 semantic override layer */
+            {design_system_css}
 
             /* Theme custom CSS (.voodoo/theme/custom.css) */
             {project_styles}
