@@ -31,9 +31,18 @@ class ToolFailureThenTextProvider(MockProvider):
             return ProviderResponse(
                 content="",
                 model=self.model,
+                tokens_in=0,
+                tokens_out=0,
+                cost=0.0,
                 tool_calls=[ToolCall(name="boom", arguments={}, id="call-1")],
             )
-        return ProviderResponse(content="recovered", model=self.model)
+        return ProviderResponse(
+            content="recovered",
+            model=self.model,
+            tokens_in=0,
+            tokens_out=0,
+            cost=0.0,
+        )
 
 
 def _failing_agent(*, engine=None, registry=None, memory=None, agent_id="agent-a"):
