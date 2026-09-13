@@ -154,7 +154,9 @@ class StateRenderer:
         if task is None or task.done():
             task = loop.create_task(self._drain(element_id))
             self._pending[element_id] = task
-            task.add_done_callback(lambda _task, eid=element_id: self._pending.pop(eid, None))
+            task.add_done_callback(
+                lambda _task, eid=element_id: self._pending.pop(eid, None)
+            )
 
     async def _drain(self, element_id: str) -> None:
         while element_id in self._dirty and element_id in self._bindings:
