@@ -30,12 +30,14 @@ def test_deny_policy_overrides_granted_capability():
     engine = ExecutionEngine()
     engine.capabilities.register(Capability(name="payment.refund"))
     engine.capabilities.policy.register(
-        lambda request: PolicyResult(
-            PolicyDecision.DENY,
-            reason="support agents cannot issue this refund",
-        )
-        if request.actor == "agent:support"
-        else None,
+        lambda request: (
+            PolicyResult(
+                PolicyDecision.DENY,
+                reason="support agents cannot issue this refund",
+            )
+            if request.actor == "agent:support"
+            else None
+        ),
         name="support-refund-boundary",
     )
     context = ExecutionContext(
@@ -96,9 +98,11 @@ def test_policy_target_can_come_from_execution_metadata():
     world.observe("robot-1", "battery.level", 0.12, source="bms")
     policy = PolicyEngine(world=world)
     policy.register(
-        lambda request: PolicyDecision.DENY
-        if request.world and request.world.entity.get("battery.level") < 0.2
-        else None,
+        lambda request: (
+            PolicyDecision.DENY
+            if request.world and request.world.entity.get("battery.level") < 0.2
+            else None
+        ),
         name="battery-safety",
     )
     context = ExecutionContext(actor="agent:operator", intent=Intent(name="move"))
