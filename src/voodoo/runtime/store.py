@@ -1,13 +1,14 @@
-"""Runtime-owned durable store provider boundary for Sprint 28.
+"""Runtime-owned durable Store provider boundary for Sprint 28.
 
 The Runtime owns the semantic contract. Native ``voodoo_store`` classes stay
-behind this module so application code and higher runtime layers do not depend
+behind this module so application code and higher Runtime layers do not depend
 on the binding directly.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -15,34 +16,65 @@ from typing import Any, Protocol, runtime_checkable
 from voodoo.core.errors import ConfigurationError, VoodooError
 
 __all__ = [
+    "DEFAULT_STORE_PATH",
+    "StoreConfig",
     "StoreHealth",
     "StoreProvider",
     "StoreProviderError",
+    "StoreProviderRegistry",
+    "RuntimeStore",
     "VoodooStoreProvider",
+    "create_store_provider",
+    "store_registry",
 ]
+
+DEFAULT_STORE_PATH = Path(".voodoo/application.vstore")
 
 
 class StoreProviderError(VoodooError):
-    """Runtime store provider lifecycle or verification failure."""
+    """Runtime Store provider lifecycle or verification failure."""
+
+
+@dataclass(frozen=True, slots=True)
+class StoreConfig:
+    """Provider-neutral Store configuration owned by the Runtime.
+
+    ``enabled`` intentionally remains ``False`` during Sprint 28.1. The next
+    slice makes Voodoo Store the application default only after packaging and
+    compatibility behavior are wired. Keeping the switch explicit here lets
+    the lifecycle land before changing existing 2.x defaults.
+    """
+
+    provider: str = "voodoo"
+    path: Path = DEFAULT_STORE_PATH
+    enabled: bool = False
+    durability: str = "data"
+    repair_torn_tail: bool = True
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_mapping(cls, value: dict[str, Any] | None = None) -> StoreConfig:
+        data = dict(value or {})
+        known = {
+            "provider",
+            "path",
+            "enabled",
+            "durability",
+            "repair_torn_tail",
+        }
+        return cls(
+            provider=str(data.get("provider") or "voodoo"),
+            path=Path(data.get("path") or DEFAULT_STORE_PATH),
+            enabled=bool(data.get("enabled", False)),
+            durability=str(data.get("durability") or "data"),
+            repair_torn_tail=bool(data.get("repair_torn_tail", True)),
+            extra={key: item for key, item in data.items() if key not in known},
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class StoreHealth:
-    """Minimal provider-neutral health projection.
-
-    Parameters
-    ----------
-    provider:
-        Provider identifier.
-    path:
-        Durable store location.
-    opened:
-        Whether this provider currently owns an open store handle.
-    verified:
-        Whether the backing store passed its native verification operation.
-    details:
-        Provider-specific diagnostic values safe to expose to Runtime tooling.
-    """
+    """Minimal provider-neutral health projection."""
 
     provider: str
     path: Path
@@ -71,24 +103,50 @@ class StoreProvider(Protocol):
     def health(self) -> StoreHealth: ...
 
 
-class VoodooStoreProvider:
-    """Lazy adapter around the standalone ``voodoo-store`` Python binding.
+StoreProviderFactory = Callable[[StoreConfig], StoreProvider]
 
-    Parameters
-    ----------
-    path:
-        Path to the application ``.vstore`` file.
-    durability:
-        Native Store durability mode: ``strict``, ``data`` or ``relaxed``.
-    repair_torn_tail:
-        Allow native recovery to repair a torn append-log tail on open.
+
+class StoreProviderRegistry:
+    """Registry for Runtime infrastructure providers.
+
+    This registry is intentionally separate from the legacy per-domain adapter
+    registry. A Store provider is an application-infrastructure substrate from
+    which Data/Work/Events/Objects adapters can later be derived; it is not a
+    database adapter itself.
     """
+
+    def __init__(self) -> None:
+        self._providers: dict[str, StoreProviderFactory] = {}
+
+    def register(self, name: str, factory: StoreProviderFactory) -> None:
+        normalized = name.strip().lower()
+        if not normalized:
+            raise ConfigurationError("Store provider name cannot be empty")
+        self._providers[normalized] = factory
+
+    def create(self, config: StoreConfig) -> StoreProvider:
+        name = config.provider.strip().lower()
+        factory = self._providers.get(name)
+        if factory is None:
+            available = ", ".join(sorted(self._providers)) or "none"
+            raise ConfigurationError(
+                f"Unknown Store provider '{config.provider}'. "
+                f"Available Store providers: {available}."
+            )
+        return factory(config)
+
+    def names(self) -> tuple[str, ...]:
+        return tuple(sorted(self._providers))
+
+
+class VoodooStoreProvider:
+    """Lazy adapter around the standalone ``voodoo-store`` Python binding."""
 
     name = "voodoo"
 
     def __init__(
         self,
-        path: str | Path = ".voodoo/application.vstore",
+        path: str | Path = DEFAULT_STORE_PATH,
         *,
         durability: str = "data",
         repair_torn_tail: bool = True,
@@ -204,3 +262,73 @@ class VoodooStoreProvider:
             ) from exc
         self._store_type = module.Store
         return self._store_type
+
+
+def _create_voodoo_provider(config: StoreConfig) -> StoreProvider:
+    return VoodooStoreProvider(
+        config.path,
+        durability=config.durability,
+        repair_torn_tail=config.repair_torn_tail,
+    )
+
+
+store_registry = StoreProviderRegistry()
+store_registry.register("voodoo", _create_voodoo_provider)
+
+
+def create_store_provider(
+    config: StoreConfig,
+    *,
+    registry: StoreProviderRegistry = store_registry,
+) -> StoreProvider:
+    """Resolve one Store provider through the Runtime-owned registry."""
+    return registry.create(config)
+
+
+class RuntimeStore:
+    """Own exactly one Store provider for a Runtime lifecycle.
+
+    Construction does not open files or import the native Store binding. The
+    provider is created/opened only when ``start`` is called and the Store is
+    enabled. This is the seam the application lifespan will adopt when Sprint
+    28.2 turns Store-backed infrastructure on by default.
+    """
+
+    def __init__(
+        self,
+        config: StoreConfig | None = None,
+        *,
+        registry: StoreProviderRegistry = store_registry,
+    ) -> None:
+        self.config = config or StoreConfig()
+        self._registry = registry
+        self._provider: StoreProvider | None = None
+
+    @property
+    def provider(self) -> StoreProvider | None:
+        return self._provider
+
+    @property
+    def started(self) -> bool:
+        return self._provider is not None and self._provider.opened
+
+    def start(self) -> StoreProvider | None:
+        if not self.config.enabled:
+            return None
+        if self._provider is None:
+            self._provider = create_store_provider(self.config, registry=self._registry)
+        self._provider.open()
+        return self._provider
+
+    def stop(self) -> None:
+        if self._provider is None:
+            return
+        try:
+            self._provider.close()
+        finally:
+            self._provider = None
+
+    def health(self) -> StoreHealth | None:
+        if self._provider is None:
+            return None
+        return self._provider.health()
