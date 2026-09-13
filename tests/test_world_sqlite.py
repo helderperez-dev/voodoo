@@ -12,7 +12,16 @@ def test_world_survives_store_reopen(tmp_path):
     world.put_entity(Entity(id="robot-1", type="robot"))
     world.put_entity(Entity(id="room-1", type="place"))
     world.relate("robot-1", "located_in", "room-1", metadata={"source": "map"})
-    world.observe("robot-1", "battery.level", 0.82, source="telemetry:bms", confidence=0.97, trace_id="trace-1", execution_id="exec-1", observation_id="obs-1")
+    world.observe(
+        "robot-1",
+        "battery.level",
+        0.82,
+        source="telemetry:bms",
+        confidence=0.97,
+        trace_id="trace-1",
+        execution_id="exec-1",
+        observation_id="obs-1",
+    )
     store.close()
 
     reopened = SQLiteWorldStore(str(path))
@@ -20,7 +29,8 @@ def test_world_survives_store_reopen(tmp_path):
     robot = recovered.entity("robot-1")
     assert robot is not None
     assert robot.get("battery.level") == 0.82
-    assert [entity.id for entity in recovered.neighbors("robot-1", predicate="located_in")] == ["room-1"]
+    neighbors = recovered.neighbors("robot-1", predicate="located_in")
+    assert [entity.id for entity in neighbors] == ["room-1"]
     history = recovered.history("robot-1", "battery.level")
     assert len(history) == 1
     assert history[0].id == "obs-1"
@@ -35,8 +45,20 @@ def test_duplicate_observation_remains_idempotent_after_restart(tmp_path):
     store = SQLiteWorldStore(str(path))
     world = WorldModel(store)
     world.put_entity(Entity(id="sensor-1", type="sensor"))
-    world.observe("sensor-1", "temperature", 22.5, source="sensor", observation_id="reading-1")
-    world.observe("sensor-1", "temperature", 22.5, source="sensor", observation_id="reading-1")
+    world.observe(
+        "sensor-1",
+        "temperature",
+        22.5,
+        source="sensor",
+        observation_id="reading-1",
+    )
+    world.observe(
+        "sensor-1",
+        "temperature",
+        22.5,
+        source="sensor",
+        observation_id="reading-1",
+    )
     store.close()
 
     reopened = SQLiteWorldStore(str(path))
@@ -51,8 +73,22 @@ def test_stale_observation_is_history_not_current_state_after_restart(tmp_path):
     world = WorldModel(store)
     world.put_entity(Entity(id="robot-1", type="robot"))
     now = datetime.now(UTC)
-    world.observe("robot-1", "battery.level", 0.60, source="bms", observed_at=now, observation_id="newer")
-    world.observe("robot-1", "battery.level", 0.90, source="bms", observed_at=now - timedelta(minutes=5), observation_id="older")
+    world.observe(
+        "robot-1",
+        "battery.level",
+        0.60,
+        source="bms",
+        observed_at=now,
+        observation_id="newer",
+    )
+    world.observe(
+        "robot-1",
+        "battery.level",
+        0.90,
+        source="bms",
+        observed_at=now - timedelta(minutes=5),
+        observation_id="older",
+    )
     store.close()
 
     reopened = SQLiteWorldStore(str(path))
@@ -60,7 +96,10 @@ def test_stale_observation_is_history_not_current_state_after_restart(tmp_path):
     robot = recovered.entity("robot-1")
     assert robot is not None
     assert robot.get("battery.level") == 0.60
-    assert [item.id for item in recovered.history("robot-1", "battery.level")] == ["older", "newer"]
+    assert [item.id for item in recovered.history("robot-1", "battery.level")] == [
+        "older",
+        "newer",
+    ]
     reopened.close()
 
 
@@ -75,8 +114,12 @@ def test_relationship_queries_survive_restart(tmp_path):
 
     reopened = SQLiteWorldStore(str(path))
     recovered = WorldModel(reopened)
-    outbound = recovered.relationships("agent-1", predicate="controls", direction="out")
-    inbound = recovered.relationships("robot-1", predicate="controls", direction="in")
+    outbound = recovered.relationships(
+        "agent-1", predicate="controls", direction="out"
+    )
+    inbound = recovered.relationships(
+        "robot-1", predicate="controls", direction="in"
+    )
     assert [relationship.id for relationship in outbound] == ["rel-1"]
     assert [relationship.id for relationship in inbound] == ["rel-1"]
     reopened.close()
