@@ -23,7 +23,7 @@ from .operational import (
     WorldSnapshot,
 )
 from .schemas import (
-    PROTOCOL_ENTITIES,
+    PROTOCOL_ENTITIES as CORE_PROTOCOL_ENTITIES,
     SCHEMA_VERSION,
     AgentEntity,
     AgentRun,
@@ -50,6 +50,11 @@ from .schemas import (
     TelemetrySpan,
     TimeSpec,
 )
+
+# Public protocol registry means *all* stable entities available at the
+# semantic boundary. The original 18-entity registry remains internal to
+# schemas.py so existing implementation modules can compose it without cycles.
+PROTOCOL_ENTITIES = {**CORE_PROTOCOL_ENTITIES, **OPERATIONAL_PROTOCOL_ENTITIES}
 
 __all__ = [
     "SCHEMA_VERSION",
