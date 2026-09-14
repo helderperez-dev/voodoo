@@ -54,22 +54,22 @@ class StoreProviderError(VoodooError):
 class StoreConfig:
     """Provider-neutral Store configuration owned by the Runtime.
 
-    ``enabled`` intentionally remains ``False`` until the ``voodoo-store``
-    Python distribution is available as a normal framework dependency. The
-    provider/path already point at the Sprint 28 target defaults so activation
-    does not require another architecture change.
+    Voodoo Store is the default durable application infrastructure. Applications
+    may explicitly disable it or replace individual higher-level domains with
+    external adapters, but a fresh Runtime starts with one local
+    ``.voodoo/application.vstore``.
     """
 
     provider: str = "voodoo"
     path: Path = DEFAULT_STORE_PATH
-    enabled: bool = False
+    enabled: bool = True
     durability: str = "data"
     repair_torn_tail: bool = True
     extra: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any] | None = None) -> StoreConfig:
-        """Resolve Store config with explicit mapping > env > target defaults."""
+        """Resolve Store config with explicit mapping > env > defaults."""
         data = dict(value or {})
         known = {
             "provider",
@@ -98,7 +98,7 @@ class StoreConfig:
         return cls(
             provider=str(provider),
             path=Path(path),
-            enabled=_parse_bool(enabled_value, default=False),
+            enabled=_parse_bool(enabled_value, default=True),
             durability=str(durability),
             repair_torn_tail=_parse_bool(repair_value, default=True),
             extra={key: item for key, item in data.items() if key not in known},
@@ -288,10 +288,9 @@ class VoodooStoreProvider:
             module = import_module("voodoo_store")
         except ImportError as exc:
             raise ConfigurationError(
-                "Voodoo Store is not installed. Sprint 28 keeps the binding behind "
-                "a lazy Runtime provider boundary while packaging/default migration "
-                "is completed. Install the 'voodoo-store' package to use provider "
-                "'voodoo'."
+                "Voodoo Store is the default durable provider but the 'voodoo-store' "
+                "package is not installed. Reinstall voodoo-framework or run "
+                "`pip install voodoo-store`."
             ) from exc
         self._store_type = module.Store
         return self._store_type
@@ -319,13 +318,7 @@ def create_store_provider(
 
 
 class RuntimeStore:
-    """Own exactly one Store provider for a Runtime lifecycle.
-
-    Construction does not open files or import the native Store binding. The
-    provider is created/opened only when ``start`` is called and the Store is
-    enabled. This is the seam the application lifespan adopts when Store-backed
-    infrastructure is enabled.
-    """
+    """Own exactly one Store provider for a Runtime lifecycle."""
 
     def __init__(
         self,
