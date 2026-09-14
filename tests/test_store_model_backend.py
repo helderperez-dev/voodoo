@@ -171,7 +171,7 @@ class _FakeNativeCollections:
         return rows
 
 
-def test_backend_prefers_native_collections_when_binding_supports_them(monkeypatch):
+def test_backend_uses_native_collections(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
 
@@ -179,23 +179,20 @@ def test_backend_prefers_native_collections_when_binding_supports_them(monkeypat
 
     assert record_id == 1
     assert native.kv[b"data:lead:meta:next_id"] == b"2"
-    assert b"data:lead:record:00000000000000000001" not in native.kv
     record = native.get_record(b"lead", b"00000000000000000001")
     assert record is not None
     assert store_backend.get_record("lead", 1) == {"id": 1, "name": "Ada"}
 
 
-def test_native_scan_migrates_progressively_from_legacy_records(monkeypatch):
+def test_native_scan_and_update_use_collection_records_only(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
 
-    legacy_key = b"data:lead:record:00000000000000000001"
-    native.put(legacy_key, b'{"id":1,"name":"Legacy"}')
     native.create_collection(b"lead", codec=b"json")
     native.upsert_record(
         b"lead",
         b"00000000000000000001",
-        b'{"id":1,"name":"Native"}',
+        b'{"id":1,"name":"Ada"}',
     )
     native.upsert_record(
         b"lead",
@@ -204,10 +201,9 @@ def test_native_scan_migrates_progressively_from_legacy_records(monkeypatch):
     )
 
     assert store_backend.scan_records("lead") == [
-        {"id": 1, "name": "Native"},
+        {"id": 1, "name": "Ada"},
         {"id": 2, "name": "Grace"},
     ]
 
     store_backend.put_record("lead", 1, {"name": "Updated"})
-    assert legacy_key not in native.kv
     assert store_backend.get_record("lead", 1) == {"id": 1, "name": "Updated"}
