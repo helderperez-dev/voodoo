@@ -31,6 +31,12 @@ LEDGER_TABLE = "schema_migrations"
 _FRAMEWORK_MIGRATIONS: list[Migration] = []
 FRAMEWORK_MIGRATIONS = _FRAMEWORK_MIGRATIONS
 
+# Keep strong references to connected adapters until they are explicitly
+# closed. Besides making leaked lifecycle ownership visible, this lets test
+# and shutdown boundaries deterministically drain every aiosqlite worker
+# thread while its owning event loop is still alive.
+_OPEN_SQLITE_DATABASES: set["SQLiteDatabase"] = set()
+
 
 def register_framework_migration(migration: Migration) -> None:
     """Register a framework-owned migration (called at import time).
@@ -47,6 +53,17 @@ def register_framework_migration(migration: Migration) -> None:
                 f"({existing.name!r} vs {migration.name!r})"
             )
     _FRAMEWORK_MIGRATIONS.append(migration)
+
+
+async def _close_open_sqlite_databases() -> None:
+    """Close every connected SQLite adapter still owned by this process.
+
+    Normal runtime code should close the adapter it owns directly. This drain
+    is intentionally private: it is used by process/test lifecycle boundaries
+    that must guarantee no aiosqlite worker survives its event loop.
+    """
+    for database in tuple(_OPEN_SQLITE_DATABASES):
+        await database.close()
 
 
 class SQLiteDatabase:
@@ -93,11 +110,16 @@ class SQLiteDatabase:
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)
         self._conn = await aiosqlite.connect(self.path)
-        self._conn.row_factory = aiosqlite.Row
-        # Durability/concurrency pragmas. WAL is a no-op on :memory:.
-        await self._conn.execute("PRAGMA journal_mode=WAL")
-        await self._conn.execute("PRAGMA busy_timeout=5000")
-        await self._conn.commit()
+        _OPEN_SQLITE_DATABASES.add(self)
+        try:
+            self._conn.row_factory = aiosqlite.Row
+            # Durability/concurrency pragmas. WAL is a no-op on :memory:.
+            await self._conn.execute("PRAGMA journal_mode=WAL")
+            await self._conn.execute("PRAGMA busy_timeout=5000")
+            await self._conn.commit()
+        except BaseException:
+            await self.close()
+            raise
 
     async def close(self) -> None:
         """Close the connection if open. No-op otherwise (keeps startup lazy).
@@ -110,6 +132,9 @@ class SQLiteDatabase:
                 await self._conn.close()
             finally:
                 self._conn = None
+                _OPEN_SQLITE_DATABASES.discard(self)
+        else:
+            _OPEN_SQLITE_DATABASES.discard(self)
 
     # -- migrations ----------------------------------------------------------
 
