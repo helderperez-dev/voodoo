@@ -103,7 +103,9 @@ def _primary_key(record_id: int) -> bytes:
 
 
 def _ensure_collection(store: Any, collection: str) -> None:
-    store.create_collection(_collection_key(collection), schema_version=1, codec=b"json")
+    store.create_collection(
+        _collection_key(collection), schema_version=1, codec=b"json"
+    )
 
 
 def _sequence_key(collection: str) -> bytes:
@@ -144,7 +146,9 @@ def insert_record(collection: str, values: dict[str, Any]) -> int:
 def get_record(collection: str, record_id: int) -> dict[str, Any] | None:
     store = _native()
     _ensure_collection(store, collection)
-    native_record = store.get_record(_collection_key(collection), _primary_key(record_id))
+    native_record = store.get_record(
+        _collection_key(collection), _primary_key(record_id)
+    )
     if native_record is None:
         return None
     return _decode(bytes(native_record[1]))

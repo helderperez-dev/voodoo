@@ -26,9 +26,9 @@ _APPROVAL_PREFIX = b"runtime:execution:approval:"
 
 
 def _encode(value: Any) -> bytes:
-    return json.dumps(value, default=str, ensure_ascii=False, separators=(",", ":")).encode(
-        "utf-8"
-    )
+    return json.dumps(
+        value, default=str, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
 
 
 def _decode(value: bytes) -> Any:
@@ -180,7 +180,9 @@ class VoodooStoreExecutionStore:
                 for artifact in artifacts
                 if artifact.get("execution_id") == execution_id
             ]
-        artifacts.sort(key=lambda artifact: str(artifact.get("created_at", "")), reverse=True)
+        artifacts.sort(
+            key=lambda artifact: str(artifact.get("created_at", "")), reverse=True
+        )
         return artifacts[:limit]
 
     def save_approval(self, approval: Any) -> None:
@@ -193,7 +195,9 @@ class VoodooStoreExecutionStore:
             "requested_by": approval.requested_by,
             "status": approval.status.value,
             "decided_by": approval.decided_by,
-            "decided_at": approval.decided_at.isoformat() if approval.decided_at else None,
+            "decided_at": approval.decided_at.isoformat()
+            if approval.decided_at
+            else None,
             "reason": approval.reason,
             "created_at": approval.created_at.isoformat()
             if approval.created_at
@@ -216,7 +220,9 @@ class VoodooStoreExecutionStore:
         ]
         if pending_only:
             approvals = [
-                approval for approval in approvals if approval.get("status") == "pending"
+                approval
+                for approval in approvals
+                if approval.get("status") == "pending"
             ]
         approvals.sort(
             key=lambda approval: str(approval.get("created_at", "")), reverse=True

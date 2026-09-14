@@ -311,14 +311,18 @@ def _build_store_config(file_data: dict[str, Any]) -> StoreSettings:
     enabled_flag = _env_flag("VOODOO_STORE_ENABLED")
     repair_flag = _env_flag("VOODOO_STORE_REPAIR_TORN_TAIL")
     return StoreSettings(
-        provider=store_data.get("provider") or os.getenv("VOODOO_STORE_PROVIDER") or "voodoo",
+        provider=store_data.get("provider")
+        or os.getenv("VOODOO_STORE_PROVIDER")
+        or "voodoo",
         path=store_data.get("path")
         or os.getenv("VOODOO_STORE_PATH")
         or ".voodoo/application.vstore",
         enabled=(
             bool(store_data["enabled"])
             if "enabled" in store_data
-            else enabled_flag if enabled_flag is not None else True
+            else enabled_flag
+            if enabled_flag is not None
+            else True
         ),
         durability=store_data.get("durability")
         or os.getenv("VOODOO_STORE_DURABILITY")
@@ -326,7 +330,9 @@ def _build_store_config(file_data: dict[str, Any]) -> StoreSettings:
         repair_torn_tail=(
             bool(store_data["repair_torn_tail"])
             if "repair_torn_tail" in store_data
-            else repair_flag if repair_flag is not None else True
+            else repair_flag
+            if repair_flag is not None
+            else True
         ),
         extra={
             k: v

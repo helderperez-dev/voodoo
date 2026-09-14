@@ -233,7 +233,9 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
         from voodoo.runtime.store import RuntimeStore, StoreConfig
 
-        application_store = RuntimeStore(StoreConfig.from_mapping(config.store.model_dump()))
+        application_store = RuntimeStore(
+            StoreConfig.from_mapping(config.store.model_dump())
+        )
         application_store.start()
         app.state.runtime_store = application_store
 
@@ -409,9 +411,7 @@ def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
             if stem == "index":
                 route_path = "/"
             else:
-                parts = [
-                    p.replace("[", "{").replace("]", "}") for p in stem.split("/")
-                ]
+                parts = [p.replace("[", "{").replace("]", "}") for p in stem.split("/")]
                 route_path = "/" + "/".join(parts)
             clean_name = route_path.replace("/", "_").replace("{", "").replace("}", "")
             module_name = f"pages_{clean_name}"

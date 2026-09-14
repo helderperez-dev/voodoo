@@ -56,7 +56,9 @@ def test_execution_save_load_and_timeline_are_durable(tmp_path: Path) -> None:
         runtime.stop()
 
 
-def test_execution_artifacts_and_approvals_share_application_store(tmp_path: Path) -> None:
+def test_execution_artifacts_and_approvals_share_application_store(
+    tmp_path: Path,
+) -> None:
     runtime = _runtime(tmp_path)
     try:
         store = VoodooStoreExecutionStore()

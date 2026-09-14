@@ -82,8 +82,7 @@ class VoodooStoreScheduleStore:
         if missing:
             raise ConfigurationError(
                 "The installed voodoo-store binding is too old for the native "
-                "scheduler; missing: "
-                + ", ".join(missing)
+                "scheduler; missing: " + ", ".join(missing)
             )
         self._store = native
 
@@ -192,7 +191,9 @@ class VoodooStoreScheduleStore:
             # cannot yet reposition an existing cursor. Refuse rather than
             # silently changing the semantics of the public API.
             current = self._get_native(metadata)
-            current_next = None if current is None else _from_ms(current.get("next_run_ms"))
+            current_next = (
+                None if current is None else _from_ms(current.get("next_run_ms"))
+            )
             if current_next != next_run_at:
                 raise ConfigurationError(
                     "The active voodoo-store binding cannot reposition an existing "
