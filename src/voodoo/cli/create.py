@@ -54,9 +54,9 @@ class Counter(Model):
     value: int
 
 
-counter_value = state("counter_value", 0)
-log_lines = state("log_lines", [])
-agent_result = state("agent_result", "Click to run the agent")
+counter_value = state(0)
+log_lines = state([])
+agent_result = state("Click to run the agent")
 
 
 def _log(msg: str) -> None:
