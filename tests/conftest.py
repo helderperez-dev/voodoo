@@ -46,20 +46,29 @@ def _reset_queue_state():
 
 @pytest_asyncio.fixture(autouse=True)
 async def _close_db_after_test():
-    """Close every async SQLite resource before the test loop is torn down.
-
-    ``data.base`` owns the normal application DB, while contract/provider tests
-    may instantiate independent SQLite adapters. All of them use aiosqlite
-    worker threads bound to the loop that opened them, so teardown must happen
-    here rather than after pytest closes that loop.
-    """
+    """Close optional SQLite resources before the test loop is torn down."""
     yield
-    from voodoo.data import base
     from voodoo.storage.database.sqlite import _close_open_sqlite_databases
 
-    if base._db_connection is not None:
-        await voodoo.data.close_db()
     await _close_open_sqlite_databases()
+
+
+@pytest.fixture
+def model_store(tmp_path):
+    """Bind a fresh application.vstore for one Store-native Model test."""
+    from voodoo.data.store_backend import bind_runtime_store
+    from voodoo.runtime.store import RuntimeStore, StoreConfig
+
+    runtime = RuntimeStore(
+        StoreConfig(path=tmp_path / "application.vstore", enabled=True)
+    )
+    runtime.start()
+    bind_runtime_store(runtime)
+    try:
+        yield runtime
+    finally:
+        bind_runtime_store(None)
+        runtime.stop()
 
 
 @pytest.fixture
@@ -84,7 +93,7 @@ def client(app):
 
 @pytest_asyncio.fixture
 async def test_db():
-    """Initialize an in-memory database for data tests without starting the app."""
+    """Initialize explicit SQLite for adapter-compatibility tests only."""
     await voodoo.data.init_db(":memory:")
     db = await voodoo.data.get_db()
     yield db
