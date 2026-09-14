@@ -8,8 +8,6 @@ scaffold until their APIs are stable.
 
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
 import typer
@@ -72,7 +70,11 @@ dependencies = ["voodoo-framework"]
 def create(
     project_name: str = typer.Argument(..., help="Name of the project to create"),
 ) -> None:
-    """Scaffold the stable Store-first Voodoo application."""
+    """Scaffold the stable Store-first Voodoo application.
+
+    Creation is intentionally side-effect free: it writes the project files but
+    does not create environments, access the network, or install dependencies.
+    """
     project_dir = Path(project_name)
     if project_dir.exists():
         terminal.error(f"Directory '{project_name}' already exists")
@@ -103,61 +105,12 @@ def create(
         ]
     )
     terminal.blank()
-
-    terminal.status("installing", "dependencies")
-    terminal.blank()
-
-    local_venv = project_dir / ".venv"
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "uv", "venv", str(local_venv)],
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            [
-                str(local_venv / "bin" / "python"),
-                "-m",
-                "uv",
-                "pip",
-                "install",
-                "-e",
-                ".",
-            ],
-            cwd=str(project_dir),
-            check=True,
-            capture_output=True,
-        )
-        terminal.muted("installed via uv")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        try:
-            subprocess.run(
-                [sys.executable, "-m", "venv", str(local_venv)],
-                check=True,
-                capture_output=True,
-            )
-            subprocess.run(
-                [
-                    str(local_venv / "bin" / "pip"),
-                    "install",
-                    "-e",
-                    ".",
-                ],
-                cwd=str(project_dir),
-                check=True,
-                capture_output=True,
-            )
-            terminal.muted("installed via pip")
-        except subprocess.CalledProcessError as exc:
-            terminal.warning(f"dependency install failed: {exc}")
-            terminal.muted(f"run 'cd {project_name} && pip install -e .' manually")
-
-    terminal.blank()
     terminal.success("ready")
     terminal.blank()
     terminal.next_steps(
         [
             f"cd {project_name}",
+            "pip install -e .",
             "voodoo dev",
             "",
             "Open http://localhost:8000.",
