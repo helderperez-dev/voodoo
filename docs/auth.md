@@ -68,9 +68,7 @@ user, raw_api_key = await User.create_user(
 )
 
 user = await User.authenticate("ada@example.com", "SecurePass99!")
-token = create_access_token(
-    {"sub": user.id, "email": user.email, "role": user.role}
-)
+token = create_access_token({"sub": user.id, "email": user.email, "role": user.role})
 ```
 
 With the default Runtime configuration, built-in `User` records are persisted
@@ -102,14 +100,12 @@ from voodoo.auth import require_auth, require_roles
 
 @page("/dashboard")
 @require_auth(redirect_url="/login")
-async def dashboard(request):
-    ...
+async def dashboard(request): ...
 
 
 @page("/admin")
 @require_roles("admin")
-async def admin_panel(request):
-    ...
+async def admin_panel(request): ...
 ```
 
 These guards answer whether a request may enter a web route. They do not replace
@@ -123,8 +119,7 @@ from voodoo.auth import require_api_key
 
 @api.post("/api/sync")
 @require_api_key(scopes=["write"])
-async def sync_endpoint(request):
-    ...
+async def sync_endpoint(request): ...
 ```
 
 On the default Store path, API-key lookup reads the built-in user records from
