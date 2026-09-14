@@ -231,12 +231,11 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        from voodoo.runtime.store import RuntimeStore, StoreConfig
+        from voodoo.runtime.store import StoreConfig, activate_runtime_store
 
-        application_store = RuntimeStore(
+        application_store = activate_runtime_store(
             StoreConfig.from_mapping(config.store.model_dump())
         )
-        application_store.start()
         app.state.runtime_store = application_store
 
         from voodoo.data.store_backend import bind_runtime_store
