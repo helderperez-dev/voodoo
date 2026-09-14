@@ -263,9 +263,9 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
             schedule_path = store_path.replace("data.db", "schedules.db")
 
         from voodoo.runtime.scheduler import ScheduleService
-        from voodoo.storage.scheduler import SQLiteScheduleStore
+        from voodoo.storage.scheduler import create_schedule_store
 
-        schedule_store = SQLiteScheduleStore(schedule_path)
+        schedule_store = create_schedule_store(schedule_path)
         scheduler = ScheduleService(schedule_store)
         await scheduler.start()
 
