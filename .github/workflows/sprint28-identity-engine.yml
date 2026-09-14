@@ -26,6 +26,7 @@ jobs:
           text = text.replace(
               "from voodoo.runtime.execution import Execution, ExecutionStatus\n",
               "from voodoo.runtime.execution import Execution, ExecutionStatus\nfrom voodoo.runtime.identity import Principal\n",
+              1,
           )
           text = text.replace(
               "        actor: str = \"system\",\n        capabilities: list[str] | None = None,\n",
@@ -51,6 +52,11 @@ jobs:
                   return ctx
               ctx = ExecutionContext(actor=actor, intent=intent)
               ctx.engine = self
+              for c in intent.constraints:
+                  ctx.constrain(c)
+              if intent.deadline is not None:
+                  ctx.deadline = intent.deadline
+              return ctx
           '''
           new = '''    def _build_context(
               self,
@@ -70,6 +76,11 @@ jobs:
                   return ctx
               ctx = ExecutionContext(actor=actor, principal=principal, intent=intent)
               ctx.engine = self
+              for c in intent.constraints:
+                  ctx.constrain(c)
+              if intent.deadline is not None:
+                  ctx.deadline = intent.deadline
+              return ctx
           '''
           if old not in text:
               raise SystemExit("ExecutionEngine _build_context pattern not found")
