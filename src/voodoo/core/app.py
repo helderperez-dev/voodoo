@@ -123,7 +123,9 @@ class App:
 
 def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     """Build a fully wired Starlette application."""
-    from voodoo.config import config
+    from voodoo.config import get_config
+
+    config = get_config()
 
     try:
         cwd = os.getcwd()
@@ -329,6 +331,7 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
             close_execution_store = getattr(execution_store, "close", None)
             if close_execution_store is not None:
                 close_execution_store()
+            runtime_engine.use_store(None)
             bind_runtime_store(None)
             application_store.stop()
 
