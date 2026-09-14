@@ -7,19 +7,6 @@ versioned ``voodoo-edge/v1`` protocol over HTTP and MQTT transports.
 There is **no** DeviceExecutionEngine: device-triggered work enters the
 standard ExecutionEngine, device events use the standard event system,
 and device state uses standard State semantics.
-
-    from voodoo.edge import DeviceGateway, SQLiteDeviceStore
-
-    store = SQLiteDeviceStore("data/devices.db")
-    gateway = DeviceGateway(store, engine)
-
-Bind the Edge boundary to the World Model when physical evidence should become
-first-class observations::
-
-    from voodoo.edge import WorldAwareDeviceGateway
-    from voodoo.world import WorldModel
-
-    gateway = WorldAwareDeviceGateway(store, engine, world=WorldModel())
 """
 
 from __future__ import annotations
@@ -81,13 +68,12 @@ from voodoo.edge.store import (
     InMemoryDeviceStore,
     SQLiteDeviceStore,
 )
+from voodoo.edge.store_voodoo import VoodooStoreDeviceStore
 from voodoo.edge.world import EdgeWorldBridge, WorldAwareDeviceGateway
 
 __all__ = [
-    # Protocol identity
     "PROTOCOL_NAME",
     "PROTOCOL_VERSION",
-    # Models
     "Device",
     "DeviceStatus",
     "DeviceCredential",
@@ -97,30 +83,26 @@ __all__ = [
     "DeviceSession",
     "AuthenticatedDeviceContext",
     "TransportKind",
-    # Protocol
     "EdgeMessage",
     "EdgeMessageType",
     "EffectAckStatus",
     "make_message",
     "encode_message",
     "decode_message",
-    # Store
     "DeviceStoreProtocol",
     "InMemoryDeviceStore",
     "SQLiteDeviceStore",
+    "VoodooStoreDeviceStore",
     "EffectDelivery",
-    # Auth
     "authenticate_device",
     "consume_enrollment",
     "create_enrollment",
     "generate_device_credential",
     "hash_device_credential",
     "rotate_device_credential",
-    # Gateway
     "DeviceGateway",
     "WorldAwareDeviceGateway",
     "EdgeWorldBridge",
-    # Errors
     "EdgeError",
     "error_response",
     "AuthenticationFailedError",
