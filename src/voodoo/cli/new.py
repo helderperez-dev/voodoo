@@ -9,136 +9,33 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from voodoo.cli import terminal
 
-# ---------------------------------------------------------------------------
-# Offline scaffold — used when no template repository is available.
-# Showcases Voodoo CSS (the default adapter), folder-based routing, and the
-# file-based `page(request)` convention. Keeps the surface minimal: routes
-# only, no main.py / .env / infrastructure directories.
-# ---------------------------------------------------------------------------
+# Offline fallback for the official default scaffold. Keep this intentionally
+# equivalent in spirit to voodoo-templates/default: one route, stable public UI
+# APIs, latest published framework, no specialized feature examples.
+_HOME_PAGE = '''"""Default Voodoo route — intentionally small and stable."""
 
-_HOME_PAGE = '''"""Home route — app/page.py maps to / via folder-based routing.
-
-Voodoo CSS is the default style adapter: components emit semantic `vd-*`
-classes (e.g. `vd-button vd-button--primary`) resolved by theme tokens, so
-prefer semantic props (`variant`, `size`, `tone`) over utility classes.
-"""
-from voodoo import A, Badge, Button, Card, Flex, Grid, Heading, Page, Stack, Text
+from voodoo.ui import A, Button, Container, Heading, Page, Stack, Text
 from voodoo.seo import SEO
 
 
 def page(request):
     seo = SEO(
-        title="My Voodoo App",
-        description="Built with Voodoo: Python UI, semantic components, themeable tokens.",
+        title="Voodoo App",
+        description="A minimal application powered by the Voodoo Runtime.",
     )
-    ui = Page(
-        Stack(
-            Heading("Hello, Voodoo", level=1, size="xl"),
-            Text(
-                "Build your UI in Python. Voodoo CSS ships themed, semantic "
-                "components out of the box.",
-                tone="muted",
-            ),
-            Flex(
-                Button("Get Started", variant="primary"),
-                A(
-                    "View about",
-                    href="/about",
-                    onClick="voodoo.navigate('/about')",
-                ),
-                direction="row",
-                gap="sm",
-            ),
-            Grid(
-                Card(
-                    Stack(
-                        Badge("Routing", variant="secondary"),
-                        Heading("Folder-based routing", level=3),
-                        Text("app/page.py → /", tone="muted"),
-                        Text(
-                            "Add app/about/page.py to create /about — no wiring.",
-                            tone="muted",
-                        ),
-                        gap="sm",
-                    ),
-                ),
-                Card(
-                    Stack(
-                        Badge("Theming", variant="secondary"),
-                        Heading("Theme tokens", level=3),
-                        Text(
-                            "Components read --vd-* tokens; swap them to restyle everything.",
-                            tone="muted",
-                        ),
-                        gap="sm",
-                    ),
-                ),
-                Card(
-                    Stack(
-                        Badge("Layout", variant="secondary"),
-                        Heading("Semantic layout", level=3),
-                        Text(
-                            "Stack, Flex, Grid and Page express layout — no utility classes.",
-                            tone="muted",
-                        ),
-                        gap="sm",
-                    ),
-                ),
-                cols="3",
-                gap="md",
-            ),
-            gap="lg",
-        )
-    )
-    return seo, ui
-'''
-
-_ABOUT_PAGE = '''"""About route — app/about/page.py maps to /about."""
-from voodoo import Container, Heading, Page, Stack, Text
-from voodoo.seo import SEO
-
-
-def page(request):
-    seo = SEO(title="About — My Voodoo App", description="About this project.")
     ui = Page(
         Container(
             Stack(
-                Heading("About", level=1, size="xl"),
-                Text("This route is defined by app/about/page.py.", tone="muted"),
+                Heading("Hello, Voodoo", level=1),
                 Text(
-                    "Folder structure drives routing: app/about/page.py → /about.",
+                    "One Runtime. One local Store. No external infrastructure required.",
                     tone="muted",
                 ),
-                gap="md",
-            )
-        )
-    )
-    return seo, ui
-'''
-
-_USER_PAGE = '''"""User route — app/users/[id]/page.py maps to /users/{id}.
-
-Bracket folders create dynamic segments; the `id: int` annotation coerces
-the path segment to the declared type.
-"""
-from voodoo import Card, Heading, Page, Stack, Text
-from voodoo.seo import SEO
-
-
-def page(request, id: int):
-    seo = SEO(title=f"User {id} — My Voodoo App")
-    ui = Page(
-        Card(
-            Stack(
-                Heading(f"User #{id}", level=2),
-                Text(
-                    "Dynamic segments use bracket folders: "
-                    "app/users/[id]/page.py → /users/{id}.",
-                    tone="muted",
-                ),
-                Text(
-                    "The int annotation coerces the segment: '42' → 42.",
-                    tone="muted",
+                Button("Get started", variant="primary"),
+                A(
+                    "Voodoo on GitHub",
+                    href="https://github.com/helderperez-dev/voodoo",
+                    target="_blank",
                 ),
                 gap="md",
             )
@@ -149,33 +46,28 @@ def page(request, id: int):
 
 
 def _scaffold_offline(project_dir: Path, name: str) -> None:
-    """Write the minimal default Voodoo project (Voodoo CSS + folder routing)."""
+    """Write the stable default Voodoo project without network access."""
     (project_dir / "app").mkdir(parents=True, exist_ok=True)
     (project_dir / "app" / "page.py").write_text(_HOME_PAGE)
-
-    about_dir = project_dir / "app" / "about"
-    about_dir.mkdir(parents=True, exist_ok=True)
-    (about_dir / "page.py").write_text(_ABOUT_PAGE)
-
-    user_dir = project_dir / "app" / "users" / "[id]"
-    user_dir.mkdir(parents=True, exist_ok=True)
-    (user_dir / "page.py").write_text(_USER_PAGE)
+    (project_dir / ".voodoo").mkdir(parents=True, exist_ok=True)
 
     (project_dir / "voodoo.toml").write_text(
-        f'[app]\nname = "{name}"\n'
-        "# Voodoo CSS is the default style adapter.\n"
-        "# To opt into Tailwind instead:\n"
-        "#   from voodoo import TailwindAdapter, set_style_adapter\n"
-        "#   set_style_adapter(TailwindAdapter())\n"
+        f'[app]\nname = "{name}"\n\n'
+        "# Voodoo Store is the default durable application infrastructure.\n"
+        "# .voodoo/application.vstore is created automatically on first start.\n"
     )
 
     (project_dir / "pyproject.toml").write_text(
-        f"[project]\n"
+        "[build-system]\n"
+        'requires = ["setuptools>=68"]\n'
+        'build-backend = "setuptools.build_meta"\n\n'
+        "[project]\n"
         f'name = "{name}"\n'
-        f'version = "0.1.0"\n'
-        f"dependencies = [\n"
-        f'    "voodoo-framework"\n'
-        f"]\n"
+        'version = "0.1.0"\n'
+        'requires-python = ">=3.12"\n'
+        'dependencies = ["voodoo-framework"]\n\n'
+        "[tool.setuptools]\n"
+        "packages = []\n"
     )
 
 
@@ -191,12 +83,10 @@ def new(  # noqa: C901
         "default",
         "--variant",
         "-v",
-        help="Specific template variant inside the repository",
+        help="Template variant for custom/community repositories",
     ),
 ):
-    """
-    Scaffold a new Voodoo project or clone a community template.
-    """
+    """Scaffold the stable default Voodoo project or a community template."""
     project_dir = Path(project_name)
     if project_dir.exists():
         terminal.error(f"Directory '{project_name}' already exists")
@@ -212,6 +102,8 @@ def new(  # noqa: C901
         TextColumn("[dim]{task.description}[/]"),
         transient=True,
     ) as progress:
+        fallback_to_offline = not bool(template)
+
         if template:
             task = progress.add_task(
                 description=f"cloning {variant} from {template}...",
@@ -234,8 +126,6 @@ def new(  # noqa: C901
                 )
                 raise typer.Exit(1)
 
-            fallback_to_offline = False
-
             try:
                 with tempfile.TemporaryDirectory() as tmp_dir:
                     subprocess.run(
@@ -245,12 +135,10 @@ def new(  # noqa: C901
                     )
 
                     variant_path = Path(tmp_dir) / variant
-
                     if not variant_path.exists() or not variant_path.is_dir():
-                        if (
-                            variant == "default"
-                            and not (Path(tmp_dir) / "default").exists()
-                        ):
+                        if variant == "default" and not (
+                            Path(tmp_dir) / "default"
+                        ).exists():
                             variant_path = Path(tmp_dir)
                         else:
                             terminal.error(
@@ -259,32 +147,22 @@ def new(  # noqa: C901
                             raise typer.Exit(1)
 
                     shutil.copytree(variant_path, project_dir, dirs_exist_ok=True)
-
+                    fallback_to_offline = False
             except subprocess.CalledProcessError:
                 progress.update(
-                    task, description="template unavailable, using minimal scaffold..."
+                    task, description="template unavailable, using default scaffold..."
                 )
                 fallback_to_offline = True
 
-            if not fallback_to_offline:
-                if (project_dir / ".git").exists():
-                    shutil.rmtree(project_dir / ".git", ignore_errors=True)
+            if not fallback_to_offline and (project_dir / ".git").exists():
+                shutil.rmtree(project_dir / ".git", ignore_errors=True)
 
-        if not template or fallback_to_offline:
-            progress.add_task(
-                description="scaffolding project...",
-                total=None,
-            )
-
+        if fallback_to_offline:
+            progress.add_task(description="scaffolding project...", total=None)
             _scaffold_offline(project_dir, project_dir.name)
 
-        # Set up local virtual environment and install dependencies
         if (project_dir / "pyproject.toml").exists():
-            task = progress.add_task(
-                description="setting up .venv...",
-                total=None,
-            )
-
+            task = progress.add_task(description="setting up .venv...", total=None)
             has_uv = shutil.which("uv") is not None
             try:
                 if has_uv:
@@ -321,10 +199,10 @@ def new(  # noqa: C901
                 for item in project_dir.glob("*.egg-info"):
                     if item.is_dir():
                         shutil.rmtree(item)
-            except subprocess.CalledProcessError as e:
+            except subprocess.CalledProcessError as exc:
                 terminal.warning("Failed to set up environment or install dependencies")
-                if e.stderr:
-                    terminal.muted(e.stderr.decode().strip())
+                if exc.stderr:
+                    terminal.muted(exc.stderr.decode().strip())
 
     terminal.blank()
     terminal.success("ready")
