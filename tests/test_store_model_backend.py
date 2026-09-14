@@ -158,7 +158,9 @@ class _FakeNativeCollections:
         return bytes(primary_key), value, indexes
 
     def delete_record(self, collection: bytes, primary_key: bytes) -> bool:
-        return self.records.pop((bytes(collection), bytes(primary_key)), None) is not None
+        return (
+            self.records.pop((bytes(collection), bytes(primary_key)), None) is not None
+        )
 
     def scan_collection(self, collection: bytes):
         rows = []
