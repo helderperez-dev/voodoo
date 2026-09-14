@@ -1,10 +1,11 @@
 # Sprint 28 — Runtime Infrastructure Convergence
 
-**Status:** ACTIVE · started 2026-09-13
+**Status:** ACTIVE · started 2026-09-13  
+**Current slice:** 28.5 — Scheduler / Cron / Triggers -> Store
 
 ## Purpose
 
-Sprint 28 makes Voodoo's local-first promise operational across the whole runtime.
+Sprint 28 makes Voodoo's local-first promise operational across the Runtime.
 Voodoo Store becomes the default durable application infrastructure, Voodoo Identity
 becomes a first-class Runtime semantic, and a single-node application gains a path to
 multiple Voodoo Nodes without changing application architecture.
@@ -31,9 +32,8 @@ application.vstore
 ```
 
 External systems remain explicit adapters for workloads that genuinely need them.
-SQLite is no longer the default database/runtime persistence choice; SQLite,
-PostgreSQL, Redis, S3 and future providers are optional adapters behind Voodoo
-semantics.
+SQLite, PostgreSQL, Redis, S3 and future providers remain supported, but they do not
+define Voodoo's application architecture.
 
 ## Architectural laws
 
@@ -48,7 +48,7 @@ semantics.
 9. Distributed ownership precedes distributed storage: each Store remains locally owned until replication/sync is explicitly designed.
 10. Remote work still enters Capability + Policy + canonical Execution before effects occur.
 11. Node discovery/routing never grants authority by itself.
-12. Voodoo must not claim distributed consensus, global exactly-once, or shared-file multi-writer semantics that it does not implement.
+12. Voodoo must not claim distributed consensus, global exactly-once, or shared-file multi-writer semantics it does not implement.
 
 ## Target topology
 
@@ -87,8 +87,7 @@ Multi-node operation uses node-local ownership and governed Runtime routing.
 
 ## Default infrastructure model
 
-Current fragmented defaults (`sqlite`, `local`, `memory`) converge behind a Store
-provider. The intended no-configuration path is conceptually:
+The intended no-configuration path is:
 
 ```toml
 [store]
@@ -98,7 +97,7 @@ path = ".voodoo/application.vstore"
 
 The normal developer should not need to write that block.
 
-Explicit adapters remain possible, for example:
+Explicit domain adapters remain possible:
 
 ```toml
 [database]
@@ -111,8 +110,8 @@ provider = "redis"
 provider = "s3"
 ```
 
-Adapters replace only the domain selected by the application/operator; they do not
-replace Runtime semantics.
+Adapters replace only the selected infrastructure domain. They do not replace Runtime
+semantics or create a second authority model.
 
 ## Store semantic mapping
 
@@ -126,16 +125,181 @@ Execution / HITL         -> Store Workflow / durable Runtime state
 Runtime Identity         -> identity state persisted through Store
 ```
 
-Cross-domain transactions are a strategic requirement. Where Store supports the
-necessary primitives, Voodoo should be able to atomically persist application state,
-enqueue durable work and emit an outbox event rather than create split-brain across a
-database, broker and event system.
+Cross-domain transactions remain a strategic requirement. Where Store supports the
+necessary primitives, Voodoo should atomically persist application state, durable work
+and outbox effects instead of creating split-brain across separate infrastructure.
+
+## Execution slices
+
+| Slice | Goal | State |
+|---|---|---|
+| 28.1 | Store provider foundation and dependency/lifecycle boundary | **DONE** |
+| 28.2 | Make Voodoo Store the zero-config default; demote legacy defaults to adapters | **DONE** |
+| 28.3 | Data/Model -> Store Collections, indexes and transactions | **DONE** |
+| 28.4 | `@task` / Jobs / Queues -> Store durable work | **DONE** |
+| 28.5 | Scheduler / Cron / Triggers -> Store | **ACTIVE** |
+| 28.6 | Events / Topics / Streams / Outbox -> Store | TODO |
+| 28.7 | ObjectStore -> Store Objects | TODO |
+| 28.8 | Execution / Workflow / HITL Runtime durability -> Store | TODO |
+| 28.9 | Voodoo Identity semantic foundation | TODO |
+| 28.10 | Identity -> Principal/Actor -> Capability -> Policy convergence | TODO |
+| 28.11 | Unified cross-domain Runtime transactions | TODO |
+| 28.12 | Node Identity and authenticated membership | TODO |
+| 28.13 | Node discovery, health and membership lifecycle | TODO |
+| 28.14 | Transparent Runtime routing and distributed ownership | TODO |
+| 28.15 | Capability/Policy-aware and load-aware placement | TODO |
+| 28.16 | Failure detection, leases, recovery and bounded failover | TODO |
+| 28.17 | Mesh/Protocol convergence for node fabric semantics | TODO |
+| 28.18 | External adapter compatibility and explicit override rules | TODO |
+| 28.19 | CLI/DX: create/dev/inspect/health/verify/backup/join | TODO |
+| 28.20 | Legacy SQLite/default migration and compatibility strategy | TODO |
+| 28.21 | Single-node zero-infrastructure acceptance | TODO |
+| 28.22 | Multi-node topology-transparent acceptance | TODO |
+| 28.23 | Edge/distributed closed-loop acceptance and sprint closure | TODO |
+
+## 28.1 — Store provider foundation — DONE
+
+Implemented and accepted:
+
+- Runtime-owned Store provider protocol and registry;
+- `VoodooStoreProvider` and deterministic open/health/close lifecycle;
+- `RuntimeStore` as the application-owned lifecycle boundary;
+- active Runtime Store accessor for infrastructure adapters;
+- environment/configuration boundary for provider/path/durability;
+- native `voodoo_store` objects remain behind Runtime-owned adapters;
+- contract/lifecycle tests cover optional import, errors and idempotent startup/shutdown.
+
+## 28.2 — Store as zero-config application infrastructure — DONE
+
+Implemented and accepted:
+
+- framework depends on the currently published `voodoo-store` compatibility line;
+- Store is enabled by default at `.voodoo/application.vstore`;
+- one `App` lifecycle opens one application Store and closes it on shutdown;
+- Data/Queue and later infrastructure domains reuse that Store instead of opening
+  parallel `.vstore` files;
+- explicit opt-out and external provider overrides remain possible;
+- legacy domain adapters stay available while each domain converges deliberately.
+
+The Store package is not republished automatically during Sprint development. New
+native capabilities remain capability-gated until a compatible Store release is
+explicitly authorized and published.
+
+## 28.3 — Data / Model -> Store — DONE
+
+Framework side:
+
+- public `Model` is Store-first unless an explicit SQL adapter is initialized;
+- existing CRUD and fluent query ergonomics remain intact;
+- published Store 0.1.1 transactional-KV representation remains readable/writable;
+- native Collections are detected when the newer binding is available;
+- native records supersede legacy rows and rewritten records remove stale legacy copies;
+- Model/Data uses the same application `RuntimeStore`.
+
+Store side (`voodoo-store` Sprint 28 integration branch):
+
+- native Collections metadata;
+- secondary and unique indexes;
+- record upsert/get/delete/scan and index lookup;
+- transactional native record upsert alongside KV metadata;
+- rollback and uniqueness acceptance coverage;
+- Python binding coverage across supported CI platforms.
+
+## 28.4 — `@task` / Jobs / Queues -> Store — DONE
+
+Framework side:
+
+- canonical `VoodooStoreQueue` adapter lives at `voodoo.storage.queue.store`;
+- provider registry recognizes `queue.provider: voodoo`;
+- worker runtime reuses the active application Store and never opens another `.vstore`;
+- Store 128-bit Job IDs project reversibly onto the existing integer task API;
+- handler-filtered claim preserves worker-type isolation;
+- heartbeat, lease ownership, completion, failure, release, expired-lease reclaim and
+  manual retry preserve the `VoodooQueue` contract;
+- payload and trace metadata remain behind the existing public queue API;
+- pending/retrying/running/completed/failed projections and list/stats are covered;
+- Redis/memory queue resolution no longer initializes an unrelated SQL database.
+
+Store side:
+
+- durable submit/get/claim/complete/fail/cancel/history;
+- handler-filtered claims;
+- heartbeat / lease extension;
+- explicit release and expired-lease recovery;
+- manual retry, list and state statistics;
+- priority, delay, deadlines, retry backoff and durable attempt counts;
+- active-job idempotency: Ready/Leased work deduplicates, terminal work may reuse the key.
+
+Acceptance evidence:
+
+- Store Rust workspace green on Linux, macOS and Windows;
+- Store Python package/binding green on Linux, macOS and Windows;
+- Store MSRV 1.85, rustfmt and Clippy green;
+- Framework Ruff, mypy, Python 3.12, Python 3.13 and CodeQL green;
+- async SQLite compatibility adapters now have deterministic teardown so no aiosqlite
+  worker survives its owning event loop.
+
+## 28.5 — Scheduler / Cron / Triggers -> Store — ACTIVE
+
+### Goal
+
+Move durable temporal work from the SQLite-era pattern:
+
+```text
+claim/advance schedule -> return record -> enqueue separately
+```
+
+into Store-owned durable mechanics:
+
+```text
+schedule/cron/trigger -> Store tick/fire -> durable Job
+```
+
+The important semantic improvement is eliminating the failure window where a scheduler
+advances its durable cursor but crashes before durable work is enqueued.
+
+### Current implementation
+
+The Store core already provides:
+
+- one-shot and interval schedules backed by Jobs;
+- durable cron schedules with occurrence-level idempotency;
+- durable trigger definitions for manual/collection/stream/topic sources;
+- atomic `fire_trigger()` that creates the Job and advances trigger metadata in one
+  Store transaction.
+
+The Sprint 28 Store Python binding is being expanded to expose:
+
+- `create/get/set-enabled/tick` for one-shot and interval schedules;
+- `create/get/list/set-enabled/tick` for cron schedules;
+- `create/get/list/set-enabled/fire` for triggers;
+- Python acceptance proving `schedule/cron/trigger -> Job -> claim` without Framework
+  application code inside Store.
+
+Before Framework activation, 28.5 must also preserve the existing scheduler contract:
+
+- `TimeSpec` support;
+- create/get/list/pause/resume semantics;
+- explicit `next_run_at` resume behavior;
+- compatibility with SQLite scheduler adapters;
+- Store-backed ticking must not enqueue the same occurrence a second time through the
+  Framework worker layer.
+
+### 28.5 acceptance
+
+28.5 is DONE only when:
+
+1. the required Store scheduler/cron/trigger Python APIs are green across the Store CI matrix;
+2. Framework has a Runtime-owned Store scheduler adapter with no `voodoo_store` leakage;
+3. existing public schedule/TimeSpec behavior remains compatible;
+4. Store-native ticks/fires create Jobs exactly once according to their documented semantics;
+5. the App scheduler lifecycle reuses the same application RuntimeStore;
+6. SQLite remains an explicit compatibility adapter;
+7. Framework full Python 3.12/3.13, Ruff, mypy and CodeQL gates are green.
 
 ## Identity model
 
-Sprint 28 elevates identity above the existing auth helper surface.
-
-Canonical semantic direction:
+Sprint 28 will elevate identity above the existing auth helper surface:
 
 ```text
 Identity
@@ -163,18 +327,12 @@ Execution
 ```
 
 Password, JWT, API key, OAuth/OIDC, device credentials and future mTLS/PKI are
-credential/authentication mechanisms; they are not separate authority models.
-
-Production PKI/OIDC/mTLS infrastructure remains allowed to mature incrementally, but
-Sprint 28 must establish the unified Runtime identity contracts and make existing
-local auth fit them.
+credential mechanisms; they are not separate authority models.
 
 ## Transparent node scaling
 
 A Voodoo Node is an authenticated Runtime participant with identity, health,
 capabilities, load/resource information and ownership metadata.
-
-The intended progression is:
 
 ```text
 Phase 1: Runtime + application.vstore
@@ -189,64 +347,12 @@ Initial multi-node laws:
 - node identity is authenticated;
 - membership never implies capability;
 - routing can consider capability, Policy, health, ownership and load;
-- durable work has an explicit owner/lease;
+- durable work has explicit ownership/lease semantics;
 - failure may cause governed reassignment only when semantics permit it;
 - Store files are node-local, never a network-filesystem coordination trick;
 - application code remains topology-agnostic.
 
-## Execution slices
-
-| Slice | Goal | State |
-|---|---|---|
-| 28.1 | Store provider foundation and dependency/lifecycle boundary | **ACTIVE** |
-| 28.2 | Make Voodoo Store the zero-config default; demote legacy defaults to adapters | TODO |
-| 28.3 | Data/Model -> Store Collections, indexes and transactions | TODO |
-| 28.4 | `@task` / Jobs / Queues -> Store durable work | TODO |
-| 28.5 | Scheduler / Cron / Triggers -> Store | TODO |
-| 28.6 | Events / Topics / Streams / Outbox -> Store | TODO |
-| 28.7 | ObjectStore -> Store Objects | TODO |
-| 28.8 | Execution / Workflow / HITL Runtime durability -> Store | TODO |
-| 28.9 | Voodoo Identity semantic foundation | TODO |
-| 28.10 | Identity -> Principal/Actor -> Capability -> Policy convergence | TODO |
-| 28.11 | Unified cross-domain Runtime transactions | TODO |
-| 28.12 | Node Identity and authenticated membership | TODO |
-| 28.13 | Node discovery, health and membership lifecycle | TODO |
-| 28.14 | Transparent Runtime routing and distributed ownership | TODO |
-| 28.15 | Capability/Policy-aware and load-aware placement | TODO |
-| 28.16 | Failure detection, leases, recovery and bounded failover | TODO |
-| 28.17 | Mesh/Protocol convergence for node fabric semantics | TODO |
-| 28.18 | External adapter compatibility and explicit override rules | TODO |
-| 28.19 | CLI/DX: create/dev/inspect/health/verify/backup/join | TODO |
-| 28.20 | Legacy SQLite/default migration and compatibility strategy | TODO |
-| 28.21 | Single-node zero-infrastructure acceptance | TODO |
-| 28.22 | Multi-node topology-transparent acceptance | TODO |
-| 28.23 | Edge/distributed closed-loop acceptance and sprint closure | TODO |
-
-## 28.1 — Store provider foundation
-
-**Status: ACTIVE**
-
-First implementation work:
-
-1. audit existing provider registries and every implicit SQLite/local/memory default;
-2. audit the currently published `voodoo-store` Python API rather than assuming Rust-core coverage is exposed;
-3. define a Runtime-owned Store/provider protocol that does not leak native binding classes;
-4. add Store configuration and lifecycle (`open`, health, close) semantics;
-5. establish optional-import/error behavior so compatibility adapters remain usable;
-6. add contract tests before changing existing defaults.
-
-Acceptance for 28.1:
-
-- Voodoo can resolve a Store provider through a Runtime-owned abstraction;
-- lifecycle is deterministic and test-covered;
-- importing Voodoo does not require application code to import `voodoo_store` directly;
-- no legacy provider is removed before an adapter/migration path exists;
-- the abstraction is broad enough for later Data/Work/Event/Object/Runtime slices without becoming a second Runtime.
-
-## Acceptance target for Sprint 28
-
-A canonical application must demonstrate both forms without changing its application
-architecture:
+## Sprint 28 acceptance target
 
 ### Single node
 
@@ -254,9 +360,9 @@ architecture:
 app -> Voodoo Runtime -> application.vstore
 ```
 
-It must survive process restart with durable state/work/execution semantics and require
-no mandatory PostgreSQL, Redis, RabbitMQ, Kafka, Celery, S3/MinIO or external auth
-database.
+A canonical application must survive process restart with durable state/work/execution
+semantics and require no mandatory PostgreSQL, Redis, RabbitMQ, Kafka, Celery, S3/MinIO
+or external auth database.
 
 ### Multiple nodes
 
@@ -268,7 +374,7 @@ same app semantics
       `-- node-c -> node-c.vstore
 ```
 
-The acceptance must prove authenticated membership, governed routing, ownership,
+Acceptance must prove authenticated membership, governed routing, ownership,
 capability/policy enforcement, health/failure behavior and a closed-loop execution
 without application code becoming topology-aware.
 
