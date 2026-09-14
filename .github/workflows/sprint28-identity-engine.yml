@@ -23,42 +23,58 @@ jobs:
 
           engine = Path("src/voodoo/runtime/engine.py")
           text = engine.read_text()
+          old = "from voodoo.runtime.execution import Execution, ExecutionStatus\n"
+          if "from voodoo.runtime.identity import Principal\n" not in text:
+              if old not in text:
+                  raise SystemExit("Execution import anchor not found")
+              text = text.replace(
+                  old,
+                  old + "from voodoo.runtime.identity import Principal\n",
+                  1,
+              )
+
+          signature = (
+              "        actor: str = \"system\",\n"
+              "        capabilities: list[str] | None = None,\n"
+          )
+          if "        principal: Principal | None = None,\n" not in text:
+              if signature not in text:
+                  raise SystemExit("execute signature anchor not found")
+              text = text.replace(
+                  signature,
+                  "        actor: str = \"system\",\n"
+                  "        principal: Principal | None = None,\n"
+                  "        capabilities: list[str] | None = None,\n",
+                  1,
+              )
+
+          call = "        ctx = self._build_context(intent, actor=actor, parent=parent)\n"
+          if call not in text:
+              raise SystemExit("_build_context call anchor not found")
           text = text.replace(
-              "from voodoo.runtime.execution import Execution, ExecutionStatus\n",
-              "from voodoo.runtime.execution import Execution, ExecutionStatus\nfrom voodoo.runtime.identity import Principal\n",
+              call,
+              "        ctx = self._build_context(\n"
+              "            intent, actor=actor, principal=principal, parent=parent\n"
+              "        )\n",
               1,
           )
+
+          execution_actor = (
+              "            actor=actor,\n"
+              "            capabilities=[c.name for c in ctx.capabilities],\n"
+          )
+          if execution_actor not in text:
+              raise SystemExit("Execution actor anchor not found")
           text = text.replace(
-              "        actor: str = \"system\",\n        capabilities: list[str] | None = None,\n",
-              "        actor: str = \"system\",\n        principal: Principal | None = None,\n        capabilities: list[str] | None = None,\n",
+              execution_actor,
+              "            actor=ctx.actor,\n"
+              "            capabilities=[c.name for c in ctx.capabilities],\n",
               1,
           )
-          text = text.replace(
-              "        ctx = self._build_context(intent, actor=actor, parent=parent)\n",
-              "        ctx = self._build_context(\n            intent, actor=actor, principal=principal, parent=parent\n        )\n",
-              1,
-          )
-          text = text.replace(
-              "            actor=actor,\n            capabilities=[c.name for c in ctx.capabilities],\n",
-              "            actor=ctx.actor,\n            capabilities=[c.name for c in ctx.capabilities],\n",
-              1,
-          )
-          old = '''    def _build_context(
-              self, intent: Intent, *, actor: str, parent: ExecutionContext | None
-          ) -> ExecutionContext:
-              if parent is not None:
-                  ctx = parent.child(actor=actor)
-                  ctx.intent = intent
-                  return ctx
-              ctx = ExecutionContext(actor=actor, intent=intent)
-              ctx.engine = self
-              for c in intent.constraints:
-                  ctx.constrain(c)
-              if intent.deadline is not None:
-                  ctx.deadline = intent.deadline
-              return ctx
-          '''
-          new = '''    def _build_context(
+
+          start = text.index("    def _build_context(")
+          end = text.index("\n    async def _run_compute(", start)
+          replacement = '''    def _build_context(
               self,
               intent: Intent,
               *,
@@ -82,21 +98,33 @@ jobs:
                   ctx.deadline = intent.deadline
               return ctx
           '''
-          if old not in text:
-              raise SystemExit("ExecutionEngine _build_context pattern not found")
-          text = text.replace(old, new, 1)
+          text = text[:start] + replacement.rstrip() + text[end:]
           engine.write_text(text)
 
           runtime = Path("src/voodoo/runtime/__init__.py")
           text = runtime.read_text()
-          text = text.replace(
-              "    actor: str = \"system\",\n    capabilities: list[str] | None = None,\n",
-              "    actor: str = \"system\",\n    principal: Principal | None = None,\n    capabilities: list[str] | None = None,\n",
-              1,
+          signature = (
+              "    actor: str = \"system\",\n"
+              "    capabilities: list[str] | None = None,\n"
           )
+          if "    principal: Principal | None = None,\n" not in text:
+              if signature not in text:
+                  raise SystemExit("runtime execute signature anchor not found")
+              text = text.replace(
+                  signature,
+                  "    actor: str = \"system\",\n"
+                  "    principal: Principal | None = None,\n"
+                  "    capabilities: list[str] | None = None,\n",
+                  1,
+              )
+          forward = "        actor=actor,\n        capabilities=capabilities,\n"
+          if forward not in text:
+              raise SystemExit("runtime execute forwarding anchor not found")
           text = text.replace(
-              "        actor=actor,\n        capabilities=capabilities,\n",
-              "        actor=actor,\n        principal=principal,\n        capabilities=capabilities,\n",
+              forward,
+              "        actor=actor,\n"
+              "        principal=principal,\n"
+              "        capabilities=capabilities,\n",
               1,
           )
           runtime.write_text(text)
