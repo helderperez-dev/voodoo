@@ -22,6 +22,7 @@ from voodoo.primitives.constraint import Constraint
 from voodoo.primitives.effect import Effect
 from voodoo.primitives.intent import Intent
 from voodoo.primitives.resource import Resource
+from voodoo.runtime.identity import Principal
 
 __all__ = [
     "ExecutionContext",
@@ -62,6 +63,11 @@ async def use_context(ctx: ExecutionContext) -> AsyncIterator[ExecutionContext]:
 class ExecutionContext:
     """The single shared execution context.
 
+    ``principal`` carries authenticated identity semantics. ``actor`` remains
+    the compatibility/audit string consumed by existing Runtime surfaces. A
+    Principal never grants capabilities by itself; authority still enters via
+    explicit Capability + Policy.
+
     World access is read/query oriented by default. A participant may report
     observed consequences through :meth:`observe`, which automatically carries
     trace/execution lineage. Issuing an Effect never mutates world state by
@@ -72,6 +78,7 @@ class ExecutionContext:
     trace_id: str = field(default_factory=new_trace_id)
     parent_execution_id: str | None = None
     actor: str = "system"
+    principal: Principal | None = None
     intent: Intent | None = None
     capabilities: list[Capability] = field(default_factory=list)
     constraints: list[Constraint] = field(default_factory=list)
@@ -86,12 +93,32 @@ class ExecutionContext:
     world: Any | None = None
     target_entity_id: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.principal is not None and self.actor == "system":
+            self.actor = self.principal.actor
+
+    @classmethod
+    def for_principal(
+        cls,
+        principal: Principal,
+        *,
+        intent: Intent | None = None,
+        actor: str | None = None,
+    ) -> ExecutionContext:
+        """Create a top-level context for an authenticated Runtime Principal."""
+        return cls(
+            actor=actor or principal.actor,
+            principal=principal,
+            intent=intent,
+        )
+
     def child(self, actor: str | None = None) -> ExecutionContext:
         return ExecutionContext(
             execution_id=str(uuid4()),
             trace_id=self.trace_id,
             parent_execution_id=self.execution_id,
             actor=actor or self.actor,
+            principal=self.principal,
             intent=self.intent,
             capabilities=list(self.capabilities),
             constraints=list(self.constraints),
@@ -189,6 +216,13 @@ class ExecutionContext:
             "trace_id": self.trace_id,
             "parent_execution_id": self.parent_execution_id,
             "actor": self.actor,
+            "identity_id": self.principal.id if self.principal is not None else None,
+            "identity_kind": (
+                self.principal.kind.value if self.principal is not None else None
+            ),
+            "authenticated": (
+                self.principal.authenticated if self.principal is not None else False
+            ),
             "intent": self.intent.name if self.intent else None,
             "capabilities": [c.name for c in self.capabilities if c.valid],
             "constraint_count": len(self.constraints),
