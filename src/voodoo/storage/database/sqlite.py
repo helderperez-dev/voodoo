@@ -35,7 +35,7 @@ FRAMEWORK_MIGRATIONS = _FRAMEWORK_MIGRATIONS
 # closed. Besides making leaked lifecycle ownership visible, this lets test
 # and shutdown boundaries deterministically drain every aiosqlite worker
 # thread while its owning event loop is still alive.
-_OPEN_SQLITE_DATABASES: set["SQLiteDatabase"] = set()
+_OPEN_SQLITE_DATABASES: set[SQLiteDatabase] = set()
 
 
 def register_framework_migration(migration: Migration) -> None:
