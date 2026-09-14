@@ -233,10 +233,7 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
         from voodoo.runtime.store import RuntimeStore, StoreConfig
 
-        raw_store_config = config.extra.get("store", {})
-        if not isinstance(raw_store_config, dict):
-            raw_store_config = {"provider": str(raw_store_config)}
-        application_store = RuntimeStore(StoreConfig.from_mapping(raw_store_config))
+        application_store = RuntimeStore(StoreConfig.from_mapping(config.store.model_dump()))
         application_store.start()
         app.state.runtime_store = application_store
 
@@ -247,20 +244,33 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         from voodoo.runtime.engine import engine as runtime_engine
 
         provider = config.database.provider.lower()
-        if provider == "postgres":
+        if provider == "voodoo":
+            from voodoo.storage.execution import VoodooStoreExecutionStore
+
+            execution_store = VoodooStoreExecutionStore()
+            runtime_engine.use_store(execution_store)
+            schedule_path = None
+        elif provider == "postgres":
             from voodoo.storage.execution import PostgresExecutionStore
 
             url = config.database.url or os.getenv("VOODOO_DATABASE_URL", "")
             execution_store = PostgresExecutionStore(url)
             runtime_engine.use_store(execution_store)
             schedule_path = ".voodoo/state/schedules.db"
-        else:
+        elif provider == "sqlite":
             from voodoo.storage.execution import SQLiteExecutionStore
 
             store_path = config.db_path.replace(":memory:", ".voodoo/state/data.db")
             execution_store = SQLiteExecutionStore(store_path)
             runtime_engine.use_store(execution_store)
             schedule_path = store_path.replace("data.db", "schedules.db")
+        else:
+            from voodoo.core.errors import ConfigurationError
+
+            raise ConfigurationError(
+                f"Unknown execution database provider '{config.database.provider}'. "
+                "Use 'voodoo' (default), 'sqlite', or 'postgres'."
+            )
 
         from voodoo.runtime.scheduler import ScheduleService
         from voodoo.storage.scheduler import create_schedule_store
@@ -315,6 +325,9 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
             await close_db()
             await scheduler.stop()
             schedule_store.close()
+            close_execution_store = getattr(execution_store, "close", None)
+            if close_execution_store is not None:
+                close_execution_store()
             bind_runtime_store(None)
             application_store.stop()
 
@@ -396,7 +409,9 @@ def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
             if stem == "index":
                 route_path = "/"
             else:
-                parts = [p.replace("[", "{").replace("]", "}") for p in stem.split("/")]
+                parts = [
+                    p.replace("[", "{").replace("]", "}") for p in stem.split("/")
+                ]
                 route_path = "/" + "/".join(parts)
             clean_name = route_path.replace("/", "_").replace("{", "").replace("}", "")
             module_name = f"pages_{clean_name}"
