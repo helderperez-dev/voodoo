@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from voodoo.runtime.store import RuntimeStore
@@ -45,14 +45,25 @@ def close_owned_store() -> None:
 
 
 def should_use_store() -> bool:
-    """Use Store unless a SQL database adapter was explicitly initialized."""
+    """Use Store by default; an initialized SQL adapter is an explicit override."""
     from voodoo.data.base import _active_adapter
 
     if _active_adapter() is not None:
         return False
-    from voodoo.config import get_config
+    if _runtime_store is not None:
+        return True
 
-    return get_config().database.provider.lower() == "voodoo"
+    # Outside an App lifespan, fresh Model usage is still Store-first. A
+    # configured SQL provider remains an explicit compatibility override.
+    from voodoo.config import _load_raw_file_data
+
+    raw = _load_raw_file_data(None)
+    database = raw.get("database") if isinstance(raw, dict) else None
+    if isinstance(database, str):
+        return database.lower() == "voodoo"
+    if isinstance(database, dict) and database.get("provider"):
+        return str(database["provider"]).lower() == "voodoo"
+    return True
 
 
 def _native() -> Any:
