@@ -40,7 +40,9 @@ async def test_principal_enters_top_level_canonical_execution() -> None:
         seen["capabilities"] = list(ctx.capabilities)
         return "ok"
 
-    execution = await engine.execute(Intent(name="inspect"), compute, principal=principal)
+    execution = await engine.execute(
+        Intent(name="inspect"), compute, principal=principal
+    )
 
     assert execution.result == "ok"
     assert execution.actor == "user:42"
