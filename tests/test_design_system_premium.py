@@ -35,8 +35,7 @@ def test_primary_actions_use_voodoo_brand_not_monochrome_fill() -> None:
 
     assert ".vd-button--primary" in css
     assert (
-        "background: linear-gradient(180deg, #8b5cf6 0%, var(--vd-brand) 100%)"
-        in css
+        "background: linear-gradient(180deg, #8b5cf6 0%, var(--vd-brand) 100%)" in css
     )
     assert "box-shadow: var(--vd-shadow-brand)" in css
 
