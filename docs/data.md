@@ -2,7 +2,23 @@
 
 ## What it is
 
-Voodoo ships with an async SQLite data layer. Define models with typed fields, and get CRUD operations for free. Row-Level Security (RLS) policies and lifecycle hooks (`on_insert`, `on_update`) are built in.
+`Model` is Store-first. In a fresh Voodoo application, persistent model records
+are stored in `.voodoo/application.vstore` through Voodoo Store Collections.
+SQLite and PostgreSQL remain explicit SQL adapters; they are not the default
+persistence path.
+
+```text
+Model
+  |
+  v
+Voodoo Runtime
+  |
+  v
+Voodoo Store Collections
+  |
+  v
+.voodoo/application.vstore
+```
 
 ## Minimal example
 
@@ -16,7 +32,6 @@ class Lead(Model):
     score: int = 0
 
 
-# CRUD
 lead = await Lead.create(name="Ada", email="ada@x.io")
 lead = await Lead.get(lead.id)
 leads = await Lead.all()
@@ -25,9 +40,25 @@ await lead.save()
 await lead.delete()
 ```
 
-## Common usage
+No database initialization is required for this default path. The application
+Runtime owns the Store lifecycle.
 
-### Lifecycle hooks
+## Queries
+
+```python
+leads = await Lead.where(email="ada@x.io").order_by("-score").limit(20)
+first = await Lead.first(email="ada@x.io")
+count = await Lead.count()
+deleted = await Lead.delete_where(email="old@x.io")
+```
+
+The current Store-backed query facade preserves the public `Model` ergonomics.
+Filtering/order/offset/limit are evaluated through the Store compatibility
+layer while richer native indexes/query capabilities evolve.
+
+## Lifecycle hooks
+
+Lifecycle hooks remain available on the Store path:
 
 ```python
 from voodoo.data import on_insert
@@ -39,221 +70,140 @@ async def validate_lead(model):
         raise ValueError("Email required")
 ```
 
-### Row-Level Security
+Store-backed inserts/updates fire the same model hook registry.
 
-```python
-from voodoo.data import rls_policy
+## Row-Level Security caveat
 
+The legacy `rls_policy()` API returns SQL predicates. SQL predicate strings do
+not map safely onto Voodoo Store Collections, so they are **not silently
+interpreted** on the Store backend.
 
-@rls_policy(Lead)
-def lead_rls(user_context):
-    if user_context["role"] == "admin":
-        return "1=1"
-    return f"user_id = {user_context['id']}"
+If a model currently depends on SQL-string RLS, select an explicit SQL adapter
+until the policy-native Model authorization contract lands:
+
+```toml
+[database]
+provider = "postgres"
+url = "postgresql://user:pass@localhost:5432/voodoo"
 ```
 
-### Querying with RLS
+Attempting to use a SQL-string RLS policy through the Store backend fails
+clearly instead of bypassing the policy.
 
-```python
-user_ctx = {"role": "user", "id": 42}
-leads = await Lead.all(user_context=user_ctx)
+## `Model` vs `BaseModel`
+
+- `Model` — public Store-first CRUD/query facade.
+- `BaseModel` — legacy/raw SQL ORM compatibility surface.
+
+Calling `init_db()` explicitly or configuring a SQL database provider selects
+the SQL compatibility path.
+
+## Explicit SQLite adapter
+
+SQLite is still available when explicitly requested:
+
+```bash
+pip install "voodoo-framework[sqlite]"
 ```
 
-## Advanced
+```toml
+[database]
+provider = "sqlite"
+path = ".voodoo/state/data.db"
+```
 
-### BaseModel vs Model
-
-- `BaseModel` — the raw ORM (async `insert()`, `update()`, `_create_table()`).
-- `Model` — the CRUD facade (`create()`, `get()`, `all()`, `save()`, `delete()`).
-
-### Database initialization
+Or initialize the compatibility API directly:
 
 ```python
-from voodoo.data import init_db, get_db
+from voodoo.data import get_db, init_db
 
-await init_db(":memory:")  # or a file path
+await init_db("data.db")
 db = await get_db()
 ```
 
-### Storage backend boundary
+This is an adapter choice, not the fresh-app default.
 
-The default backend is SQLite (via `aiosqlite`). Since Sprint 10, PostgreSQL
-sits behind the same `VoodooDatabase` protocol — the data layer detects the
-backend and adapts the small dialect differences (identity columns vs
-`AUTOINCREMENT`, `RETURNING id` vs `lastrowid`, `%s` vs `?` placeholders).
-The facade stays the same:
+## PostgreSQL adapter
 
-```python
-# voodoo.yaml
-database:
-  provider: postgres
-  url: postgresql://user:pass@localhost:5432/voodoo
-
-# or environment
-#   VOODOO_DATABASE_PROVIDER=postgres
-#   VOODOO_DATABASE_URL=postgresql://user:pass@localhost:5432/voodoo
-```
-
-The `postgres` provider requires the optional extra:
+Install the optional extra:
 
 ```bash
-pip install "voodoo-framework[postgres]"   # psycopg[binary]
+pip install "voodoo-framework[postgres]"
 ```
 
-**Pooling** (spec §4 / §49): the current adapter keeps one async `psycopg`
-connection per process, mirroring the SQLite adapter's single connection —
-introspection, migrations, and per-request queries share it, and the
-`transaction()` context gives atomic commit/rollback. A `psycopg_pool`
-`AsyncConnectionPool` (per-backend proxy) is the documented future option for
-multi-worker deployments; it is deliberately not introduced in Sprint 10 to
-keep the protocol and the in-process default stable. JSONB payload columns
-(spec §50) stay `TEXT` for parity with SQLite — the queue, event bus, and
-execution store (Sprint 11) reuse the same shared translated migrations, so
-PostgreSQL uses TEXT columns just like SQLite (JSONB / TIMESTAMPTZ remain a
-future sprint).
+Configure only the database domain:
 
-The full provider contract (write/read roundtrip, migration ledger,
-idempotent migrations, transaction commit/rollback, reconnect durability)
-is enforced by `DatabaseContractTests` — run against SQLite always, and
-against a real PostgreSQL server in CI via a service container (or locally
-with `VOODOO_TEST_DATABASE_URL` set). The queue, event bus, and execution
-store each have their own PostgreSQL contract + failure-path suites
-(`tests/contracts/test_queue_postgres.py`, `test_eventbus_postgres.py`,
-`test_execution_postgres.py`) that run against the same service container.
+```toml
+[database]
+provider = "postgres"
+url = "postgresql://user:pass@localhost:5432/voodoo"
+```
 
-## Memory (Sprint 16)
+The rest of the Runtime can continue using Voodoo Store unless separately
+overridden.
 
-Entities need durable, queryable memory — not just one-shot state. The memory
-system gives every entity layered recall: **working** (current context),
-**episodic** (what happened during an execution), **durable** (long-term facts),
-and **semantic** (searchable knowledge). The default backend is SQLite with FTS5
-for full-text search — no external dependencies.
+## Store transaction boundary
 
-### Minimal example
+For operations that must atomically mutate Store state and stage an application
+message, use the Runtime transaction boundary rather than opening a second
+storage system:
 
 ```python
-from voodoo import SQLiteMemoryStore, MemoryEntry, MemoryLayer
+from voodoo.runtime import transaction
 
-store = SQLiteMemoryStore("memory.db")
+with transaction() as tx:
+    tx.upsert_record(b"orders", b"42", b'{"status":"created"}')
+    tx.stage_outbox(
+        id="order-42-created",
+        topic="order.created",
+        payload={"order_id": "42"},
+    )
+```
 
-# Write a memory
+The supported atomicity is local to one Runtime Store commit. Voodoo does not
+claim global transactions across external systems or nodes.
+
+## Memory is a separate abstraction
+
+`Model` persistence and agent/entity Memory are different concepts. The legacy
+`SQLiteMemoryStore` remains an explicit Memory implementation with FTS5 search;
+it does not redefine the default `Model` backend.
+
+```python
+from voodoo import MemoryEntry, MemoryLayer, SQLiteMemoryStore
+
+memory = SQLiteMemoryStore("memory.db")
 entry = MemoryEntry(
     entity_id="user:42",
     layer=MemoryLayer.EPISODIC,
-    content="User asked about pricing for the enterprise plan",
-    tags=["pricing", "enterprise"],
-    importance=0.8,
+    content="User asked about enterprise pricing",
 )
-await store.write(entry)
-
-# Search memories
-results = await store.search("pricing", entity_id="user:42")
-for result in results:
-    print(result.entry.content, result.score)
-
-# Read a specific memory
-entry = await store.read(entry_id=results[0].entry.id)
-
-# List all memories for an entity
-entries = await store.list_entries(
-    entity_id="user:42",
-    layer=MemoryLayer.EPISODIC,
-    limit=10,
-)
+await memory.write(entry)
 ```
 
-### Memory layers
+For ephemeral tests, use `InMemoryMemoryStore`.
 
-| Layer | Purpose | Typical source |
-|---|---|---|
-| `WORKING` | Current session context, short-lived | Manual write |
-| `EPISODIC` | What happened during an execution | Auto-written by Agent |
-| `DURABLE` | Long-term facts that survive sessions | Manual write |
-| `SEMANTIC` | Searchable knowledge, tags + full-text | Manual or derived |
+## Current boundaries
 
-### In-memory store
-
-For tests or ephemeral workloads, use `InMemoryMemoryStore` — same protocol,
-runs entirely in RAM:
-
-```python
-from voodoo.memory import InMemoryMemoryStore
-
-store = InMemoryMemoryStore()
-```
-
-### SQLite memory store
-
-`SQLiteMemoryStore` persists to a SQLite file with WAL mode and FTS5
-full-text search. When FTS5 is unavailable, it falls back to `LIKE` queries.
-
-```python
-from voodoo import SQLiteMemoryStore
-
-store = SQLiteMemoryStore("data/memory.db")
-
-# Count entries
-n = await store.count(entity_id="user:42", layer=MemoryLayer.EPISODIC)
-
-# Delete a memory
-await store.delete(entry_id=some_id)
-```
-
-### MemoryEntry fields
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | `str` | Unique ID (auto-generated UUID) |
-| `entity_id` | `str` | Owner entity (e.g. `"user:42"`, `"agent:lead-scorer"`) |
-| `layer` | `MemoryLayer` | Working / Episodic / Durable / Semantic |
-| `content` | `str` | The memory content text |
-| `metadata` | `dict` | Arbitrary key-value metadata |
-| `tags` | `list[str]` | Searchable tags |
-| `importance` | `float` | 0.0–1.0 importance score |
-| `source_execution_id` | `str \| None` | Link to the execution that produced this memory |
-| `created_at` | `str` | ISO timestamp |
-| `updated_at` | `str` | ISO timestamp |
-| `expires_at` | `str \| None` | Optional expiration (for working memory) |
+- Voodoo Store is the default `Model` persistence backend.
+- SQLite/PostgreSQL are explicit adapters.
+- Store-backed CRUD, queries and lifecycle hooks are supported.
+- Legacy SQL-string RLS requires an explicit SQL adapter today.
+- Native richer Store query/index capabilities can replace compatibility
+  implementations without changing the `Model` API.
 
 ## API reference
 
-- `Model` — async CRUD facade over `BaseModel`.
-  - `Model.create(**kwargs)` — insert and return.
-  - `Model.get(id)` — fetch by PK.
-  - `Model.all(user_context=None)` — fetch all rows.
-  - `model.save()` — insert or update.
-  - `model.delete()` — delete row (fires FK cascades first).
-- **Fluent queries** — `Model.where(**filters)` returns a lazy, chainable
-  `Query`; nothing hits the database until awaited or a terminal runs:
-  - `await Model.where(status="new")` — matching rows as instances.
-  - `.order_by("-updated_at")` — order (prefix `-` for descending).
-  - `.limit(n)` / `.offset(n)` — paging.
-  - `.first()` — first match or `None`; `.count()` — row count.
-  - `.delete()` — delete matching rows (returns count; requires filters).
-  - Shortcuts: `Model.count(**f)`, `Model.first(**f)`, `Model.delete_where(**f)`.
-- **Foreign keys with cascade** — annotate a column as `FK[ParentModel]`
-  (stored as `INTEGER`); deleting the parent removes referencing children:
-
-  ```python
-  from voodoo.data import FK, Model
-
-
-  class Conversation(Model):
-      title: str
-
-
-  class ChatMessage(Model):
-      conversation_id: FK[Conversation]
-      content: str
-
-
-  await conversation.delete()  # also deletes its ChatMessages
-  ```
-
-- `BaseModel` — base ORM class.
-- `FK` — foreign-key annotation with cascade delete.
-- `Query` — the lazy query builder behind `Model.where()`.
-- `init_db(db_path=None)` — initialize the database.
-- `get_db()` — get the database connection.
-- `on_insert(model_cls)` / `on_update(model_cls)` — lifecycle hook decorators.
-- `rls_policy(model_cls)` — RLS policy decorator.
+- `Model.create(**kwargs)` — insert and return a Store-backed model by default.
+- `Model.get(id)` — fetch by primary key.
+- `Model.all()` — fetch all records.
+- `Model.where(**filters)` — lazy query facade.
+- `Model.first(**filters)` — first match or `None`.
+- `Model.count(**filters)` — matching record count.
+- `Model.delete_where(**filters)` — delete filtered records.
+- `model.save()` — insert or update.
+- `model.delete()` — delete one record.
+- `BaseModel` — explicit/legacy SQL ORM base.
+- `init_db()` / `get_db()` — explicit SQL compatibility APIs.
+- `on_insert()` / `on_update()` — model lifecycle hook decorators.
+- `rls_policy()` — legacy SQL predicate policy; requires SQL backend today.
