@@ -10,6 +10,9 @@ import pytest
 
 from voodoo.core.errors import ConfigurationError
 from voodoo.runtime.scheduler import ScheduleService
+from voodoo.storage import scheduler as scheduler_package
+from voodoo.storage.queue.sqlite import SQLiteQueue
+from voodoo.storage.scheduler import SQLiteScheduleStore, create_schedule_store
 from voodoo.storage.scheduler import store as scheduler_module
 from voodoo.storage.scheduler.store import VoodooStoreScheduleStore
 
@@ -192,6 +195,23 @@ def test_timespec_interval_creates_native_interval_schedule(monkeypatch):
     native_schedule = next(iter(native.schedules.values()))
     assert native_schedule["mode"] == "interval"
     assert native_schedule["every_ms"] == 30_000
+
+
+def test_provider_resolution_prefers_native_store(monkeypatch, tmp_path):
+    native = _FakeNativeScheduler()
+    _bind(monkeypatch, native)
+    resolved = create_schedule_store(tmp_path / "fallback.db")
+    assert isinstance(resolved, VoodooStoreScheduleStore)
+
+
+def test_provider_resolution_falls_back_for_old_binding(monkeypatch, tmp_path):
+    class OldNative:
+        pass
+
+    _bind(monkeypatch, OldNative())
+    resolved = create_schedule_store(tmp_path / "fallback.db")
+    assert isinstance(resolved, SQLiteScheduleStore)
+    resolved.close()
 
 
 @pytest.mark.asyncio
