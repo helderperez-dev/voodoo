@@ -164,12 +164,6 @@ jobs:
             depends_on "uv"
             depends_on "python@3.12"
 
-            # Voodoo Store ships a prebuilt Mach-O Python extension whose install
-            # name is intentionally @rpath-based. Homebrew's generic post-install
-            # dylib relocation cannot expand its load-command header, so leave it
-            # untouched.
-            skip_clean "libexec/voodoo-framework/lib/python3.12/site-packages/voodoo_store/_native.abi3.so"
-
             def install
               ENV["UV_TOOL_DIR"] = libexec.to_s
               system "uv", "tool", "install", "voodoo-framework==#{version}", "--python", "3.12"
@@ -192,13 +186,30 @@ jobs:
                 chmod("+x", voodoo_script)
               end
 
+              # Homebrew rewrites every Mach-O it finds in the keg. Voodoo
+              # Store's prebuilt @rpath extension is already relocatable but has
+              # no spare Mach-O header room for Homebrew's longer install name.
+              # Hide it as gzip data during keg relocation and restore it in
+              # post_install after Homebrew's relocation pass has completed.
+              native = Dir[libexec/"**/site-packages/voodoo_store/_native.abi3.so"].first
+              odie "voodoo_store native extension not found" if native.nil?
+              system "gzip", "-f", native
+
               rm_rf Dir.glob(libexec/"**/site-packages/jiter/*.so")
 
               bin.install_symlink tool_bin/"voodoo"
             end
 
+            def post_install
+              native_gz = Dir[libexec/"**/site-packages/voodoo_store/_native.abi3.so.gz"].first
+              return if native_gz.nil?
+
+              system "gzip", "-d", native_gz
+            end
+
             test do
               assert_match "Voodoo Framework CLI", shell_output("#{bin}/voodoo --help")
+              system Formula["python@3.12"].opt_bin/"python3.12", "-c", "import voodoo_store"
             end
           end
           EOF
