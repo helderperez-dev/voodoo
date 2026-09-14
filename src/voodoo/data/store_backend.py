@@ -1,8 +1,8 @@
-"""Voodoo Store-backed record persistence for the Model facade.
+"""Voodoo Store-backed record persistence for the public Model facade.
 
-Voodoo Store 0.2+ provides the native Collections contract used here. This is a
-Runtime-owned data adapter, not a SQL emulation layer, and there is no legacy
-transactional-KV fallback in the default Store path.
+Voodoo Store 0.2+ provides the native Collections contract used here. The
+public data path has no SQL fallback and therefore no optional SQL dependency in
+its import graph.
 """
 
 from __future__ import annotations
@@ -49,22 +49,11 @@ def close_owned_store() -> None:
 
 
 def should_use_store() -> bool:
-    """Use Store by default; an initialized SQL adapter is an explicit override."""
-    from voodoo.data.base import _active_adapter
+    """Return True for the public Model API.
 
-    if _active_adapter() is not None:
-        return False
-    if _runtime_store is not None:
-        return True
-
-    from voodoo.config import _load_raw_file_data
-
-    raw = _load_raw_file_data(None)
-    database = raw.get("database") if isinstance(raw, dict) else None
-    if isinstance(database, str):
-        return database.lower() == "voodoo"
-    if isinstance(database, dict) and database.get("provider"):
-        return str(database["provider"]).lower() == "voodoo"
+    Kept temporarily for compatibility with internal callers while the 2.x SQL
+    compatibility modules are retired. Public Model persistence is Store-only.
+    """
     return True
 
 
