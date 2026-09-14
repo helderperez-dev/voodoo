@@ -1,8 +1,8 @@
 # Sprint 28 — Runtime Infrastructure Convergence
 
 **Status:** DONE · started 2026-09-13 · closed 2026-09-14  
-**Validated feature head:** `0f03dc01ad21dac17a9fdbd40d762b087679e46f`  
-**Validation:** CI #475 · CodeQL #443 · Python 3.12/3.13 · **1574 tests passed**
+**Validated usability head:** `d9571091afcc23a493fe9c677b8b67f773308ff4`  
+**Validation:** CI #499 · CodeQL #467 · Python 3.12/3.13 · **1577 tests passed**
 
 ## Purpose
 
@@ -197,100 +197,77 @@ placement metadata:
 - Store ownership;
 - metadata.
 
-`RuntimeFabric` provides:
-
-- ACTIVE-member discovery;
-- stale-heartbeat transition to `SUSPECT`;
-- capability/service/ownership filtering;
-- load-aware placement;
-- preferred-node, data-owner and locality preference;
-- optional placement policy predicate;
-- durable work leases with generations;
-- explicit stable idempotency keys;
-- bounded failover for work declared retryable;
-- prohibition on reassignment when ambiguous physical/external work is declared
-  `retryable=False`.
-
-The fabric executor is deliberately a replaceable transport boundary. Receiving nodes
-remain responsible for authentication and canonical Runtime authorization/execution.
+`RuntimeFabric` provides ACTIVE-member discovery, stale-heartbeat transition to
+`SUSPECT`, capability/service/ownership filtering, load-aware placement,
+preferred-node/data-owner/locality preference, optional placement policy, durable lease
+generations, stable idempotency keys and bounded failover for retryable work.
+Ambiguous physical/external work declared `retryable=False` is not reassigned blindly.
 
 ## Protocol boundary
 
-The public Protocol registry now includes transport-neutral schemas for:
-
-- `NodeAdvertisement`;
-- `NodeMembership`;
-- `FabricWorkRequest`;
-- `FabricWorkOutcome`.
-
+The public Protocol registry includes transport-neutral schemas for
+`NodeAdvertisement`, `NodeMembership`, `FabricWorkRequest` and `FabricWorkOutcome`.
 They are JSON-Schema exportable and do not expose Python Runtime internals.
 
 ## Edge convergence
 
 Edge no longer introduces a hidden SQLite database on the Store-first Runtime path.
-`VoodooStoreDeviceStore` shares the Runtime-owned `application.vstore` for:
-
-- devices;
-- credentials;
-- enrollments;
-- sessions;
-- durable effect deliveries;
-- message replay/idempotency state;
-- cached responses.
-
-`SQLiteDeviceStore` remains available only as an explicit compatibility adapter.
-Acceptance proves a device effect and its ACK survive Store/process restart.
+`VoodooStoreDeviceStore` shares the Runtime-owned `application.vstore` for devices,
+credentials, enrollments, sessions, durable effect deliveries, replay/idempotency state
+and cached responses. `SQLiteDeviceStore` remains an explicit compatibility adapter.
 
 ## Explicit adapters and migration
 
-Existing PostgreSQL, SQLite, Redis and S3 contract suites remain green. An explicit
-provider override changes infrastructure mechanics for that domain; it does not create
-another Identity, Capability, Policy or Execution model.
+PostgreSQL, SQLite, Redis and S3 contract suites remain green. An explicit provider
+override changes infrastructure mechanics for that domain; it does not create another
+Identity, Capability, Policy or Execution model. Migration is operator-controlled; Voodoo
+does not silently import legacy production data during startup.
 
-Migration is intentionally operator-controlled. Voodoo does not silently import legacy
-production data during startup. See `docs/guides/STORE_FIRST_MIGRATION.md`.
+Operational CLI under `voodoo fabric` includes `status`, `health`, `verify`, `join` and
+`backup`.
 
-Operational CLI added under `voodoo fabric`:
+## Post-closure usability audit
 
-```text
-status
-health
-verify
-join
-backup
-```
+After architectural closure, Sprint 28 was audited again from the perspective of a brand
+new user rather than relying only on subsystem tests. That audit found and corrected
+several release-blocking DX/documentation defects:
 
-`backup` is a verified cold-copy workflow: it acquires the Store writer lock rather
-than presenting a live multi-writer file copy as safe.
+- `voodoo create` still described SQLite/local filesystem/in-memory queue defaults;
+- the generated project used a nonexistent `@app.on_startup` API;
+- the generated project used the obsolete `state(name, initial)` call shape;
+- the scaffold used reactive UI state and a `.booted` marker as a durability demo instead
+  of Store-backed business data;
+- public docs still taught `voodoo new` and SQLite-first behavior;
+- deployment docs recommended multiple ASGI workers against one local state path,
+  violating the one-writer Store law;
+- contributor/coding-agent instructions still encoded old provider defaults.
 
-## Acceptance evidence
+The official scaffold now uses a real Store-backed `Model`, a durable queue worker and
+current reactive-state API. It contains no fake startup hook or filesystem boot marker.
 
-### 28.21 — single node
+Two release-gate smoke tests were added:
 
-Acceptance proves Collection state + local transaction + durable outbox + EventBus
-survive restart using only `application.vstore` for the tested Runtime infrastructure.
+1. **Fresh generated project test** — runs the actual scaffold in a clean subprocess,
+   starts its App, requests `/`, verifies `.voodoo/application.vstore` is created, then
+   launches a second process and confirms Model data is still present.
+2. **Cross-domain Store journey** — persists Model data, a Queue Job, an Event and a
+   canonical Execution to one Store, closes it completely, reopens the same file and
+   verifies every tested domain survives restart.
 
-### 28.22 — multiple nodes
-
-Acceptance proves the same application operation is routed by Runtime placement to an
-eligible node without application code selecting a node, transport or retry loop. The
-receiving path still creates a canonical `Execution`.
-
-### 28.23 — Edge closed loop
-
-Acceptance proves Store-backed device/effect state, delivery claim, ACK and restart
-recovery without a default SQLite Edge database.
+This audit is why the final usability baseline is 1577 tests rather than the earlier 1574.
 
 ## Validation baseline
 
-Validated feature head `0f03dc01ad21dac17a9fdbd40d762b087679e46f`:
+Validated usability head `d9571091afcc23a493fe9c677b8b67f773308ff4`:
 
-- CI #475: **success**;
+- CI #499: **success**;
 - Ruff format/lint: **green**;
 - declared mypy boundary: **green**;
-- Python 3.12: **1574 passed**;
+- Python 3.12: **1577 passed**;
 - Python 3.13: **green**;
-- CodeQL #443: **success**.
+- CodeQL #467: **success**;
+- generated-project Store/restart smoke: **green**;
+- cross-domain Model + Queue + Event + Execution Store reopen smoke: **green**.
 
 The suite also keeps PostgreSQL, Redis, S3 and explicit SQLite compatibility contracts
 green, so Store-first did not require deleting external-adapter support.
@@ -325,7 +302,8 @@ Sprint 28 closes with:
 10. language-neutral fabric Protocol schemas;
 11. Store/fabric operational CLI and migration guidance;
 12. topology-transparent multi-node and Edge closed-loop acceptance;
-13. full supported CI/type/security gates green.
+13. executable fresh-user scaffold and restart/reopen release gates;
+14. full supported CI/type/security gates green.
 
 > **Sprint 28 turns Voodoo from a runtime that can use infrastructure into a runtime
 > that provides coherent application infrastructure by default and can grow from one
