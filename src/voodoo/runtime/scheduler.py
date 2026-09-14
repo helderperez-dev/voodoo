@@ -38,18 +38,24 @@ class ScheduleService:
                 pass
             self._task = None
 
+    async def tick_once(self) -> int:
+        """Advance one scheduler iteration and return occurrences fired."""
+        if getattr(self.store, "creates_jobs_natively", False):
+            fired = int(self.store.tick())
+            if fired:
+                logger.info("native scheduler fired %d durable job(s)", fired)
+            return fired
+
+        due = self.store.claim_due()
+        for schedule in due:
+            await self._fire(schedule)
+        return len(due)
+
     async def _tick_loop(self) -> None:
         """Advance schedules using the active provider's ownership model."""
         while True:
             try:
-                if getattr(self.store, "creates_jobs_natively", False):
-                    fired = self.store.tick()
-                    if fired:
-                        logger.info("native scheduler fired %d durable job(s)", fired)
-                else:
-                    due = self.store.claim_due()
-                    for schedule in due:
-                        await self._fire(schedule)
+                await self.tick_once()
             except asyncio.CancelledError:
                 break
             except Exception as exc:
