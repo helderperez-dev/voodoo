@@ -1,8 +1,8 @@
 """Durable storage for GoalRuntime checkpoints.
 
 Goal persistence is deliberately separate from Execution persistence: a Goal is
-an objective spanning one or more canonical Executions. The store serializes
-planning/checkpoint state only; it never executes work.
+an objective spanning one or more canonical Executions. Stores serialize
+planning/checkpoint state only; they never execute work.
 """
 
 from __future__ import annotations
@@ -10,9 +10,15 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-__all__ = ["GoalStore", "SQLiteGoalStore"]
+if TYPE_CHECKING:
+    from voodoo.runtime.store import RuntimeStore
+
+__all__ = ["GoalStore", "SQLiteGoalStore", "VoodooStoreGoalStore"]
+
+_GOAL_PREFIX = b"runtime:goals:checkpoint:"
+_TERMINAL = {"completed", "failed", "cancelled"}
 
 
 class GoalStore(Protocol):
@@ -23,8 +29,87 @@ class GoalStore(Protocol):
     def load_unfinished(self) -> list[dict[str, Any]]: ...
 
 
+class VoodooStoreGoalStore:
+    """Goal checkpoints backed by the Runtime-owned Voodoo Store.
+
+    The adapter resolves the process-shared RuntimeStore lazily so GoalRuntime
+    can be used before an ASGI ``App`` lifespan without opening a competing
+    writer. When an App is active, the same application Store is reused.
+    """
+
+    provider = "voodoo"
+
+    def __init__(self, runtime_store: RuntimeStore | None = None) -> None:
+        self._runtime_store = runtime_store
+
+    @staticmethod
+    def _key(goal_id: str) -> bytes:
+        return _GOAL_PREFIX + goal_id.encode("utf-8")
+
+    def _runtime(self) -> RuntimeStore:
+        if self._runtime_store is not None:
+            return self._runtime_store
+        from voodoo.runtime.store import acquire_runtime_store
+
+        return acquire_runtime_store()
+
+    def _store(self) -> Any:
+        runtime = self._runtime()
+        provider = runtime.provider or runtime.start()
+        if provider is None:
+            from voodoo.core.errors import ConfigurationError
+
+            raise ConfigurationError(
+                "Voodoo Store is disabled; durable Goal checkpoints require an "
+                "explicit GoalStore adapter or an enabled Runtime Store."
+            )
+        native = getattr(provider, "native", None)
+        if native is None:
+            from voodoo.core.errors import ConfigurationError
+
+            raise ConfigurationError(
+                "The active Voodoo Store provider does not expose durable KV storage."
+            )
+        return native
+
+    def save(self, goal_id: str, payload: dict[str, Any]) -> None:
+        encoded = json.dumps(
+            payload,
+            separators=(",", ":"),
+            sort_keys=True,
+            default=str,
+        ).encode("utf-8")
+        self._store().put(self._key(goal_id), encoded)
+
+    def load(self, goal_id: str) -> dict[str, Any] | None:
+        raw = self._store().get(self._key(goal_id))
+        if raw is None:
+            return None
+        return json.loads(bytes(raw).decode("utf-8"))
+
+    def load_unfinished(self) -> list[dict[str, Any]]:
+        checkpoints: list[dict[str, Any]] = []
+        for _key, raw in self._store().scan_prefix(_GOAL_PREFIX):
+            payload = json.loads(bytes(raw).decode("utf-8"))
+            goal = payload.get("goal", {})
+            if str(goal.get("status", "")) not in _TERMINAL:
+                checkpoints.append(payload)
+        checkpoints.sort(
+            key=lambda payload: (
+                str(payload.get("goal", {}).get("updated_at", "")),
+                str(payload.get("goal", {}).get("id", "")),
+            )
+        )
+        return checkpoints
+
+    def close(self) -> None:
+        """No-op: RuntimeStore owns the native Store lifecycle."""
+
+
 class SQLiteGoalStore:
-    """Local-first durable Goal checkpoint store."""
+    """Explicit SQLite compatibility adapter for Goal checkpoints."""
+
+    provider = "sqlite"
 
     def __init__(self, path: str | Path = "data/goals.db") -> None:
         self.path = Path(path)
