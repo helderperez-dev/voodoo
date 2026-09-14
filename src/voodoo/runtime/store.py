@@ -78,17 +78,15 @@ class StoreConfig:
             "durability",
             "repair_torn_tail",
         }
-        provider = data.get("provider") or os.getenv("VOODOO_STORE_PROVIDER") or "voodoo"
+        provider = (
+            data.get("provider") or os.getenv("VOODOO_STORE_PROVIDER") or "voodoo"
+        )
         path = data.get("path") or os.getenv("VOODOO_STORE_PATH") or DEFAULT_STORE_PATH
         enabled_value = (
-            data["enabled"]
-            if "enabled" in data
-            else os.getenv("VOODOO_STORE_ENABLED")
+            data["enabled"] if "enabled" in data else os.getenv("VOODOO_STORE_ENABLED")
         )
         durability = (
-            data.get("durability")
-            or os.getenv("VOODOO_STORE_DURABILITY")
-            or "data"
+            data.get("durability") or os.getenv("VOODOO_STORE_DURABILITY") or "data"
         )
         repair_value = (
             data["repair_torn_tail"]
