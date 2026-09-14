@@ -46,7 +46,6 @@ dependencies = [
     "uvicorn",
     "pydantic",
     "voodoo-store>=0.1.1,<0.2",
-    "aiosqlite",
     "websockets",
     "httpx",
     "python-dotenv",
@@ -81,7 +80,11 @@ dev = [
     "pytest-asyncio",
     "ruff",
     "mypy",
-    "pre-commit"
+    "pre-commit",
+    "aiosqlite",
+]
+sqlite = [
+    "aiosqlite",
 ]
 postgres = [
     "psycopg[binary]>=3.3.4",
