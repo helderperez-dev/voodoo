@@ -72,9 +72,9 @@ class VoodooStoreWorkflowStore:
         body["workflow_id"] = workflow_id
         self._store().put(
             self._key(workflow_id),
-            json.dumps(
-                body, separators=(",", ":"), sort_keys=True, default=str
-            ).encode("utf-8"),
+            json.dumps(body, separators=(",", ":"), sort_keys=True, default=str).encode(
+                "utf-8"
+            ),
         )
 
     def load(self, workflow_id: str) -> dict[str, Any] | None:
