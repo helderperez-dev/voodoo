@@ -56,12 +56,12 @@ def _registry() -> StoreProviderRegistry:
     return registry
 
 
-def test_store_config_has_future_default_without_enabling_it_yet() -> None:
+def test_store_config_defaults_to_voodoo_store_enabled() -> None:
     config = StoreConfig()
 
     assert config.provider == "voodoo"
     assert config.path == DEFAULT_STORE_PATH
-    assert config.enabled is False
+    assert config.enabled is True
     assert config.durability == "data"
     assert config.repair_torn_tail is True
 
@@ -100,6 +100,12 @@ def test_store_config_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert config.enabled is True
     assert config.durability == "strict"
     assert config.repair_torn_tail is False
+
+
+def test_store_can_be_explicitly_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VOODOO_STORE_ENABLED", "false")
+
+    assert StoreConfig.from_mapping().enabled is False
 
 
 def test_store_mapping_wins_over_environment(monkeypatch: pytest.MonkeyPatch) -> None:
