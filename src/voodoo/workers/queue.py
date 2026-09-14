@@ -50,7 +50,7 @@ async def _get_queue() -> VoodooQueue:
     provider = cfg.provider.lower()
 
     if provider == "voodoo":
-        from voodoo.storage.queue.voodoo import VoodooStoreQueue
+        from voodoo.storage.queue.store import VoodooStoreQueue
 
         _queue = VoodooStoreQueue()
     elif provider in {"memory", "redis"}:
