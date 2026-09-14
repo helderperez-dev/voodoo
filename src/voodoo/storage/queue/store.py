@@ -1,8 +1,8 @@
 """Voodoo Store implementation of the durable queue contract.
 
-The Runtime owns the active Store lifecycle. This adapter projects native
-Store Jobs into the existing :class:`VoodooQueue` API without exposing
-``voodoo_store`` objects to application code or opening a second ``.vstore``.
+The Runtime owns the Store lifecycle. This adapter projects native Store Jobs
+into the existing :class:`VoodooQueue` API without exposing ``voodoo_store``
+objects to application code or opening a competing ``.vstore`` writer.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any
 
 from voodoo.adapters.capabilities import QueueCapabilities
 from voodoo.core.errors import ConfigurationError
-from voodoo.runtime.store import get_active_runtime_store
+from voodoo.runtime.store import acquire_runtime_store
 from voodoo.storage.queue.interfaces import QueueStats, TaskRecord, TaskStatus
 
 _REQUIRED_JOB_API = (
@@ -47,7 +47,6 @@ def _from_ms(value: Any) -> datetime | None:
 
 
 def _public_id(job_id: bytes) -> int:
-    """Project a 128-bit Store JobId into the existing integer task API."""
     raw = bytes(job_id)
     if len(raw) != 16:
         raise ValueError("Voodoo Store job ids must be exactly 16 bytes")
@@ -63,23 +62,16 @@ def _native_id(task_id: int) -> bytes:
 def _status(job: dict[str, Any]) -> TaskStatus:
     state = str(job["state"])
     if state == "ready":
-        return (
-            TaskStatus.RETRYING
-            if int(job.get("attempts", 0)) > 0
-            else TaskStatus.PENDING
-        )
+        return TaskStatus.RETRYING if int(job.get("attempts", 0)) > 0 else TaskStatus.PENDING
     if state == "leased":
         return TaskStatus.RUNNING
     if state == "completed":
         return TaskStatus.COMPLETED
-    # The legacy TaskStatus surface has no cancelled state. Cancellation is a
-    # terminal unsuccessful outcome, so it projects to FAILED together with
-    # native dead-lettered jobs.
     return TaskStatus.FAILED
 
 
 class VoodooStoreQueue:
-    """Durable background work backed by the active Runtime Store."""
+    """Durable background work backed by the process-shared Runtime Store."""
 
     provider = "voodoo"
 
@@ -88,12 +80,7 @@ class VoodooStoreQueue:
         self._leases: dict[int, tuple[str, int]] = {}
 
     async def setup(self) -> None:
-        runtime_store = get_active_runtime_store()
-        if runtime_store is None:
-            raise ConfigurationError(
-                "The 'voodoo' queue provider requires the active RuntimeStore. "
-                "Start the queue inside the Voodoo application lifecycle."
-            )
+        runtime_store = acquire_runtime_store()
         provider = runtime_store.provider or runtime_store.start()
         if provider is None:
             raise ConfigurationError(
@@ -101,9 +88,7 @@ class VoodooStoreQueue:
             )
         native = getattr(provider, "native", None)
         if native is None:
-            raise ConfigurationError(
-                "The active Store provider does not expose durable Jobs."
-            )
+            raise ConfigurationError("The active Store provider does not expose durable Jobs.")
         missing = [name for name in _REQUIRED_JOB_API if not hasattr(native, name)]
         if missing:
             names = ", ".join(missing)
@@ -151,7 +136,7 @@ class VoodooStoreQueue:
             ),
         )
         job = store.get_job(job_id)
-        if job is None:  # pragma: no cover - native submit/get is atomic
+        if job is None:
             raise RuntimeError("Voodoo Store submitted a job that cannot be read back")
         return self._record(job)
 
@@ -200,7 +185,7 @@ class VoodooStoreQueue:
             return False
         try:
             self._store().complete_job(_native_id(task_id), generation, _now_ms())
-        except Exception as exc:  # noqa: BLE001 - stale lease projects to False
+        except Exception as exc:
             if "lease" in str(exc).lower() or "not found" in str(exc).lower():
                 self._leases.pop(task_id, None)
                 return False
@@ -219,9 +204,6 @@ class VoodooStoreQueue:
         generation = self._owned_lease(task_id, worker)
         if generation is None:
             return None
-        # Store Jobs persist retry policy at submit time. The current public
-        # worker contract uses the same 1.0 second default, so native retry
-        # timing remains equivalent while becoming process-crash durable.
         _ = backoff_base
         self._store().fail_job(
             _native_id(task_id), generation, _now_ms(), error.encode("utf-8")
