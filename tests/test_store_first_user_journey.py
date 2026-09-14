@@ -15,6 +15,7 @@ from voodoo.data import Model
 from voodoo.data.store_backend import bind_runtime_store
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.engine import ComputeResult, ExecutionEngine
+from voodoo.runtime.execution import ExecutionStatus
 from voodoo.runtime.store import (
     RuntimeStore,
     StoreConfig,
@@ -77,7 +78,7 @@ async def test_store_first_application_domains_survive_restart(tmp_path: Path) -
             compute,
             actor="user:smoke",
         )
-        assert execution.completed
+        assert execution.status is ExecutionStatus.COMPLETED
         execution_id = execution.id
 
         assert path.exists()
@@ -108,7 +109,7 @@ async def test_store_first_application_domains_survive_restart(tmp_path: Path) -
         execution_store = VoodooStoreExecutionStore()
         executions = execution_store.load_all()
         restored = next(item for item in executions if item.id == execution_id)
-        assert restored.completed
+        assert restored.status is ExecutionStatus.COMPLETED
         assert restored.result == {"record_id": 1, "ok": True}
     finally:
         _unbind()
