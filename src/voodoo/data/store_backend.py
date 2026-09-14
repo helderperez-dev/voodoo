@@ -22,7 +22,10 @@ _owned_runtime_store: RuntimeStore | None = None
 def bind_runtime_store(runtime_store: RuntimeStore | None) -> None:
     """Bind the application-owned RuntimeStore for Model persistence."""
     global _runtime_store
+    from voodoo.runtime.store import bind_active_runtime_store
+
     _runtime_store = runtime_store
+    bind_active_runtime_store(runtime_store)
 
 
 def _get_runtime_store() -> RuntimeStore:
