@@ -1,14 +1,13 @@
 """Durable async queue & worker runtime.
 
-Workers poll a ``VoodooQueue`` provider (SQLite by default, memory optional)
-for claimable tasks. Each claimed task performs exactly one execution attempt.
-On failure the durable queue owns retry scheduling and backoff, so retry budget
-survives worker/process failure instead of living only in memory.
+Workers poll a ``VoodooQueue`` provider for claimable tasks. Each claimed task
+performs exactly one canonical Runtime execution attempt. The queue owns durable
+delivery, leasing, retry scheduling, and crash recovery; it never executes
+application code itself.
 
 The ``@queue`` decorator and ``enqueue``/``start_workers``/``stop_workers``
-functions form the public API; swapping the provider (see
-``VOODOO_QUEUE_PROVIDER``) changes the backend without touching application
-code.
+functions form the public API; swapping the provider changes infrastructure
+without touching application code.
 """
 
 from __future__ import annotations
@@ -46,14 +45,22 @@ async def _get_queue() -> VoodooQueue:
 
     from voodoo.adapters.registry import registry
     from voodoo.config import get_config
-    from voodoo.data.base import _database, get_db
 
     cfg = get_config().queue
     provider = cfg.provider.lower()
 
-    if provider == "memory":
+    if provider == "voodoo":
+        from voodoo.storage.queue.voodoo import VoodooStoreQueue
+
+        _queue = VoodooStoreQueue()
+    elif provider in {"memory", "redis"}:
+        # These providers do not depend on a relational database. Historically
+        # Redis fell through the DB-backed branch and initialized SQLite for no
+        # reason; Sprint 28 makes provider ownership explicit.
         _queue = registry.get_queue(cfg)
     else:
+        from voodoo.data.base import _database, get_db
+
         db = _database
         if db is None:
             await get_db()
