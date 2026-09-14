@@ -1,9 +1,9 @@
 """Voodoo Store-backed object storage.
 
-This adapter keeps object bytes and metadata inside the application-owned
+This adapter keeps object bytes and metadata inside the Runtime-owned
 ``application.vstore`` so the default Runtime does not require a parallel
-filesystem metadata database or S3 service. It deliberately consumes the
-Runtime Store boundary rather than opening a second ``.vstore`` writer.
+filesystem metadata database or S3 service. It consumes the central Runtime
+Store boundary rather than opening a competing writer.
 
 The standalone Store core already has a richer object subsystem; until that
 surface is exposed by the Python binding, this adapter uses the Store KV
@@ -21,7 +21,7 @@ from typing import Any
 from urllib.parse import quote
 
 from voodoo.core.errors import ConfigurationError
-from voodoo.runtime.store import RuntimeStore, StoreConfig, get_active_runtime_store
+from voodoo.runtime.store import acquire_runtime_store
 from voodoo.storage.objects.interfaces import ObjectStoreCapabilities
 
 _DATA_PREFIX = b"runtime:objects:data:"
@@ -29,12 +29,9 @@ _META_PREFIX = b"runtime:objects:meta:"
 
 
 class VoodooStoreObjectStore:
-    """Object storage backed by the active application Voodoo Store."""
+    """Object storage backed by the process-shared Runtime Store."""
 
     provider = "voodoo"
-
-    def __init__(self) -> None:
-        self._owned_runtime_store: RuntimeStore | None = None
 
     def capabilities(self) -> ObjectStoreCapabilities:
         return ObjectStoreCapabilities(
@@ -45,17 +42,8 @@ class VoodooStoreObjectStore:
             multipart=False,
         )
 
-    def _runtime(self) -> RuntimeStore:
-        active = get_active_runtime_store()
-        if active is not None:
-            return active
-        if self._owned_runtime_store is None:
-            self._owned_runtime_store = RuntimeStore(StoreConfig())
-            self._owned_runtime_store.start()
-        return self._owned_runtime_store
-
     def _native(self) -> Any:
-        runtime = self._runtime()
+        runtime = acquire_runtime_store()
         provider = runtime.provider or runtime.start()
         if provider is None:
             raise ConfigurationError("Voodoo Store is disabled for object storage")
@@ -133,6 +121,4 @@ class VoodooStoreObjectStore:
         return f"voodoo://objects/{quote(key, safe='/')}"
 
     def close(self) -> None:
-        if self._owned_runtime_store is not None:
-            self._owned_runtime_store.stop()
-            self._owned_runtime_store = None
+        """Lifecycle is owned centrally by RuntimeStore."""
