@@ -43,9 +43,7 @@ class TestCreateScaffold:
         assert "App" in content
         assert "Model" in content
 
-    def test_creates_voodoo_toml_with_store_first_guidance(
-        self, tmp_cwd: Path
-    ) -> None:
+    def test_creates_voodoo_toml_with_store_first_guidance(self, tmp_cwd: Path) -> None:
         runner.invoke(app, ["create", "myapp"])
         toml = tmp_cwd / "myapp" / "voodoo.toml"
         assert toml.exists()
