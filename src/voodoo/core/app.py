@@ -65,7 +65,6 @@ class App:
         self._plugins: list[Callable[[App], Any]] = []
         if theme is not None:
             if isinstance(theme, str):
-                # A preset name/path/URL — resolve and install it.
                 from voodoo.ui.styles.presets import activate_theme
 
                 activate_theme(theme)
@@ -73,8 +72,6 @@ class App:
                 from voodoo.ui.styles.theme import set_theme
 
                 set_theme(theme)
-
-    # -- ASGI ----------------------------------------------------------------
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         await self.starlette(scope, receive, send)
@@ -93,14 +90,10 @@ class App:
         """All registered routes (consumed by ``voodoo routes``)."""
         return list(self.starlette.routes)
 
-    # -- Extension point -----------------------------------------------------
-
     def use(self, plugin: Callable[["App"], Any]) -> "App":
         """Register a plugin callable invoked once the app is built."""
         self._plugins.append(plugin)
         return self
-
-    # -- Dev server ----------------------------------------------------------
 
     def run(
         self,
@@ -122,7 +115,6 @@ class App:
         port = port if port is not None else config.port
 
         if reload:
-            # uvicorn reload requires an import string, not an app object.
             raise ConfigurationError(
                 "app.run(reload=True) requires an import string. Use "
                 "`voodoo dev` or uvicorn.run('main:app', reload=True)."
@@ -156,8 +148,6 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     except FileNotFoundError:
         cwd = "."
 
-    # Resolve the active theme once up front (preset → project .voodoo/theme/
-    # → built-in default) so rendering, adapters, and tone resolution share it.
     from voodoo.ui.styles.presets import activate_theme
 
     activate_theme(config.theme.preset, project_root=cwd, mode=config.theme.mode)
@@ -169,24 +159,20 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         WebSocketRoute("/voodoo/mesh/ws", mesh._handle_websocket),
     ]
 
-    # Mount public/ static assets only if the directory exists
     public_dir = os.path.join(cwd, "public")
     if os.path.isdir(public_dir):
         routes.append(
             Mount("/public", app=StaticFiles(directory=public_dir), name="public")
         )
 
-    # Mount storage/ for local file serving only if the directory exists
     storage_dir = os.path.join(cwd, config.storage_dir)
     if os.path.isdir(storage_dir):
         routes.append(
             Mount("/storage", app=StaticFiles(directory=storage_dir), name="storage")
         )
 
-    # --- Decorator-registered pages (@page) take precedence over convention ---
     routes.extend(page_registry.routes)
 
-    # --- SEO: Auto-generate sitemap.xml and robots.txt ---
     seo_config = config.seo
 
     if seo_config.sitemap_enabled:
@@ -207,11 +193,9 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
         routes.append(Route("/robots.txt", robots_handler, methods=["GET"]))
 
-    # File-based routing: app/page.py convention + app/pages/ file-per-page
     _scan_page_convention(app_dir, routes)
     _scan_pages_directory(app_dir, routes)
 
-    # Initialize components if needed
     models_path = os.path.join(app_dir, "models.py")
     if os.path.exists(models_path):
         spec = importlib.util.spec_from_file_location("models", models_path)
@@ -236,15 +220,11 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
             sys.modules["app_api"] = api_module
             spec.loader.exec_module(api_module)
 
-    # Always include internal API routes (like /status) even if no user api.py exists
     from voodoo.routing.api import api as voodoo_api
 
     routes.extend(voodoo_api.routes)
 
-    # --- Edge device gateway (Sprint 23, EDGE §68) -------------------------
-    # Entirely optional: when ``edge.enabled`` is False, no store, gateway,
-    # routes, or MQTT client are created — regular apps pay zero overhead.
-    edge_gateway: list = []  # mutable holder so lifespan can share/replace the gateway
+    edge_gateway: list = []
     if config.edge.enabled and config.edge.http_enabled:
         from voodoo.edge import DeviceGateway, SQLiteDeviceStore
 
@@ -270,29 +250,36 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        # Startup — wire the durable execution store (Sprint 3 / Sprint 11).
+        # Sprint 28: every Runtime owns one local-first application Store by
+        # default. The legacy per-domain stores remain active until their
+        # dedicated convergence slices move onto this substrate.
+        from voodoo.runtime.store import RuntimeStore, StoreConfig
+
+        raw_store_config = config.extra.get("store", {})
+        if not isinstance(raw_store_config, dict):
+            raw_store_config = {"provider": str(raw_store_config)}
+        application_store = RuntimeStore(StoreConfig.from_mapping(raw_store_config))
+        application_store.start()
+        app.state.runtime_store = application_store
+
         from voodoo.runtime.engine import engine as runtime_engine
 
         provider = config.database.provider.lower()
         if provider == "postgres":
-            # Sprint 11: run the durable execution store on PostgreSQL via the
-            # shared translated migrations. The scheduler remains SQLite-backed
-            # (documented) so the lifespan boots cleanly with a server DB.
             from voodoo.storage.execution import PostgresExecutionStore
 
             url = config.database.url or os.getenv("VOODOO_DATABASE_URL", "")
-            store = PostgresExecutionStore(url)
-            runtime_engine.use_store(store)
+            execution_store = PostgresExecutionStore(url)
+            runtime_engine.use_store(execution_store)
             schedule_path = ".voodoo/state/schedules.db"
         else:
             from voodoo.storage.execution import SQLiteExecutionStore
 
             store_path = config.db_path.replace(":memory:", ".voodoo/state/data.db")
-            store = SQLiteExecutionStore(store_path)
-            runtime_engine.use_store(store)
+            execution_store = SQLiteExecutionStore(store_path)
+            runtime_engine.use_store(execution_store)
             schedule_path = store_path.replace("data.db", "schedules.db")
 
-        # Scheduler (Sprint 5)
         from voodoo.runtime.scheduler import ScheduleService
         from voodoo.storage.scheduler import SQLiteScheduleStore
 
@@ -300,14 +287,12 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         scheduler = ScheduleService(schedule_store)
         await scheduler.start()
 
-        # DB and workers are lazily initialized
         worker_task = None
         from voodoo.workers.queue import _workers
 
         if _workers:
             worker_task = asyncio.create_task(start_workers())
 
-        # Edge MQTT transport (Sprint 23) — optional, only when configured.
         mqtt_transport = None
         if config.edge.enabled and config.edge.mqtt_enabled:
             try:
@@ -333,22 +318,22 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
                 )
                 await mqtt_transport.start()
             except ImportError:
-                # paho-mqtt not installed — edge stays HTTP-only.
                 pass
-        yield
-        # Shutdown
-        if mqtt_transport is not None:
-            await mqtt_transport.stop()
-        await stop_workers()
-        if worker_task:
-            worker_task.cancel()
-        # Close the database connection if one was lazily opened
-        # (no-op when the app never touched the data layer)
-        from voodoo.data import close_db
 
-        await close_db()
-        await scheduler.stop()
-        schedule_store.close()
+        try:
+            yield
+        finally:
+            if mqtt_transport is not None:
+                await mqtt_transport.stop()
+            await stop_workers()
+            if worker_task:
+                worker_task.cancel()
+            from voodoo.data import close_db
+
+            await close_db()
+            await scheduler.stop()
+            schedule_store.close()
+            application_store.stop()
 
     middleware = [
         Middleware(SecurityHeadersMiddleware),
@@ -398,7 +383,6 @@ def _scan_page_convention(app_dir: str, routes: list[BaseRoute]) -> None:
     if not os.path.exists(app_dir):
         return
     for root, _dirs, files in os.walk(app_dir):
-        # Skip the pages/ subdirectory — handled by _scan_pages_directory
         if os.path.relpath(root, app_dir) == "pages":
             continue
         if "page.py" in files:
@@ -435,15 +419,12 @@ def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
             filepath = os.path.join(root, fname)
             rel_path = os.path.relpath(filepath, pages_dir)
 
-            # Remove .py extension and normalize separators
-            stem = rel_path[:-3]  # without .py
+            stem = rel_path[:-3]
             stem = stem.replace("\\", "/")
 
-            # index.py → /
             if stem == "index":
                 route_path = "/"
             else:
-                # about.py → /about, users/[id].py → /users/{id}
                 parts = stem.split("/")
                 parts = [p.replace("[", "{").replace("]", "}") for p in parts]
                 route_path = "/" + "/".join(parts)
@@ -455,6 +436,4 @@ def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
                 routes.append(route)
 
 
-# Module-level ASGI app for `voodoo dev` when no main.py exists.
-# The underlying Starlette app is built lazily on first request.
 app = App()
