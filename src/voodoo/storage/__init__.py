@@ -37,15 +37,27 @@ __all__ = [
 ]
 
 _LAZY_EXPORTS = {
-    "EventBusCapabilities": ("voodoo.storage.events.interfaces", "EventBusCapabilities"),
+    "EventBusCapabilities": (
+        "voodoo.storage.events.interfaces",
+        "EventBusCapabilities",
+    ),
     "VoodooEventBus": ("voodoo.storage.events.interfaces", "VoodooEventBus"),
     "VoodooStoreEventBus": ("voodoo.storage.events.store", "VoodooStoreEventBus"),
     "LocalEventBus": ("voodoo.storage.events.local", "LocalEventBus"),
     "SQLiteEventBus": ("voodoo.storage.events.sqlite", "SQLiteEventBus"),
     "PostgresEventStore": ("voodoo.storage.events.postgres", "PostgresEventStore"),
-    "SQLiteExecutionStore": ("voodoo.storage.execution.sqlite", "SQLiteExecutionStore"),
-    "PostgresExecutionStore": ("voodoo.storage.execution.postgres", "PostgresExecutionStore"),
-    "VoodooStoreExecutionStore": ("voodoo.storage.execution.store", "VoodooStoreExecutionStore"),
+    "SQLiteExecutionStore": (
+        "voodoo.storage.execution.sqlite",
+        "SQLiteExecutionStore",
+    ),
+    "PostgresExecutionStore": (
+        "voodoo.storage.execution.postgres",
+        "PostgresExecutionStore",
+    ),
+    "VoodooStoreExecutionStore": (
+        "voodoo.storage.execution.store",
+        "VoodooStoreExecutionStore",
+    ),
     "VoodooQueue": ("voodoo.storage.queue.interfaces", "VoodooQueue"),
     "VoodooStoreQueue": ("voodoo.storage.queue.store", "VoodooStoreQueue"),
     "MemoryQueue": ("voodoo.storage.queue.memory", "MemoryQueue"),
