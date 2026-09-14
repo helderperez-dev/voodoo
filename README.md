@@ -45,8 +45,16 @@ cd my_app
 voodoo dev
 ```
 
-Open `http://localhost:8000`. The default path requires no external database,
-queue or object store.
+Open `http://localhost:8000`. On first run Voodoo creates:
+
+```text
+.voodoo/application.vstore
+```
+
+That Store is the default durable application substrate for local data, durable
+work, scheduling, event state, objects, execution state, workflows, approvals,
+identity state, and Edge/device state. A local application does not require an
+external database, Redis, queue server, or object server.
 
 AI provider SDKs are optional:
 
@@ -57,6 +65,35 @@ pip install "voodoo-framework[ai]"
 The core package does not install OpenAI, Anthropic, Gemini or Ollama SDKs.
 Providers are resolved lazily when used.
 
+## Voodoo Store by default
+
+Voodoo Store is embedded application infrastructure. The framework owns one
+Runtime Store handle per process/application lifecycle and shares it across
+Store-backed Runtime domains.
+
+```text
+Application
+    |
+    v
+Voodoo Runtime
+    |
+    +-- Model / Data
+    +-- Jobs / Queue
+    +-- Scheduler
+    +-- Events
+    +-- Objects
+    +-- Execution / Workflow / HITL
+    +-- Identity
+    +-- Edge
+    |
+    v
+.voodoo/application.vstore
+```
+
+The Store is local-first and single-writer. PostgreSQL, SQLite, Redis, S3 and
+other infrastructure remain explicit adapters for workloads that need them;
+they are not silent defaults.
+
 ## Start simple
 
 | You need | Voodoo primitive |
@@ -65,7 +102,7 @@ Providers are resolved lazily when used.
 | Persistent business data | `Model` |
 | Browser interaction | Python-callable UI event/action |
 | Decoupled application notification | Mesh / event bus |
-| Retryable background work | `@task` |
+| Retryable background work | `@task` / durable queue |
 | Meaningful durable/observable work | `Execution` |
 | LLM reasoning and tool use | `Agent` + `@tool` |
 | Authorization to produce an effect | `Capability` |
@@ -105,13 +142,13 @@ async def notify(payload):
 agent = Agent(model="mock:test", tools=["create_lead"])
 ```
 
-The local chain is exactly what it says: Agent → Tool → Model → Mesh. Tools may
-also be exposed through MCP, but MCP is a separate interoperability boundary,
-not a fake step inserted into every tool call.
+With the default configuration, `Lead` is persisted through Voodoo Store. Tools
+may also be exposed through MCP, but MCP is a separate interoperability
+boundary, not a fake step inserted into every tool call.
 
 ## Operational closed loop
 
-Sprint 27 adds a zero-infrastructure canary proving the deeper runtime model:
+The operational runtime keeps attempted effects separate from observed reality:
 
 ```text
 simulated device
@@ -129,7 +166,7 @@ simulated device
   → World
 ```
 
-Run it with:
+Run the canary with:
 
 ```bash
 python examples/operational_closed_loop/main.py
@@ -156,8 +193,9 @@ boundary.
   ExecutionEngine, capability and policy boundary.
 - **Physical participants use the same semantics.** Edge devices report
   evidence and receive Effects without owning a DeviceExecutionEngine.
-- **Local-first, production-capable.** SQLite/local filesystem provide the
-  default path; PostgreSQL, Redis and S3-compatible storage are adapters.
+- **Store-first and local-first.** Voodoo Store provides the default embedded
+  durable infrastructure; PostgreSQL, SQLite, Redis and S3-compatible storage
+  are explicit adapters.
 - **Observability is structural.** Trace/execution lineage connects meaningful
   work, Effects and resulting Observations.
 
@@ -180,7 +218,7 @@ See `docs/public-api-3.md` for the 3.0 import law and 2.x compatibility policy.
 ## Major capabilities
 
 **Application:** server-rendered/reactive Python UI, routing/APIs, design
-system/themes, SEO, async ORM, auth and security middleware.
+system/themes, SEO, async Model persistence, auth and security middleware.
 
 **Runtime:** ExecutionEngine, durable checkpoints/recovery, workers/tasks,
 scheduler, event infrastructure, human approvals, capability security,
@@ -193,53 +231,91 @@ World storage and reasoning/policy snapshots.
 model/provider abstraction and config-driven OpenAI-compatible endpoints.
 
 **Distributed/Edge:** governed remote execution, replay/idempotency, distributed
-WAITING/HITL, device identity/auth, HTTP/MQTT Edge semantics, effect delivery,
-ACKs and Edge → World evidence convergence.
+WAITING/HITL, node membership/routing, device identity/auth, HTTP/MQTT Edge
+semantics, effect delivery, ACKs and Edge → World evidence convergence.
 
-**Infrastructure adapters:** PostgreSQL, Redis, S3-compatible object storage and
-OpenTelemetry are optional extras behind runtime contracts.
+**Infrastructure adapters:** PostgreSQL, SQLite, Redis, S3-compatible object
+storage and OpenTelemetry are optional or explicit integrations behind Runtime
+contracts.
 
 ## Installation
 
 ```bash
-# Core runtime
+# Core runtime (includes the Voodoo Store dependency)
 pip install voodoo-framework
 
 # Model providers
 pip install "voodoo-framework[ai]"
 
-# Production adapters as needed
+# Explicit external adapters as needed
 pip install "voodoo-framework[postgres,redis,s3,otel]"
 
-# Edge MQTT adapter when needed
+# Explicit SQLite adapter when needed
+pip install "voodoo-framework[sqlite]"
+
+# Edge MQTT transport when needed
 pip install "voodoo-framework[edge]"
 
 # Development tools
 pip install "voodoo-framework[dev]"
 ```
 
-Other supported installation paths include Homebrew, `uv tool install
-voodoo-framework`, and `pipx install voodoo-framework`.
+Other supported installation paths include `uv tool install voodoo-framework`
+and `pipx install voodoo-framework`.
 
 ## Configuration
 
-Voodoo is zero-config locally. Add `voodoo.yaml` only when you need explicit
-providers:
+Voodoo is zero-config locally. The effective defaults are equivalent to:
 
-```yaml
-database:
-  provider: sqlite
-queue:
-  provider: sqlite
-events:
-  provider: sqlite
-objects:
-  provider: local
-cache:
-  provider: memory
-runtime:
-  run_api_through_runtime: true
+```toml
+[store]
+provider = "voodoo"
+path = ".voodoo/application.vstore"
+
+[database]
+provider = "voodoo"
+
+[queue]
+provider = "voodoo"
+
+[events]
+provider = "voodoo"
+
+[objects]
+provider = "voodoo"
 ```
+
+You normally do not need to write those blocks. Override only the domain that
+needs external infrastructure. For example:
+
+```toml
+[database]
+provider = "postgres"
+url = "postgresql://..."
+
+[queue]
+provider = "redis"
+url = "redis://..."
+
+[objects]
+provider = "s3"
+bucket = "my-bucket"
+```
+
+Voodoo does not silently migrate or copy legacy SQLite/PostgreSQL/Redis/S3 data
+into the Store at startup. Migration is an explicit operation.
+
+## Current Store boundaries
+
+The Store-first path is usable, but current 0.2.x boundaries are explicit:
+
+- schedule enable/disable is supported, but arbitrary schedule-cursor
+  repositioning is not exposed by Store 0.2.2;
+- Events and Objects preserve their Framework contracts through Store-backed
+  compatibility layers while richer native Python bindings evolve;
+- node-local Stores are not replicated automatically;
+- Voodoo does not claim distributed consensus, global serializable
+  transactions, or global exactly-once execution.
 
 ## Documentation
 
@@ -271,9 +347,9 @@ Start here:
 
 ## Project status
 
-Voodoo is beta software. `SPRINT_PLAN.md` is the implementation source of truth
-and `ROADMAP.md` is the architectural source of truth. Sprint completion and a
-published package release are intentionally separate operations.
+Voodoo is beta software. Sprint completion and a published package release are
+intentionally separate operations. The repository branch may contain completed
+work that has not yet been released to PyPI.
 
 ## Contributing and security
 
