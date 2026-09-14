@@ -21,12 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    # PostgreSQL service container (Sprint 11): runs the queue/events/execution
-    # contract + failure-path suites against a real server at release time.
-    # MinIO service container (Sprint 12): runs the object store contract
-    # suite against a real S3-compatible server at release time.
-    # Redis service container (Sprint 13): runs the queue + cache contract
-    # suites against a real server at release time.
     services:
       postgres:
         image: postgres:16
@@ -43,9 +37,6 @@ jobs:
           --health-retries 5
       minio:
         image: quay.io/minio/minio
-        # quay.io/minio/minio CMD is bare `minio` (prints help + exits), so the
-        # server must be started explicitly — same as `just minio-up`.
-        # (Moved off Docker Hub `minio/minio` — public images were removed.)
         command: server /data
         env:
           MINIO_ROOT_USER: minioadmin
@@ -68,14 +59,11 @@ jobs:
           --health-retries 5
 
     env:
-      # Makes the PostgreSQL contract + failure-path tests run instead of skip.
       VOODOO_TEST_DATABASE_URL: postgresql://voodoo:voodoo@localhost:5432/voodoo_test
-      # Makes the S3 object store contract tests run instead of skip.
       VOODOO_TEST_S3_ENDPOINT: http://localhost:9000
       VOODOO_TEST_S3_BUCKET: voodoo-test
       VOODOO_TEST_S3_KEY: minioadmin
       VOODOO_TEST_S3_SECRET: minioadmin
-      # Makes the Redis queue + cache contract tests run instead of skip.
       VOODOO_TEST_REDIS_URL: redis://localhost:6379/0
 
     steps:
@@ -83,8 +71,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          # Use a PAT (RELEASE_TOKEN) so the version-bump commit + tag can be
-          # pushed to the protected `main` branch even with enforce_admins.
           token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: ⚙️ Configure git identity
@@ -178,21 +164,19 @@ jobs:
             depends_on "uv"
             depends_on "python@3.12"
 
+            # Voodoo Store ships a prebuilt Mach-O Python extension whose install
+            # name is intentionally @rpath-based. Homebrew's generic post-install
+            # dylib relocation cannot expand its load-command header, so leave it
+            # untouched.
+            skip_clean "libexec/voodoo-framework/lib/python3.12/site-packages/voodoo_store/_native.abi3.so"
+
             def install
-              # Use uv tool install — uv manages its own Python for the install step
-              # (avoids pip's truststore bug and Homebrew's broken platform.mac_ver()
-              # on macOS Tahoe 26.x). After install, rewrite shebangs to use Homebrew's Python.
               ENV["UV_TOOL_DIR"] = libexec.to_s
-              # Pin the exact version — an unpinned `uv tool install` would pull
-              # whatever is latest on PyPI at `brew install` time and ignore the
-              # url/sha256 above, shipping stale framework code.
               system "uv", "tool", "install", "voodoo-framework==#{version}", "--python", "3.12"
 
               tool_bin = libexec/"voodoo-framework/bin"
               brew_python = Formula["python@3.12"].bin/"python3.12"
 
-              # Replace ALL python symlinks (including broken ones) with Homebrew Python.
-              # Use lstat to detect broken symlinks (File.exist? returns false for those).
               %w[python python3 python3.12].each do |name|
                 link = tool_bin/name
                 next unless File.symlink?(link.to_s)
@@ -200,7 +184,6 @@ jobs:
                 File.symlink(brew_python, link)
               end
 
-              # Rewrite shebang in the voodoo script
               voodoo_script = tool_bin/"voodoo"
               if voodoo_script.exist?
                 content = File.read(voodoo_script)
@@ -209,7 +192,6 @@ jobs:
                 chmod("+x", voodoo_script)
               end
 
-              # Remove .so files whose Mach-O headers lack padding for Homebrew's dylib fixup.
               rm_rf Dir.glob(libexec/"**/site-packages/jiter/*.so")
 
               bin.install_symlink tool_bin/"voodoo"
