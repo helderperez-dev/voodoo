@@ -9,6 +9,7 @@ import pytest
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.engine import ExecutionEngine
+from voodoo.runtime.execution import ExecutionStatus
 from voodoo.runtime.fabric import FabricWork, PlacementRequirement, RuntimeFabric
 from voodoo.runtime.identity import (
     AuthenticationEvidence,
@@ -50,7 +51,7 @@ def test_single_node_zero_external_infrastructure_survives_restart(tmp_path) -> 
     received = []
     bus = VoodooStoreEventBus()
     bus.subscribe("order.created", lambda event: received.append(event["payload"]))
-    assert dispatch_events(bus, runtime_store=runtime) == 1
+    assert dispatch_events(event_bus=bus, runtime_store=runtime) == 1
     assert received == [{"order_id": "42"}]
     bind_active_runtime_store(None)
     runtime.stop()
@@ -107,7 +108,7 @@ async def test_same_application_operation_routes_across_nodes_without_topology_l
                     actor=f"remote:{node_id}",
                     capabilities=["vision"],
                 )
-                assert execution.completed
+                assert execution.status is ExecutionStatus.COMPLETED
                 return execution.result
 
         # Application semantics mention only the operation and requirement. No
@@ -122,7 +123,11 @@ async def test_same_application_operation_routes_across_nodes_without_topology_l
         )
 
         assert result == {"node": "node-b", "image": "scan-1"}
-        completed = [e for e in engines["node-b"].executions.values() if e.completed]
+        completed = [
+            execution
+            for execution in engines["node-b"].executions.values()
+            if execution.status is ExecutionStatus.COMPLETED
+        ]
         assert len(completed) == 1
         assert completed[0].actor == "remote:node-b"
     finally:
