@@ -1,212 +1,299 @@
 # Architecture
 
-> **Root-level architecture reference.** For the full guide, see `docs/architecture.md`. For AI agent guidance, see `.github/instructions/architecture.instructions.md`.
+> **Root architecture reference.** Detailed subsystem guides live under `docs/`.
 
----
-
-## What it is
+## What Voodoo is
 
 Voodoo is a **programmable runtime for adaptive applications and operational
-systems**. Web applications, APIs, agents, background workers, realtime
-systems, MCP tools, data-driven applications, human workflows, and distributed
-systems are different manifestations of the same runtime — they converge on one
-execution model.
-
-**Built on:** Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python `asyncio`.
-
-**Zero-config by default** (SQLite + local filesystem). **Production-ready by configuration** (PostgreSQL, Redis, S3, and optional model providers).
-
----
-
-## The Convergence Model
-
-Every subsystem flows through the same conceptual model. There is no independent execution model per subsystem.
+systems**. Web applications, APIs, agents, background workers, human workflows,
+remote nodes and physical devices converge on one Runtime and one canonical
+Execution model.
 
 ```text
-Entity → State → Intent → Capability → Execution → Effect → State
+World / Application State
+          |
+          v
+        Intent
+          |
+          v
+Identity / Principal
+          |
+          v
+Capability + Policy
+          |
+          v
+ canonical Execution
+          |
+          v
+Compute -> Effect -> observed evidence -> World
 ```
 
-An **Entity** with **State** pursues an **Intent**, which resolves to a
-**Capability**, which is performed as an **Execution**. The execution is
-governed by **Compute** (how), **Time** (when / how long), **Resource** (what
-is consumed), and **Constraint** (what must hold). The execution produces an
-**Effect**, which changes **State**.
+AI is one form of Compute. It is not a second runtime and it does not grant
+ambient authority.
 
----
+## Default infrastructure
 
-## Design Principles
+Fresh applications are Store-first:
 
-1. **Progressive complexity** — Start with the smallest executable application. Add capabilities when needed.
-2. **One primary onboarding path** — `voodoo create` is the standard full-runtime scaffold; `voodoo new` is the intentionally minimal UI/routing scaffold.
-3. **Lazy capabilities** — Database, storage, workers, and optional provider SDKs initialize only when actually used.
-4. **AI as one Compute** — AI is not a separate subsystem; it is one class of Compute, never a fundamental primitive.
-5. **Capability-based security** — Explicit, composable, revocable permissions rather than implicit access.
-6. **Observability everywhere** — Correlation IDs + telemetry form the runtime's sensory system.
-7. **Zero-config runtime** — `voodoo create` → `voodoo dev` → working local runtime.
-8. **Meaningful executions only** — an `Execution` represents work worth observing, authorizing, recovering, accounting for, or reasoning about. Internal function calls, state reads, and implementation callbacks do not become executions merely because they occur inside Voodoo.
-9. **Adaptive behavior stays optional** — planner/supervisor features may enrich execution without making simple application paths depend on adaptive orchestration.
+```text
+Application
+    |
+    v
+Voodoo Runtime
+    |
+    +-- Model / Data
+    +-- Queue / Jobs
+    +-- Scheduler / Cron / Triggers
+    +-- Events / Outbox
+    +-- Objects
+    +-- Execution / Workflow / Goal / HITL
+    +-- Identity
+    +-- Edge / device state
+    |
+    v
+RuntimeStore
+    |
+    v
+.voodoo/application.vstore
+```
 
----
+The Framework depends on Voodoo Store and requires no external database, queue
+server or object server for its local default path. PostgreSQL, SQLite, Redis,
+S3 and other providers remain explicit adapters.
+
+## Architectural laws
+
+1. There is one Voodoo Runtime and one canonical `Execution` lifecycle.
+2. Voodoo Store is the default local durable infrastructure provider.
+3. Store owns durable mechanics; Runtime owns semantics, authority and intelligence.
+4. Identity belongs to Runtime; persistence does not define authorization.
+5. Application APIs do not leak native `voodoo_store` implementation types.
+6. One Runtime process owns one local Store writer.
+7. Multiple processes never coordinate by writing one shared `.vstore` file.
+8. Scaling changes deployment topology, not application business architecture.
+9. Distributed ownership comes before distributed storage/replication.
+10. Remote work still enters Capability + Policy + canonical Execution.
+11. Discovery or advertisement never grants authority.
+12. Voodoo does not claim consensus, global transactions or global exactly-once semantics it has not implemented.
+
+## One process, one Runtime Store
+
+```text
+Process / Runtime
+       |
+       v
+ RuntimeStore
+       |
+       v
+application.vstore
+```
+
+Infrastructure used before App startup acquires a process-shared Store. App
+startup adopts the compatible handle instead of opening a competing writer.
+Conflicting live Store configurations fail explicitly.
 
 ## Computational concepts
 
 | Concept | Purpose |
 |---|---|
-| **Entity** | Something with identity that participates in the system |
-| **State** | Current operational truth of an entity or system |
-| **Intent** | Desired outcome |
-| **Capability** | Ability + authorization to produce an effect under conditions |
-| **Execution** | Durable/observable unit of meaningful runtime work |
-| **Effect** | Change produced by an execution |
-| **Compute** | How execution is performed; AI is one form |
-| **Time** | Deadline, timeout, schedule, retry and lifecycle |
-| **Resource** | CPU, memory, tokens or other consumed resources |
-| **Constraint** | Conditions that must hold |
+| Entity | identifiable participant or thing |
+| State | current operational truth |
+| Intent | desired outcome |
+| Capability | ability/authorization to produce an effect |
+| Policy | contextual decision about whether authority may be exercised now |
+| Execution | durable/observable meaningful unit of Runtime work |
+| Effect | attempted external/state-changing action |
+| Observation | evidence about what actually happened |
+| Compute | how work is performed; AI is one form |
+| Time | deadlines, retries, schedules and lifecycle |
+| Resource | cost, tokens, CPU, memory, energy or other consumption |
+| Constraint | condition that must hold |
 
-Cross-cutting concepts are **Event**, **Identity**, **Telemetry**, and **Relationship**.
+`Effect != Observation`: sending a command does not make the World true. World
+state changes from observed evidence.
 
-### Choosing the right abstraction
+## Choosing abstractions
 
 | Need | Use |
 |---|---|
-| UI-local mutable value | reactive `state()` |
+| UI-local mutable value | `state()` |
 | Persistent business data | `Model` |
-| Long-term contextual recall | agent/runtime memory |
-| Browser interaction | `@event` |
-| Decoupled application notification | Mesh/event bus |
-| Retryable background work | `@task` |
-| Meaningful durable/observable operation | `Execution` |
-| LLM reasoning/tool loop | `Agent` |
-| Reusable callable action | `@tool` |
-| Authorization to produce an effect | `Capability` |
-| Human decision in an execution | HITL approval |
-| Work at a future time | Scheduler |
+| Retryable durable background delivery | Store-backed Queue / `@queue` |
+| Callable retry/timeout wrapper | `@task` |
+| Decoupled durable application notification | Event bus / Outbox |
+| Meaningful governed operation | `Execution` |
+| LLM reasoning/tool loop | `Agent` + `@tool` |
+| Human decision in ongoing work | HITL approval |
+| Durable desired outcome | `Goal` + `GoalRuntime` |
+| Physical/external participant | Edge / `DeviceGateway` |
+| Node-to-node governed work | Runtime Fabric |
 
-The table is deliberately semantic: similar-looking primitives are not aliases. UI state is not business persistence; a tool is not a capability; an event is not automatically an execution.
+UI state is not business persistence. A tool is not a Capability. An event is
+not automatically an Execution.
 
----
-
-## Layering rules
-
-- **UI** does not import storage/runtime internals.
-- **AI** does not import UI/routing.
-- **Runtime** does not import provider SDKs directly.
-- **Primitives** have zero dependencies on other Voodoo layers.
-- **Data** does not import AI or Mesh.
-- Optional infrastructure/provider SDKs stay behind lazy adapters and optional extras.
-
----
-
-## Request lifecycle
-
-1. HTTP request enters the ASGI app.
-2. Middleware applies security, telemetry, i18n and auth concerns.
-3. Telemetry assigns a correlation/trace identifier.
-4. Auth resolves the caller when configured.
-5. Routing dispatches to a page or API handler.
-6. Runtime integration creates an `Execution` only when the configured boundary treats the operation as meaningful runtime work.
-7. The response flows back through middleware.
-
-## Reactive loop
-
-1. Browser sends an event over WebSocket.
-2. Event handler mutates a reactive state cell.
-3. `StateRenderer` re-renders the bound component/page.
-4. A DOM patch is broadcast.
-5. The browser applies the patch.
-
-Reactive reads/renders are not themselves durable executions.
-
-## Agent execution loop
+## Identity and authority
 
 ```text
-prompt → provider → native tool call? → execute tool → tool result → provider → final answer
+Identity
+  +-- user
+  +-- agent
+  +-- service
+  +-- device
+  `-- node
+        |
+        v
+AuthenticationEvidence
+        |
+        v
+Principal
+        |
+        v
+Capability + Policy
+        |
+        v
+Execution
 ```
 
-1. Agent builds messages from prompt, system prompt, history and context.
-2. Provider returns normalized `ProviderResponse` / streaming `ProviderEvent` values.
-3. Native provider tool calls are normalized into `ToolCall` objects and invoked through the tool registry.
-4. Tool results are appended using the provider-compatible call/result identifiers and the loop continues.
-5. When no tool calls remain, the final response is returned.
-6. The legacy `[TOOL: ...]` text marker exists only as a compatibility/mock fallback; it is not the canonical provider protocol.
+Roles, scopes, credentials and node advertisements are evidence/context. They do
+not automatically become Runtime Capability grants.
 
-Provider SDKs are optional and lazily imported. A core installation can use the mock/runtime surfaces without installing third-party AI SDKs.
+## Durable Runtime state
 
----
+The default Store-backed Runtime includes:
 
-## Runtime Engine
+- Model Collections and CRUD/query compatibility;
+- Jobs/Queue with leases, heartbeat, retries and idempotency keys;
+- schedules, Cron and triggers;
+- durable event state and replay;
+- object bytes/metadata compatibility layer;
+- Execution materialized state and journal;
+- Goal and Workflow checkpoints;
+- HITL approval persistence/recovery;
+- built-in identity persistence;
+- Edge device/session/effect/replay state.
 
-`ExecutionEngine` is the unified runtime mechanism. A meaningful operation can produce an `Execution` with:
+Some richer native Store subsystems are not yet exposed through the Python
+binding; stable Framework contracts hide those compatibility details.
 
-- `execution_id`, `trace_id`, `parent_execution_id`
-- lifecycle status (`created`, `planned`, `authorized`, `running`, `waiting`, terminal states)
-- effects and observable state changes
-- resource/cost/duration accounting
-- structured errors and recovery context
+## Local transactions and outbox
 
-### Execution boundary rule
+One local Runtime transaction can atomically combine Store KV/Collection
+mutations and a durable outbox message:
 
-Create an `Execution` when at least one of these matters:
+```text
+business state mutation
+        +
+   outbox record
+        |
+        v
+ ONE Store commit
+```
 
-- durability or crash recovery;
-- authorization/capability enforcement;
-- parent/child delegation and traceability;
-- effect/state-change recording;
-- resource/cost accounting;
-- retries, timeout, scheduling or human waiting;
-- operational observability at a user/business boundary.
+Delivery happens after commit with at-least-once semantics. The outbox message
+id is the idempotency key for consumers that require duplicate suppression.
+External APIs, jobs already executing elsewhere, and another node's Store are
+not part of that local atomic transaction.
 
-Do **not** create one for every helper call, state access, render pass, callback, or internal event. This keeps the execution graph useful rather than noisy.
+## Runtime Fabric
 
-### Human-in-the-loop
+A Voodoo application can grow from one node to multiple node-local Runtimes:
 
-Human approval is a waiting state of the same execution model. Approval state is persisted so recoverable work can resume after a process restart.
+```text
+same application semantics
+          |
+          v
+     Runtime Fabric
+      /    |    \
+   node-a node-b node-c
+      |      |      |
+   a.vstore b.vstore c.vstore
+```
 
----
+The fabric provides authenticated node identity, durable membership,
+heartbeats/health, discovery, capability/service/ownership filtering,
+load/locality/data-owner placement, lease generations and bounded failover.
 
-## Provider / adapter system
+Failover is permitted only where work semantics allow it. Ambiguous physical or
+external work can be declared non-retryable so the Runtime does not blindly
+reissue it on another node.
 
-Infrastructure implementations sit behind protocols so local defaults and production adapters share contracts.
+## Protocol boundary
 
-| Protocol | Typical implementations |
+Node advertisement, membership and fabric work request/outcome models live in
+the language-neutral Protocol boundary. Transport is replaceable; authority and
+Execution semantics are not.
+
+## Deployment model
+
+Default Store-backed production deployment:
+
+```text
+one process = one Voodoo Node = one local Store writer
+```
+
+Do not run multiple uvicorn/gunicorn workers against the same Store file. To
+scale horizontally, add separate Voodoo Nodes with separate local Stores.
+
+## External adapters
+
+Explicit overrides include:
+
+| Domain | Examples |
 |---|---|
-| `VoodooDatabase` | SQLite, PostgreSQL |
-| `VoodooQueue` | local/SQLite, PostgreSQL, Redis |
-| `VoodooEventBus` | local/SQLite, PostgreSQL |
-| `VoodooObjectStore` | local filesystem, S3-compatible |
-| `VoodooCache` | in-memory, Redis |
+| Database | SQLite, PostgreSQL |
+| Queue | Redis, PostgreSQL, legacy SQLite |
+| Objects | S3-compatible storage |
+| Cache | in-memory, Redis |
+| Telemetry | OpenTelemetry |
 
-Model providers are resolved lazily from `provider:model` references. Third-party SDKs belong to the `ai` optional extra; the base runtime does not require them.
+Changing an infrastructure adapter does not replace Runtime authority or create
+a second execution model.
 
----
-
-## Module responsibilities
+## Package/module responsibilities
 
 ```text
 src/voodoo/
-├── core/        # application facade, routing-facing core, errors/events/state
+├── core/        # App lifecycle/facade and errors
 ├── primitives/  # ontology and execution dimensions
-├── runtime/     # execution engine, planner/adaptive, human, persistence
-├── ai/          # agents, provider abstraction, tools
-├── adapters/    # adapter/capability integration
-├── storage/     # database, queue, events, execution, objects, cache adapters
-├── ui/          # components, reactive state, styles/themes
+├── runtime/     # Execution, identity, workflow, goals, fabric, Store boundary
+├── storage/     # infrastructure contracts/adapters
+├── data/        # Store-first Model + SQL compatibility
+├── workers/     # task and durable queue runtime
+├── ai/          # agents/providers/tools
+├── world/       # entities/relationships/observations/world model
+├── edge/        # physical/external participant boundary
+├── protocol/    # transport/language-neutral contracts
+├── ui/          # components/reactive state/design system
 ├── routing/     # page/API routing
-├── mesh/        # realtime application communication
-├── mcp/         # MCP integration
-├── workers/     # background task runtime
-├── data/        # async ORM
-├── auth/        # identity/authentication/guards
-├── security/    # HTTP/application security middleware
-├── telemetry/   # traces, metrics and observability
-├── cli/         # create/new/dev/generate/inspect/recover/etc.
-├── config.py    # configuration and environment interpolation
-├── schedule.py  # durable scheduling
-└── status.py    # health/status endpoint
+├── mesh/        # realtime/remote communication surfaces
+├── auth/        # credential/session compatibility APIs
+├── security/    # HTTP security and redaction
+├── telemetry/   # traces/metrics/observability
+└── cli/         # create/dev/fabric/inspection operations
 ```
 
----
+## Honest boundaries
+
+Current architecture deliberately does **not** promise:
+
+- Store replication/sync between nodes;
+- shared multi-writer Store files;
+- distributed consensus;
+- global serializable transactions;
+- global exactly-once execution;
+- production PKI/OIDC/mTLS infrastructure;
+- managed cloud/fleet control plane.
+
+Store 0.2.2 also lacks arbitrary schedule-cursor repositioning and richer native
+Python bindings for Topics/Streams and Objects. The Framework fails clearly or
+uses stable compatibility boundaries instead of inventing unsupported behavior.
 
 ## Further reading
 
-The detailed guides under `docs/` are authoritative for individual subsystems. In particular see `docs/primitives.md`, `docs/execution-model.md`, `docs/runtime.md`, `docs/agents.md`, `docs/events.md`, `docs/mesh.md`, `docs/workers.md`, `docs/data.md`, `docs/hitl.md`, and `docs/telemetry.md`.
+- `docs/runtime.md`
+- `docs/data.md`
+- `docs/workers.md`
+- `docs/deployment.md`
+- `docs/protocol.md`
+- `docs/hitl.md`
+- `docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md`
