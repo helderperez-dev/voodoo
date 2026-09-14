@@ -8,8 +8,8 @@ import pytest
 
 from voodoo.core.errors import ConfigurationError
 from voodoo.storage.queue import TaskStatus
-from voodoo.storage.queue import voodoo as queue_module
-from voodoo.storage.queue.voodoo import VoodooStoreQueue, _native_id, _public_id
+from voodoo.storage.queue import store as queue_module
+from voodoo.storage.queue.store import VoodooStoreQueue, _native_id, _public_id
 
 
 class _FakeNativeJobs:
