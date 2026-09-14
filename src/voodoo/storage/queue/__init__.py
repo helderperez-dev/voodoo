@@ -17,7 +17,7 @@ from voodoo.storage.queue.memory import MemoryQueue
 from voodoo.storage.queue.postgres import PostgresQueue
 from voodoo.storage.queue.redis import RedisQueue
 from voodoo.storage.queue.sqlite import TASKS_MIGRATION, TASKS_TABLE, SQLiteQueue
-from voodoo.storage.queue.voodoo import VoodooStoreQueue
+from voodoo.storage.queue.store import VoodooStoreQueue
 
 __all__ = [
     "ACTIVE_STATUSES",
