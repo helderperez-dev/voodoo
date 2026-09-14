@@ -9,14 +9,13 @@ from pydantic import BaseModel, Field
 
 from voodoo.core.errors import ConfigurationError
 
-# Load .env variables first
 load_dotenv()
 
 _ENV_VAR_PATTERN = re.compile(r"\$\{([^}:]+)(?::([^}]*))?\}")
 
 
 def interpolate_env_vars(value: Any) -> Any:
-    """Recursively interpolates ${VAR} or ${VAR:default} in strings, dicts, and lists."""
+    """Recursively interpolate ${VAR} or ${VAR:default}."""
     if isinstance(value, str):
 
         def _replace(match: re.Match) -> str:
@@ -30,9 +29,9 @@ def interpolate_env_vars(value: Any) -> Any:
             return ""
 
         return _ENV_VAR_PATTERN.sub(_replace, value)
-    elif isinstance(value, dict):
+    if isinstance(value, dict):
         return {k: interpolate_env_vars(v) for k, v in value.items()}
-    elif isinstance(value, list):
+    if isinstance(value, list):
         return [interpolate_env_vars(v) for v in value]
     return value
 
@@ -45,7 +44,6 @@ def _env_flag(name: str) -> bool | None:
 
 
 def _resolve_debug() -> bool:
-    """Debug mode: explicit VOODOO_DEBUG wins; otherwise on unless production."""
     explicit = _env_flag("VOODOO_DEBUG")
     if explicit is not None:
         return explicit
@@ -53,12 +51,10 @@ def _resolve_debug() -> bool:
 
 
 def _resolve_db_path() -> str:
-    """Database location: VOODOO_DB_PATH > DATABASE_URL > default.
+    """Resolve an explicitly configured legacy/external database location.
 
-    SQLite URLs are normalized to local paths; PostgreSQL URLs are passed
-    through unchanged for the ``postgres`` database provider (Sprint 10),
-    so ``VOODOO_DATABASE_URL``/``DATABASE_URL`` can point at a server
-    without a separate ``database.url`` in ``voodoo.yaml``.
+    Voodoo Store is the default infrastructure substrate, so the fallback is
+    empty. SQLite/PostgreSQL locations only matter when an adapter is selected.
     """
     explicit = os.getenv("VOODOO_DB_PATH")
     if explicit:
@@ -71,24 +67,17 @@ def _resolve_db_path() -> str:
             return url[len("sqlite:///") :] or ":memory:"
         scheme = url.split(":", 1)[0]
         if scheme in ("postgres", "postgresql"):
-            # Pass through — consumed as ``database.url`` by the postgres
-            # provider factory (see ``adapters/registry.py``). Kept in
-            # ``db_path`` so ``get_config()`` still surfaces it.
             return url
         raise ConfigurationError(
-            f"DATABASE_URL scheme '{scheme}://' is not supported yet. "
-            "Use a sqlite:///... URL, a postgres://... URL (Sprint 10), "
-            "or VOODOO_DB_PATH. Additional backends arrive as optional "
-            "extras (e.g. voodoo[postgres]) in a later release."
+            f"DATABASE_URL scheme '{scheme}://' is not supported. "
+            "Use an explicit sqlite:///... or postgres://... adapter URL."
         )
-    return ".voodoo/state/data.db"
+    return ""
 
 
 class SEOConfig(BaseModel):
-    """SEO & GEO configuration for the Voodoo framework."""
-
     site_name: str = "Voodoo App"
-    base_url: str = ""  # e.g., "https://example.com"
+    base_url: str = ""
     default_og_image: str = ""
     sitemap_enabled: bool = True
     robots_enabled: bool = True
@@ -97,12 +86,10 @@ class SEOConfig(BaseModel):
         default_factory=lambda: ["/_voodoo_ws", "/voodoo/mesh/ws"]
     )
     default_lang: str = "en"
-    generator_meta: bool = True  # show Voodoo generator tag
+    generator_meta: bool = True
 
 
 class AuthConfig(BaseModel):
-    """Authentication and identity configuration."""
-
     secret_key: str = Field(
         default_factory=lambda: os.getenv(
             "VOODOO_SECRET_KEY", "dev-secret-key-change-in-production-voodoo-2026"
@@ -111,7 +98,7 @@ class AuthConfig(BaseModel):
     token_expiry_seconds: int = Field(
         default_factory=lambda: int(
             os.getenv("VOODOO_TOKEN_EXPIRY", str(7 * 24 * 3600))
-        )  # 7 days
+        )
     )
     cookie_name: str = "voodoo_auth"
     cookie_secure: bool = Field(
@@ -123,8 +110,6 @@ class AuthConfig(BaseModel):
 
 
 class SecurityConfig(BaseModel):
-    """Security headers, CORS, CSRF, and Rate Limiting configuration."""
-
     headers_enabled: bool = True
     hsts_enabled: bool = Field(
         default_factory=lambda: os.getenv("VOODOO_ENV", "development") == "production"
@@ -134,7 +119,7 @@ class SecurityConfig(BaseModel):
     content_type_options: str = "nosniff"
     xss_protection: str = "1; mode=block"
     referrer_policy: str = "strict-origin-when-cross-origin"
-    permissions_policy: str = ""  # e.g. "geolocation=(), microphone=()"
+    permissions_policy: str = ""
     csp_directives: dict[str, str] = Field(
         default_factory=lambda: {
             "default-src": "'self'",
@@ -146,49 +131,45 @@ class SecurityConfig(BaseModel):
             "frame-ancestors": "'self'",
         }
     )
-    # CORS
     cors_enabled: bool = True
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     cors_allow_credentials: bool = True
     cors_allow_methods: list[str] = Field(default_factory=lambda: ["*"])
     cors_allow_headers: list[str] = Field(default_factory=lambda: ["*"])
-    # CSRF
     csrf_enabled: bool = False
     csrf_cookie_name: str = "voodoo_csrf"
     csrf_header_name: str = "X-CSRF-Token"
-    # Rate Limiting
     rate_limit_enabled: bool = True
     rate_limit_requests: int = 100
-    rate_limit_window: int = 60  # seconds
+    rate_limit_window: int = 60
 
 
 class RuntimeConfig(BaseModel):
-    """Runtime operating mode and environment options."""
-
     mode: str = "development"
     run_api_through_runtime: bool = True
 
 
 class ThemeConfig(BaseModel):
-    """Design-token overrides (``theme:`` block in voodoo.yaml).
-
-    ``preset`` names a theme preset (built-in name, path, or URL) resolved by
-    ``voodoo.ui.styles.presets``; when omitted, the project
-    ``.voodoo/theme/theme.json`` is used, falling back to the built-in default.
-    ``mode`` is a top-level override applied only to the built-in default
-    (presets are self-describing, including their mode). Arbitrary keys are
-    allowed so sub-dictionaries forward.
-    """
-
-    preset: str | None = None  # name | path | URL of a theme preset
-    mode: str = "dark"  # dark | light | system
+    preset: str | None = None
+    mode: str = "dark"
     model_config = {"extra": "allow"}
 
 
-class DatabaseConfig(BaseModel):
-    """Database provider configuration."""
+class StoreSettings(BaseModel):
+    """Canonical application Store settings."""
 
-    provider: str = "sqlite"
+    provider: str = "voodoo"
+    path: str = ".voodoo/application.vstore"
+    enabled: bool = True
+    durability: str = "data"
+    repair_torn_tail: bool = True
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class DatabaseConfig(BaseModel):
+    """Optional database adapter configuration."""
+
+    provider: str = "voodoo"
     url: str = ""
     path: str = ""
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -197,7 +178,7 @@ class DatabaseConfig(BaseModel):
 class QueueConfig(BaseModel):
     """Task queue provider configuration."""
 
-    provider: str = "sqlite"
+    provider: str = "voodoo"
     url: str = ""
     extra: dict[str, Any] = Field(default_factory=dict)
 
@@ -205,7 +186,7 @@ class QueueConfig(BaseModel):
 class EventsConfig(BaseModel):
     """Event bus provider configuration."""
 
-    provider: str = "sqlite"
+    provider: str = "voodoo"
     url: str = ""
     path: str = ""
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -214,7 +195,7 @@ class EventsConfig(BaseModel):
 class ObjectsConfig(BaseModel):
     """Object store provider configuration."""
 
-    provider: str = "local"
+    provider: str = "voodoo"
     bucket: str = ""
     endpoint: str = ""
     base_dir: str = ""
@@ -222,7 +203,11 @@ class ObjectsConfig(BaseModel):
 
 
 class CacheConfig(BaseModel):
-    """Cache provider configuration."""
+    """Cache provider configuration.
+
+    Memory remains the transient cache default; durable infrastructure belongs
+    to Voodoo Store and does not require a second persistence system.
+    """
 
     provider: str = "memory"
     url: str = ""
@@ -230,24 +215,12 @@ class CacheConfig(BaseModel):
 
 
 class ModelsConfig(BaseModel):
-    """AI model routing and default provider configuration."""
-
     default: str = "mock:default"
     aliases: dict[str, str] = Field(default_factory=dict)
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
 class AIConfig(BaseModel):
-    """AI provider & model configuration (``ai:`` block in voodoo.toml/yaml).
-
-    Enables config-driven, zero-code provider setup: ``provider`` names a
-    built-in provider (e.g. ``openai`` for any OpenAI-compatible endpoint),
-    ``model`` is its model id, ``base_url`` targets an OpenAI-compatible
-    endpoint (e.g. DeepSeek, OpenRouter), and ``api_key`` is a literal or a
-    ``${ENV_VAR}`` reference (interpolated at load time). ``aliases`` merge
-    over the built-in routing aliases.
-    """
-
     provider: str = ""
     model: str = ""
     base_url: str = ""
@@ -256,21 +229,11 @@ class AIConfig(BaseModel):
 
 
 class EdgeConfig(BaseModel):
-    """Edge device gateway configuration (``edge:`` block) — Sprint 23.
-
-    Edge is disabled by default: users who never enable it pay zero
-    overhead and need no MQTT broker, device tables, or gateway
-    (EDGE §68 — backwards compatibility).
-    """
-
     enabled: bool = False
     http_enabled: bool = True
     mqtt_enabled: bool = False
-    # Optional separate listener for the edge gateway; when empty the
-    # edge routes mount onto the main app instead.
     http_host: str = ""
     http_port: int = 0
-    # MQTT broker connection (EDGE §35, §38).
     mqtt_broker_url: str = ""
     mqtt_port: int = 1883
     mqtt_tls: bool = False
@@ -279,21 +242,16 @@ class EdgeConfig(BaseModel):
     mqtt_client_id: str = "voodoo-runtime"
     mqtt_keepalive: int = 60
     mqtt_qos: int = 1
-    # Resource limits (EDGE §76).
-    max_message_size: int = 262144  # 256 KiB
-    max_state_size: int = 65536  # 64 KiB
+    max_message_size: int = 262144
+    max_state_size: int = 65536
     max_pending_effects: int = 1000
     heartbeat_interval: int = 30
-    # Enrollment security (Sprint 23.1).
     enrollment_auth_required: bool = True
     enrollment_admin_token: str = ""
-    # Effect delivery (Sprint 23.1).
     max_effect_retries: int = 3
 
 
 class VoodooConfig(BaseModel):
-    """Core configuration for the Voodoo framework."""
-
     env: str = Field(default_factory=lambda: os.getenv("VOODOO_ENV", "development"))
     debug: bool = Field(default_factory=_resolve_debug)
     db_path: str = Field(default_factory=_resolve_db_path)
@@ -303,8 +261,8 @@ class VoodooConfig(BaseModel):
     port: int = Field(default_factory=lambda: int(os.getenv("VOODOO_PORT", "8000")))
     host: str = Field(default_factory=lambda: os.getenv("VOODOO_HOST", "0.0.0.0"))
 
-    # Provider & Runtime sub-blocks (Spec §31)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    store: StoreSettings = Field(default_factory=StoreSettings)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     queue: QueueConfig = Field(default_factory=QueueConfig)
     events: EventsConfig = Field(default_factory=EventsConfig)
@@ -322,7 +280,6 @@ class VoodooConfig(BaseModel):
 
 
 def load_yaml_config(file_path: str = "voodoo.yaml") -> dict[str, Any]:
-    """Loads configuration from a YAML file if it exists, with env interpolation."""
     if os.path.exists(file_path):
         with open(file_path) as f:
             try:
@@ -334,7 +291,6 @@ def load_yaml_config(file_path: str = "voodoo.yaml") -> dict[str, Any]:
 
 
 def load_toml_config(file_path: str = "voodoo.toml") -> dict[str, Any]:
-    """Loads configuration from a TOML file if it exists, with env interpolation."""
     if os.path.exists(file_path):
         try:
             import tomllib
@@ -347,16 +303,53 @@ def load_toml_config(file_path: str = "voodoo.toml") -> dict[str, Any]:
     return {}
 
 
+def _build_store_config(file_data: dict[str, Any]) -> StoreSettings:
+    store_data = file_data.get("store") or {}
+    if not isinstance(store_data, dict):
+        store_data = {"provider": str(store_data)}
+
+    enabled_flag = _env_flag("VOODOO_STORE_ENABLED")
+    repair_flag = _env_flag("VOODOO_STORE_REPAIR_TORN_TAIL")
+    return StoreSettings(
+        provider=store_data.get("provider") or os.getenv("VOODOO_STORE_PROVIDER") or "voodoo",
+        path=store_data.get("path")
+        or os.getenv("VOODOO_STORE_PATH")
+        or ".voodoo/application.vstore",
+        enabled=(
+            bool(store_data["enabled"])
+            if "enabled" in store_data
+            else enabled_flag if enabled_flag is not None else True
+        ),
+        durability=store_data.get("durability")
+        or os.getenv("VOODOO_STORE_DURABILITY")
+        or "data",
+        repair_torn_tail=(
+            bool(store_data["repair_torn_tail"])
+            if "repair_torn_tail" in store_data
+            else repair_flag if repair_flag is not None else True
+        ),
+        extra={
+            k: v
+            for k, v in store_data.items()
+            if k
+            not in {
+                "provider",
+                "path",
+                "enabled",
+                "durability",
+                "repair_torn_tail",
+            }
+        },
+    )
+
+
 def _build_database_config(file_data: dict[str, Any], db_path: str) -> DatabaseConfig:
     db_data = file_data.get("database") or {}
     if not isinstance(db_data, dict):
         db_data = {"provider": str(db_data)}
     db_provider = (
-        db_data.get("provider") or os.getenv("VOODOO_DATABASE_PROVIDER") or "sqlite"
+        db_data.get("provider") or os.getenv("VOODOO_DATABASE_PROVIDER") or "voodoo"
     )
-    # ``db_path`` may carry a provider URL (sqlite:///… or postgres://…).
-    # For server backends the URL is surfaced as ``database.url`` so the
-    # provider factory can connect (Sprint 10).
     db_url = db_data.get("url") or ""
     if not db_url and db_path.startswith(("postgres://", "postgresql://", "sqlite://")):
         db_url = db_path
@@ -375,7 +368,7 @@ def _build_queue_config(file_data: dict[str, Any]) -> QueueConfig:
     if not isinstance(queue_data, dict):
         queue_data = {"provider": str(queue_data)}
     queue_provider = (
-        queue_data.get("provider") or os.getenv("VOODOO_QUEUE_PROVIDER") or "sqlite"
+        queue_data.get("provider") or os.getenv("VOODOO_QUEUE_PROVIDER") or "voodoo"
     )
     queue_url = queue_data.get("url") or os.getenv("VOODOO_QUEUE_URL") or ""
     return QueueConfig(
@@ -390,7 +383,7 @@ def _build_events_config(file_data: dict[str, Any], db_path: str) -> EventsConfi
     if not isinstance(events_data, dict):
         events_data = {"provider": str(events_data)}
     events_provider = (
-        events_data.get("provider") or os.getenv("VOODOO_EVENTS_PROVIDER") or "sqlite"
+        events_data.get("provider") or os.getenv("VOODOO_EVENTS_PROVIDER") or "voodoo"
     )
     events_url = events_data.get("url") or os.getenv("VOODOO_EVENTS_URL") or ""
     events_path = events_data.get("path") or os.getenv("VOODOO_EVENTS_PATH") or db_path
@@ -408,18 +401,9 @@ def _build_objects_config(file_data: dict[str, Any]) -> ObjectsConfig:
     objects_data = file_data.get("objects") or {}
     if not isinstance(objects_data, dict):
         objects_data = {"provider": str(objects_data)}
-    objects_provider = objects_data.get("provider") or os.getenv(
-        "VOODOO_OBJECTS_PROVIDER"
+    objects_provider = (
+        objects_data.get("provider") or os.getenv("VOODOO_OBJECTS_PROVIDER") or "voodoo"
     )
-    if not objects_provider:
-        if (
-            os.getenv("VOODOO_BUCKET")
-            or os.getenv("AWS_BUCKET")
-            or os.getenv("AWS_ACCESS_KEY_ID")
-        ):
-            objects_provider = "s3"
-        else:
-            objects_provider = "local"
     objects_bucket = (
         objects_data.get("bucket")
         or os.getenv("VOODOO_BUCKET")
@@ -496,7 +480,6 @@ def _build_ai_config(file_data: dict[str, Any]) -> AIConfig:
 
 
 def _build_edge_config(file_data: dict[str, Any]) -> EdgeConfig:
-    """Merge file ``edge:`` block with ``VOODOO_EDGE_*``/``MQTT_*`` env vars."""
     edge_data = file_data.get("edge") or {}
     if not isinstance(edge_data, dict):
         edge_data = {"enabled": bool(edge_data)}
@@ -504,8 +487,7 @@ def _build_edge_config(file_data: dict[str, Any]) -> EdgeConfig:
     def _flag(key: str, env: str) -> bool | None:
         if key in edge_data:
             return bool(edge_data[key])
-        val = _env_flag(env)
-        return val
+        return _env_flag(env)
 
     enabled = _flag("enabled", "VOODOO_EDGE_ENABLED")
     mqtt = edge_data.get("mqtt") or {}
@@ -550,7 +532,6 @@ def _pick(
     convert_file: Callable[[Any], Any],
     convert_env: Callable[[str], Any] | None = None,
 ) -> tuple[str, Any] | None:
-    """First value wins: explicit file config > env var > None."""
     if key in file_data:
         return key, convert_file(file_data[key])
     if env and env in os.environ:
@@ -560,7 +541,6 @@ def _pick(
 
 def _build_core_scalars(file_data: dict[str, Any]) -> dict[str, Any]:
     args: dict[str, Any] = {}
-    # ``debug``: file ``bool(...)``; env via _resolve_debug (1/true/yes/on).
     scalars: list[tuple[str, str, Callable[[Any], Any], Callable[[str], Any]]] = [
         ("env", "VOODOO_ENV", str, str),
         ("debug", "VOODOO_DEBUG", bool, lambda _val: _resolve_debug()),
@@ -605,31 +585,25 @@ def get_config(
     file_path: str | None = None,
     overrides: dict[str, Any] | None = None,
 ) -> VoodooConfig:
-    """Gets the merged configuration from config file, env vars, and defaults.
-
-    Precedence: explicit file config > env vars > local defaults.
-    """
+    """Merge file config, environment and Store-first defaults."""
     file_data = _load_raw_file_data(file_path)
     if overrides:
         file_data = {**file_data, **interpolate_env_vars(overrides)}
 
     config_args = _build_core_scalars(file_data)
     config_args["runtime"] = _build_runtime_config(file_data)
+    config_args["store"] = _build_store_config(file_data)
 
-    # Database sub-block
     db_data = file_data.get("database") or {}
     db_path = (
         (db_data.get("path") if isinstance(db_data, dict) else None)
         or (db_data.get("url") if isinstance(db_data, dict) else None)
         or os.getenv("VOODOO_DB_PATH")
         or os.getenv("DATABASE_URL")
+        or _resolve_db_path()
     )
-    if not db_path:
-        db_path = _resolve_db_path()
     config_args["db_path"] = db_path
     config_args["database"] = _build_database_config(file_data, db_path)
-
-    # Queue, events, objects, cache, models
     config_args["queue"] = _build_queue_config(file_data)
     config_args["events"] = _build_events_config(file_data, db_path)
     config_args["objects"] = _build_objects_config(file_data)
@@ -638,7 +612,6 @@ def get_config(
     config_args["ai"] = _build_ai_config(file_data)
     config_args["edge"] = _build_edge_config(file_data)
 
-    # Existing sub-configurations
     if "seo" in file_data and isinstance(file_data["seo"], dict):
         config_args["seo"] = SEOConfig(**file_data["seo"])
     if "auth" in file_data and isinstance(file_data["auth"], dict):
@@ -648,7 +621,6 @@ def get_config(
     if "security" in file_data and isinstance(file_data["security"], dict):
         config_args["security"] = SecurityConfig(**file_data["security"])
 
-    # Store any extra custom configuration
     known_keys = {
         "env",
         "debug",
@@ -657,6 +629,7 @@ def get_config(
         "port",
         "host",
         "runtime",
+        "store",
         "database",
         "queue",
         "events",
@@ -676,5 +649,4 @@ def get_config(
     return VoodooConfig(**config_args)
 
 
-# Global config instance
 config = get_config()
