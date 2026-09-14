@@ -107,6 +107,36 @@ jobs:
       - name: 🧪 Run test suite
         run: uv run pytest
 
+      - name: 🧪 Clean Store-first distribution gate
+        run: |
+          rm -rf /tmp/voodoo-release-clean /tmp/voodoo-release-app /tmp/voodoo-release-dist
+          mkdir -p /tmp/voodoo-release-dist
+          uv build --wheel --out-dir /tmp/voodoo-release-dist
+          uv venv --python 3.12 /tmp/voodoo-release-clean
+          uv pip install --python /tmp/voodoo-release-clean/bin/python /tmp/voodoo-release-dist/*.whl
+          /tmp/voodoo-release-clean/bin/python - <<'PY'
+          import importlib.util
+          assert importlib.util.find_spec("aiosqlite") is None
+          PY
+          cd /tmp
+          /tmp/voodoo-release-clean/bin/voodoo create voodoo-release-app
+          cd voodoo-release-app
+          /tmp/voodoo-release-clean/bin/python - <<'PY'
+          import runpy
+          from pathlib import Path
+          from starlette.testclient import TestClient
+
+          namespace = runpy.run_path("main.py", run_name="release_gate_app")
+          with TestClient(namespace["app"]) as client:
+              response = client.get("/")
+              assert response.status_code == 200, response.text
+              assert "Hello, Voodoo" in response.text
+
+          store = Path(".voodoo/application.vstore")
+          assert store.exists()
+          assert store.stat().st_size > 0
+          PY
+
       - name: 📝 Bump version in source files
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
@@ -210,6 +240,18 @@ jobs:
             test do
               assert_match "Voodoo Framework CLI", shell_output("#{bin}/voodoo --help")
               system Formula["python@3.12"].opt_bin/"python3.12", "-c", "import voodoo_store"
+              system bin/"voodoo", "create", "smoke-app"
+              cd testpath/"smoke-app" do
+                system libexec/"voodoo-framework/bin/python3.12", "-c", <<~PY
+                  import runpy
+                  from pathlib import Path
+                  from starlette.testclient import TestClient
+                  ns = runpy.run_path('main.py', run_name='brew_smoke')
+                  with TestClient(ns['app']) as client:
+                      assert client.get('/').status_code == 200
+                  assert Path('.voodoo/application.vstore').exists()
+                PY
+              end
             end
           end
           EOF
