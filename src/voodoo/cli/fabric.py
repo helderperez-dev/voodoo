@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import Annotated
 
 import typer
 
@@ -31,10 +32,13 @@ def status() -> None:
     """Show Store health and durable node membership."""
     runtime = _open_runtime()
     try:
-        health = runtime.health()
+        report = runtime.health()
+        if report is None:
+            typer.echo("Store is disabled", err=True)
+            raise typer.Exit(code=1)
         typer.echo(
-            f"store={health.provider} path={health.path} "
-            f"opened={health.opened} verified={health.verified}"
+            f"store={report.provider} path={report.path} "
+            f"opened={report.opened} verified={report.verified}"
         )
         membership = VoodooStoreMembershipStore(runtime)
         members = membership.list(include_left=True)
@@ -72,11 +76,13 @@ def verify() -> None:
 
 @fabric_app.command("join")
 def join(
-    node_id: str = typer.Argument(..., help="Stable Voodoo Node identity."),
-    capability: list[str] | None = typer.Option(None, "--capability", "-c"),
-    service: list[str] | None = typer.Option(None, "--service", "-s"),
-    owner: list[str] | None = typer.Option(None, "--owner"),
-    location: str | None = typer.Option(None, "--location"),
+    node_id: Annotated[str, typer.Argument(help="Stable Voodoo Node identity.")],
+    capability: Annotated[
+        list[str] | None, typer.Option("--capability", "-c")
+    ] = None,
+    service: Annotated[list[str] | None, typer.Option("--service", "-s")] = None,
+    owner: Annotated[list[str] | None, typer.Option("--owner")] = None,
+    location: Annotated[str | None, typer.Option("--location")] = None,
 ) -> None:
     """Administratively join/update a local node membership record.
 
@@ -107,7 +113,7 @@ def join(
 
 @fabric_app.command("backup")
 def backup(
-    destination: Path = typer.Argument(..., help="Destination .vstore path."),
+    destination: Annotated[Path, typer.Argument(help="Destination .vstore path.")],
 ) -> None:
     """Create a verified cold backup of the configured application Store.
 
