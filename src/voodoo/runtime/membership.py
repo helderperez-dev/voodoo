@@ -15,7 +15,11 @@ from enum import StrEnum
 from typing import Any
 
 from voodoo.runtime.identity import IdentityKind, Principal
-from voodoo.runtime.store import RuntimeStore, StoreProviderError, get_active_runtime_store
+from voodoo.runtime.store import (
+    RuntimeStore,
+    StoreProviderError,
+    get_active_runtime_store,
+)
 
 __all__ = [
     "MemberStatus",
@@ -160,7 +164,9 @@ class VoodooStoreMembershipStore:
             node_id=principal.id,
             status=MemberStatus.ACTIVE,
             advertisement=advertisement
-            or (existing.advertisement if existing is not None else NodeAdvertisement()),
+            or (
+                existing.advertisement if existing is not None else NodeAdvertisement()
+            ),
             joined_at=existing.joined_at if existing is not None else now,
             last_seen_at=now,
             updated_at=now,
