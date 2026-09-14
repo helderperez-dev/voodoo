@@ -49,6 +49,7 @@ class ProviderRegistry:
         self.register_queue("postgres", self._create_postgres_queue)
         self.register_queue("redis", self._create_redis_queue)
 
+        self.register_events("voodoo", self._create_voodoo_events)
         self.register_events("sqlite", self._create_sqlite_events)
         self.register_events("local", self._create_local_events)
         self.register_events("postgres", self._create_postgres_events)
@@ -212,6 +213,11 @@ class ProviderRegistry:
             db = cfg.extra.get("db") or "0"
             url = f"redis://{host}:{port}/{db}"
         return RedisQueue(url)
+
+    def _create_voodoo_events(self, cfg: EventsConfig) -> Any:
+        from voodoo.storage.events.store import VoodooStoreEventBus
+
+        return VoodooStoreEventBus()
 
     def _create_sqlite_events(self, cfg: EventsConfig) -> Any:
         from voodoo.storage.events.sqlite import SQLiteEventBus
