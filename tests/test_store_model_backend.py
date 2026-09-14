@@ -4,8 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from voodoo.data import Model, close_db
-from voodoo.data import store_backend
+from voodoo.data import Model, close_db, store_backend
 from voodoo.data.store_backend import bind_runtime_store
 from voodoo.runtime.store import RuntimeStore, StoreConfig
 
