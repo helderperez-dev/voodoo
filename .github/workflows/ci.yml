@@ -68,6 +68,60 @@ jobs:
           src/voodoo/edge/world.py
           src/voodoo/protocol/operational.py
 
+  clean-install:
+    name: 🧪 Clean Store-first Install
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v7
+
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: 🔨 Build wheel
+        run: uv build --wheel
+
+      - name: 📦 Install wheel without extras
+        run: |
+          uv venv --python 3.12 /tmp/voodoo-clean
+          uv pip install --python /tmp/voodoo-clean/bin/python dist/*.whl
+
+      - name: 🚫 Verify optional SQLite is absent
+        run: |
+          /tmp/voodoo-clean/bin/python - <<'PY'
+          import importlib.util
+          assert importlib.util.find_spec("aiosqlite") is None
+          PY
+
+      - name: 🪄 Scaffold and run full Runtime lifecycle
+        run: |
+          cd /tmp
+          rm -rf voodoo-clean-app
+          /tmp/voodoo-clean/bin/voodoo create voodoo-clean-app
+          cd voodoo-clean-app
+          /tmp/voodoo-clean/bin/python - <<'PY'
+          import runpy
+          from pathlib import Path
+          from starlette.testclient import TestClient
+
+          namespace = runpy.run_path("main.py", run_name="clean_install_app")
+          with TestClient(namespace["app"]) as client:
+              response = client.get("/")
+              assert response.status_code == 200, response.text
+              assert "Hello, Voodoo" in response.text
+
+          store = Path(".voodoo/application.vstore")
+          assert store.exists()
+          assert store.stat().st_size > 0
+          PY
+
   test:
     name: 🧪 Test Suite (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

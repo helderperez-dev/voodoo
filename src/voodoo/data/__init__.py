@@ -37,6 +37,8 @@ __all__ = [
     "_triggers",
 ]
 
+_sql_initialized = False
+
 
 async def init_db(*args: Any, **kwargs: Any) -> Any:
     """Compatibility entry point for the optional SQL subsystem.
@@ -44,9 +46,13 @@ async def init_db(*args: Any, **kwargs: Any) -> Any:
     Importing ``voodoo`` does not load SQL or require ``aiosqlite``. Calling
     this function explicitly opts into the legacy SQL adapter surface.
     """
+    global _sql_initialized
+
     from voodoo.data.base import init_db as _init_db
 
-    return await _init_db(*args, **kwargs)
+    result = await _init_db(*args, **kwargs)
+    _sql_initialized = True
+    return result
 
 
 async def get_db() -> Any:
@@ -57,7 +63,18 @@ async def get_db() -> Any:
 
 
 async def close_db() -> None:
-    """Close the explicitly initialized optional SQL connection."""
+    """Close SQL only when the optional subsystem was explicitly initialized.
+
+    The Store-first Runtime calls this compatibility hook during shutdown. A
+    default application must therefore treat it as a no-op instead of importing
+    the legacy SQLite adapter merely to discover that no SQL connection exists.
+    """
+    global _sql_initialized
+
+    if not _sql_initialized:
+        return
+
     from voodoo.data.base import close_db as _close_db
 
     await _close_db()
+    _sql_initialized = False
