@@ -417,17 +417,22 @@ def activate_runtime_store(config: StoreConfig) -> RuntimeStore:
     If infrastructure touched Store before ASGI startup, the App adopts that
     exact ``RuntimeStore`` instance instead of attempting to open a competing
     writer. A mismatched standalone configuration is closed before activation.
+    A failed startup may leave an unstarted RuntimeStore registered as active;
+    that inert residue is safe to replace on the next activation.
     """
     global _active_runtime_store, _shared_runtime_store
 
     if _active_runtime_store is not None:
-        if _active_runtime_store.config != config:
+        if _active_runtime_store.config == config:
+            if config.enabled and not _active_runtime_store.started:
+                _active_runtime_store.start()
+            return _active_runtime_store
+        if _active_runtime_store.started:
             raise StoreProviderError(
                 "A Voodoo RuntimeStore is already active with a different configuration"
             )
-        if config.enabled and not _active_runtime_store.started:
-            _active_runtime_store.start()
-        return _active_runtime_store
+        _active_runtime_store.stop()
+        _active_runtime_store = None
 
     if _shared_runtime_store is not None:
         if _shared_runtime_store.config == config:
