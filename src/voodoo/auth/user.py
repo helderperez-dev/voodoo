@@ -11,6 +11,13 @@ from voodoo.auth.passwords import (
     verify_password,
 )
 from voodoo.data import BaseModel, get_db
+from voodoo.runtime.identity import (
+    AuthenticationEvidence,
+    Identity,
+    IdentityKind,
+    IdentityStatus,
+    Principal,
+)
 
 current_user: ContextVar[Optional["AuthUser"]] = ContextVar(
     "current_user", default=None
@@ -18,7 +25,12 @@ current_user: ContextVar[Optional["AuthUser"]] = ContextVar(
 
 
 class AuthUser:
-    """Represents an authenticated user identity in the request context."""
+    """Compatibility request-auth projection for a human/service user.
+
+    Runtime authority does not come from this object's roles/scopes. Call
+    :meth:`to_principal` to enter the Runtime-native Identity boundary; explicit
+    Capability + Policy remains authoritative for execution.
+    """
 
     def __init__(
         self,
@@ -53,6 +65,45 @@ class AuthUser:
         if not self.is_authenticated:
             return False
         return all(s in self.scopes for s in required_scopes)
+
+    def to_principal(self) -> Principal | None:
+        """Project authenticated request identity into Runtime semantics.
+
+        Roles/scopes are preserved as non-authoritative claims for compatibility
+        and policy inspection. They are intentionally not converted into
+        Capability grants.
+        """
+        if not self.is_authenticated or self.id is None:
+            return None
+        kind = IdentityKind.SERVICE if self.role == "service" else IdentityKind.USER
+        identity_id = f"{kind.value}:{self.id}"
+        identity = Identity(
+            id=identity_id,
+            kind=kind,
+            display_name=self.username or self.email or str(self.id),
+            status=IdentityStatus.ACTIVE,
+            attributes={
+                key: value
+                for key, value in {
+                    "email": self.email,
+                    "username": self.username,
+                }.items()
+                if value is not None
+            },
+        )
+        evidence = AuthenticationEvidence(
+            method=self.auth_type,
+            subject=str(self.id),
+            issuer="voodoo",
+        )
+        return Principal(
+            identity=identity,
+            evidence=(evidence,),
+            claims={
+                "roles": list(self.roles),
+                "scopes": list(self.scopes),
+            },
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
