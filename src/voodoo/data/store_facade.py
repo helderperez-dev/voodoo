@@ -1,31 +1,201 @@
-"""Store-first public Model facade with explicit SQL compatibility fallback."""
+"""Store-native public data model for Voodoo applications.
+
+The public ``Model`` API is backed directly by Voodoo Store Collections. SQL is
+not part of this module's import graph. Optional SQL adapters live under
+``voodoo.storage.database`` and are loaded only when explicitly imported.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+from collections.abc import Callable
+from typing import Any, get_type_hints
 
-from voodoo.data.base import _get_table_name
-from voodoo.data.model import Model as SQLModel
 from voodoo.data.store_backend import (
     delete_record,
     get_record,
+    insert_record,
+    put_record,
     scan_records,
-    should_use_store,
 )
-from voodoo.data.store_model import StoreModelMixin, _hydrate
+
+__all__ = [
+    "BaseModel",
+    "FK",
+    "Model",
+    "ModelMeta",
+    "StoreQuery",
+    "_get_table_name",
+    "_models",
+    "_rls_policies",
+    "_triggers",
+    "on_insert",
+    "on_update",
+    "rls_policy",
+]
+
+_models: list[type] = []
+_triggers: dict[str, dict[str, list[Callable[..., Any]]]] = {}
+_rls_policies: dict[str, Callable[..., Any]] = {}
+_cascades: dict[str, list[tuple[str, str]]] = {}
 
 
-class Model(StoreModelMixin, SQLModel):
-    """Public Store-first model API.
+class _FKRef:
+    __slots__ = ("target",)
 
-    Fresh applications persist through Voodoo Store. Calling ``init_db()`` or
-    explicitly selecting a SQL provider preserves the legacy SQL adapter path.
+    def __init__(self, target: type) -> None:
+        self.target = target
+
+
+class FK:
+    """Field annotation declaring a Store-native cascade relationship."""
+
+    def __class_getitem__(cls, target: type) -> _FKRef:  # noqa: N805
+        if not isinstance(target, type):
+            raise TypeError("FK[...] requires a model class")
+        return _FKRef(target)
+
+
+def _get_table_name(cls_or_obj: Any) -> str:
+    cls = cls_or_obj if isinstance(cls_or_obj, type) else cls_or_obj.__class__
+    name = getattr(cls, "__tablename__", None)
+    return str(name) if name else cls.__name__.lower()
+
+
+def _register_foreign_keys(cls: type) -> None:
+    try:
+        hints = get_type_hints(cls)
+    except Exception:
+        hints = getattr(cls, "__annotations__", {})
+    for col_name, col_type in hints.items():
+        if isinstance(col_type, _FKRef):
+            parent = _get_table_name(col_type.target)
+            _cascades.setdefault(parent, []).append((_get_table_name(cls), col_name))
+
+
+def _clear_cascades() -> None:
+    _cascades.clear()
+
+
+class ModelMeta(type):
+    def __init__(cls, name: str, bases: tuple[type, ...], attrs: dict[str, Any]) -> None:
+        super().__init__(name, bases, attrs)
+        if name not in ("BaseModel", "Model"):
+            _models.append(cls)
+            _register_foreign_keys(cls)
+
+
+def on_insert(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        table = _get_table_name(model_cls)
+        _triggers.setdefault(table, {"insert": [], "update": []})["insert"].append(func)
+        return func
+
+    return decorator
+
+
+def on_update(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        table = _get_table_name(model_cls)
+        _triggers.setdefault(table, {"insert": [], "update": []})["update"].append(func)
+        return func
+
+    return decorator
+
+
+def rls_policy(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        _rls_policies[_get_table_name(model_cls)] = func
+        return func
+
+    return decorator
+
+
+def _model_values(obj: Any, *, include_id: bool = False) -> dict[str, Any]:
+    values: dict[str, Any] = {}
+    try:
+        hints = get_type_hints(obj.__class__)
+    except Exception:
+        hints = getattr(obj.__class__, "__annotations__", {})
+    for name in hints:
+        if name.startswith("__") or (name == "id" and not include_id):
+            continue
+        if hasattr(obj, name):
+            values[name] = getattr(obj, name)
+    return values
+
+
+def _hydrate(model: type[Any], row: dict[str, Any]) -> Any:
+    obj = model()
+    try:
+        hints = get_type_hints(model)
+    except Exception:
+        hints = getattr(model, "__annotations__", {})
+    for key, value in row.items():
+        if hints.get(key) is bool:
+            value = bool(value)
+        setattr(obj, key, value)
+    return obj
+
+
+def _fire_hooks(table: str, event: str, obj: Any) -> None:
+    for hook in _triggers.get(table, {}).get(event, []):
+        if asyncio.iscoroutinefunction(hook):
+            asyncio.create_task(hook(obj))
+        else:
+            hook(obj)
+
+
+class BaseModel(metaclass=ModelMeta):
+    """Store-native persistence base.
+
+    ``BaseModel`` remains available as a compatibility spelling, but no longer
+    implies SQL. New code should prefer ``Model``.
     """
+
+    id: int
+    __tablename__: str | None = None
+
+    @classmethod
+    async def find_all(cls, user_context: dict | None = None) -> list[Any]:
+        table = _get_table_name(cls)
+        if table in _rls_policies and user_context:
+            predicate = _rls_policies[table]
+            rows = scan_records(table)
+            selected: list[Any] = []
+            for row in rows:
+                try:
+                    allowed = predicate(row, user_context)
+                except TypeError:
+                    raise RuntimeError(
+                        "SQL-string rls_policy callbacks are not supported by the "
+                        "Store-native Model; use a predicate accepting (row, context)."
+                    ) from None
+                if allowed:
+                    selected.append(_hydrate(cls, row))
+            return selected
+        return [_hydrate(cls, row) for row in scan_records(table)]
+
+    async def insert(self) -> BaseModel:
+        table = _get_table_name(self)
+        self.id = insert_record(table, _model_values(self))
+        _fire_hooks(table, "insert", self)
+        return self
+
+    async def update(self) -> BaseModel:
+        if not getattr(self, "id", None):
+            raise ValueError("Cannot update a model without an id")
+        table = _get_table_name(self)
+        put_record(table, self.id, _model_values(self))
+        _fire_hooks(table, "update", self)
+        return self
+
+
+class Model(BaseModel):
+    """Async CRUD facade backed exclusively by Voodoo Store."""
 
     @classmethod
     async def create(cls, **kwargs: Any) -> Model:
-        if not should_use_store():
-            return await super().create(**kwargs)
         obj = cls()
         for key, value in kwargs.items():
             setattr(obj, key, value)
@@ -34,15 +204,15 @@ class Model(StoreModelMixin, SQLModel):
 
     @classmethod
     async def get(cls, id: int) -> Model | None:
-        if not should_use_store():
-            return await super().get(id)
         row = get_record(_get_table_name(cls), id)
         return None if row is None else _hydrate(cls, row)
 
     @classmethod
-    def where(cls, **filters: Any) -> StoreQuery | Any:
-        if not should_use_store():
-            return super().where(**filters)
+    async def all(cls, user_context: dict | None = None) -> list[Model]:
+        return await cls.find_all(user_context=user_context)
+
+    @classmethod
+    def where(cls, **filters: Any) -> StoreQuery:
         return StoreQuery(cls, filters)
 
     @classmethod
@@ -57,15 +227,24 @@ class Model(StoreModelMixin, SQLModel):
     async def delete_where(cls, **filters: Any) -> int:
         return await cls.where(**filters).delete()
 
+    async def save(self) -> Model:
+        if getattr(self, "id", None):
+            await self.update()
+        else:
+            await self.insert()
+        return self
+
     async def delete(self) -> None:
-        if not should_use_store():
-            await super().delete()
-            return
-        await self._store_delete()
+        table = _get_table_name(self)
+        for child_table, fk_col in _cascades.get(table, []):
+            for child in scan_records(child_table):
+                if child.get(fk_col) == self.id:
+                    delete_record(child_table, int(child["id"]))
+        delete_record(table, self.id)
 
 
 class StoreQuery:
-    """Lazy Store query preserving the existing ``Model.where`` ergonomics."""
+    """Lazy query over one Voodoo Store collection."""
 
     def __init__(self, model: type[Model], filters: dict[str, Any]) -> None:
         self._model = model
