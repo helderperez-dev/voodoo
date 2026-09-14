@@ -2,9 +2,11 @@
 
 from pathlib import Path
 
+import pytest
 from starlette.testclient import TestClient
 
 from voodoo.core.app import create_app
+from voodoo.core.errors import ConfigurationError
 
 
 def test_app_opens_and_closes_voodoo_store_by_default(
@@ -35,16 +37,17 @@ def test_app_opens_and_closes_voodoo_store_by_default(
     assert store_path.exists()
 
 
-def test_app_can_explicitly_disable_default_store(tmp_path: Path, monkeypatch) -> None:
+def test_app_rejects_disabling_required_default_store(
+    tmp_path: Path, monkeypatch
+) -> None:
     store_path = tmp_path / "disabled.vstore"
     monkeypatch.setenv("VOODOO_STORE_PATH", str(store_path))
     monkeypatch.setenv("VOODOO_STORE_ENABLED", "false")
 
     app = create_app(app_dir=str(tmp_path / "app"))
 
-    with TestClient(app):
-        runtime_store = app.state.runtime_store
-        assert runtime_store.started is False
-        assert runtime_store.provider is None
+    with pytest.raises(ConfigurationError, match="disabled"):
+        with TestClient(app):
+            pass
 
     assert not store_path.exists()
