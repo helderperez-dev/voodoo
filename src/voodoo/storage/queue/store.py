@@ -62,7 +62,11 @@ def _native_id(task_id: int) -> bytes:
 def _status(job: dict[str, Any]) -> TaskStatus:
     state = str(job["state"])
     if state == "ready":
-        return TaskStatus.RETRYING if int(job.get("attempts", 0)) > 0 else TaskStatus.PENDING
+        return (
+            TaskStatus.RETRYING
+            if int(job.get("attempts", 0)) > 0
+            else TaskStatus.PENDING
+        )
     if state == "leased":
         return TaskStatus.RUNNING
     if state == "completed":
@@ -88,7 +92,9 @@ class VoodooStoreQueue:
             )
         native = getattr(provider, "native", None)
         if native is None:
-            raise ConfigurationError("The active Store provider does not expose durable Jobs.")
+            raise ConfigurationError(
+                "The active Store provider does not expose durable Jobs."
+            )
         missing = [name for name in _REQUIRED_JOB_API if not hasattr(native, name)]
         if missing:
             names = ", ".join(missing)
