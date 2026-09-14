@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 
-from voodoo.core.errors import ConfigurationError
 from voodoo.storage.queue import TaskStatus
 from voodoo.storage.queue import store as queue_module
 from voodoo.storage.queue.store import VoodooStoreQueue, _native_id, _public_id
@@ -190,18 +189,23 @@ class _RuntimeStore:
 
 
 @pytest.mark.asyncio
-async def test_queue_requires_active_runtime_store(monkeypatch):
-    monkeypatch.setattr(queue_module, "get_active_runtime_store", lambda: None)
+async def test_queue_acquires_process_shared_runtime_store(monkeypatch):
+    native = _FakeNativeJobs()
+    runtime = _RuntimeStore(native)
+    monkeypatch.setattr(queue_module, "acquire_runtime_store", lambda: runtime)
+
     queue = VoodooStoreQueue()
-    with pytest.raises(ConfigurationError, match="active RuntimeStore"):
-        await queue.setup()
+    await queue.setup()
+
+    assert queue._native is native
+    assert runtime.start_calls == 0
 
 
 @pytest.mark.asyncio
 async def test_queue_reuses_active_store_and_preserves_public_task_api(monkeypatch):
     native = _FakeNativeJobs()
     runtime = _RuntimeStore(native)
-    monkeypatch.setattr(queue_module, "get_active_runtime_store", lambda: runtime)
+    monkeypatch.setattr(queue_module, "acquire_runtime_store", lambda: runtime)
     queue = VoodooStoreQueue()
     await queue.setup()
 
@@ -251,7 +255,7 @@ async def test_queue_reuses_active_store_and_preserves_public_task_api(monkeypat
 async def test_queue_completion_release_reaper_and_manual_retry(monkeypatch):
     native = _FakeNativeJobs()
     runtime = _RuntimeStore(native)
-    monkeypatch.setattr(queue_module, "get_active_runtime_store", lambda: runtime)
+    monkeypatch.setattr(queue_module, "acquire_runtime_store", lambda: runtime)
     queue = VoodooStoreQueue()
     await queue.setup()
 
