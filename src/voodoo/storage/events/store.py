@@ -1,9 +1,9 @@
 """Voodoo Store-backed durable event bus.
 
-Events are persisted inside the application-owned ``application.vstore`` and
+Events are persisted inside the Runtime-owned ``application.vstore`` and
 replayed from the same durable substrate used by the rest of the Runtime. The
-adapter deliberately consumes the Runtime Store boundary and never exposes the
-native ``voodoo_store`` binding to application code.
+adapter consumes the central Runtime Store boundary and never opens a competing
+writer.
 
 Store 0.2.x does not yet expose the richer messaging subsystem through the
 Python binding, so this adapter uses the durable KV/transaction contract as the
@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from voodoo.core.errors import ConfigurationError
-from voodoo.runtime.store import RuntimeStore, StoreConfig, get_active_runtime_store
+from voodoo.runtime.store import acquire_runtime_store
 from voodoo.storage.events.interfaces import EventBusCapabilities
 
 _SEQUENCE_PREFIX = b"runtime:events:sequence:"
@@ -29,13 +29,12 @@ _EVENT_PREFIX = b"runtime:events:event:"
 
 
 class VoodooStoreEventBus:
-    """Durable event bus backed by the active application Voodoo Store."""
+    """Durable event bus backed by the process-shared Runtime Store."""
 
     provider = "voodoo"
 
     def __init__(self) -> None:
         self._handlers: dict[str, list[Callable]] = {}
-        self._owned_runtime_store: RuntimeStore | None = None
 
     def capabilities(self) -> EventBusCapabilities:
         return EventBusCapabilities(
@@ -46,21 +45,8 @@ class VoodooStoreEventBus:
             delivery="at_least_once",
         )
 
-    def _runtime(self) -> RuntimeStore:
-        active = get_active_runtime_store()
-        if active is not None:
-            if self._owned_runtime_store is not None:
-                self._owned_runtime_store.stop()
-                self._owned_runtime_store = None
-            return active
-
-        if self._owned_runtime_store is None:
-            self._owned_runtime_store = RuntimeStore(StoreConfig())
-            self._owned_runtime_store.start()
-        return self._owned_runtime_store
-
     def _native(self) -> Any:
-        runtime = self._runtime()
+        runtime = acquire_runtime_store()
         provider = runtime.provider or runtime.start()
         if provider is None:
             raise ConfigurationError("Voodoo Store is disabled for event persistence")
@@ -152,6 +138,4 @@ class VoodooStoreEventBus:
         return count
 
     def close(self) -> None:
-        if self._owned_runtime_store is not None:
-            self._owned_runtime_store.stop()
-            self._owned_runtime_store = None
+        """Lifecycle is owned centrally by RuntimeStore."""
