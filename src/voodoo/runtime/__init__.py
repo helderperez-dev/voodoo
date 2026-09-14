@@ -83,6 +83,7 @@ from voodoo.runtime.store import (
 )
 from voodoo.runtime.task import Task, TaskStatus
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
+from voodoo.runtime.workflow_store import WorkflowStore, VoodooStoreWorkflowStore
 from voodoo.runtime.world_execution import (
     bind_world,
     resolve_target_entity_id,
@@ -125,6 +126,8 @@ __all__ = [
     "Workflow",
     "WorkflowRun",
     "WorkflowStrategy",
+    "WorkflowStore",
+    "VoodooStoreWorkflowStore",
     "ExecutionGraph",
     "ExecutionNode",
     "Approval",
