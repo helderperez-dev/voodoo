@@ -1,80 +1,39 @@
 # Runtime Engine
 
-> **Status:** Implemented and architecture-stabilized. Sprint 28 is converging
-> durable infrastructure behind a Runtime-owned Voodoo Store provider boundary.
+> **Status:** Store-first Runtime infrastructure convergence is complete on this branch.
 
 The Voodoo Runtime Engine is the unified execution model that makes the
-computational model operational. Every meaningful operation — HTTP request,
-agent run, task, workflow step, tool invocation, MCP call, worker job, human
-approval, event handler or governed remote operation — is represented as an
-**Execution** produced by a single `ExecutionEngine`.
+computational model operational. Meaningful work converges on one canonical
+`ExecutionEngine`; persistence and infrastructure converge on one Runtime-owned
+Voodoo Store by default.
 
-## The Execution Lifecycle
+## Execution lifecycle
 
-```mermaid
-flowchart LR
-    Intent --> Capability
-    Capability --> Policy
-    Policy --> Execution
-    Execution --> Compute
-    Compute --> Effect
-    Effect --> Observation
-    Observation --> World
+```text
+Observation / Goal
+        |
+        v
+      Intent
+        |
+        v
+Identity / Principal
+        |
+        v
+Capability + Policy
+        |
+        v
+canonical Execution
+        |
+        v
+Compute -> Effect -> observed evidence -> World
 ```
 
-## Core Concepts
+AI is one form of Compute. Node membership, authentication and network location
+do not create authority by themselves.
 
-### Execution
+## Store-first Runtime
 
-An `Execution` is the universal durable/observable unit of meaningful work.
-Internal helper calls do not become executions merely because they happen
-inside Voodoo.
-
-```python
-from voodoo.runtime import Execution, ExecutionStatus
-```
-
-### ExecutionEngine
-
-The `ExecutionEngine` (singleton: `engine`) drives the canonical lifecycle:
-
-```python
-from voodoo.runtime import execute
-from voodoo.primitives import Intent
-
-result = await execute(
-    Intent("qualify_customer", customer_id=123),
-    capabilities=["customers:read", "customers:write"],
-)
-```
-
-### ExecutionContext
-
-Every execution carries an `ExecutionContext` with identity/actor context,
-trace and parent lineage, granted capabilities, deadlines and runtime state.
-Capability and contextual Policy determine authority; network location or node
-membership never grants authority by itself.
-
-## Durable infrastructure — Sprint 28
-
-Sprint 28 introduces a Runtime-owned Store boundary. The first slice deliberately
-creates the lifecycle seam **before** switching legacy defaults.
-
-```python
-from voodoo.runtime import VoodooStoreProvider
-
-store = VoodooStoreProvider(".voodoo/application.vstore")
-store.open()
-health = store.health()
-store.close()
-```
-
-Application code is not expected to import `voodoo_store.Store` directly. The
-native binding remains behind `voodoo.runtime` so later Data, Jobs, Events,
-Objects, Identity and Execution durability adapters can depend on a stable
-Voodoo semantic boundary instead of a binding implementation.
-
-The target architecture is:
+A fresh application uses:
 
 ```text
 Application
@@ -82,121 +41,225 @@ Application
     v
 Voodoo Runtime
     |
-    +-- Identity / Capability / Policy
-    +-- Data / Jobs / Scheduler / Events / Objects
-    +-- Execution / Workflow / HITL
+    +-- Model / Data
+    +-- Jobs / Queue
+    +-- Scheduler / Cron / Triggers
+    +-- Events / Outbox
+    +-- Objects
+    +-- Execution / Workflow / Goal / HITL
+    +-- Identity
+    +-- Edge / device state
     |
     v
-Voodoo Store
+RuntimeStore
     |
+    v
+.voodoo/application.vstore
+```
+
+The framework depends on `voodoo-store>=0.2.2,<0.3` on this branch. Application
+code should not import native `voodoo_store` objects for normal Runtime use;
+Store implementation details remain behind Voodoo-owned contracts.
+
+## Runtime Store ownership
+
+One process owns one Store handle:
+
+```text
+Process / Runtime
+       |
+       v
+ RuntimeStore
+       |
+       v
 application.vstore
 ```
 
-### Current transition state
+Infrastructure touched before `App` startup acquires the process-shared
+RuntimeStore. App startup adopts that compatible handle rather than opening a
+second writer. A live Store with a conflicting configuration is rejected.
 
-During **Sprint 28.1**, existing SQLite/local/memory defaults remain operational
-for compatibility. The Store lifecycle boundary is being established and tested
-first. Sprint 28.2 is the explicit point where fresh zero-config applications
-move to Voodoo Store as the default and SQLite/PostgreSQL/Redis/S3 become
-explicit adapters.
+This is a single-writer law, not a limitation Voodoo tries to hide. Multiple
+processes must not write the same `.vstore` file.
 
-This sequencing prevents a fake migration in which configuration says
-"Voodoo Store" while subsystems still silently write to SQLite.
+## Execution
 
-### Store provider contract
+An `Execution` is meaningful work worth observing, authorizing, recovering,
+accounting for, waiting on, or reasoning about. Internal helper calls do not
+become executions merely because they occur inside Voodoo.
 
-`StoreProvider` currently owns only provider-neutral lifecycle semantics:
+```python
+from voodoo.primitives import Intent
+from voodoo.runtime import ExecutionEngine
 
-- deterministic `open()` / `close()`;
-- provider path and opened state;
-- verification-backed health projection;
-- lazy loading of the native Voodoo Store binding;
-- normalization of binding failures into Voodoo errors.
+engine = ExecutionEngine()
 
-It deliberately does **not** duplicate Data, Queue, Event or Execution
-semantics. Those remain Runtime/framework concepts and receive Store-backed
-adapters in later Sprint 28 slices.
 
-### Binding coverage
+async def compute(ctx):
+    return {"ok": True}
 
-The Voodoo Store Rust engine contains more capabilities than the current Python
-0.1.x binding exposes. The integration therefore proceeds in parallel:
 
-```text
-voodoo Runtime contracts
-        |
-        +--> currently exposed Store lifecycle/KV/transactions
-        |
-        `--> typed binding expansion as later slices need
-             Collections / Jobs / Queues / Scheduler / Streams /
-             Objects / Workflow / Outbox
+execution = await engine.execute(
+    Intent(name="customer.refresh"),
+    compute,
+    actor="service:crm",
+)
 ```
 
-Voodoo must never claim a Store capability through Python until that capability
-is actually exposed and contract-tested by the binding used by the framework.
+App startup attaches the Store-backed execution persistence adapter to the
+canonical engine. Execution materialized state, journal events, artifacts and
+HITL approvals share the Runtime Store.
 
-## Checkpoints & Resume
+## Identity and authority
 
-Executions checkpoint at meaningful durability boundaries, including before
-human waiting and after meaningful completed work. Recovery must restore runtime
-truth without re-running already committed effects.
+Runtime Identity is separate from authentication evidence and authority:
 
-Existing execution persistence remains compatible during the Sprint 28
-migration. Its durable representation will converge onto Store in slice 28.8.
+```text
+Identity
+   |
+AuthenticationEvidence
+   |
+Principal
+   |
+Capability + Policy
+   |
+Execution
+```
+
+Supported identity kinds include user, agent, service, device and node.
+Authentication, roles/scopes or node advertisements do **not** automatically
+grant Runtime Capability.
+
+## Durable workflows, Goals and HITL
+
+- execution checkpoints survive Store restart;
+- Goal checkpoints have a Store-backed provider;
+- Workflow orchestration checkpoints persist references to canonical
+  Executions rather than creating a second execution truth;
+- HITL approvals persist and can be rehydrated by `ExecutionEngine.recover()`
+  after restart.
+
+Durability does not mean global exactly-once. External effects still require
+idempotency and domain-appropriate recovery semantics.
+
+## Runtime transactions and outbox
+
+The supported local atomic boundary is explicit:
+
+```python
+from voodoo.runtime import OutboxMessage, transaction
+
+with transaction() as tx:
+    tx.upsert_record(
+        b"orders",
+        b"42",
+        b'{"status":"created"}',
+    )
+    tx.stage_outbox(
+        OutboxMessage(
+            id="order-42-created",
+            topic="order.created",
+            payload={"order_id": "42"},
+        )
+    )
+```
+
+The Collection/KV mutation and outbox insertion commit atomically in one local
+Store transaction. Outbox delivery is at-least-once; consumers should use the
+message id as an idempotency key where duplicate suppression matters.
+
+Jobs, arbitrary external effects, and operations on another node are not
+claimed to be part of this local transaction.
 
 ## Transparent node scaling
 
-Sprint 28 also establishes the infrastructure direction for topology-transparent
-scaling:
-
-> **Scaling a Voodoo application must change deployment topology, not
-> application architecture.**
-
-The initial model is node-local ownership, not shared-file storage:
+> **Scaling a Voodoo application changes deployment topology, not application architecture.**
 
 ```text
 same application semantics
-        |
-        v
-   Runtime Router
+         |
+         v
+   Runtime Fabric
      /    |    \
  node-a node-b node-c
    |      |      |
  a.vstore b.vstore c.vstore
 ```
 
-Multiple processes must not write the same `.vstore`. Authenticated Voodoo Nodes
-will advertise identity, capability, health, load and ownership, while Runtime
-routing preserves Capability + Policy + Execution semantics. Replication/sync,
-distributed consensus and global exactly-once are separate future problems and
-are not implied by this architecture.
+The Runtime Fabric provides:
+
+- authenticated node Principals;
+- durable membership and heartbeat lifecycle;
+- health-aware discovery;
+- capability/service/ownership filtering;
+- load/locality/data-owner aware placement;
+- durable lease generations;
+- bounded failover for work explicitly declared retryable;
+- stable idempotency keys across attempts.
+
+A node advertising a capability is not the same as being authorized to use it.
+Remote work still enters Capability + Policy + canonical Execution.
+
+## Protocol boundary
+
+Node advertisement, membership and fabric work request/outcome semantics are
+represented in transport-neutral Protocol models. The transport may evolve
+without changing Runtime authority or Execution semantics.
+
+## Edge
+
+When Edge is enabled, device/credential/session/effect/replay state uses the
+same Runtime Store by default. `SQLiteDeviceStore` remains an explicit adapter,
+not a hidden Edge default.
 
 ## Configuration
 
-Legacy provider configuration remains valid during the transition:
+A fresh Runtime is equivalent to:
 
-```yaml
-database:
-  provider: sqlite
-queue:
-  provider: sqlite
-events:
-  provider: sqlite
-objects:
-  provider: local
-cache:
-  provider: memory
+```toml
+[store]
+provider = "voodoo"
+path = ".voodoo/application.vstore"
+
+[database]
+provider = "voodoo"
+
+[queue]
+provider = "voodoo"
+
+[events]
+provider = "voodoo"
+
+[objects]
+provider = "voodoo"
 ```
 
-Sprint 28.2 will introduce the zero-config Store default while keeping these
-providers available as explicit adapters. Compatibility is preserved until the
-migration path is implemented and acceptance-tested.
+Those blocks normally do not need to be written. PostgreSQL, SQLite, Redis and
+S3 are explicit domain overrides.
 
-## See Also
+## Current honest boundaries
 
-- [Sprint 28 — Runtime Infrastructure Convergence](sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)
-- [Computational Model](primitives.md)
-- [Human-in-the-Loop](hitl.md)
-- [Planner & Adaptive Runtime](adaptive.md)
+Voodoo does not currently claim:
+
+- shared-file multi-writer Store semantics;
+- Store replication/sync between node-local Stores;
+- distributed consensus;
+- globally serializable transactions;
+- global exactly-once execution;
+- production PKI/OIDC/mTLS identity infrastructure;
+- a managed cloud/fleet control plane.
+
+Store 0.2.2 also does not expose arbitrary schedule cursor repositioning or the
+richer native Topics/Streams and Objects subsystems through the Python binding.
+Framework adapters preserve stable contracts without pretending those native
+bindings already exist.
+
+## See also
+
+- [Sprint 28 closure](sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)
 - [Architecture](architecture.md)
-- [ROADMAP.md](../ROADMAP.md)
+- [Data & Models](data.md)
+- [Workers](workers.md)
+- [Deployment](deployment.md)
+- [Human-in-the-Loop](hitl.md)
+- [Protocol](protocol.md)
