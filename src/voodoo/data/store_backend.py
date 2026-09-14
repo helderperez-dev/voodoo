@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from voodoo.runtime.store import RuntimeStore
 
 _runtime_store: RuntimeStore | None = None
-_owned_runtime_store: RuntimeStore | None = None
 
 _REQUIRED_COLLECTION_API = (
     "create_collection",
@@ -38,22 +37,15 @@ def bind_runtime_store(runtime_store: RuntimeStore | None) -> None:
 
 
 def _get_runtime_store() -> RuntimeStore:
-    global _owned_runtime_store
     if _runtime_store is not None:
         return _runtime_store
-    if _owned_runtime_store is None:
-        from voodoo.runtime.store import RuntimeStore, StoreConfig
+    from voodoo.runtime.store import acquire_runtime_store
 
-        _owned_runtime_store = RuntimeStore(StoreConfig.from_mapping())
-        _owned_runtime_store.start()
-    return _owned_runtime_store
+    return acquire_runtime_store()
 
 
 def close_owned_store() -> None:
-    global _owned_runtime_store
-    if _owned_runtime_store is not None:
-        _owned_runtime_store.stop()
-        _owned_runtime_store = None
+    """Standalone Store lifetime is managed centrally by runtime.store."""
 
 
 def should_use_store() -> bool:
