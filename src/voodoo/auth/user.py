@@ -12,14 +12,9 @@ from voodoo.auth.passwords import (
 )
 from voodoo.data import BaseModel, get_db
 
-# Context variable for the currently authenticated user in the current async task
 current_user: ContextVar[Optional["AuthUser"]] = ContextVar(
     "current_user", default=None
 )
-
-# =========================================================================
-# Auth User & Context
-# =========================================================================
 
 
 class AuthUser:
@@ -50,13 +45,11 @@ class AuthUser:
         self.raw_data = raw_data or {}
 
     def has_role(self, *required_roles: str) -> bool:
-        """Checks if the user has at least one of the required roles."""
         if not self.is_authenticated:
             return False
         return any(r in self.roles for r in required_roles)
 
     def has_scope(self, *required_scopes: str) -> bool:
-        """Checks if the user has all required scopes."""
         if not self.is_authenticated:
             return False
         return all(s in self.scopes for s in required_scopes)
@@ -78,9 +71,6 @@ class AuthUser:
 
 
 def get_current_user(request: Request | None = None) -> AuthUser | None:
-    """
-    Retrieves the currently authenticated user from request state or ContextVar.
-    """
     if (
         request is not None
         and hasattr(request, "state")
@@ -92,13 +82,25 @@ def get_current_user(request: Request | None = None) -> AuthUser | None:
     return current_user.get()
 
 
-# =========================================================================
-# Built-in User Database Model (extends Voodoo BaseModel)
-# =========================================================================
+def _uses_store() -> bool:
+    from voodoo.config import get_config
+
+    return get_config().database.provider.lower() == "voodoo"
+
+
+def _from_record(record: dict[str, Any]) -> "User":
+    user = User()
+    for key, value in record.items():
+        setattr(user, key, value)
+    return user
 
 
 class User(BaseModel):
-    """Built-in User entity for relational SQLite storage."""
+    """Built-in Runtime user identity persisted in Store by default.
+
+    SQLite/Postgres remain explicit compatibility adapters. Identity semantics
+    stay in the Runtime while Voodoo Store owns default durable mechanics.
+    """
 
     __tablename__ = "voodoo_users"
     id: int
@@ -119,29 +121,32 @@ class User(BaseModel):
         role: str = "user",
         api_key_prefix: str | None = None,
     ) -> tuple["User", str | None]:
-        """
-        Creates and stores a new User in the database with hashed password.
-        Optionally generates an initial API key.
-        Returns (user, raw_api_key)
-        """
-        _ = await get_db()
-        # Ensure table exists
-        await cls._create_table()
-
         hashed = hash_password(password)
         uname = username or email.split("@")[0]
         raw_key, key_hash = generate_api_key(api_key_prefix)
         created = datetime.now(UTC).isoformat()
 
-        user = cls()
-        user.email = email
-        user.username = uname
-        user.hashed_password = hashed
-        user.role = role
-        user.is_active = True
-        user.api_key_hash = key_hash
-        user.created_at = created
+        values = {
+            "email": email,
+            "username": uname,
+            "hashed_password": hashed,
+            "role": role,
+            "is_active": True,
+            "api_key_hash": key_hash,
+            "created_at": created,
+        }
 
+        if _uses_store():
+            from voodoo.data.store_backend import insert_record
+
+            user_id = insert_record(cls.__tablename__, values)
+            return _from_record({"id": user_id, **values}), raw_key
+
+        _ = await get_db()
+        await cls._create_table()
+        user = cls()
+        for key, value in values.items():
+            setattr(user, key, value)
         await user.insert()
         return user, raw_key
 
@@ -149,10 +154,24 @@ class User(BaseModel):
     async def authenticate(
         cls, email_or_username: str, password: str
     ) -> Optional["User"]:
-        """Authenticates user by email/username and password."""
+        if _uses_store():
+            from voodoo.data.store_backend import scan_records
+
+            for record in scan_records(cls.__tablename__):
+                if not record.get("is_active"):
+                    continue
+                if email_or_username not in {
+                    record.get("email"),
+                    record.get("username"),
+                }:
+                    continue
+                if verify_password(password, str(record["hashed_password"])):
+                    return _from_record(record)
+                return None
+            return None
+
         db = await get_db()
         await cls._create_table()
-
         query = (
             "SELECT * FROM voodoo_users "
             "WHERE (email = ? OR username = ?) AND is_active = ?"
@@ -177,11 +196,18 @@ class User(BaseModel):
 
     @classmethod
     async def find_by_api_key(cls, api_key: str) -> Optional["User"]:
-        """Finds active user by matching API key hash."""
+        key_hash = hash_api_key(api_key)
+
+        if _uses_store():
+            from voodoo.data.store_backend import scan_records
+
+            for record in scan_records(cls.__tablename__):
+                if record.get("is_active") and record.get("api_key_hash") == key_hash:
+                    return _from_record(record)
+            return None
+
         db = await get_db()
         await cls._create_table()
-
-        key_hash = hash_api_key(api_key)
         query = "SELECT * FROM voodoo_users WHERE api_key_hash = ? AND is_active = ?"
         async with db.execute(query, [key_hash, True]) as cursor:
             row = await cursor.fetchone()
