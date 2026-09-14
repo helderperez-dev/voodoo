@@ -8,14 +8,14 @@ never creates a second execution lifecycle.
 from __future__ import annotations
 
 import json
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from voodoo.core.errors import ConfigurationError
-from voodoo.runtime.store import acquire_runtime_store
+if TYPE_CHECKING:
+    from voodoo.runtime.store import RuntimeStore
 
 __all__ = ["WorkflowStore", "VoodooStoreWorkflowStore"]
 
-_PREFIX = b"voodoo:runtime:workflow:"
+_PREFIX = b"runtime:workflows:checkpoint:"
 _TERMINAL = {"completed", "failed", "cancelled"}
 
 
@@ -30,48 +30,62 @@ class WorkflowStore(Protocol):
 
 
 class VoodooStoreWorkflowStore:
-    """Persist Workflow checkpoints in the process-owned Voodoo Store."""
+    """Workflow checkpoints backed by the Runtime-owned Voodoo Store."""
 
     provider = "voodoo"
 
-    def __init__(self) -> None:
-        self._runtime_store = acquire_runtime_store()
-        provider = self._runtime_store.provider or self._runtime_store.start()
+    def __init__(self, runtime_store: RuntimeStore | None = None) -> None:
+        self._runtime_store = runtime_store
+
+    def _runtime(self) -> RuntimeStore:
+        if self._runtime_store is not None:
+            return self._runtime_store
+        from voodoo.runtime.store import acquire_runtime_store
+
+        return acquire_runtime_store()
+
+    def _store(self) -> Any:
+        runtime = self._runtime()
+        provider = runtime.provider or runtime.start()
         if provider is None:
+            from voodoo.core.errors import ConfigurationError
+
             raise ConfigurationError(
-                "Workflow durability requires Voodoo Store to be enabled."
+                "Voodoo Store is disabled; durable Workflow checkpoints require "
+                "an explicit WorkflowStore adapter or an enabled Runtime Store."
             )
         native = getattr(provider, "native", None)
-        if native is None or not all(
-            hasattr(native, name) for name in ("get", "put", "scan_prefix")
-        ):
+        if native is None:
+            from voodoo.core.errors import ConfigurationError
+
             raise ConfigurationError(
-                "The active Voodoo Store binding does not expose the KV primitives "
-                "required for Workflow checkpoints."
+                "The active Voodoo Store provider does not expose durable KV storage."
             )
-        self._store = native
+        return native
 
     @property
     def path(self):
-        return self._runtime_store.config.path
+        return self._runtime().config.path
 
     def save(self, workflow_id: str, payload: dict[str, Any]) -> None:
         body = dict(payload)
         body["workflow_id"] = workflow_id
-        self._store.put(
+        self._store().put(
             self._key(workflow_id),
-            json.dumps(body, separators=(",", ":"), default=str).encode("utf-8"),
+            json.dumps(
+                body, separators=(",", ":"), sort_keys=True, default=str
+            ).encode("utf-8"),
         )
 
     def load(self, workflow_id: str) -> dict[str, Any] | None:
-        raw = self._store.get(self._key(workflow_id))
+        raw = self._store().get(self._key(workflow_id))
         if raw is None:
             return None
         return json.loads(bytes(raw).decode("utf-8"))
 
     def load_unfinished(self) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
-        for _key, raw in self._store.scan_prefix(_PREFIX):
+        for _key, raw in self._store().scan_prefix(_PREFIX):
             payload = json.loads(bytes(raw).decode("utf-8"))
             if payload.get("status") not in _TERMINAL:
                 records.append(payload)
