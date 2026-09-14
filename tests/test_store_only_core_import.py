@@ -57,6 +57,8 @@ with TestClient(create_app()) as client:
     assert client is not None
 
 assert "aiosqlite" not in sys.modules
+assert "voodoo.data.base" not in sys.modules
+assert "voodoo.storage.database.sqlite" not in sys.modules
 assert "voodoo.storage.scheduler.sqlite" not in sys.modules
 """
     result = subprocess.run(
