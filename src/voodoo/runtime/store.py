@@ -25,6 +25,8 @@ __all__ = [
     "StoreProviderRegistry",
     "RuntimeStore",
     "VoodooStoreProvider",
+    "acquire_runtime_store",
+    "activate_runtime_store",
     "bind_active_runtime_store",
     "create_store_provider",
     "get_active_runtime_store",
@@ -362,15 +364,15 @@ class RuntimeStore:
 
 
 _active_runtime_store: RuntimeStore | None = None
+_shared_runtime_store: RuntimeStore | None = None
 
 
 def bind_active_runtime_store(runtime_store: RuntimeStore | None) -> None:
     """Bind the application-owned Store for Runtime infrastructure adapters.
 
-    Domain adapters (Data, Queue, Events, Objects, Execution) consume this
-    Runtime-owned handle instead of opening their own ``.vstore`` files. This
-    preserves the one-Runtime/one-Store lifecycle law and avoids competing
-    writers against the same embedded store.
+    Domain adapters consume this Runtime-owned handle instead of opening their
+    own ``.vstore`` files. Standalone consumers use :func:`acquire_runtime_store`
+    so every subsystem inside one process converges on one writer.
     """
     global _active_runtime_store
     _active_runtime_store = runtime_store
@@ -379,3 +381,66 @@ def bind_active_runtime_store(runtime_store: RuntimeStore | None) -> None:
 def get_active_runtime_store() -> RuntimeStore | None:
     """Return the Store owned by the active application Runtime, if any."""
     return _active_runtime_store
+
+
+def acquire_runtime_store(config: StoreConfig | None = None) -> RuntimeStore:
+    """Return the process-shared Store for standalone Runtime infrastructure.
+
+    This is the only supported escape hatch for infrastructure used before an
+    ``App`` lifespan exists (for example ``mesh`` or direct ``enqueue()``). It
+    prevents each adapter from opening its own writer against the same embedded
+    Store file.
+    """
+    global _shared_runtime_store
+
+    if _active_runtime_store is not None:
+        return _active_runtime_store
+
+    resolved = config or StoreConfig.from_mapping()
+    if _shared_runtime_store is None:
+        _shared_runtime_store = RuntimeStore(resolved)
+        _shared_runtime_store.start()
+        return _shared_runtime_store
+
+    if _shared_runtime_store.config != resolved:
+        _shared_runtime_store.stop()
+        _shared_runtime_store = RuntimeStore(resolved)
+        _shared_runtime_store.start()
+    elif not _shared_runtime_store.started:
+        _shared_runtime_store.start()
+    return _shared_runtime_store
+
+
+def activate_runtime_store(config: StoreConfig) -> RuntimeStore:
+    """Promote the shared standalone Store into the application lifecycle.
+
+    If infrastructure touched Store before ASGI startup, the App adopts that
+    exact ``RuntimeStore`` instance instead of attempting to open a competing
+    writer. A mismatched standalone configuration is closed before activation.
+    """
+    global _active_runtime_store, _shared_runtime_store
+
+    if _active_runtime_store is not None:
+        if _active_runtime_store.config != config:
+            raise StoreProviderError(
+                "A Voodoo RuntimeStore is already active with a different configuration"
+            )
+        if config.enabled and not _active_runtime_store.started:
+            _active_runtime_store.start()
+        return _active_runtime_store
+
+    if _shared_runtime_store is not None:
+        if _shared_runtime_store.config == config:
+            runtime_store = _shared_runtime_store
+            _shared_runtime_store = None
+        else:
+            _shared_runtime_store.stop()
+            _shared_runtime_store = None
+            runtime_store = RuntimeStore(config)
+    else:
+        runtime_store = RuntimeStore(config)
+
+    if config.enabled:
+        runtime_store.start()
+    _active_runtime_store = runtime_store
+    return runtime_store
