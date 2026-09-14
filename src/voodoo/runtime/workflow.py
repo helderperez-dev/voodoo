@@ -5,17 +5,8 @@ under the Voodoo runtime. It is *not* a separate execution engine: every
 strategy compiles into the same Intent → Capability → Execution → Effect →
 State pipeline via :class:`~voodoo.runtime.task.Task`.
 
-Supported strategies:
-
-    sequential
-    parallel        (dependency-aware)
-    conditional     (per-task condition)
-    iterative       (repeat until predicate / max iterations)
-    delegated       (tasks delegate to sub-agents via child executions)
-    hierarchical    (nested workflows)
-    adaptive        (planner-driven)
-
-``Crew`` is intentionally **not** used — Voodoo-native terminology only.
+Workflow durability checkpoints orchestration progress only. Canonical
+Executions remain owned by :class:`ExecutionEngine`.
 """
 
 from __future__ import annotations
@@ -23,6 +14,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
@@ -34,8 +26,13 @@ from voodoo.runtime.engine import engine as default_engine
 from voodoo.runtime.errors import WorkflowFailure
 from voodoo.runtime.execution import Execution
 from voodoo.runtime.task import Task, TaskStatus
+from voodoo.runtime.workflow_store import WorkflowStore
 
 __all__ = ["WorkflowStrategy", "Workflow", "WorkflowRun"]
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 class WorkflowStrategy(StrEnum):
@@ -50,15 +47,45 @@ class WorkflowStrategy(StrEnum):
 
 @dataclass
 class WorkflowRun:
-    """Result of running a :class:`Workflow`."""
+    """Result and resumable orchestration checkpoint for a Workflow."""
 
     workflow_id: str
     status: str = "running"
     task_results: dict[str, Any] = field(default_factory=dict)
     task_statuses: dict[str, str] = field(default_factory=dict)
     executions: list[Execution] = field(default_factory=list)
+    execution_ids: list[str] = field(default_factory=list)
+    completed_steps: list[str] = field(default_factory=list)
     error: str | None = None
     iterations: int = 0
+    updated_at: str = field(default_factory=_now_iso)
+
+    def describe(self) -> dict[str, Any]:
+        return {
+            "workflow_id": self.workflow_id,
+            "status": self.status,
+            "task_results": dict(self.task_results),
+            "task_statuses": dict(self.task_statuses),
+            "execution_ids": list(self.execution_ids),
+            "completed_steps": list(self.completed_steps),
+            "error": self.error,
+            "iterations": self.iterations,
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_checkpoint(cls, payload: dict[str, Any]) -> WorkflowRun:
+        return cls(
+            workflow_id=str(payload["workflow_id"]),
+            status=str(payload.get("status", "running")),
+            task_results=dict(payload.get("task_results") or {}),
+            task_statuses=dict(payload.get("task_statuses") or {}),
+            execution_ids=[str(value) for value in payload.get("execution_ids") or []],
+            completed_steps=[str(value) for value in payload.get("completed_steps") or []],
+            error=payload.get("error"),
+            iterations=int(payload.get("iterations") or 0),
+            updated_at=str(payload.get("updated_at") or _now_iso()),
+        )
 
 
 @dataclass
@@ -71,17 +98,12 @@ class Workflow:
     id: str = field(default_factory=lambda: str(uuid4()))
     until: Callable[[WorkflowRun], bool] | None = None
     max_iterations: int = 1
+    store: WorkflowStore | None = None
 
     # -- topology ----------------------------------------------------------
 
     def _validate_topology(self) -> None:
-        """Validate task identity, dependency membership, and acyclicity.
-
-        Task names are durable result/dependency keys, so they must be unique.
-        Dependencies must belong to this workflow. Cycles are rejected before
-        any task executes instead of silently running declaration order or
-        allowing a partial parallel run to look successful.
-        """
+        """Validate task identity, dependency membership, and acyclicity."""
         names = [task.name for task in self.tasks]
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
@@ -151,16 +173,60 @@ class Workflow:
         parent: ExecutionContext | None = None,
         context: dict[str, Any] | None = None,
     ) -> WorkflowRun:
-        """Execute the workflow according to its strategy."""
+        """Execute a new Workflow run according to its strategy."""
         run = WorkflowRun(workflow_id=self.id)
+        self._persist(run)
+        return await self._execute_run(run, engine=engine, parent=parent, context=context)
+
+    async def resume(
+        self,
+        *,
+        engine: ExecutionEngine = default_engine,
+        parent: ExecutionContext | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> WorkflowRun:
+        """Resume this Workflow definition from its latest durable checkpoint.
+
+        The caller supplies the same Workflow definition (Tasks/compute functions),
+        while Store supplies orchestration progress. Completed checkpoint steps are
+        not executed a second time.
+        """
+        if self.store is None:
+            raise RuntimeError("Workflow.resume() requires a WorkflowStore")
+        payload = self.store.load(self.id)
+        if payload is None:
+            raise KeyError(self.id)
+        run = WorkflowRun.from_checkpoint(payload)
+        if run.status == "completed":
+            return run
+        if run.status in {"failed", "cancelled"}:
+            raise RuntimeError(
+                f"workflow {self.id} is terminal and cannot resume: {run.status}"
+            )
+        run.status = "running"
+        run.error = None
+        self._persist(run)
+        return await self._execute_run(run, engine=engine, parent=parent, context=context)
+
+    async def _execute_run(
+        self,
+        run: WorkflowRun,
+        *,
+        engine: ExecutionEngine,
+        parent: ExecutionContext | None,
+        context: dict[str, Any] | None,
+    ) -> WorkflowRun:
         try:
             if self.strategy is not WorkflowStrategy.HIERARCHICAL:
                 self._validate_topology()
             await self._dispatch(run, engine, parent, context)
             run.status = "completed"
+            run.error = None
+            self._persist(run)
         except Exception as error:  # noqa: BLE001
             run.status = "failed"
             run.error = str(error)
+            self._persist(run)
             if isinstance(error, WorkflowFailure):
                 raise
             raise WorkflowFailure(
@@ -181,7 +247,6 @@ class Workflow:
         parent: ExecutionContext | None,
         context: dict[str, Any] | None,
     ) -> None:
-        """Dispatch one validated workflow to its strategy implementation."""
         handlers: dict[
             WorkflowStrategy,
             Callable[
@@ -208,21 +273,30 @@ class Workflow:
         engine: ExecutionEngine,
         parent: ExecutionContext | None,
         ctx: dict | None,
+        *,
+        step_prefix: str = "task",
     ) -> None:
         results: dict[str, Any] = dict(ctx or {})
+        results.update(run.task_results)
         for task in self._topological_order():
+            step = f"{step_prefix}:{task.name}"
+            if step in run.completed_steps:
+                continue
             execution = await task.run(
                 context=ctx, engine=engine, parent=parent, results=results
             )
-            run.executions.append(execution)
+            self._record_execution(run, execution)
             run.task_statuses[task.name] = task.status.value
             run.task_results[task.name] = task.result
             results[task.name] = task.result
             engine.checkpoint(execution)
             if task.status is TaskStatus.FAILED:
+                self._persist(run)
                 raise WorkflowFailure(
                     f"Task '{task.name}' failed", context={"task": task.name}
                 )
+            run.completed_steps.append(step)
+            self._persist(run)
 
     async def _run_parallel(
         self,
@@ -235,7 +309,12 @@ class Workflow:
             "workflow.started", {"workflow_id": self.id, "strategy": "parallel"}
         )
         results: dict[str, Any] = dict(ctx or {})
-        done: set[str] = set()
+        results.update(run.task_results)
+        done = {
+            task.name
+            for task in self.tasks
+            if f"task:{task.name}" in run.completed_steps
+        }
 
         while len(done) < len(self.tasks):
             ready = self._ready_tasks(done)
@@ -256,20 +335,26 @@ class Workflow:
                 if isinstance(execution, Exception):
                     run.task_statuses[task.name] = TaskStatus.FAILED.value
                     run.task_results[task.name] = None
+                    self._persist(run)
                     raise WorkflowFailure(
                         f"Task '{task.name}' failed: {execution}",
                         context={"task": task.name},
                     )
-                run.executions.append(execution)
+                self._record_execution(run, execution)
                 run.task_statuses[task.name] = task.status.value
                 run.task_results[task.name] = task.result
                 results[task.name] = task.result
                 done.add(task.name)
                 engine.checkpoint(execution)
                 if task.status is TaskStatus.FAILED:
+                    self._persist(run)
                     raise WorkflowFailure(
                         f"Task '{task.name}' failed", context={"task": task.name}
                     )
+                step = f"task:{task.name}"
+                if step not in run.completed_steps:
+                    run.completed_steps.append(step)
+                self._persist(run)
 
     async def _run_conditional(
         self,
@@ -281,15 +366,7 @@ class Workflow:
         await self._emit(
             "workflow.started", {"workflow_id": self.id, "strategy": "conditional"}
         )
-        results: dict[str, Any] = dict(ctx or {})
-        for task in self._topological_order():
-            execution = await task.run(
-                context=ctx, engine=engine, parent=parent, results=results
-            )
-            run.executions.append(execution)
-            run.task_statuses[task.name] = task.status.value
-            run.task_results[task.name] = task.result
-            results[task.name] = task.result
+        await self._run_sequential(run, engine, parent, ctx)
 
     async def _run_iterative(
         self,
@@ -301,10 +378,17 @@ class Workflow:
         await self._emit(
             "workflow.started", {"workflow_id": self.id, "strategy": "iterative"}
         )
-        iteration = 0
+        iteration = max(run.iterations - 1, 0) if run.iterations else 0
         while iteration < self.max_iterations:
             run.iterations = iteration + 1
-            await self._run_sequential(run, engine, parent, ctx)
+            self._persist(run)
+            await self._run_sequential(
+                run,
+                engine,
+                parent,
+                ctx,
+                step_prefix=f"iteration:{run.iterations}",
+            )
             if self.until is not None and self.until(run):
                 return
             iteration += 1
@@ -320,15 +404,21 @@ class Workflow:
             "workflow.started", {"workflow_id": self.id, "strategy": "delegated"}
         )
         results: dict[str, Any] = dict(ctx or {})
+        results.update(run.task_results)
         for task in self._topological_order():
+            step = f"task:{task.name}"
+            if step in run.completed_steps:
+                continue
             child_parent = parent or ExecutionContext(actor="workflow")
             execution = await task.run(
                 context=ctx, engine=engine, parent=child_parent, results=results
             )
-            run.executions.append(execution)
+            self._record_execution(run, execution)
             run.task_statuses[task.name] = task.status.value
             run.task_results[task.name] = task.result
             results[task.name] = task.result
+            run.completed_steps.append(step)
+            self._persist(run)
 
     async def _run_hierarchical(
         self,
@@ -341,20 +431,32 @@ class Workflow:
             "workflow.started", {"workflow_id": self.id, "strategy": "hierarchical"}
         )
         results: dict[str, Any] = dict(ctx or {})
+        results.update(run.task_results)
         for item in self.tasks:
+            key = item.name or item.id if isinstance(item, Workflow) else item.name
+            step = f"item:{key}"
+            if step in run.completed_steps:
+                continue
             if isinstance(item, Workflow):
                 sub_run = await item.run(engine=engine, parent=parent, context=ctx)
-                run.task_statuses[item.name or item.id] = sub_run.status
-                run.task_results[item.name or item.id] = sub_run.task_results
+                run.task_statuses[key] = sub_run.status
+                run.task_results[key] = sub_run.task_results
                 run.executions.extend(sub_run.executions)
+                run.execution_ids.extend(
+                    value
+                    for value in sub_run.execution_ids
+                    if value not in run.execution_ids
+                )
             else:
                 execution = await item.run(
                     context=ctx, engine=engine, parent=parent, results=results
                 )
-                run.executions.append(execution)
+                self._record_execution(run, execution)
                 run.task_statuses[item.name] = item.status.value
                 run.task_results[item.name] = item.result
                 results[item.name] = item.result
+            run.completed_steps.append(step)
+            self._persist(run)
 
     async def _run_adaptive(
         self,
@@ -364,6 +466,8 @@ class Workflow:
         ctx: dict | None,
     ) -> None:
         """Run the planner/supervisor strategy using declared capabilities."""
+        if "adaptive:aggregate" in run.completed_steps:
+            return
         await self._emit(
             "workflow.started", {"workflow_id": self.id, "strategy": "adaptive"}
         )
@@ -394,12 +498,18 @@ class Workflow:
         adaptive_run = await supervisor.run(intent)
         run.task_statuses["_adaptive"] = adaptive_run.status
         run.task_results["_adaptive"] = adaptive_run.result
+        if adaptive_run.execution_id:
+            if adaptive_run.execution_id not in run.execution_ids:
+                run.execution_ids.append(adaptive_run.execution_id)
         if adaptive_run.error:
             run.error = adaptive_run.error
+            self._persist(run)
             raise WorkflowFailure(
                 f"Adaptive workflow failed: {adaptive_run.error}",
                 context={"decisions": adaptive_run.decisions},
             )
+        run.completed_steps.append("adaptive:aggregate")
+        self._persist(run)
 
     def _build_adaptive_intent(self, ctx: dict | None) -> Intent:
         """Build an aggregate Intent carrying every task's capabilities."""
@@ -411,6 +521,17 @@ class Workflow:
                     seen.add(capability)
                     intent.require(capability)
         return intent
+
+    def _record_execution(self, run: WorkflowRun, execution: Execution) -> None:
+        run.executions.append(execution)
+        if execution.id not in run.execution_ids:
+            run.execution_ids.append(execution.id)
+
+    def _persist(self, run: WorkflowRun) -> None:
+        if self.store is None:
+            return
+        run.updated_at = _now_iso()
+        self.store.save(self.id, run.describe())
 
     # -- mesh --------------------------------------------------------------
 
