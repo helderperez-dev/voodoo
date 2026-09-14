@@ -1,4 +1,4 @@
-"""Sprint 28.2 acceptance for the application-owned Voodoo Store lifecycle."""
+"""Sprint 28.2/28.8 acceptance for the application-owned Store lifecycle."""
 
 from pathlib import Path
 
@@ -23,6 +23,12 @@ def test_app_opens_and_closes_voodoo_store_by_default(
         assert runtime_store.provider.name == "voodoo"
         assert runtime_store.provider.path == store_path
         assert store_path.exists()
+
+        from voodoo.runtime.engine import engine
+
+        assert engine._execution_store is not None
+        assert engine._execution_store.provider == "voodoo"
+        assert engine._execution_store.path == store_path
 
     assert runtime_store.started is False
     assert runtime_store.provider is None
