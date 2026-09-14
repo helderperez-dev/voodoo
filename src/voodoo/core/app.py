@@ -38,21 +38,7 @@ def _local_ip() -> str | None:
 
 
 class App:
-    """Central Voodoo application.
-
-    Wraps the :func:`create_app` machinery behind one object with sane defaults
-    for every subsystem. The Starlette application is built lazily (on first
-    request or ``run()``) so ``@page`` registrations in the same module still
-    apply::
-
-        app = App()
-
-        @page("/")
-        def home():
-            return Text("Hello")
-
-        app.run()
-    """
+    """Central Voodoo application."""
 
     def __init__(
         self,
@@ -136,11 +122,7 @@ class App:
 
 
 def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
-    """Build a fully wired Starlette application.
-
-    ``App`` wraps this factory; ``create_app`` itself remains available as a
-    compatibility alias for existing code.
-    """
+    """Build a fully wired Starlette application."""
     from voodoo.config import config
 
     try:
@@ -174,7 +156,6 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     routes.extend(page_registry.routes)
 
     seo_config = config.seo
-
     if seo_config.sitemap_enabled:
 
         def sitemap_handler(request: Request) -> Response:
@@ -250,9 +231,6 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        # Sprint 28: every Runtime owns one local-first application Store by
-        # default. The legacy per-domain stores remain active until their
-        # dedicated convergence slices move onto this substrate.
         from voodoo.runtime.store import RuntimeStore, StoreConfig
 
         raw_store_config = config.extra.get("store", {})
@@ -261,6 +239,10 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         application_store = RuntimeStore(StoreConfig.from_mapping(raw_store_config))
         application_store.start()
         app.state.runtime_store = application_store
+
+        from voodoo.data.store_backend import bind_runtime_store
+
+        bind_runtime_store(application_store)
 
         from voodoo.runtime.engine import engine as runtime_engine
 
@@ -333,6 +315,7 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
             await close_db()
             await scheduler.stop()
             schedule_store.close()
+            bind_runtime_store(None)
             application_store.stop()
 
     middleware = [
@@ -351,7 +334,6 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         middleware=middleware,
         lifespan=lifespan,
     )
-
     return app
 
 
@@ -371,10 +353,8 @@ def _load_page_file(filepath: str, route_path: str, module_name: str) -> Route |
         page_module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = page_module
         spec.loader.exec_module(page_module)
-
         if hasattr(page_module, "page"):
-            page_func = page_module.page
-            return Route(route_path, _module_page_endpoint(page_func))
+            return Route(route_path, _module_page_endpoint(page_module.page))
     return None
 
 
@@ -388,14 +368,12 @@ def _scan_page_convention(app_dir: str, routes: list[BaseRoute]) -> None:
         if "page.py" in files:
             filepath = os.path.join(root, "page.py")
             rel_path = os.path.relpath(root, app_dir)
-
             if rel_path == ".":
                 route_path = "/"
             else:
                 route_path = "/" + rel_path.replace("\\", "/").replace(
                     "[", "{"
                 ).replace("]", "}")
-
             clean_name = route_path.replace("/", "_").replace("{", "").replace("}", "")
             module_name = f"page_{clean_name}"
             route = _load_page_file(filepath, route_path, module_name)
@@ -404,11 +382,7 @@ def _scan_page_convention(app_dir: str, routes: list[BaseRoute]) -> None:
 
 
 def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
-    """Scan ``app_dir/pages/`` for file-per-page routing.
-
-    ``pages/index.py`` → ``/``, ``pages/about.py`` → ``/about``,
-    ``pages/users/[id].py`` → ``/users/{id}``.
-    """
+    """Scan ``app_dir/pages/`` for file-per-page routing."""
     pages_dir = os.path.join(app_dir, "pages")
     if not os.path.isdir(pages_dir):
         return
@@ -418,17 +392,14 @@ def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
                 continue
             filepath = os.path.join(root, fname)
             rel_path = os.path.relpath(filepath, pages_dir)
-
-            stem = rel_path[:-3]
-            stem = stem.replace("\\", "/")
-
+            stem = rel_path[:-3].replace("\\", "/")
             if stem == "index":
                 route_path = "/"
             else:
-                parts = stem.split("/")
-                parts = [p.replace("[", "{").replace("]", "}") for p in parts]
+                parts = [
+                    p.replace("[", "{").replace("]", "}") for p in stem.split("/")
+                ]
                 route_path = "/" + "/".join(parts)
-
             clean_name = route_path.replace("/", "_").replace("{", "").replace("}", "")
             module_name = f"pages_{clean_name}"
             route = _load_page_file(filepath, route_path, module_name)
