@@ -14,13 +14,11 @@ from voodoo.config import config
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """
-    Extracts and authenticates user from:
-    1. Authorization: Bearer <token>
-    2. X-API-Key: <key> or Authorization: ApiKey <key>
-    3. Session cookie (voodoo_auth)
+    """Authenticate HTTP credentials and expose request identity projections.
 
-    Populates request.state.user and current_user ContextVar.
+    Credential mechanisms remain compatibility/authentication concerns. The
+    resulting ``request.state.principal`` is the Runtime-native identity
+    projection; it does not grant Capability by itself.
     """
 
     async def dispatch(
@@ -37,7 +35,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if db_user:
                 user = db_user.to_auth_user(auth_type="api_key")
             else:
-                # Invalid API key
                 user = AuthUser(
                     id=None,
                     username="api_client",
@@ -89,8 +86,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             except AuthError:
                 user = AuthUser(is_authenticated=False)
 
-        # Set request state and task context variable
         request.state.user = user
+        request.state.principal = user.to_principal()
         ctx_token: Token[AuthUser | None] = current_user.set(user)
         try:
             response = await call_next(request)
