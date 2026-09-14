@@ -173,6 +173,15 @@ class BaseModel(metaclass=ModelMeta):
     __tablename__: str | None = None
 
     @classmethod
+    async def _create_table(cls) -> None:
+        """Ensure the model collection exists in Voodoo Store.
+
+        The historical method name is retained as a Store-native collection
+        initializer; it does not create SQL tables or import a SQL adapter.
+        """
+        scan_records(_get_table_name(cls))
+
+    @classmethod
     async def find_all(cls, user_context: dict | None = None) -> list[Any]:
         table = _get_table_name(cls)
         context = user_context if user_context is not None else _identity_context()
