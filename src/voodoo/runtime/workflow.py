@@ -81,7 +81,9 @@ class WorkflowRun:
             task_results=dict(payload.get("task_results") or {}),
             task_statuses=dict(payload.get("task_statuses") or {}),
             execution_ids=[str(value) for value in payload.get("execution_ids") or []],
-            completed_steps=[str(value) for value in payload.get("completed_steps") or []],
+            completed_steps=[
+                str(value) for value in payload.get("completed_steps") or []
+            ],
             error=payload.get("error"),
             iterations=int(payload.get("iterations") or 0),
             updated_at=str(payload.get("updated_at") or _now_iso()),
@@ -99,8 +101,6 @@ class Workflow:
     until: Callable[[WorkflowRun], bool] | None = None
     max_iterations: int = 1
     store: WorkflowStore | None = None
-
-    # -- topology ----------------------------------------------------------
 
     def _validate_topology(self) -> None:
         """Validate task identity, dependency membership, and acyclicity."""
@@ -164,8 +164,6 @@ class Workflow:
             and all(dependency.name in done for dependency in task.depends_on)
         ]
 
-    # -- execution ---------------------------------------------------------
-
     async def run(
         self,
         *,
@@ -176,7 +174,9 @@ class Workflow:
         """Execute a new Workflow run according to its strategy."""
         run = WorkflowRun(workflow_id=self.id)
         self._persist(run)
-        return await self._execute_run(run, engine=engine, parent=parent, context=context)
+        return await self._execute_run(
+            run, engine=engine, parent=parent, context=context
+        )
 
     async def resume(
         self,
@@ -206,7 +206,9 @@ class Workflow:
         run.status = "running"
         run.error = None
         self._persist(run)
-        return await self._execute_run(run, engine=engine, parent=parent, context=context)
+        return await self._execute_run(
+            run, engine=engine, parent=parent, context=context
+        )
 
     async def _execute_run(
         self,
@@ -264,8 +266,6 @@ class Workflow:
         }
         handler = handlers.get(self.strategy, self._run_sequential)
         await handler(run, engine, parent, context)
-
-    # -- strategies --------------------------------------------------------
 
     async def _run_sequential(
         self,
@@ -533,8 +533,6 @@ class Workflow:
         run.updated_at = _now_iso()
         self.store.save(self.id, run.describe())
 
-    # -- mesh --------------------------------------------------------------
-
     async def _emit(self, event: str, payload: dict[str, Any]) -> None:
         try:
             from voodoo.mesh import mesh
@@ -542,8 +540,6 @@ class Workflow:
             await mesh.broadcast(event, payload)
         except Exception:  # noqa: BLE001
             pass
-
-    # -- inspectability ----------------------------------------------------
 
     def describe(self) -> dict[str, Any]:
         return {
