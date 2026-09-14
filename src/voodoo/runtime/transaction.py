@@ -210,14 +210,18 @@ class OutboxDispatcher:
             delivered += 1
         return delivered
 
-    def dispatch_events(self, event_bus: Any | None = None, *, limit: int | None = None) -> int:
+    def dispatch_events(
+        self, event_bus: Any | None = None, *, limit: int | None = None
+    ) -> int:
         """Dispatch pending messages through the configured Runtime EventBus."""
         if event_bus is None:
             from voodoo.adapters.registry import registry
 
             event_bus = registry.get_events()
 
-        def publish(topic: str, payload: dict[str, Any], metadata: dict[str, Any]) -> Any:
+        def publish(
+            topic: str, payload: dict[str, Any], metadata: dict[str, Any]
+        ) -> Any:
             return event_bus.publish(topic, payload, **metadata)
 
         return self.dispatch(publish, limit=limit)
