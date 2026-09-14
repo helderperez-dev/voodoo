@@ -61,6 +61,12 @@ from voodoo.runtime.identity import (
     Principal,
 )
 from voodoo.runtime.identity_store import IdentityStore, VoodooStoreIdentityStore
+from voodoo.runtime.membership import (
+    MemberStatus,
+    NodeAdvertisement,
+    NodeMembership,
+    VoodooStoreMembershipStore,
+)
 from voodoo.runtime.operations import OperationalRuntime
 from voodoo.runtime.persistence import (
     ExecutionStore,
@@ -144,6 +150,10 @@ __all__ = [
     "Principal",
     "IdentityStore",
     "VoodooStoreIdentityStore",
+    "MemberStatus",
+    "NodeAdvertisement",
+    "NodeMembership",
+    "VoodooStoreMembershipStore",
     "Task",
     "TaskStatus",
     "Workflow",
