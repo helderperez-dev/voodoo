@@ -76,7 +76,9 @@ from voodoo.runtime.store import (
     StoreProviderError,
     StoreProviderRegistry,
     VoodooStoreProvider,
+    bind_active_runtime_store,
     create_store_provider,
+    get_active_runtime_store,
     store_registry,
 )
 from voodoo.runtime.task import Task, TaskStatus
@@ -141,7 +143,9 @@ __all__ = [
     "StoreProviderRegistry",
     "RuntimeStore",
     "VoodooStoreProvider",
+    "bind_active_runtime_store",
     "create_store_provider",
+    "get_active_runtime_store",
     "store_registry",
     "ComputeParticipant",
     "Plan",
