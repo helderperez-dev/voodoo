@@ -209,9 +209,12 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
     edge_gateway: list = []
     if config.edge.enabled and config.edge.http_enabled:
-        from voodoo.edge import DeviceGateway, SQLiteDeviceStore
+        from voodoo.edge import DeviceGateway, InMemoryDeviceStore
 
-        edge_store = SQLiteDeviceStore(".voodoo/state/devices.db")
+        # Routes are assembled before the lifespan opens application.vstore.
+        # No request can run before lifespan startup, so the temporary in-memory
+        # store is replaced by VoodooStoreDeviceStore as soon as RuntimeStore is active.
+        edge_store = InMemoryDeviceStore()
         from voodoo.runtime.engine import engine as _runtime_engine
 
         gateway = DeviceGateway(edge_store, _runtime_engine)
@@ -275,6 +278,13 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
                 "Use 'voodoo' (default), 'sqlite', or 'postgres'."
             )
 
+        if edge_gateway:
+            from voodoo.edge import VoodooStoreDeviceStore
+
+            # DeviceGateway deliberately exposes no second lifecycle owner; Edge
+            # shares the exact Store handle owned by this Runtime.
+            edge_gateway[0]._store = VoodooStoreDeviceStore(application_store)
+
         from voodoo.runtime.scheduler import ScheduleService
         from voodoo.storage.scheduler import create_schedule_store
 
@@ -292,14 +302,14 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         if config.edge.enabled and config.edge.mqtt_enabled:
             try:
                 from voodoo.edge import DeviceGateway as _DG
-                from voodoo.edge import SQLiteDeviceStore as _SDS
+                from voodoo.edge import VoodooStoreDeviceStore as _VSDS
                 from voodoo.edge.mqtt import EdgeMQTTTransport
                 from voodoo.runtime.engine import engine as _rt_engine
 
                 gateway = (
                     edge_gateway[0]
                     if edge_gateway
-                    else _DG(_SDS(".voodoo/state/devices.db"), _rt_engine)
+                    else _DG(_VSDS(application_store), _rt_engine)
                 )
                 mqtt_transport = EdgeMQTTTransport(
                     gateway,
