@@ -94,6 +94,7 @@ from voodoo.runtime.transaction import (
     OutboxDispatcher,
     OutboxMessage,
     RuntimeTransaction,
+    dispatch_events,
     dispatch_outbox,
     transaction,
 )
@@ -177,6 +178,7 @@ __all__ = [
     "OutboxDispatcher",
     "transaction",
     "dispatch_outbox",
+    "dispatch_events",
     "ComputeParticipant",
     "Plan",
     "PlanStep",
