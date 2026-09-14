@@ -11,6 +11,7 @@ from voodoo.runtime.transaction import (
     OutboxDispatcher,
     OutboxMessage,
     RuntimeTransaction,
+    dispatch_events,
     dispatch_outbox,
     transaction,
 )
@@ -118,6 +119,35 @@ def test_outbox_failed_publish_remains_pending(runtime_store) -> None:
         dispatcher.dispatch(fail_publish)
 
     assert dispatcher.pending() == [message]
+
+
+def test_outbox_dispatches_through_runtime_event_bus(runtime_store) -> None:
+    class FakeEventBus:
+        def __init__(self) -> None:
+            self.events = []
+
+        def publish(self, topic, payload, **metadata):
+            self.events.append((topic, payload, metadata))
+
+    message = OutboxMessage(
+        id="event-3",
+        topic="order.shipped",
+        payload={"order_id": "42"},
+        metadata={"source": "workflow", "correlation_id": "trace-3"},
+    )
+    with transaction() as tx:
+        tx.stage_outbox(message)
+
+    bus = FakeEventBus()
+    assert dispatch_events(event_bus=bus) == 1
+    assert bus.events == [
+        (
+            "order.shipped",
+            {"order_id": "42"},
+            {"source": "workflow", "correlation_id": "trace-3"},
+        )
+    ]
+    assert OutboxDispatcher().pending() == []
 
 
 def test_transaction_rejects_unstarted_runtime_store(tmp_path) -> None:
