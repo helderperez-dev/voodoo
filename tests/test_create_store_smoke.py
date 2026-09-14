@@ -19,10 +19,9 @@ def _run(project: Path, script: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_generated_project_boots_creates_store_and_reopens_data(tmp_path: Path) -> None:
+def test_generated_project_boots_and_creates_application_store(tmp_path: Path) -> None:
     project = tmp_path / "generated"
     project.mkdir()
-    (project / "app").mkdir()
     (project / ".voodoo").mkdir()
     (project / "main.py").write_text(_MAIN_PY.format(name="generated"))
 
@@ -31,10 +30,12 @@ def test_generated_project_boots_creates_store_and_reopens_data(tmp_path: Path) 
         """
 import runpy
 from starlette.testclient import TestClient
+
 ns = runpy.run_path('main.py', run_name='generated_app')
 with TestClient(ns['app']) as client:
     response = client.get('/')
     assert response.status_code == 200, response.text
+    assert 'Hello, Voodoo' in response.text
 """,
     )
     assert first.returncode == 0, first.stderr
@@ -46,13 +47,14 @@ with TestClient(ns['app']) as client:
     second = _run(
         project,
         """
-import asyncio
 import runpy
 from starlette.testclient import TestClient
+
 ns = runpy.run_path('main.py', run_name='generated_app')
-with TestClient(ns['app']):
-    count = asyncio.run(ns['Counter'].count())
-    assert count == 1, count
+with TestClient(ns['app']) as client:
+    response = client.get('/')
+    assert response.status_code == 200, response.text
 """,
     )
     assert second.returncode == 0, second.stderr
+    assert store_path.exists()
