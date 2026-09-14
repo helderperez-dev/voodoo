@@ -141,8 +141,10 @@ class Principal:
 
     @property
     def authenticated(self) -> bool:
-        return self.identity.active and bool(self.evidence) and all(
-            item.valid for item in self.evidence
+        return (
+            self.identity.active
+            and bool(self.evidence)
+            and all(item.valid for item in self.evidence)
         )
 
     def describe(self) -> dict[str, Any]:
