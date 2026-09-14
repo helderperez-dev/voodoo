@@ -54,9 +54,6 @@ async def _get_queue() -> VoodooQueue:
 
         _queue = VoodooStoreQueue()
     elif provider in {"memory", "redis"}:
-        # These providers do not depend on a relational database. Historically
-        # Redis fell through the DB-backed branch and initialized SQLite for no
-        # reason; Sprint 28 makes provider ownership explicit.
         _queue = registry.get_queue(cfg)
     else:
         from voodoo.data.base import _database, get_db
@@ -91,11 +88,7 @@ async def enqueue(
     max_attempts: int = 1,
     idempotency_key: str | None = None,
 ) -> None:
-    """Enqueue *payload* as a durable task of type *name*.
-
-    ``max_attempts`` is persisted by the queue provider. It therefore remains
-    authoritative across worker crashes and process restarts.
-    """
+    """Enqueue *payload* as a durable task of type *name*."""
     from voodoo.telemetry import trace_id_var
 
     q = await _get_queue()
@@ -186,9 +179,12 @@ async def start_workers() -> None:
 
 
 async def stop_workers() -> None:
-    """Cancel all worker tasks; expired leases are reclaimed durably later."""
+    """Cancel worker tasks and release cached provider handles for next lifecycle."""
+    global _queue
+
     for worker_task in _worker_tasks:
         worker_task.cancel()
     if _worker_tasks:
         await asyncio.gather(*_worker_tasks, return_exceptions=True)
     _worker_tasks.clear()
+    _queue = None
