@@ -1,8 +1,9 @@
-"""Durable scheduler service (Sprint 5).
+"""Durable scheduler service.
 
-The scheduler tick loop claims due schedules from the SQLite store and
-enqueues durable tasks via the existing queue system. Schedules survive
-restarts because they live in the database, not in process memory.
+Legacy scheduler stores return due records that the Runtime then enqueues. A
+Store-native scheduler instead advances temporal state and creates durable Jobs
+inside Store. ``ScheduleService`` supports both without allowing a native
+occurrence to be enqueued twice.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ logger = logging.getLogger("voodoo.scheduler")
 
 
 class ScheduleService:
-    """Background service that polls the schedule store and fires tasks."""
+    """Background service that advances durable temporal work."""
 
     def __init__(self, store, tick_interval: float = 1.0):
         self.store = store
@@ -38,12 +39,17 @@ class ScheduleService:
             self._task = None
 
     async def _tick_loop(self) -> None:
-        """Poll for due schedules and enqueue tasks."""
+        """Advance schedules using the active provider's ownership model."""
         while True:
             try:
-                due = self.store.claim_due()
-                for schedule in due:
-                    await self._fire(schedule)
+                if getattr(self.store, "creates_jobs_natively", False):
+                    fired = self.store.tick()
+                    if fired:
+                        logger.info("native scheduler fired %d durable job(s)", fired)
+                else:
+                    due = self.store.claim_due()
+                    for schedule in due:
+                        await self._fire(schedule)
             except asyncio.CancelledError:
                 break
             except Exception as exc:
@@ -51,7 +57,7 @@ class ScheduleService:
             await asyncio.sleep(self.tick_interval)
 
     async def _fire(self, schedule: dict) -> None:
-        """Enqueue the scheduled task."""
+        """Enqueue one legacy-provider schedule occurrence."""
         import json
 
         from voodoo.workers.queue import enqueue
