@@ -25,7 +25,9 @@ __all__ = [
     "StoreProviderRegistry",
     "RuntimeStore",
     "VoodooStoreProvider",
+    "bind_active_runtime_store",
     "create_store_provider",
+    "get_active_runtime_store",
     "store_registry",
 ]
 
@@ -357,3 +359,23 @@ class RuntimeStore:
         if self._provider is None:
             return None
         return self._provider.health()
+
+
+_active_runtime_store: RuntimeStore | None = None
+
+
+def bind_active_runtime_store(runtime_store: RuntimeStore | None) -> None:
+    """Bind the application-owned Store for Runtime infrastructure adapters.
+
+    Domain adapters (Data, Queue, Events, Objects, Execution) consume this
+    Runtime-owned handle instead of opening their own ``.vstore`` files. This
+    preserves the one-Runtime/one-Store lifecycle law and avoids competing
+    writers against the same embedded store.
+    """
+    global _active_runtime_store
+    _active_runtime_store = runtime_store
+
+
+def get_active_runtime_store() -> RuntimeStore | None:
+    """Return the Store owned by the active application Runtime, if any."""
+    return _active_runtime_store
