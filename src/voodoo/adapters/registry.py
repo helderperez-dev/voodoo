@@ -53,6 +53,7 @@ class ProviderRegistry:
         self.register_events("local", self._create_local_events)
         self.register_events("postgres", self._create_postgres_events)
 
+        self.register_objects("voodoo", self._create_voodoo_objects)
         self.register_objects("local", self._create_local_objects)
         self.register_objects("s3", self._create_s3_objects)
 
@@ -243,6 +244,11 @@ class ProviderRegistry:
                 "in voodoo.yaml, or export VOODOO_EVENTS_URL / VOODOO_DATABASE_URL."
             )
         return PostgresEventStore(url)
+
+    def _create_voodoo_objects(self, cfg: ObjectsConfig) -> Any:
+        from voodoo.storage.objects.store import VoodooStoreObjectStore
+
+        return VoodooStoreObjectStore()
 
     def _create_local_objects(self, cfg: ObjectsConfig) -> Any:
         from voodoo.storage.objects.local import LocalObjectStore
