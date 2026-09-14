@@ -166,7 +166,7 @@ class ProviderRegistry:
         return PostgresDatabase(url, migrations=migrations)
 
     def _create_voodoo_queue(self, cfg: QueueConfig) -> Any:
-        from voodoo.storage.queue.voodoo import VoodooStoreQueue
+        from voodoo.storage.queue.store import VoodooStoreQueue
 
         return VoodooStoreQueue()
 
