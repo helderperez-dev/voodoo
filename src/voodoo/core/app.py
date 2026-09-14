@@ -396,9 +396,7 @@ def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
             if stem == "index":
                 route_path = "/"
             else:
-                parts = [
-                    p.replace("[", "{").replace("]", "}") for p in stem.split("/")
-                ]
+                parts = [p.replace("[", "{").replace("]", "}") for p in stem.split("/")]
                 route_path = "/" + "/".join(parts)
             clean_name = route_path.replace("/", "_").replace("{", "").replace("}", "")
             module_name = f"pages_{clean_name}"
