@@ -9,14 +9,11 @@ from voodoo.storage.objects.s3 import S3ObjectStore
 
 
 class StorageManager:
-    """Thin facade over the active storage adapter (Sprint 6, Sprint 9).
+    """Thin facade over the active storage adapter (Sprint 6, Sprint 9, Sprint 28).
 
-    When S3 is configured, upload/delete/url delegate to
-    :class:`~voodoo.storage.objects.S3ObjectStore`; otherwise a local
-    filesystem backend under ``base_dir`` is used. The public surface
-    (``upload`` / ``delete`` / ``url`` / ``base_dir`` / ``use_s3`` /
-    ``s3_client``) is preserved so ``status.py`` and downstream callers
-    are unchanged.
+    The configured object adapter owns persistence. S3 keeps its existing remote
+    URL behavior, local storage keeps the ``/storage/...`` route, and the Voodoo
+    Store provider persists object bytes in the application-owned Runtime Store.
     """
 
     def __init__(self):
@@ -30,6 +27,7 @@ class StorageManager:
         self.secret = self._s3.secret
         self.endpoint = self._s3.endpoint
         self.use_s3 = isinstance(self._store, S3ObjectStore) and self._s3.use_s3
+        self.use_voodoo = getattr(self._store, "provider", "") == "voodoo"
         self.s3_client = self._s3.s3_client
 
     @property
@@ -46,41 +44,54 @@ class StorageManager:
     async def upload(
         self, file_content: bytes | str, path: str, bucket: str = "public"
     ) -> str:
-        """Uploads a file to a specific bucket and returns its path/url"""
+        """Upload a file to the configured object provider."""
         if isinstance(file_content, str):
             file_content = file_content.encode("utf-8")
 
+        object_key = f"{bucket}/{path}"
         if self.use_s3 and self.s3_client:
-            s3_key = f"{bucket}/{path}"
             await asyncio.to_thread(
-                self._s3.put, s3_key, file_content, "application/octet-stream"
+                self._s3.put, object_key, file_content, "application/octet-stream"
             )
             return self.url(path, bucket)
-        else:
-            local_path = self._get_local_path(bucket, path)
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            async with aiofiles.open(local_path, "wb") as f:
-                await f.write(file_content)
+        if self.use_voodoo:
+            await asyncio.to_thread(
+                self._store.put,
+                object_key,
+                file_content,
+                "application/octet-stream",
+            )
             return self.url(path, bucket)
 
+        local_path = self._get_local_path(bucket, path)
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        async with aiofiles.open(local_path, "wb") as f:
+            await f.write(file_content)
+        return self.url(path, bucket)
+
     async def delete(self, path: str, bucket: str = "public") -> bool:
-        """Deletes a file from a specific bucket"""
+        """Delete a file from the configured object provider."""
+        object_key = f"{bucket}/{path}"
         if self.use_s3 and self.s3_client:
-            await asyncio.to_thread(self._s3.delete, f"{bucket}/{path}")
+            await asyncio.to_thread(self._s3.delete, object_key)
             return True
-        else:
-            local_path = self._get_local_path(bucket, path)
-            if os.path.exists(local_path):
-                os.remove(local_path)
-                return True
-            return False
+        if self.use_voodoo:
+            return bool(await asyncio.to_thread(self._store.delete, object_key))
+
+        local_path = self._get_local_path(bucket, path)
+        if os.path.exists(local_path):
+            os.remove(local_path)
+            return True
+        return False
 
     def url(self, path: str, bucket: str = "public") -> str:
-        """Returns the URL for a file in a specific bucket"""
+        """Return the provider-specific reference for a stored object."""
+        object_key = f"{bucket}/{path}"
         if self.use_s3 and self.s3_client:
-            return self._s3.url(f"{bucket}/{path}")
-        else:
-            return f"/storage/{bucket}/{path}"
+            return self._s3.url(object_key)
+        if self.use_voodoo:
+            return self._store.presign(object_key)
+        return f"/storage/{bucket}/{path}"
 
 
 storage = StorageManager()
