@@ -8,7 +8,12 @@ from typing import Annotated
 
 import typer
 
-from voodoo.runtime.identity import AuthenticationEvidence, Identity, IdentityKind, Principal
+from voodoo.runtime.identity import (
+    AuthenticationEvidence,
+    Identity,
+    IdentityKind,
+    Principal,
+)
 from voodoo.runtime.membership import NodeAdvertisement, VoodooStoreMembershipStore
 from voodoo.runtime.store import RuntimeStore, StoreConfig, VoodooStoreProvider
 
@@ -77,9 +82,7 @@ def verify() -> None:
 @fabric_app.command("join")
 def join(
     node_id: Annotated[str, typer.Argument(help="Stable Voodoo Node identity.")],
-    capability: Annotated[
-        list[str] | None, typer.Option("--capability", "-c")
-    ] = None,
+    capability: Annotated[list[str] | None, typer.Option("--capability", "-c")] = None,
     service: Annotated[list[str] | None, typer.Option("--service", "-s")] = None,
     owner: Annotated[list[str] | None, typer.Option("--owner")] = None,
     location: Annotated[str | None, typer.Option("--location")] = None,
@@ -94,7 +97,9 @@ def join(
         principal = Principal(
             identity=Identity(id=node_id, kind=IdentityKind.NODE),
             evidence=(
-                AuthenticationEvidence(method="cli-local", subject=node_id, issuer="voodoo"),
+                AuthenticationEvidence(
+                    method="cli-local", subject=node_id, issuer="voodoo"
+                ),
             ),
         )
         member = VoodooStoreMembershipStore(runtime).join(

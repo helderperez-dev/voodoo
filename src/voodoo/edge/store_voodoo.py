@@ -11,9 +11,19 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from voodoo.edge.models import Device, DeviceCredential, DeviceEnrollment, DeviceSession, DeviceStatus
+from voodoo.edge.models import (
+    Device,
+    DeviceCredential,
+    DeviceEnrollment,
+    DeviceSession,
+    DeviceStatus,
+)
 from voodoo.edge.store import EffectDelivery, InMemoryDeviceStore
-from voodoo.runtime.store import RuntimeStore, StoreProviderError, get_active_runtime_store
+from voodoo.runtime.store import (
+    RuntimeStore,
+    StoreProviderError,
+    get_active_runtime_store,
+)
 
 __all__ = ["VoodooStoreDeviceStore"]
 
@@ -36,7 +46,9 @@ class VoodooStoreDeviceStore(InMemoryDeviceStore):
             raise StoreProviderError("No active RuntimeStore for Edge persistence")
         provider = self.runtime_store.provider
         if provider is None or not provider.opened:
-            raise StoreProviderError("RuntimeStore must be started for Edge persistence")
+            raise StoreProviderError(
+                "RuntimeStore must be started for Edge persistence"
+            )
         if provider.name != "voodoo":
             raise StoreProviderError("VoodooStoreDeviceStore requires Voodoo Store")
         self._native = getattr(provider, "native", None)
@@ -121,11 +133,15 @@ class VoodooStoreDeviceStore(InMemoryDeviceStore):
         await super().update_device_status(device_id, status)
         self._save_device(device_id)
 
-    async def update_device_capabilities(self, device_id: str, capabilities: list[str]) -> None:
+    async def update_device_capabilities(
+        self, device_id: str, capabilities: list[str]
+    ) -> None:
         await super().update_device_capabilities(device_id, capabilities)
         self._save_device(device_id)
 
-    async def update_device_state(self, device_id: str, state: dict[str, Any], state_version: int) -> bool:
+    async def update_device_state(
+        self, device_id: str, state: dict[str, Any], state_version: int
+    ) -> bool:
         changed = await super().update_device_state(device_id, state, state_version)
         if changed:
             self._save_device(device_id)
@@ -191,7 +207,11 @@ class VoodooStoreDeviceStore(InMemoryDeviceStore):
         self._delete(_SESSION, session_id)
 
     async def delete_device_sessions(self, device_id: str) -> int:
-        session_ids = [sid for sid, session in self._sessions.items() if session.device_id == device_id]
+        session_ids = [
+            sid
+            for sid, session in self._sessions.items()
+            if session.device_id == device_id
+        ]
         count = await super().delete_device_sessions(device_id)
         for session_id in session_ids:
             self._delete(_SESSION, session_id)
@@ -207,7 +227,9 @@ class VoodooStoreDeviceStore(InMemoryDeviceStore):
         await super().mark_effect_delivered(effect_id)
         self._save_effect(effect_id)
 
-    async def mark_effect_acked(self, effect_id: str, ack_status: str) -> EffectDelivery | None:
+    async def mark_effect_acked(
+        self, effect_id: str, ack_status: str
+    ) -> EffectDelivery | None:
         delivery = await super().mark_effect_acked(effect_id, ack_status)
         if delivery is not None:
             self._save_effect(effect_id)
@@ -243,7 +265,9 @@ class VoodooStoreDeviceStore(InMemoryDeviceStore):
 
     async def store_response(self, message_id: str, response_json: str) -> None:
         await super().store_response(message_id, response_json)
-        self._native.put(_RESPONSE + message_id.encode("utf-8"), response_json.encode("utf-8"))
+        self._native.put(
+            _RESPONSE + message_id.encode("utf-8"), response_json.encode("utf-8")
+        )
 
     async def close(self) -> None:
         """RuntimeStore owns the underlying Store lifecycle."""

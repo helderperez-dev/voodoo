@@ -8,8 +8,8 @@ from voodoo.edge import (
     AuthenticatedDeviceContext,
     Device,
     DeviceGateway,
-    EffectAckStatus,
     EdgeMessageType,
+    EffectAckStatus,
     VoodooStoreDeviceStore,
     make_message,
 )

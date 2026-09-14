@@ -14,7 +14,12 @@ from voodoo.runtime.fabric import (
     RuntimeFabric,
     WorkNotFailoverSafeError,
 )
-from voodoo.runtime.identity import AuthenticationEvidence, Identity, IdentityKind, Principal
+from voodoo.runtime.identity import (
+    AuthenticationEvidence,
+    Identity,
+    IdentityKind,
+    Principal,
+)
 from voodoo.runtime.membership import NodeAdvertisement, VoodooStoreMembershipStore
 from voodoo.runtime.store import RuntimeStore, StoreConfig, bind_active_runtime_store
 

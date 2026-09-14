@@ -10,9 +10,10 @@ Capability + Policy + canonical Execution on the receiving node.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Awaitable, Callable, Protocol
+from typing import Any, Protocol
 from uuid import uuid4
 
 from voodoo.runtime.membership import (
@@ -20,7 +21,11 @@ from voodoo.runtime.membership import (
     NodeMembership,
     VoodooStoreMembershipStore,
 )
-from voodoo.runtime.store import RuntimeStore, StoreProviderError, get_active_runtime_store
+from voodoo.runtime.store import (
+    RuntimeStore,
+    StoreProviderError,
+    get_active_runtime_store,
+)
 
 __all__ = [
     "FabricRoutingError",
@@ -230,7 +235,9 @@ class RuntimeFabric:
     ) -> PlacementDecision:
         candidates = self.candidates(requirement, exclude=exclude)
         if not candidates:
-            raise NoEligibleNodeError("No ACTIVE Voodoo Node satisfies placement requirements")
+            raise NoEligibleNodeError(
+                "No ACTIVE Voodoo Node satisfies placement requirements"
+            )
 
         ranked: list[PlacementDecision] = []
         for member in candidates:
@@ -290,7 +297,9 @@ class RuntimeFabric:
         )
         self._native.put(
             self._lease_key(work_id),
-            json.dumps(lease.describe(), sort_keys=True, separators=(",", ":")).encode(),
+            json.dumps(
+                lease.describe(), sort_keys=True, separators=(",", ":")
+            ).encode(),
         )
         return lease
 
@@ -327,4 +336,6 @@ class RuntimeFabric:
                     self.release_lease(work.id)
             return result
 
-        raise FabricRoutingError(f"Work '{work.id}' could not be routed") from last_error
+        raise FabricRoutingError(
+            f"Work '{work.id}' could not be routed"
+        ) from last_error

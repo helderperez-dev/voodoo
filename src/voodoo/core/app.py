@@ -235,7 +235,7 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     from voodoo.workers.queue import start_workers, stop_workers
 
     @asynccontextmanager
-    async def lifespan(app: Starlette) -> AsyncIterator[None]:
+    async def lifespan(app: Starlette) -> AsyncIterator[None]:  # noqa: C901
         from voodoo.runtime.store import StoreConfig, activate_runtime_store
 
         application_store = activate_runtime_store(

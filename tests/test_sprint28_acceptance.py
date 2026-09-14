@@ -10,7 +10,12 @@ from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.engine import ExecutionEngine
 from voodoo.runtime.fabric import FabricWork, PlacementRequirement, RuntimeFabric
-from voodoo.runtime.identity import AuthenticationEvidence, Identity, IdentityKind, Principal
+from voodoo.runtime.identity import (
+    AuthenticationEvidence,
+    Identity,
+    IdentityKind,
+    Principal,
+)
 from voodoo.runtime.membership import NodeAdvertisement, VoodooStoreMembershipStore
 from voodoo.runtime.store import RuntimeStore, StoreConfig, bind_active_runtime_store
 from voodoo.runtime.transaction import OutboxMessage, dispatch_events, transaction
@@ -56,13 +61,17 @@ def test_single_node_zero_external_infrastructure_survives_restart(tmp_path) -> 
         record = reopened.provider.native.get_record(b"orders", b"42")
         assert record is not None
         assert json.loads(bytes(record[1])) == {"status": "created"}
-        assert reopened.provider.native.get(b"runtime:outbox:delivered:order-42-created")
+        assert reopened.provider.native.get(
+            b"runtime:outbox:delivered:order-42-created"
+        )
     finally:
         reopened.stop()
 
 
 @pytest.mark.asyncio
-async def test_same_application_operation_routes_across_nodes_without_topology_logic(tmp_path) -> None:
+async def test_same_application_operation_routes_across_nodes_without_topology_logic(
+    tmp_path,
+) -> None:
     runtime = RuntimeStore(StoreConfig(path=tmp_path / "control.vstore"))
     runtime.start()
     bind_active_runtime_store(runtime)
@@ -85,7 +94,9 @@ async def test_same_application_operation_routes_across_nodes_without_topology_l
         class CanonicalExecutor:
             async def execute(self, node_id, work, *, attempt):
                 engine = engines[node_id]
-                intent = Intent(name=work.operation, params=dict(work.payload)).require("vision")
+                intent = Intent(name=work.operation, params=dict(work.payload)).require(
+                    "vision"
+                )
 
                 async def compute(ctx):
                     return {"node": node_id, "image": work.payload["image"]}
