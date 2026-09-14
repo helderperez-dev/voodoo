@@ -42,7 +42,9 @@ _LAZY_EXPORTS = {
 def __getattr__(name: str) -> Any:
     target = _LAZY_EXPORTS.get(name)
     if target is None:
-        raise AttributeError(f"module 'voodoo.storage.database' has no attribute {name!r}")
+        raise AttributeError(
+            f"module 'voodoo.storage.database' has no attribute {name!r}"
+        )
     module_name, symbol = target
     value = getattr(import_module(module_name), symbol)
     globals()[name] = value
