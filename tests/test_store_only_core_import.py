@@ -7,7 +7,7 @@ import sys
 
 
 def test_import_voodoo_does_not_require_aiosqlite() -> None:
-    code = r'''
+    code = r"""
 import importlib.abc
 import sys
 
@@ -26,7 +26,7 @@ assert "voodoo.storage.database.sqlite" not in sys.modules
 assert "voodoo.storage.events.sqlite" not in sys.modules
 assert "voodoo.storage.queue.sqlite" not in sys.modules
 assert "voodoo.storage.execution.sqlite" not in sys.modules
-'''
+"""
     result = subprocess.run(
         [sys.executable, "-c", code],
         text=True,
@@ -37,14 +37,14 @@ assert "voodoo.storage.execution.sqlite" not in sys.modules
 
 
 def test_public_model_module_has_no_sql_fallback_import() -> None:
-    code = r'''
+    code = r"""
 import sys
 from voodoo import Model
 
 assert Model.__module__ == "voodoo.data.store_facade"
 assert "voodoo.data.base" not in sys.modules
 assert "voodoo.data.model" not in sys.modules
-'''
+"""
     result = subprocess.run(
         [sys.executable, "-c", code],
         text=True,
