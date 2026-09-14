@@ -1,0 +1,31 @@
+name: Sprint 28 Final Format
+
+on:
+  push:
+    branches:
+      - sprint-28-runtime-infrastructure-convergence
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: sprint-28-runtime-infrastructure-convergence
+      - name: Format Sprint 28 Python changes
+        run: |
+          python -m pip install ruff==0.16.3
+          ruff format src/voodoo tests
+          ruff check --fix src/voodoo tests
+      - name: Commit
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/voodoo tests
+          git commit -m "style(sprint): format Sprint 28 closure"
+          git push origin HEAD:sprint-28-runtime-infrastructure-convergence
