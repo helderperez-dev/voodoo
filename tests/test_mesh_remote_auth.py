@@ -1,4 +1,4 @@
-"""Sprint 26.6 — trusted participant/session authentication seam."""
+"""Sprint 26.6 / 28.12 — trusted participant and node identity seam."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from voodoo.mesh.auth import (
     ParticipantAuthenticationError,
 )
 from voodoo.primitives.capability import Capability
-from voodoo.runtime import ExecutionEngine
+from voodoo.runtime import ExecutionEngine, IdentityKind, PolicyDecision
 
 
 @pytest.mark.asyncio
@@ -107,6 +107,90 @@ async def test_authenticated_identity_drives_server_side_authority():
     execution = engine.get(outcome.execution_id)
     assert execution is not None
     assert execution.actor == "remote:node-a"
+
+
+@pytest.mark.asyncio
+async def test_authenticated_node_becomes_runtime_node_principal():
+    resolver = InMemoryParticipantResolver()
+    credential = resolver.register_node("node-a", credential="node-secret")
+    engine = ExecutionEngine()
+    engine.capabilities.register(Capability(name="cluster.inspect"))
+    seen = {}
+
+    def node_policy(request):
+        seen["principal"] = request.principal
+        if request.principal is None:
+            return PolicyDecision.DENY
+        if request.principal.kind is not IdentityKind.NODE:
+            return PolicyDecision.DENY
+        if not request.principal.authenticated:
+            return PolicyDecision.DENY
+        return PolicyDecision.ALLOW
+
+    engine.capabilities.policy.register(node_policy)
+    net = MeshNetwork(execution_engine=engine, participant_resolver=resolver)
+    net.grant_remote("node-a", "cluster.inspect")
+
+    @net.expose(name="cluster.inspect", capability="cluster.inspect")
+    async def inspect_cluster():
+        return "healthy"
+
+    participant = await net.resolve_participant(
+        {"credential": credential, "actor": "forged-node"},
+        transport="websocket",
+        peer="10.0.0.2",
+    )
+    assert participant is not None
+    principal = participant.to_principal()
+    assert principal.kind is IdentityKind.NODE
+    assert principal.authenticated is True
+
+    request = net.bind_participant(
+        RemoteExecutionRequest(
+            request_id="node-principal",
+            operation="cluster.inspect",
+            actor="forged-node",
+        ),
+        participant,
+    )
+    outcome = await net.execute_remote(request, principal=principal)
+
+    assert outcome.status == "completed"
+    assert outcome.result == "healthy"
+    assert seen["principal"] is principal
+    execution = engine.get(outcome.execution_id)
+    assert execution is not None
+    assert execution.actor == "remote:node-a"
+    assert execution.capabilities == ["cluster.inspect"]
+
+
+@pytest.mark.asyncio
+async def test_node_authentication_does_not_grant_capability():
+    resolver = InMemoryParticipantResolver()
+    credential = resolver.register_node("node-a", credential="node-secret")
+    engine = ExecutionEngine()
+    engine.capabilities.register(Capability(name="cluster.admin"))
+    net = MeshNetwork(execution_engine=engine, participant_resolver=resolver)
+
+    @net.expose(name="cluster.admin", capability="cluster.admin")
+    async def cluster_admin():
+        return "forbidden"
+
+    participant = await net.resolve_participant(
+        {"credential": credential}, transport="websocket"
+    )
+    assert participant is not None
+    request = net.bind_participant(
+        RemoteExecutionRequest(
+            request_id="node-no-authority",
+            operation="cluster.admin",
+            actor="fake-admin",
+        ),
+        participant,
+    )
+    outcome = await net.execute_remote(request, principal=participant.to_principal())
+
+    assert outcome.status != "completed"
 
 
 @pytest.mark.asyncio

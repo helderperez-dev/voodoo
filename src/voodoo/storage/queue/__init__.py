@@ -1,9 +1,8 @@
 """Voodoo queue capability — durable background work (spec §12).
 
-``SQLiteQueue`` is the default provider: tasks survive process restarts,
-are claimed transactionally under a lease, and retry with backoff. The
-legacy in-memory ``asyncio.Queue`` broker remains available when
-``VOODOO_QUEUE_PROVIDER=memory``.
+Voodoo Store is the target local-first durable provider. SQLite, Postgres,
+Redis, and memory remain available as explicit adapters while Sprint 28
+converges defaults onto the shared application Store.
 """
 
 from voodoo.storage.queue.interfaces import (
@@ -18,6 +17,7 @@ from voodoo.storage.queue.memory import MemoryQueue
 from voodoo.storage.queue.postgres import PostgresQueue
 from voodoo.storage.queue.redis import RedisQueue
 from voodoo.storage.queue.sqlite import TASKS_MIGRATION, TASKS_TABLE, SQLiteQueue
+from voodoo.storage.queue.store import VoodooStoreQueue
 
 __all__ = [
     "ACTIVE_STATUSES",
@@ -32,4 +32,5 @@ __all__ = [
     "TaskRecord",
     "TaskStatus",
     "VoodooQueue",
+    "VoodooStoreQueue",
 ]

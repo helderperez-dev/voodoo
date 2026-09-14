@@ -1,8 +1,8 @@
-"""CLI: ``voodoo create <app>`` — scaffold a full local runtime app.
+"""CLI: ``voodoo create <app>`` — scaffold a Store-first Voodoo app.
 
-Sprint 22: Local runtime DX.  Evolves ``voodoo new`` to wire up the full
-local runtime (durable tasks, scheduler, events, object store, agent runtime)
-with a crash/restart demo proving durability.
+The generated project exercises the default Voodoo Runtime + Voodoo Store path
+without requiring PostgreSQL, Redis, S3, SQLite, or another infrastructure
+service.
 """
 
 from __future__ import annotations
@@ -17,19 +17,14 @@ from voodoo.cli import terminal
 
 __all__ = ["create"]
 
-# ---------------------------------------------------------------------------
-# Template: main.py — full local runtime
-# ---------------------------------------------------------------------------
 
-_MAIN_PY = '''"""{name} — a Voodoo autonomous app.
+_MAIN_PY = '''"""{name} — a Store-first Voodoo application.
 
-This app demonstrates the full local runtime:
-  - Durable tasks (queue + workers) that survive restarts
-  - Scheduler for recurring jobs
-  - Mesh events for real-time communication
-  - Agent runtime with mock provider (no network needed)
+The default runtime persists application data, durable work, events, execution
+state, and other Runtime infrastructure in ``.voodoo/application.vstore``.
+No external database, queue, or object server is required for local use.
 
-Run:  python main.py   or   voodoo dev
+Run: ``python main.py`` or ``voodoo dev``.
 """
 
 from voodoo import (
@@ -39,6 +34,7 @@ from voodoo import (
     Card,
     Container,
     Heading,
+    Model,
     Stack,
     Text,
     event,
@@ -50,66 +46,64 @@ from voodoo.workers.queue import enqueue, queue
 
 app = App()
 
-# ---------------------------------------------------------------------------
-# State
-# ---------------------------------------------------------------------------
 
-counter = state("counter", 0)
-log_lines = state("log_lines", [])
-agent_result = state("agent_result", "Click to run the agent")
+class Counter(Model):
+    """Persistent application data stored in application.vstore."""
+
+    name: str
+    value: int
+
+
+counter_value = state(0)
+log_lines = state([])
+agent_result = state("Click to run the agent")
 
 
 def _log(msg: str) -> None:
-    """Append a timestamped line to the on-screen log."""
     from datetime import datetime
 
     ts = datetime.now().strftime("%H:%M:%S")
-    lines = log_lines.get()
+    lines = list(log_lines.get())
     lines.append(f"[{{ts}}] {{msg}}")
-    # Keep last 20 lines
     log_lines.set(lines[-20:])
 
 
-# ---------------------------------------------------------------------------
-# Durable task — survives restarts
-# ---------------------------------------------------------------------------
+async def _counter() -> Counter:
+    row = await Counter.first(name="main")
+    if row is None:
+        row = await Counter.create(name="main", value=0)
+    return row
+
 
 @queue("increment")
 async def increment_worker(payload: dict) -> None:
-    """Durable worker: increments the counter and logs the result."""
-    n = counter.get() + 1
-    counter.set(n)
-    _log(f"increment task done → counter = {{n}}")
+    """Durable worker backed by the same application.vstore."""
+    row = await _counter()
+    row.value += 1
+    await row.save()
+    counter_value.set(row.value)
+    _log(f"durable increment complete → counter = {{row.value}}")
 
-
-# ---------------------------------------------------------------------------
-# Agent (mock provider — no network needed)
-# ---------------------------------------------------------------------------
 
 @tool
 async def get_counter() -> str:
-    """Return the current counter value."""
-    return str(counter.get())
+    """Read persistent application state for the local mock agent."""
+    row = await _counter()
+    return str(row.value)
 
 
-agent = Agent(
-    model="mock:test",
-    tools=["get_counter"],
-)
+agent = Agent(model="mock:test", tools=["get_counter"])
 
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 
 @page("/")
-def home():
+async def home():
+    row = await _counter()
+    counter_value.set(row.value)
     return Container(
         Stack(
             Heading("{name}", level=1),
             Text(
-                "A Voodoo autonomous app — durable tasks, scheduler, "
-                "events, and agents, all running on zero infrastructure.",
+                "Voodoo Runtime + Voodoo Store — zero external infrastructure.",
                 tone="muted",
             ),
             _status_card(),
@@ -124,9 +118,9 @@ def home():
 def _status_card():
     return Card(
         Stack(
-            Heading("Runtime", level=2),
-            Text(f"Counter: {{counter.get()}}"),
-            Text(f"Log entries: {{len(log_lines.get())}}"),
+            Heading("Persistent Runtime", level=2),
+            Text(f"Counter: {{counter_value.get()}}"),
+            Text("Stored in .voodoo/application.vstore", tone="muted"),
             gap="sm",
         )
     )
@@ -135,10 +129,10 @@ def _status_card():
 def _task_card():
     return Card(
         Stack(
-            Heading("Durable Tasks", level=2),
+            Heading("Durable Work", level=2),
             Text(
-                "Enqueue a durable task. It survives restarts — "
-                "stop the server, start it again, and watch the counter increment.",
+                "Enqueue a task, restart the process, and refresh the page. "
+                "The persisted counter is recovered from Voodoo Store.",
                 tone="muted",
             ),
             Button(
@@ -176,68 +170,46 @@ def _log_card():
     )
 
 
-# ---------------------------------------------------------------------------
-# Events
-# ---------------------------------------------------------------------------
-
 @event
 async def enqueue_task(element_id, value):
-    """Enqueue a durable increment task."""
-    await enqueue("increment", {{"source": "ui"}})
-    _log("enqueued increment task")
+    await enqueue(
+        "increment",
+        {{"source": "ui"}},
+        idempotency_key=None,
+    )
+    _log("durable increment enqueued")
 
 
 @event
 async def run_agent(element_id, value):
-    """Run the agent and display the result."""
-    _log("running agent...")
-    run = await agent.run("What is the current counter value?")
+    _log("running local mock agent...")
+    run = await agent.run("What is the persistent counter value?")
     agent_result.set(run.output)
     _log(f"agent done: {{run.output}}")
-
-
-# ---------------------------------------------------------------------------
-# Startup — enqueue a demo task on first boot
-# ---------------------------------------------------------------------------
-
-@app.on_startup
-async def on_startup():
-    """On first boot, enqueue a demo task to prove durability."""
-    import os
-
-    marker = ".voodoo/state/.booted"
-    if not os.path.exists(marker):
-        os.makedirs(os.path.dirname(marker), exist_ok=True)
-        with open(marker, "w") as f:
-            f.write("booted")
-        await enqueue("increment", {{"source": "startup"}})
-        _log("first boot — enqueued demo task")
-    else:
-        _log("restart detected — pending tasks will be recovered")
 
 
 if __name__ == "__main__":
     app.run()
 '''
 
-# ---------------------------------------------------------------------------
-# Template: voodoo.toml
-# ---------------------------------------------------------------------------
 
 _VOODOO_TOML = """[app]
 name = "{name}"
 
-# Local-first defaults — zero infrastructure required.
-# The runtime uses SQLite, local filesystem, and in-memory queues by default.
-# Override with env vars or this config for production:
-#   VOODOO_DATABASE_URL=postgresql://...
-#   VOODOO_QUEUE_PROVIDER=redis
-#   VOODOO_OBJECT_STORE_PROVIDER=s3
+# Store-first defaults — zero external infrastructure required.
+# Voodoo uses .voodoo/application.vstore for durable application infrastructure.
+# No provider configuration is needed for the default local path.
+#
+# External infrastructure remains available as an explicit override, for example:
+# [database]
+# provider = "postgres"
+# url = "postgresql://..."
+#
+# [queue]
+# provider = "redis"
+# url = "redis://..."
 """
 
-# ---------------------------------------------------------------------------
-# Template: pyproject.toml
-# ---------------------------------------------------------------------------
 
 _PYPROJECT_TOML = """[project]
 name = "{name}"
@@ -249,18 +221,13 @@ dependencies = [
 """
 
 
-# ---------------------------------------------------------------------------
-# Command
-# ---------------------------------------------------------------------------
-
-
 def create(
     project_name: str = typer.Argument(..., help="Name of the project to create"),
 ) -> None:
-    """Scaffold a full local runtime app with durable tasks, scheduler, events, and agents.
+    """Scaffold a Store-first Voodoo app with durable data, work, and agents.
 
-    The generated app runs on zero infrastructure (SQLite + local filesystem)
-    and includes a crash/restart demo proving durability.
+    The generated app uses Voodoo Store at ``.voodoo/application.vstore`` and
+    requires no external database, queue, or object server for local use.
     """
     project_dir = Path(project_name)
     if project_dir.exists():
@@ -272,12 +239,10 @@ def create(
     terminal.status("creating", project_name)
     terminal.blank()
 
-    # Create directory structure
     project_dir.mkdir(parents=True)
     (project_dir / "app").mkdir()
-    (project_dir / ".voodoo" / "state").mkdir(parents=True)
+    (project_dir / ".voodoo").mkdir()
 
-    # Write files
     (project_dir / "main.py").write_text(_MAIN_PY.format(name=project_name))
     (project_dir / "voodoo.toml").write_text(_VOODOO_TOML.format(name=project_name))
     (project_dir / "pyproject.toml").write_text(
@@ -287,16 +252,16 @@ def create(
     terminal.label_value("created", f"{project_name}/")
     terminal.tree(
         [
-            "main.py          # App entry point — full runtime demo",
-            "voodoo.toml      # Runtime configuration",
-            "pyproject.toml   # Python project metadata",
-            "app/             # Folder-based routes (add page.py files here)",
-            ".voodoo/state/   # Local state (SQLite, queue, schedules)",
+            "main.py                    # App entry point — Store-first demo",
+            "voodoo.toml                # Runtime configuration",
+            "pyproject.toml             # Python project metadata",
+            "app/                       # Folder-based routes",
+            ".voodoo/                   # Voodoo local infrastructure",
+            "  application.vstore       # Created automatically on first run",
         ]
     )
     terminal.blank()
 
-    # Install dependencies
     terminal.status("installing", "dependencies")
     terminal.blank()
 
@@ -323,7 +288,6 @@ def create(
         )
         terminal.muted("installed via uv")
     except (subprocess.CalledProcessError, FileNotFoundError):
-        # Fallback to plain venv + pip
         try:
             subprocess.run(
                 [sys.executable, "-m", "venv", str(local_venv)],
@@ -344,7 +308,7 @@ def create(
             terminal.muted("installed via pip")
         except subprocess.CalledProcessError as exc:
             terminal.warning(f"dependency install failed: {exc}")
-            terminal.muted("run 'cd {project_name} && pip install -e .' manually")
+            terminal.muted(f"run 'cd {project_name} && pip install -e .' manually")
 
     terminal.blank()
     terminal.success("ready")
@@ -354,8 +318,8 @@ def create(
             f"cd {project_name}",
             "voodoo dev",
             "",
-            "Then open http://localhost:8000 and click 'Enqueue increment'.",
-            "Stop the server (Ctrl+C), run 'voodoo dev' again — the counter",
-            "increments because the task is durable.",
+            "Open http://localhost:8000 and click 'Enqueue increment'.",
+            "Restart the server and refresh: the counter is recovered from",
+            ".voodoo/application.vstore.",
         ]
     )

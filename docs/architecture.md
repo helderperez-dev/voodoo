@@ -1,335 +1,337 @@
 # Architecture
 
-## What it is
+Voodoo is a programmable Runtime for adaptive applications and operational
+systems. Web, APIs, agents, workers, human workflows, remote nodes and physical
+devices are different participants around one Runtime — not independent stacks
+with separate authority and execution semantics.
 
-Voodoo is a programmable runtime for adaptive applications and operational systems. Web applications, APIs, agents, background workers, realtime systems, MCP tools, human workflows, distributed systems, and physical systems are different manifestations of one runtime that converge on Execution.
+## North-star loop
 
-## Design principles
+```text
+World → Observation → Goal → Intent → Plan
+      → Capability + Policy
+      → Execution → Effect → Participant
+      → ACK / Observation → World
+```
 
-1. **Progressive complexity** — Start with the smallest executable application. Add capabilities when needed. Voodoo manages implementation details.
-2. **Minimal scaffold** — `voodoo new` produces only `app/page.py`. No empty directories, no placeholder files, no infrastructure boilerplate.
-3. **Lazy capabilities** — Database, storage, and workers initialize only when actually used. A project that doesn't use persistence doesn't create a database.
-4. **AI as Compute** — AI is not a separate subsystem. It is one form of Compute within the computational model.
-5. **Capability-based security** — Explicit, composable, revocable permissions rather than implicit role-based access.
-6. **Observability everywhere** — Correlation IDs + telemetry as the sensory system.
-7. **Zero-config runtime** — `voodoo new` → `voodoo dev` → working app.
+Two laws follow from this:
 
-## Computational model
+1. **AI is Compute, not authority.**
+2. **Effect is not Observation.** Attempting an action does not make it true.
 
-Voodoo is a **programmable runtime** built on a small, stable ontology — not a pile of features:
+## Runtime convergence
 
-**Core ontology**
+```text
+                         Application
+                             |
+                             v
+                       Voodoo Runtime
+                             |
+        +--------------------+--------------------+
+        |                    |                    |
+     Identity              Agency               World
+        |                    |                    |
+        +----------- Capability + Policy ---------+
+                             |
+                             v
+                     canonical Execution
+                             |
+        +--------------------+--------------------+
+        |         |          |         |          |
+      Data      Work      Events    Objects    Workflow
+        |         |          |         |          |
+        +--------------------+--------------------+
+                             |
+                             v
+                        RuntimeStore
+                             |
+                             v
+                  .voodoo/application.vstore
+```
 
-    Entity      — anything that can be identified and hold state (user, agent, order, device, …)
-    State       — the operational truth of an entity or system
-    Intent      — what the system is trying to accomplish (an outcome, not a command)
-    Capability  — ability + authorization to produce an effect
-    Effect      — a change caused outside pure computation
+Voodoo Store is the default durable infrastructure substrate for a fresh app.
+SQLite, PostgreSQL, Redis and S3-compatible storage are explicit adapters.
 
-**The runtime**
+## Core concepts
 
-    Execution   — the central mechanism; every operation (HTTP, agent, tool, MCP, worker, human, device) is one
+### Identity
 
-**Execution dimensions**
+Anything that acts is identified as a user, agent, service, device or node.
+Authentication evidence proves identity; it does not grant Runtime authority.
 
-    Compute     — the act of performing computation (AI is one form of Compute)
-    Time        — deadlines, expiration, retry, scheduling
-    Resource    — cost, latency, energy, tokens — something consumed or depended upon
-    Constraint  — what the system must or must not do
+```text
+Identity → AuthenticationEvidence → Principal
+                                      |
+                                      v
+                             Capability + Policy
+                                      |
+                                      v
+                                  Execution
+```
 
-They form one coherent loop:
+### Intent
 
-    ENTITY → STATE → INTENT → CAPABILITY → EXECUTION → EFFECT → STATE
-    TIME + CONSTRAINT surround the entire lifecycle.
-    RESOURCE determines how execution should be performed.
+Intent expresses the desired outcome. It does not select a host, database
+connection, transport or specific device driver.
+
+### Capability
+
+Capability expresses ability/authority to produce an effect. Policy adds
+contextual rules about whether that authority may be exercised now.
+
+### Execution
+
+`Execution` is the canonical durable/observable lifecycle for meaningful work:
+
+```text
+created → planned → authorized → running → waiting
+                                  |          |
+                                  |          +→ running (resume)
+                                  v
+                        completed / failed / cancelled / timed_out
+```
+
+Do not create Executions for every helper call. Create them for work where
+authorization, effects, durability, recovery, accounting, waiting or lineage
+matters.
+
+### Effect and Observation
+
+Effects describe attempted changes. Observations describe evidence about
+reality. World state is updated from observations, not optimistic assumptions
+that an external participant obeyed a command.
+
+## Store-first local Runtime
+
+A fresh app normally needs no infrastructure configuration:
+
+```toml
+[store]
+provider = "voodoo"
+path = ".voodoo/application.vstore"
+
+[database]
+provider = "voodoo"
+
+[queue]
+provider = "voodoo"
+
+[events]
+provider = "voodoo"
+
+[objects]
+provider = "voodoo"
+```
+
+These are effective defaults; users normally do not write them.
+
+### What shares the Store
+
+- `Model`/Data Collections;
+- Jobs and durable Queue state;
+- Schedule/Cron/Trigger state;
+- durable Events/replay compatibility state;
+- Object bytes/metadata compatibility state;
+- canonical Execution state and journal;
+- Workflow and Goal checkpoints;
+- HITL approvals;
+- built-in Identity persistence;
+- Edge device/session/effect/replay state.
+
+### Runtime ownership
+
+One process owns one RuntimeStore writer. Subsystems reuse that handle; they do
+not each open their own `.vstore`.
+
+```text
+Process
+  |
+  `-- RuntimeStore
+        |
+        `-- application.vstore
+              +-- Data
+              +-- Queue
+              +-- Events
+              +-- Objects
+              +-- Execution
+              +-- Identity
+              `-- Edge
+```
+
+## Local transaction boundary
+
+`RuntimeTransaction` exposes provider-neutral atomicity over the capabilities
+Voodoo Store can actually commit together: KV/Collection mutations and an
+Outbox record.
+
+```text
+state mutation + outbox message
+             |
+             v
+       one local commit
+```
+
+Outbox publication happens after commit and is at-least-once. Message ids are
+stable idempotency keys. Voodoo does not call an external API part of the same
+local transaction.
+
+## Workers and scheduling
+
+Queued jobs are durable Store Jobs. Claims use explicit leases; workers
+heartbeat ownership, complete/fail/release jobs and reclaim expired leases.
+Each application attempt executes through the canonical `ExecutionEngine`.
+
+Schedules/Cron/Triggers are Store-backed on the default path. Store 0.2.2 can
+enable/disable existing schedules but cannot arbitrarily reposition a schedule
+cursor; Voodoo fails clearly for that unsupported operation.
+
+## Events and objects
+
+Events and objects use Store-backed compatibility boundaries behind stable
+Framework APIs. Voodoo Store 0.2.2 does not yet expose the richer native
+Topics/Streams and Object subsystems through its Python binding, so the
+Framework does not pretend those bindings exist.
+
+## Workflow, Goals and HITL
+
+Durability is checkpoint-oriented:
+
+- Execution state/journal persists;
+- Workflow orchestration checkpoints reference canonical Execution ids;
+- Goal checkpoints can use Voodoo Store;
+- HITL approvals persist and are rehydrated after restart.
+
+Resume semantics must respect already committed effects and idempotency. Voodoo
+does not equate persistence with global exactly-once execution.
+
+## Runtime Fabric
+
+The same app semantics can grow into multiple Voodoo Nodes:
+
+```text
+Application semantics
+        |
+        v
+  Runtime Fabric
+   /    |    \
+Node A Node B Node C
+  |      |      |
+A.vstore B.vstore C.vstore
+```
+
+### Node membership
+
+Authenticated node Principals join durable membership and advertise metadata:
+
+- Runtime version;
+- capabilities they can service;
+- resources/load;
+- services;
+- location;
+- Store/data ownership.
+
+Advertisements support discovery/placement; they do not grant Capability.
+
+### Routing and placement
+
+Routing can filter/score by:
+
+- member health;
+- required capability/service;
+- data ownership;
+- preferred node;
+- load/resource metadata;
+- locality.
+
+The selected remote operation still passes Capability + Policy + canonical
+Execution at the destination boundary.
+
+### Leases and failover
+
+Distributed work has lease generation/idempotency state. Failover is bounded:
+retryable work may be reassigned according to policy; ambiguous physical or
+external work can be declared non-retryable to avoid blindly repeating an
+effect.
+
+## Protocol
+
+Node advertisements, memberships, fabric work requests/outcomes and existing
+remote Execution semantics have transport-neutral models under
+`voodoo.protocol`. HTTP, WebSocket, MQTT, QUIC or another transport can carry
+those contracts without changing Runtime authority.
+
+## Edge
+
+Physical/external devices use the same Runtime semantics:
+
+```text
+Device → Observation → World
+                     → Goal / Intent
+                     → Capability + Policy
+                     → Execution → Effect → Device
+                     → ACK / Observation → World
+```
+
+The default Edge device store is Store-backed and shares the application
+RuntimeStore. `SQLiteDeviceStore` remains available as an explicit adapter.
+
+## Deployment topology
+
+Store-first local deployment obeys:
+
+> **one process = one Voodoo Node = one local Store writer**
+
+Do not use multiple uvicorn/gunicorn worker processes against the same
+`.vstore`. Scale by creating separate nodes with separate local Stores.
+
+Store replication/sync is a future layer; shared network-file Store writes are
+not a substitute.
+
+## External adapters
+
+Voodoo supports explicit domain overrides where needed:
+
+```text
+Database -> PostgreSQL / SQLite
+Queue    -> Redis / PostgreSQL / compatibility adapters
+Objects  -> S3-compatible storage
+Cache    -> memory / Redis
+Telemetry-> OpenTelemetry
+```
+
+Adapters change infrastructure mechanics, not Runtime meaning or authority.
+
+## What Voodoo does not claim yet
+
+- automatic Store replication/sync;
+- shared multi-writer `.vstore` files;
+- distributed consensus;
+- globally serializable cross-node transactions;
+- global exactly-once execution;
+- production PKI/OIDC/mTLS identity infrastructure;
+- managed cloud/fleet control plane.
+
+## Public API ownership
 
 ```python
-from voodoo.primitives import State, Capability, Intent, Effect
-from voodoo.primitives import TimeSpec, ComputeSpec, Resource, Constraint
+from voodoo import App, Agent, Model, page, state, task, tool
+from voodoo.ui import Button, Card, DataTable
+from voodoo.runtime import ExecutionEngine, Goal, GoalRuntime, Planner
+from voodoo.world import Entity, Observation, WorldModel
+from voodoo.edge import DeviceGateway, WorldAwareDeviceGateway
+from voodoo.protocol import WorldSnapshot, RemoteExecutionRequest
 ```
 
-The sophistication is in the model, not in the API surface. Voodoo should feel almost boring at first — that is intentional.
+Concepts should live in the namespace that owns them; the 2.x package root is a
+compatibility facade while 3.0 import law is stabilized.
 
-## System layers
+## Further reading
 
-```
-┌─────────────────────────────────────────────┐
-│         Ontology / Primitives Layer         │
-│  Entity, State, Capability, Intent, Effect, │
-│  Compute, Time, Resource, Constraint        │
-├─────────────────────────────────────────────┤
-│              Runtime Engine Layer             │
-│  ExecutionEngine (execute, delegate, recover) │
-│  ExecutionContext (trace, capabilities, ...)  │
-│  Execution (status, effects, cost, state)    │
-│  CapabilityResolver (allow/deny/approve)     │
-│  ConstraintEnforcer + ResourceAccountant     │
-│  Planner (capability → compute resolution)   │
-│  AdaptiveSupervisor (retry/fallback/budget)  │
-│  Human (ask_human, approve, deny)            │
-│  Persistence (JSONFileExecutionStore)        │
-├─────────────────────────────────────────────┤
-│                  UI Layer                     │
-│  Components (Div, Card, Button, ...)          │
-│  Reactive State (State, StateRenderer)        │
-│  WebSocket Transport (ws_manager, events)     │
-├─────────────────────────────────────────────┤
-│                  AI Layer                      │
-│  Agent (run, stream, tool calling)            │
-│  LLM Providers (OpenAI, Anthropic, Mock)      │
-│  Tool Registry (@tool, ToolSpec)              │
-├─────────────────────────────────────────────┤
-│               Realtime Layer                   │
-│  Voodoo Mesh (events, expose, WS nodes)       │
-│  MCP Server (SSE, tools/list, tools/call)     │
-├─────────────────────────────────────────────┤│               Edge Layer (Sprint 23)            │
-│  Device Gateway (auth, validation, effects)     │
-│  Edge Protocol v1 (voodoo-edge/v1 envelope)    │
-│  Transports (HTTP REST, MQTT topics)            │
-├─────────────────────────────────────────────────┐│               Worker Layer                    │
-│  @task (retries, timeout, telemetry)          │
-│  Async Queue (enqueue, start_workers)         │
-├─────────────────────────────────────────────┤
-│                Data Layer                      │
-│  Model / BaseModel (async CRUD)               │
-│  SQLite (aiosqlite) with RLS policies         │
-├─────────────────────────────────────────────┤
-│              Infrastructure                    │
-│  Auth (JWT, API keys, RBAC)                   │
-│  Security (CORS, CSRF, rate limit, headers)   │
-│  Telemetry (trace_id, metrics, spans)          │
-│  Config (voodoo.toml, env vars)               │
-└─────────────────────────────────────────────┘
-```
-
-## Request lifecycle
-
-1. HTTP request enters the ASGI app
-2. Middleware stack processes: SecurityHeaders → CORS → RateLimit → CSRF → Telemetry → I18n → Auth
-3. TelemetryMiddleware assigns a `trace_id` (UUID)
-4. AuthMiddleware resolves user from token/API key/cookie
-5. Routing dispatches to page handler or API endpoint
-6. Handler runs, renders component tree to HTML
-7. Response flows back through middleware
-
-## Reactive loop
-
-1. Browser sends event over WebSocket (`{"type": "event", "event": "increment", ...}`)
-2. Event handler mutates `State` cell
-3. `StateRenderer` re-renders the page function
-4. DOM patch broadcast to all WebSocket clients
-5. Client swaps `outerHTML` of the target element
-
-## Agent execution loop
-
-```
-prompt → provider → tool call? → execute tool → feed result back → final answer
-```
-
-1. Agent builds messages from prompt + system_prompt + context
-2. Provider (OpenAI/Anthropic/Mock) processes the messages
-3. If the response contains a tool-call marker, the tool is invoked from the registry
-4. The tool result is appended to messages and the loop continues
-5. When no more tool calls are requested, the final answer is returned
-
-## Correlation ID propagation
-
-Every request gets a `trace_id` (UUID) via `ContextVar`. This ID propagates through:
-- HTTP request telemetry
-- Agent runs (recorded in `AgentRun.trace_id`)
-- Tool call telemetry
-- Queue items (stored in envelope, restored in worker)
-- Mesh event envelopes (`correlation_id` field)
-
-## Runtime Engine
-
-The `ExecutionEngine` is the unified execution model. Every meaningful operation — HTTP request, agent run, tool call, MCP dispatch, worker job, task, workflow step, human approval, event handler — produces an `Execution` record with:
-
-- `execution_id` / `trace_id` / `parent_execution_id` — full traceability
-- `status` — created → planned → authorized → running → waiting → completed | failed | cancelled | timed_out
-- `effects` — side effects recorded on the execution
-- `state_changes` — observable state transitions
-- `cost` / `duration_seconds` — resource accounting
-- `error` — structured error with execution context
-
-### Intent → Capability → Execution → Effect → State
-
-```python
-from voodoo.runtime import Intent, execute, Task, Workflow
-
-result = await execute(
-    Intent(name="qualify_customer", params={"customer_id": 123}),
-    compute=some_fn,
-)
-```
-
-### Human-in-the-Loop
-
-```python
-from voodoo.runtime import ask_human, ExecutionEngine
-
-engine = ExecutionEngine()
-
-# Raises ApprovalRequired — execution enters "waiting"
-await engine.execute(Intent(name="payout"), ask_human("Approve payout?"))
-
-# Resume or deny
-await engine.approve(execution_id, by="admin")
-await engine.deny(execution_id, by="admin", reason="not now")
-```
-
-### Planner & Adaptive Supervisor
-
-```python
-from voodoo.runtime import Planner, ComputeParticipant, AdaptiveSupervisor
-
-planner = Planner()
-planner.register(
-    ComputeParticipant(name="agent", kind="agent", capabilities=["reason"])
-)
-planner.register(
-    ComputeParticipant(name="human", kind="human", capabilities=["approve"])
-)
-
-supervisor = AdaptiveSupervisor(planner)
-run = await supervisor.run(Intent(name="complex").require("reason").require("approve"))
-```
-
-### Durable Recovery
-
-```python
-from voodoo.runtime import ExecutionEngine
-from voodoo.runtime.persistence import JSONFileExecutionStore
-
-engine = ExecutionEngine()
-engine.use_store(JSONFileExecutionStore(".voodoo/executions.jsonl"))
-# After restart:
-recovered = engine.recover()  # reloads unfinished executions
-```
-
-```bash
-voodoo recover --store .voodoo/executions.jsonl
-voodoo inspect approvals --pending
-voodoo inspect plan notify.customer --requires email.send,sms.send
-```
-
-## Edge device loop (Sprint 23)
-
-External devices participate in the same execution model — the Edge layer
-is a boundary, **not** a second runtime:
-
-```
-Device
-  ↓  voodoo-edge/v1 message (HTTP or MQTT — same envelope)
-Device Gateway ── authenticate (vdk_ credential) ── validate protocol
-  ↓
-Event → Intent("device:<event>") → ExecutionEngine (actor device:<id>)
-  ↓
-Effect (capability-checked at the boundary)
-  ↓
-Device Gateway ── deliver (at-least-once, stable effect_id)
-  ↓
-Device ── EFFECT_ACK (completed/failed/rejected)
-```
-
-No `DeviceExecutionEngine` exists; device state uses standard versioned
-State semantics; heartbeats never create Executions. Edge is disabled by
-default — see [docs/edge/overview.md](edge/overview.md).
-
-## Framework boundaries
-
-The boundary between core and ecosystem is explicit. This keeps the framework small.
-
-**Voodoo core** — runtime, routing, components, state, events, mesh, data, auth, tools, agent abstraction, MCP, telemetry, CLI.
-
-**Voodoo ecosystem** (adapters and integrations) — OpenAI/Anthropic adapters, Postgres, Redis, Stripe, GitHub, Cloudflare, AWS, etc.
-
-**The adapter philosophy** — Voodoo does not try to own every technology. A developer must eventually be able to replace Tailwind without replacing Voodoo. The same applies to LLM providers, databases, queues, auth providers, storage, and deployment. Built on Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python async — Voodoo must remain interoperable with FastAPI, SQLAlchemy, httpx, pytest, and asyncio. It must not become an island.
-
-### Runtime Configuration & Provider Migration (§28, §31)
-
-Infrastructure is selected by configuration, never by code changes. Standard application code (`storage.upload()`, `enqueue()`, `mesh.publish()`, `model.generate()`) runs identically across providers.
-
-#### Provider Migration Matrix (§28)
-
-| Capability | Local (Default) | Production | Future / Scaled |
-|------------|-----------------|------------|-----------------|
-| **Database** | SQLite (`sqlite`) | PostgreSQL (`postgres`) | PostgreSQL / CockroachDB |
-| **Queue** | SQLite (`sqlite`) or Memory (`memory`) | PostgreSQL (`postgres`) / Redis (`redis`) | SQS / NATS / RabbitMQ |
-| **Events** | SQLite (`sqlite`) or In-Process (`local`) | PostgreSQL (`postgres`) | NATS / Kafka |
-| **Objects** | Local Filesystem (`local`) | S3 (`s3`) — AWS S3, MinIO, R2 | Cloudflare R2 / GCS |
-| **Cache** | In-Memory (`memory`) | Redis (`redis`) | Memcached / Dragonfly |
-| **Models** | Local / Mock (`mock:default`, `ollama:...`) | OpenAI / Anthropic / Gemini | Custom fine-tuned / Router |
-
-#### Configuration Example (`voodoo.yaml`)
-
-```yaml
-runtime:
-  mode: production
-
-database:
-  provider: sqlite
-  path: ${DATABASE_URL:.voodoo/state/data.db}
-
-queue:
-  provider: sqlite
-
-events:
-  provider: sqlite
-
-objects:
-  provider: local
-  base_dir: ${VOODOO_OBJECTS_DIR:.voodoo/objects}
-
-cache:
-  provider: memory
-
-models:
-  default: openai:gpt-4o
-```
-
-**S3-compatible object storage (Sprint 12):** switch `objects.provider` to `s3` for AWS S3, MinIO, or Cloudflare R2. Install the extra (`pip install "voodoo-framework[s3]"`) and set credentials:
-
-```yaml
-objects:
-  provider: s3
-  bucket: ${VOODOO_BUCKET:my-bucket}
-  endpoint: ${VOODOO_OBJECTS_ENDPOINT:}
-  # extra:
-  #   root_prefix: ${VOODOO_OBJECTS_ROOT_PREFIX:}
-```
-
-Credentials come from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or `VOODOO_S3_KEY` / `VOODOO_S3_SECRET`), and the region from `AWS_DEFAULT_REGION`. Non-AWS endpoints (MinIO, R2) use path-style addressing automatically; AWS uses virtual-hosted style. The provider supports presigned GET/PUT URLs, checksum + content-type metadata, and multipart uploads for objects ≥ 8 MiB (`ObjectStoreCapabilities.multipart`).
-
-**Redis queue + cache (Sprint 13):** switch `queue.provider` and/or `cache.provider` to `redis` for a shared, durable, multi-process backend. Install the extra (`pip install "voodoo-framework[redis]"`) and point at a server:
-
-```yaml
-queue:
-  provider: redis
-  url: ${VOODOO_QUEUE_URL:redis://localhost:6379/0}
-
-cache:
-  provider: redis
-  url: ${VOODOO_CACHE_URL:redis://localhost:6379/0}
-```
-
-The URL resolves from `queue.url` / `cache.url` → `VOODOO_QUEUE_URL` / `VOODOO_CACHE_URL` → `VOODOO_REDIS_URL` → `extra.host`/`port`/`db` → `redis://localhost:6379/0`. `RedisQueue` implements the full `VoodooQueue` protocol (priority ordering, delayed delivery, idempotency keys, lease-based claiming, per-status stats) using atomic Lua scripts over ZSETs + per-task hashes; `RedisCache` implements `VoodooCache` with TTL + durability (`CacheCapabilities.ttl`, `.durable`). Both are honest about capabilities — `RedisQueue` declares `at_least_once` delivery and `best_effort` ordering, and `MemoryCache` rejects `set(ttl=...)` with a `CapabilityError` rather than silently dropping the TTL.
-
-**Precedence:** Explicit file configuration (`voodoo.yaml` / `voodoo.toml`) > Environment variables (`VOODOO_QUEUE_PROVIDER`, `DATABASE_URL`, etc.) > Local zero-infra defaults.
-
-**The "do not build" list** — no custom programming language, no JSX equivalent, no full React clone, no custom CSS/JS framework, no distributed database, no Kubernetes orchestration, no Celery replacement, no fully autonomous coding agent, no automatic production deployments, no self-modifying production code, no autonomous financial transactions, no vector database abstraction, no custom LLM training infrastructure.
-
-**Security threat model** — the AI trust chain is Browser → Application → Agent → Tool → Internet → External system. Modeled threats: prompt injection, tool injection, SSRF, credential leakage, malicious MCP servers, unauthorized mesh events, agent privilege escalation, arbitrary code execution, malicious generated code. The `Capability` primitive is the structural answer — agents never receive ambient authority, only explicit, revocable, time-limited capabilities.
-
-## Key design decisions
-
-- **Minimal scaffold** — `voodoo new` creates only `app/page.py`, `voodoo.toml`, `pyproject.toml`. No `main.py`, no `.env`, no placeholder directories.
-- **`voodoo dev` is canonical** — Auto-discovers the app (`main:app` if `main.py` exists, otherwise `voodoo.core:app`). No manual ASGI setup needed.
-- **Lazy database** — SQLite initializes on first `get_db()` call, not at startup. Default path: `.voodoo/state/data.db`. PostgreSQL (Sprint 10) follows the same lazy pattern: the `postgres://` URL is resolved at config time, the psycopg connection opens on first use. Since Sprint 11 the app lifespan runs the durable execution store on PostgreSQL (via the shared translated migrations) when `database.provider: postgres`; the scheduler remains SQLite-backed (documented).
-- **Lazy storage** — No storage directories created unless storage is used.
-- **Lazy workers** — Worker subsystem starts only if workers are registered.
-- **`voodoo.toml` preferred** — TOML config preferred for new projects; YAML compatibility preserved.
-- **`voodoo ai init`** — AI development context is opt-in, not generated during `voodoo new`.
-- **Starlette as ASGI base** — not reinventing the wheel.
-- **Single-process queue** — asyncio.Queue today; distributed backend (Redis) is a seam. Since Sprint 13 the seam is real: `RedisQueue` provides a durable, multi-process backend behind the same `VoodooQueue` protocol.
-- **Lazy provider imports** — `voodoo[ai]` installs SDKs, but they're imported only when a provider is used.
+- `ARCHITECTURE.md`
+- `docs/runtime.md`
+- `docs/data.md`
+- `docs/workers.md`
+- `docs/deployment.md`
+- `docs/protocol.md`
+- `docs/hitl.md`
+- `docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md`

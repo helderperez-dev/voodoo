@@ -1,277 +1,206 @@
 # Provider & Adapter Instructions
 
-> **Read this before:** adding a new database, queue, event bus, object store, cache, or LLM provider. Also read before modifying `src/voodoo/adapters/` or `src/voodoo/storage/`.
+> Read before modifying `src/voodoo/adapters/`, `src/voodoo/storage/`, provider configuration, or adding infrastructure implementations.
 
----
+## Provider law
 
-## The Provider System
+Voodoo selects infrastructure through Runtime configuration, but a fresh
+application is **Voodoo Store-first**. The default is not SQLite/PostgreSQL/Redis
+or local filesystem persistence.
 
-Voodoo selects infrastructure by **configuration, never code changes**. The same application code runs on SQLite (local dev) or PostgreSQL (production) by changing a config string.
+### Effective defaults
 
-### Provider Migration Matrix
-
-| Capability | Local (Default) | Production | Future |
-|---|---|---|---|
-| Database | SQLite | PostgreSQL | CockroachDB |
-| Queue | SQLite/Memory | PostgreSQL/Redis | SQS/NATS/RabbitMQ |
-| Events | SQLite/Local | PostgreSQL | NATS/Kafka |
-| Objects | Local FS | S3 (AWS/MinIO/R2) | R2/GCS |
-| Cache | Memory | Redis | Memcached |
-| Models | Mock/Ollama | OpenAI/Anthropic/Gemini | Custom/Router |
-
-**Config precedence:** Explicit file (`voodoo.yaml`/`voodoo.toml`) > `VOODOO_*` env vars > Local zero-infra defaults.
-
----
-
-## Infrastructure Adapters
-
-### Protocols (`voodoo/storage/*/interfaces.py`)
-
-Each category has a Protocol that all implementations must satisfy:
-
-| Protocol | Location | Methods |
+| Domain | Fresh-app default | Explicit alternatives |
 |---|---|---|
-| `VoodooDatabase` | `storage/database/interfaces.py` | `execute`, `fetchone`, `fetchall`, `executemany`, `migrate`, `transaction` |
-| `VoodooQueue` | `storage/queue/interfaces.py` | `enqueue`, `claim`, `complete`, `fail`, `release`, `stats` |
-| `VoodooEventBus` | `storage/events/interfaces.py` | `publish`, `subscribe`, `replay` |
-| `VoodooObjectStore` | `storage/objects/interfaces.py` | `upload`, `download`, `delete`, `url`, `presign` |
-| `VoodooCache` | `storage/cache/interfaces.py` | `get`, `set`, `delete`, `exists`, `expire` |
+| Durable Store | Voodoo Store | future Store providers |
+| Model/Data | Voodoo Store Collections | SQLite, PostgreSQL |
+| Queue/Jobs | Voodoo Store Jobs | Redis, PostgreSQL, compatibility SQLite |
+| Scheduler | Voodoo Store schedules/Cron/triggers | compatibility adapters |
+| Events | Voodoo Store-backed event contract | PostgreSQL/other registered adapters |
+| Objects | Voodoo Store-backed object contract | S3-compatible adapters |
+| Execution/HITL | Voodoo Store | SQLite, PostgreSQL explicit stores |
+| Edge state | Voodoo Store | `SQLiteDeviceStore` explicit |
+| Cache | memory | Redis |
+| Models/LLMs | mock/local configured provider | OpenAI, Anthropic, Gemini, Ollama, custom |
 
-### Capabilities (`voodoo/adapters/capabilities.py`)
+**Never silently fall back from Voodoo Store to SQLite because Store is disabled,
+missing, old, or failed.** Fail with a clear `ConfigurationError` and upgrade or
+configuration guidance.
 
-Each adapter declares a `*Capabilities` frozen dataclass with **boolean** flags:
+## Runtime Store ownership
 
-```python
-from voodoo.adapters.capabilities import DatabaseCapabilities
+All Store-backed infrastructure in one process reuses the Runtime-owned
+`RuntimeStore`.
 
-
-class MyDatabaseCapabilities(DatabaseCapabilities):
-    provider: str = "mydb"
-    transactions: bool = True
-    migrations: bool = True
-    native_json: bool = False
-    concurrent_writers: bool = True
+```text
+Process / App
+     |
+ RuntimeStore
+     |
+ application.vstore
 ```
 
-**Critical rules:**
-- Capabilities are **booleans**, never enums.
-- `Feature` type stays out of `__all__` — capability names live only in `voodoo.adapters`.
-- Contract tests assert `is True` / `is False`, not truthiness.
+Adapters must not independently open the same Store file. Direct/standalone
+infrastructure may use `acquire_runtime_store()`; App startup uses
+`activate_runtime_store()` and may adopt a compatible shared handle.
 
-### Capability Checking
+One process = one live Store writer. Do not implement multi-process scaling by
+sharing one `.vstore` file.
+
+## Adapter contracts
+
+Provider-neutral Framework contracts remain important even though Store is the
+default:
+
+- `VoodooDatabase`
+- `VoodooQueue`
+- `VoodooEventBus`
+- `VoodooObjectStore`
+- `VoodooCache`
+- Execution persistence contracts
+- Edge device-store contracts
+
+External adapters replace the mechanics of the selected domain only. They do
+not replace Identity, Capability, Policy or canonical Execution semantics.
+
+## Capabilities
+
+Adapter capabilities are factual feature declarations. Use boolean capability
+flags and `require()` / `negotiate()` where appropriate. Never advertise a
+feature the underlying binding cannot actually perform.
+
+Example:
 
 ```python
-from voodoo.adapters.capabilities import require, negotiate
+from voodoo.adapters.capabilities import require
 
-# Hard requirement — raises CapabilityError if unsupported
 require(caps, "transactions")
-
-# Soft negotiation — returns True/False
-if negotiate(caps, "presign_urls"):
-    # use presigned URLs
-else:
-    # fall back to direct download
 ```
 
-### Registry (`voodoo/adapters/registry.py`)
+A Store/node capability advertisement is also **not an authorization grant**.
+Runtime authority belongs to Capability + Policy.
+
+## Store binding rules
+
+The framework currently targets:
+
+```text
+voodoo-store>=0.2.2,<0.3
+```
+
+When integrating a native Store capability:
+
+1. verify the method exists in the installed Python binding;
+2. fail clearly if a required API is missing;
+3. hide native binding objects behind a Voodoo-owned semantic adapter;
+4. share the active RuntimeStore lifecycle;
+5. add restart/reopen acceptance tests for durable claims;
+6. do not invent richer semantics that the binding does not expose.
+
+Current intentional compatibility boundaries:
+
+- Events use Store KV/transaction persistence until richer Topics/Streams Python bindings exist.
+- Objects use Store KV/transaction persistence until richer native Object bindings exist.
+- Store 0.2.2 supports schedule enable/disable but not arbitrary cursor repositioning.
+
+## Adding an external infrastructure provider
+
+1. Implement the relevant Framework Protocol.
+2. Define accurate capabilities.
+3. Register the provider in `voodoo.adapters.registry`.
+4. Add provider-specific contract tests without weakening shared contracts.
+5. Put third-party SDKs in an optional extra.
+6. Use lazy imports for optional SDKs.
+7. Raise `ConfigurationError` with install/config instructions when unavailable.
+8. Update docs and `voodoo doctor`/inspection surfaces when applicable.
+
+### Database example
 
 ```python
-from voodoo.adapters.registry import registry
-
-# Register a new provider
-registry.register_database("mydb", factory_fn)
-registry.register_queue("myqueue", factory_fn)
-
-# Get an instance
-db = registry.get_database(cfg, migrations)
-queue = registry.get_queue(cfg, db)
+class MyDatabase:
+    async def connect(self) -> None: ...
+    async def execute(self, sql: str, params=()) -> None: ...
+    async def fetchone(self, sql: str, params=()): ...
+    async def fetchall(self, sql: str, params=()): ...
 ```
 
-The `registry` singleton calls `_register_defaults()` at init, registering all built-in providers.
+Selecting it must be explicit, for example:
 
----
-
-## Adding a New Infrastructure Provider
-
-### Step-by-step
-
-1. **Implement the Protocol**
-   ```python
-   # voodoo/storage/database/mydb.py
-   from __future__ import annotations
-   from voodoo.storage.database.interfaces import VoodooDatabase, Migration
-
-
-   class MyDatabase(VoodooDatabase):
-       async def execute(self, sql: str, params: list[Any]) -> None: ...
-       async def fetchone(self, sql: str, params: list[Any]) -> dict[str, Any] | None: ...
-
-       # ... implement all Protocol methods
-   ```
-
-2. **Create capabilities**
-   ```python
-   from voodoo.adapters.capabilities import DatabaseCapabilities
-
-
-   class MyDatabaseCapabilities(DatabaseCapabilities):
-       provider: str = "mydb"
-       transactions: bool = True
-       migrations: bool = True
-       native_json: bool = True
-       concurrent_writers: bool = True
-   ```
-
-3. **Register the factory**
-   ```python
-   # voodoo/adapters/registry.py → _register_defaults()
-   def _register_mydb() -> VoodooDatabase:
-       from voodoo.storage.database.mydb import MyDatabase
-
-       return MyDatabase(config)
-
-
-   registry.register_database("mydb", _register_mydb)
-   ```
-
-4. **Add contract tests**
-   ```python
-   # tests/contracts/test_database_mydb.py
-   import pytest
-   from .test_database import DatabaseContractTests
-
-   psycopg = pytest.importorskip("mydb_sdk")
-
-
-   @pytest.mark.skipif(
-       not os.environ.get("VOODOO_TEST_MYDB_URL"),
-       reason="VOODOO_TEST_MYDB_URL not set",
-   )
-   class TestMyDatabase(DatabaseContractTests):
-       @pytest.fixture
-       def db(self):
-           # return fresh MyDatabase instance
-           ...
-   ```
-
-5. **Gate on env vars** — Use `os.environ.get(...)` at module level (not `os.environ[...]`).
-
-6. **Add optional extra** in `pyproject.toml`:
-   ```toml
-   [project.optional-dependencies]
-   mydb = ["mydb-sdk>=1.0"]
-   ```
-
-7. **Update `voodoo doctor`** — Add the provider to the capability matrix output in `cli/doctor.py`.
-
----
-
-## LLM Providers (`voodoo.ai.providers`)
-
-### Architecture
-
-```
-LLMProvider (ABC)
-├── complete() → ProviderResponse
-├── stream() → AsyncIterator[ProviderEvent]
-└── name: str
-
-Implementations:
-├── MockProvider      (deterministic, no network, cost=0)
-├── OpenAIProvider    (lazy openai import)
-├── AnthropicProvider (lazy anthropic import)
-├── GeminiProvider    (lazy google-generativeai import)
-└── OllamaProvider    (lazy ollama import)
+```toml
+[database]
+provider = "mydb"
+url = "..."
 ```
 
-### Factory
+Do not change the fresh-app `database.provider = "voodoo"` law.
+
+## Queue providers
+
+The Store-backed queue is the default durable queue. External queue providers
+must preserve the `VoodooQueue` contract: durable submit where promised,
+claim/lease ownership, completion/failure, retry semantics, idempotency metadata
+and status/stat inspection.
+
+A provider may have weaker ordering/delivery guarantees; expose those honestly.
+Never call an at-least-once system exactly-once.
+
+## Event providers
+
+Event providers must define durability/replay/ordering/delivery capabilities
+accurately. Handler delivery and persistence are separate concerns.
+
+For Store-backed events today, the compatibility implementation is deliberate;
+do not replace it with SQLite merely because native Streams are not yet exposed.
+
+## Object providers
+
+S3-compatible storage is an explicit override, not a production default.
+Presigning/multipart/checksum capabilities should be negotiated, not assumed.
+The Store-backed object contract remains the local default.
+
+## Cache providers
+
+Cache is the main exception to durable Store convergence: transient cache may
+remain in memory by default. Redis is an explicit cache provider. Do not use
+cache as durable business truth.
+
+## LLM providers
+
+LLM SDKs remain optional and lazily imported. `MockProvider` is deterministic
+and network-free for tests. Adding an LLM provider must not make AI mandatory for
+the base Runtime.
+
+Expected pattern:
 
 ```python
-from voodoo.ai.providers import get_provider
-
-provider = get_provider("openai:gpt-4o")
-# Resolves "provider:model" string → _PROVIDER_CLASSES["openai"] → OpenAIProvider(model="gpt-4o")
+def get_provider(reference: str):
+    # Resolve provider:model, import SDK only when chosen.
+    ...
 ```
 
-`_PROVIDER_CLASSES` maps provider name → fully-qualified class path. Uses `importlib.import_module()` for lazy loading.
+Missing SDKs must produce actionable installation errors.
 
-### Adding a New LLM Provider
+## Contract testing
 
-1. **Subclass `LLMProvider`**
-   ```python
-   # voodoo/ai/providers/myllm.py
-   from __future__ import annotations
-   from voodoo.ai.providers.base import LLMProvider, ProviderResponse, ProviderEvent
+- Shared adapter contract suites should not be weakened to fit one provider.
+- Provider-specific behavior belongs in provider-specific tests.
+- Tests that require PostgreSQL/Redis/S3 must gate on env vars and optional SDK availability.
+- Store-backed adapters need lifecycle/restart tests against one shared RuntimeStore.
+- Test failure paths: Store disabled, missing binding capability, conflicting writer, expired lease, duplicate/idempotency behavior where relevant.
 
+## Critical gotchas
 
-   class MyLLMProvider(LLMProvider):
-       name = "myllm"
+1. **No silent SQLite fallback.** This is an architectural regression.
+2. **No second Store writer.** Reuse RuntimeStore.
+3. **No shared Store file between app workers/nodes.** Scale with node-local Stores.
+4. **No fake native Store features.** Compatibility layers are preferable to false claims.
+5. **No authority from discovery metadata.** Adapter/node capabilities do not grant Runtime Capability.
+6. **No global atomicity from local transactions.** RuntimeTransaction is one local Store boundary.
+7. **No exactly-once claim for external effects.** Use idempotency and explicit recovery semantics.
 
-       async def complete(self, messages, **kwargs) -> ProviderResponse:
-           import myllm_sdk  # lazy import
+## Documentation sync
 
-           ...
-
-       async def stream(self, messages, **kwargs) -> AsyncIterator[ProviderEvent]:
-           import myllm_sdk  # lazy import
-
-           ...
-   ```
-
-2. **Register in `_PROVIDER_CLASSES`**
-   ```python
-   # voodoo/ai/providers/__init__.py
-   _PROVIDER_CLASSES = {
-       "mock": "voodoo.ai.providers.mock.MockProvider",
-       "openai": "voodoo.ai.providers.openai.OpenAIProvider",
-       "myllm": "voodoo.ai.providers.myllm.MyLLMProvider",
-   }
-   ```
-
-3. **Use lazy imports** — `importlib.import_module()` or function-level `import`.
-
-4. **Missing SDK handling** — Raise `ConfigurationError` with install instructions:
-   ```python
-   raise ConfigurationError(
-       "myllm-sdk not installed. Install with: uv pip install voodoo-framework[ai]"
-   )
-   ```
-
-5. **Add to `[ai]` extra** in `pyproject.toml` if new dependency.
-
-6. **Test with MockProvider patterns** — Don't make real API calls in tests.
-
----
-
-## Style Adapters (`voodoo.adapters`)
-
-Style adapters generate CSS classes for components:
-
-```python
-from voodoo.ui.styles import set_style_adapter
-from voodoo.adapters.tailwind import TailwindAdapter
-
-# Switch to Tailwind
-set_style_adapter(TailwindAdapter())
-```
-
-### Adding a New Style Adapter
-
-1. Implement the `StyleAdapter` Protocol (`component_classes()` method).
-2. Place in `voodoo/adapters/<name>.py`.
-3. Register via `set_style_adapter()` at runtime.
-
----
-
-## Critical Gotchas
-
-1. **PostgreSQL FK ordering** — `execution_events.execution_id → executions.id` is enforced. Always upsert the parent row BEFORE appending journal events.
-2. **PostgreSQL dict rows** — psycopg returns dict-like rows, so use `row["col"]` not `row[0]`.
-3. **Database-backed queues** — SQLite/Postgres queues require a database instance passed or created.
-4. **`_protocol_check`** — Place Protocol compliance checks at file BOTTOM under `if TYPE_CHECKING:`.
-5. **Unknown provider** — Raise `ConfigurationError` with available providers list.
-6. **Migrations** — Registered via `register_framework_migration()` at import time. Each migration has a version number and SQL string.
-7. **WAL mode** — `SQLiteExecutionStore` uses WAL mode with `busy_timeout=5000`.
-8. **Redis Lua scripts** — `RedisQueue` uses atomic Lua scripts over ZSETs for claim/complete.
-9. **PostgresQueue** — Uses `FOR UPDATE SKIP LOCKED` for concurrent claim.
-10. **S3 presign** — `S3ObjectStore` supports presigned URLs, checksums, and multipart uploads.
+Provider/default changes require updates to `README.md`, `ARCHITECTURE.md`,
+`docs/runtime.md`, the relevant subsystem doc, config examples and these agent
+instructions. A code path and its public/documented default must agree before
+release.

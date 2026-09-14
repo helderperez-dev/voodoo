@@ -2,9 +2,16 @@
 
 ## What it is
 
-The `@task` decorator turns an async function into a retried, timeout-bounded unit of work with telemetry spans. Tasks can be awaited directly (inline) or enqueued for background execution.
+Voodoo has two related worker surfaces:
 
-## Minimal example
+- `@task` for retry/timeout/telemetry semantics around callable work;
+- the durable queue runtime for background delivery, leasing, retries and crash recovery.
+
+On a fresh application, durable queued work is stored in the same
+`.voodoo/application.vstore` used by the rest of the Runtime. The default broker
+is **not** an in-memory `asyncio.Queue` and is **not** SQLite.
+
+## Minimal task
 
 ```python
 from voodoo.workers import task
@@ -15,108 +22,122 @@ async def sync_crm(contact_id: int):
     await crm_api.sync(contact_id)
 
 
-# Run inline
 await sync_crm(42)
-
-# Enqueue for background processing
-await sync_crm.enqueue(42)
 ```
 
-## Common usage
-
-### Bare decorator
+## Durable queue worker
 
 ```python
-@task
-async def send_email(to: str, subject: str):
-    await mailer.send(to, subject)
+from voodoo.workers.queue import enqueue, queue
+
+
+@queue("send-email")
+async def send_email(payload: dict) -> None:
+    await mailer.send(payload["to"], payload["subject"])
+
+
+await enqueue(
+    "send-email",
+    {"to": "ada@example.com", "subject": "Hello"},
+    max_attempts=3,
+    idempotency_key="welcome:ada@example.com",
+)
 ```
 
-### With retries and timeout
+The job is persisted before a worker claims it. A process restart does not turn
+the queue into an in-memory best-effort buffer.
 
-```python
-@task(retries=5, timeout=10)
-async def fetch_api(url: str):
-    response = await httpx.get(url)
-    return response.json()
+## Default Store semantics
+
+The Store-backed queue supports:
+
+- durable submit/read;
+- handler-filtered claim;
+- lease ownership and generation;
+- heartbeat;
+- complete/fail/release;
+- expired-lease reclaim;
+- retry;
+- delayed availability;
+- priority;
+- idempotency keys;
+- status/list/stats/history;
+- trace metadata propagation.
+
+Each claimed application attempt executes through the canonical
+`ExecutionEngine`, so worker delivery does not create a second execution model.
+
+```text
+Store Job
+   |
+ claim + lease
+   |
+ worker
+   |
+ Intent
+   |
+ Capability + Policy
+   |
+ canonical Execution
 ```
 
-### Stacking with mesh events
+## Crash recovery
 
-```python
-from voodoo.mesh import mesh
+If a worker dies while holding a lease, the queue reaper can release expired
+jobs for another claim according to queue semantics. External side effects still
+need an idempotency strategy: durable delivery is not a promise that an external
+API can never observe a duplicate request.
 
+## Tracing
 
-@mesh.on("lead.created")
-@task(retries=3, timeout=10)
-async def sync_crm(payload):
-    await crm_api.sync(payload)
+When a job is enqueued, the current trace id is persisted in the queue envelope.
+The worker restores it before entering canonical Execution, preserving lineage
+across the background boundary.
+
+## Explicit Redis adapter
+
+```bash
+pip install "voodoo-framework[redis]"
 ```
 
-When the event fires, the task runs with retries, timeout, and a telemetry span.
-
-### Enqueuing
-
-```python
-@task
-async def process_file(path: str): ...
-
-
-await process_file.enqueue("/data/input.csv")
+```toml
+[queue]
+provider = "redis"
+url = "redis://redis:6379/0"
 ```
 
-## How it works
+Redis becomes the queue implementation only when explicitly selected.
 
-1. `@task` wraps the function with retries, timeout, and telemetry.
-2. The wrapped function runs inline when awaited.
-3. `.enqueue(payload)` submits to the single-process async queue.
-4. The queue worker runs the task with the same retries/timeout.
-5. Telemetry spans are recorded for every attempt.
+## Explicit PostgreSQL queue
 
-## Advanced
+Where supported by the configured adapter stack, PostgreSQL can be selected as
+an explicit durable queue backend. Configure the database/queue provider rather
+than relying on a hidden fallback.
 
-### Queue internals
+## Explicit legacy SQLite queue
 
-The broker is an `asyncio.Queue`; workers are `asyncio.Task` objects. The public surface (`@task`, `.enqueue`) is the seam for a future distributed backend (Redis, Celery, etc.) — only the internals would swap.
+SQLite remains a compatibility adapter for applications that deliberately
+select it. It is not the fresh-app queue default.
 
-### Durable broker (Sprint 11)
+## Runtime Store ownership
 
-Beyond the in-process broker, Voodoo ships durable queue providers behind the
-`VoodooQueue` protocol (spec §12):
+`VoodooStoreQueue` acquires/reuses the Runtime-owned Store. It does not open a
+second writer to the same `.vstore` file. App shutdown resets cached queue
+handles so a later Runtime lifecycle cannot retain a stale closed Store.
 
-- **`SQLiteQueue`** (default) — tasks survive process restarts, are claimed
-  transactionally under a lease, and retry with backoff.
-- **`PostgresQueue`** — the same semantics on PostgreSQL, using
-  `FOR UPDATE SKIP LOCKED` for atomic claims so concurrent workers never
-  claim the same task. Enabled with `VOODOO_QUEUE_PROVIDER=postgres` (plus a
-  `postgres` database / `VOODOO_DATABASE_URL`).
-- **`RedisQueue`** (Sprint 13) — the same semantics on Redis, using atomic
-  Lua scripts over ZSETs + per-task hashes so concurrent workers never claim
-  the same task. Supports priority ordering, delayed delivery, idempotency
-  keys, and per-status stats. Enabled with `VOODOO_QUEUE_PROVIDER=redis`
-  (plus a `VOODOO_QUEUE_URL` / `VOODOO_REDIS_URL`).
+## Current guarantees
 
-SQLite and Postgres share the same `tasks` schema via the migration runner;
-Redis uses its own key layout. In every case switching the provider changes
-only the backend, never application code.
-
-### TaskError
-
-When a task exhausts its retries, `TaskError` is raised with structured context:
-
-```python
-try:
-    await risky_task()
-except TaskError as e:
-    print(f"{e.task_name} failed after {e.attempts} attempts")
-```
-
-### Correlation ID propagation
-
-When a task is enqueued, the current `trace_id` is captured and propagated to the worker, ensuring telemetry spans are correlated across the queue boundary.
+- local Store queue delivery is durable;
+- leases make ownership explicit;
+- retries are bounded by configured attempts;
+- idempotency keys are persisted;
+- external effects are not globally exactly-once;
+- a queue job does not bypass Capability/Policy/Execution semantics.
 
 ## API reference
 
-- `task(func=None, *, retries=0, timeout=None, name=None, backoff=0.1)` — decorator.
-- `TaskError` — raised when retries are exhausted.
-- `task.enqueue(payload)` — submit to the background queue.
+- `@task(...)` — inline task retry/timeout/telemetry wrapper.
+- `@queue(name)` — register a durable queue handler.
+- `enqueue(name, payload, *, max_attempts=1, idempotency_key=None)` — submit durable work.
+- `start_workers()` / `stop_workers()` — worker lifecycle used by the App lifespan.
+- `VoodooStoreQueue` — Store-backed implementation of the durable queue contract.

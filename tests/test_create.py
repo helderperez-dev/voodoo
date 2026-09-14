@@ -1,27 +1,21 @@
-"""Tests for ``voodoo create`` CLI command (Sprint 22).
-
-Validates that the scaffold command generates the correct file structure,
-templates, and configuration for a zero-infrastructure local runtime app.
-"""
+"""Tests for ``voodoo create`` Store-first project scaffolding."""
 
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
 from voodoo.cli import app
+from voodoo.cli.create import _MAIN_PY
 
 __all__: list[str] = []
 
 runner = CliRunner()
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -33,17 +27,10 @@ def tmp_cwd(tmp_path: Path):
     os.chdir(old)
 
 
-# ---------------------------------------------------------------------------
-# Tests: file scaffolding
-# ---------------------------------------------------------------------------
-
-
 class TestCreateScaffold:
-    """``voodoo create`` generates the expected directory structure."""
+    """``voodoo create`` generates a Store-first project structure."""
 
     def test_creates_project_directory(self, tmp_cwd: Path) -> None:
-        # The install step may fail in test environments (no venv/uv context),
-        # but the directory and files are still created before that point.
         runner.invoke(app, ["create", "myapp"])
         assert (tmp_cwd / "myapp").is_dir()
 
@@ -54,14 +41,18 @@ class TestCreateScaffold:
         content = main_py.read_text()
         assert "from voodoo import" in content
         assert "App" in content
+        assert "Model" in content
 
-    def test_creates_voodoo_toml(self, tmp_cwd: Path) -> None:
+    def test_creates_voodoo_toml_with_store_first_guidance(self, tmp_cwd: Path) -> None:
         runner.invoke(app, ["create", "myapp"])
         toml = tmp_cwd / "myapp" / "voodoo.toml"
         assert toml.exists()
         content = toml.read_text()
         assert "myapp" in content
         assert "[app]" in content
+        assert ".voodoo/application.vstore" in content
+        assert "SQLite, local filesystem" not in content
+        assert "in-memory queues by default" not in content
 
     def test_creates_pyproject_toml(self, tmp_cwd: Path) -> None:
         runner.invoke(app, ["create", "myapp"])
@@ -71,15 +62,17 @@ class TestCreateScaffold:
         assert 'name = "myapp"' in content
         assert "voodoo-framework" in content
 
-    def test_creates_state_directory(self, tmp_cwd: Path) -> None:
+    def test_creates_voodoo_directory_not_legacy_state_tree(
+        self, tmp_cwd: Path
+    ) -> None:
         runner.invoke(app, ["create", "myapp"])
-        state_dir = tmp_cwd / "myapp" / ".voodoo" / "state"
-        assert state_dir.is_dir()
+        voodoo_dir = tmp_cwd / "myapp" / ".voodoo"
+        assert voodoo_dir.is_dir()
+        assert not (voodoo_dir / "state").exists()
 
     def test_creates_app_directory(self, tmp_cwd: Path) -> None:
         runner.invoke(app, ["create", "myapp"])
-        app_dir = tmp_cwd / "myapp" / "app"
-        assert app_dir.is_dir()
+        assert (tmp_cwd / "myapp" / "app").is_dir()
 
     def test_rejects_existing_directory(self, tmp_cwd: Path) -> None:
         (tmp_cwd / "existing").mkdir()
@@ -87,13 +80,8 @@ class TestCreateScaffold:
         assert result.exit_code == 1
 
 
-# ---------------------------------------------------------------------------
-# Tests: main.py template content
-# ---------------------------------------------------------------------------
-
-
 class TestMainPyTemplate:
-    """The generated ``main.py`` contains all required runtime features."""
+    """The generated ``main.py`` demonstrates actual Store-backed semantics."""
 
     def _get_main_py(self, tmp_cwd: Path) -> str:
         runner.invoke(app, ["create", "myapp"])
@@ -101,50 +89,69 @@ class TestMainPyTemplate:
 
     def test_has_durable_queue(self, tmp_cwd: Path) -> None:
         content = self._get_main_py(tmp_cwd)
-        assert "@queue" in content
-        assert "enqueue" in content
+        assert '@queue("increment")' in content
+        assert "enqueue(" in content
+
+    def test_has_store_backed_model(self, tmp_cwd: Path) -> None:
+        content = self._get_main_py(tmp_cwd)
+        assert "class Counter(Model):" in content
+        assert "await Counter.create" in content
+        assert "await row.save()" in content
 
     def test_has_agent(self, tmp_cwd: Path) -> None:
         content = self._get_main_py(tmp_cwd)
         assert "Agent" in content
         assert 'model="mock:test"' in content
 
-    def test_has_mesh_events(self, tmp_cwd: Path) -> None:
-        content = self._get_main_py(tmp_cwd)
-        assert "@event" in content
+    def test_has_events(self, tmp_cwd: Path) -> None:
+        assert "@event" in self._get_main_py(tmp_cwd)
 
-    def test_has_state(self, tmp_cwd: Path) -> None:
+    def test_has_reactive_state_without_claiming_it_is_durable(
+        self, tmp_cwd: Path
+    ) -> None:
         content = self._get_main_py(tmp_cwd)
         assert "state(" in content
+        assert "Persistent application data stored in application.vstore" in content
 
-    def test_has_startup_hook(self, tmp_cwd: Path) -> None:
+    def test_has_restart_durability_explanation(self, tmp_cwd: Path) -> None:
         content = self._get_main_py(tmp_cwd)
-        assert "@app.on_startup" in content
+        assert ".voodoo/application.vstore" in content
+        assert "restart the process" in content
+        assert ".booted" not in content
+        assert "@app.on_startup" not in content
 
-    def test_has_crash_restart_demo(self, tmp_cwd: Path) -> None:
-        content = self._get_main_py(tmp_cwd)
-        assert ".booted" in content
-        assert "restart detected" in content
-
-    def test_has_routes(self, tmp_cwd: Path) -> None:
+    def test_has_async_route_that_reads_store(self, tmp_cwd: Path) -> None:
         content = self._get_main_py(tmp_cwd)
         assert '@page("/")' in content
+        assert "async def home()" in content
+        assert "row = await _counter()" in content
 
     def test_has_tool_decorator(self, tmp_cwd: Path) -> None:
-        content = self._get_main_py(tmp_cwd)
-        assert "@tool" in content
+        assert "@tool" in self._get_main_py(tmp_cwd)
 
+    def test_template_imports_in_clean_python_process(self, tmp_path: Path) -> None:
+        project = tmp_path / "generated"
+        project.mkdir()
+        (project / "app").mkdir()
+        (project / ".voodoo").mkdir()
+        (project / "main.py").write_text(_MAIN_PY.format(name="generated"))
 
-# ---------------------------------------------------------------------------
-# Tests: runtime banner
-# ---------------------------------------------------------------------------
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import runpy; runpy.run_path('main.py', run_name='generated_app')",
+            ],
+            cwd=project,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
 
 
 class TestRuntimeBanner:
-    """``_print_runtime_banner`` runs without error."""
-
     def test_banner_imports(self) -> None:
-        """The banner function can be imported."""
         from voodoo.cli.dev import _print_runtime_banner
 
         assert callable(_print_runtime_banner)

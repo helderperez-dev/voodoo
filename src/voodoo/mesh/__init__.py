@@ -246,20 +246,26 @@ class MeshNetwork:
         return refreshed
 
     async def execute_remote(
-        self, request: RemoteExecutionRequest
+        self,
+        request: RemoteExecutionRequest,
+        *,
+        principal: Any | None = None,
     ) -> RemoteExecutionOutcome:
         lock = self._remote_request_locks.setdefault(request.request_id, asyncio.Lock())
         async with lock:
             replayed = self._replayed_outcome(request)
             if replayed is not None:
                 return replayed
-            outcome = await self._execute_remote_once(request)
+            outcome = await self._execute_remote_once(request, principal=principal)
             if outcome.execution_id is not None:
                 self.replay_store.save(request, outcome)
             return outcome
 
     async def _execute_remote_once(
-        self, request: RemoteExecutionRequest
+        self,
+        request: RemoteExecutionRequest,
+        *,
+        principal: Any | None = None,
     ) -> RemoteExecutionOutcome:
         operation = self.exposed_operations.get(request.operation)
         if operation is None:
@@ -288,6 +294,7 @@ class MeshNetwork:
                 intent,
                 compute,
                 actor=request.runtime_actor,
+                principal=principal,
                 capabilities=granted_capabilities,
             )
             return RemoteExecutionOutcome.from_execution(request, execution)
@@ -386,6 +393,11 @@ class MeshNetwork:
                             message_id=str(msg_id) if msg_id is not None else None,
                         )
                         request = self.bind_participant(request, participant)
+                        principal = (
+                            participant.to_principal()
+                            if participant is not None
+                            else None
+                        )
                     except Exception as error:
                         await self._send_protocol_error(
                             websocket,
@@ -394,7 +406,7 @@ class MeshNetwork:
                         )
                         continue
 
-                    outcome = await self.execute_remote(request)
+                    outcome = await self.execute_remote(request, principal=principal)
                     await self._send_remote_outcome(
                         websocket,
                         message_id=msg_id,

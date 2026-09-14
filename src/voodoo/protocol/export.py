@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .fabric import FABRIC_PROTOCOL_ENTITIES
 from .operational import OPERATIONAL_PROTOCOL_ENTITIES
 from .schemas import PROTOCOL_ENTITIES, SCHEMA_VERSION
 
@@ -23,7 +24,11 @@ __all__ = [
 
 
 def _entities() -> dict[str, Any]:
-    return {**PROTOCOL_ENTITIES, **OPERATIONAL_PROTOCOL_ENTITIES}
+    return {
+        **PROTOCOL_ENTITIES,
+        **OPERATIONAL_PROTOCOL_ENTITIES,
+        **FABRIC_PROTOCOL_ENTITIES,
+    }
 
 
 def export_json_schemas() -> dict[str, Any]:

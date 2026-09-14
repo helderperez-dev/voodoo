@@ -16,6 +16,7 @@ from enum import StrEnum
 from typing import Any
 
 from voodoo.runtime.context import ExecutionContext
+from voodoo.runtime.identity import Principal
 from voodoo.world.models import WorldSnapshot
 
 __all__ = [
@@ -50,6 +51,7 @@ class PolicyRequest:
     capability: str
     scope: str | None
     context: ExecutionContext | None
+    principal: Principal | None = None
     target_entity_id: str | None = None
     world: WorldSnapshot | None = None
 
@@ -123,6 +125,7 @@ class PolicyEngine:
             capability=capability,
             scope=scope,
             context=context,
+            principal=context.principal if context is not None else None,
             target_entity_id=target_entity_id,
             world=snapshot,
         )

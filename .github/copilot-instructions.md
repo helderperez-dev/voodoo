@@ -1,265 +1,253 @@
-# Voodoo Framework — Copilot Instructions
+# Voodoo Framework — Coding Agent Instructions
 
-> **Purpose:** This file is the entry point for GitHub Copilot and any AI coding agent working in this repository. It defines the rules, conventions, and structured process that must be followed for every change — no matter how small.
+> Entry point for Copilot and coding agents working in this repository.
 
----
-
-## Quick Reference
+## Quick reference
 
 | What | Value |
 |---|---|
-| **Language** | Python ≥ 3.12 |
-| **Package manager** | `uv` |
-| **Task runner** | `just` |
-| **Formatter/Linter** | `ruff` (line-length 88, double quotes) |
-| **Type checker** | `mypy --strict` (not part of `just lint`) |
-| **Test runner** | `pytest` (`asyncio_mode = "auto"`) |
-| **Quality gate** | `just format && just lint && just test` |
-| **Version** | `src/voodoo/__init__.py` → `__version__` |
-| **Release** | `just release X.Y.Z` (triggers GitHub Actions) |
+| Language | Python >= 3.12 |
+| Package manager | `uv` |
+| Formatter/linter | Ruff |
+| Type checker | mypy |
+| Tests | pytest (`asyncio_mode = auto`) |
+| Framework version | `src/voodoo/__init__.py` |
+| Default durable substrate | Voodoo Store |
+| Default Store path | `.voodoo/application.vstore` |
 
----
+## Project identity
 
-## Project Identity
+Voodoo is a **programmable runtime for adaptive applications and operational
+systems**. Web, APIs, agents, workers, human workflows, distributed nodes and
+physical devices converge on one Runtime and one canonical Execution model.
 
-Voodoo is a **programmable runtime for adaptive applications and operational systems** — not merely a web framework. Web applications, APIs, agents, background workers, realtime systems, MCP tools, human workflows, distributed systems, and physical systems are different manifestations of one runtime that converge on **Execution**. It is built on Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python `asyncio`. The runtime is **zero-config by default** (SQLite + local filesystem) and **production-ready by configuration** (PostgreSQL, Redis, S3, OpenAI/Anthropic).
+The zero-external-infrastructure default is **Voodoo Store**, not SQLite:
 
-**Current version:** See `src/voodoo/__init__.py` → `__version__`.
-
----
-
-## Runtime Model
-
-- **Voodoo is a programmable runtime, not merely a web framework.** Web is one manifestation of the runtime.
-- **AI is one form of Compute** — never a fundamental primitive. Do not make AI mandatory.
-- **Agents are entities** capable of holding capabilities and executing intents.
-- **Converge on Execution** — workers, tasks, tools, MCP operations, HTTP operations, humans, and physical devices should be represented as Executions whenever semantically appropriate. Do not create duplicate execution models.
-- **Prefer existing primitives** over introducing new abstractions.
-- **Keep the public API minimal.** Prefer explicit semantics over framework magic.
-- **Local-first** — prefer local-first implementations; do not make cloud infrastructure, a specific database, or any vendor (OpenAI, Anthropic, AWS, GCP, Azure, Redis, Postgres) mandatory.
-- **Preserve composability, inspectability, and deterministic behavior** where possible.
-
-> **Architectural test:** Before introducing a new abstraction, determine whether the behavior can already be expressed through Entity, State, Intent, Capability, Execution, Effect, Compute, Time, Resource, or Constraint.
-
----
-
-## Architectural Invariants (Never Violate)
-
-1. **Zero-infra local dev** — The default install must never require external services. SQLite, local filesystem, and in-memory queues are the defaults.
-2. **No new required dependencies** — Provider SDKs live in optional extras (`[ai]`, `[postgres]`, `[s3]`, `[redis]`). The base install stays minimal.
-3. **Capability-based adapters** — Every infrastructure adapter (database, queue, events, objects, cache) implements a Protocol and declares boolean capability flags. Never use enums for capabilities.
-4. **Contract tests are immutable** — The mixin contract suites in `tests/contracts/` must pass unchanged against every adapter implementation. New adapters add provider-specific tests on top, never modify the shared mixins.
-5. **Compatibility shims** — When refactoring, preserve old import paths via `sys.modules` replacement or PEP 562 `__getattr__`. Breaking imports is a breaking change.
-6. **Lazy imports** — Provider SDKs and circular-dependency-prone modules must be imported at function level, not module level.
-7. **Correlation IDs** — Every execution (HTTP request, agent run, tool call, worker job) carries a `trace_id` that propagates through the entire stack via `trace_id_var` ContextVar.
-8. **Events are namespaced** — All mesh/MCP events use dotted namespaces (e.g., `"agent.started"`, `"tool.completed"`). Never emit bare event names.
-9. **Sprint discipline** — Work sprints in order. Find the first non-DONE sprint in `SPRINT_PLAN.md`, implement only its scope, pass the quality gate, release, then continue.
-10. **Conventional Commits** — All commits must use `type(scope): description` format.
-
----
-
-## Code Style
-
-### Must Follow
-
-- **`from __future__ import annotations`** at the top of every Python module.
-- **Type hints everywhere** — Use `str | None`, `list[Any]`, `dict[str, Any]` syntax. Protocols for interfaces, Pydantic for models, dataclasses for DTOs.
-- **`__all__`** — Explicit export list in every module.
-- **Section dividers** — Use `# ---------------------------------------------------------------------------` to separate logical sections.
-- **Docstrings** — Module-level docstring explaining purpose. Class/function docstrings with `Parameters` sections for public API.
-- **Double quotes** for strings.
-- **4-space indentation**.
-- **Comments explain "why" not "what"** — Reference spec sections (e.g., "spec §9", "Sprint 3") when relevant.
-
-### Error Handling
-
-- Use the structured error hierarchy in `voodoo.core.errors` (`VoodooError` base → specific subclasses).
-- Broad excepts must use `# noqa: BLE001` and log context.
-- Never swallow exceptions silently.
-
-### Compatibility Patterns
-
-- **`sys.modules` replacement** — For module aliases (see `voodoo/queue.py`, `voodoo/tools/registry.py`).
-- **PEP 562 `__getattr__`** — For forwarded globals and deprecation shims (see `voodoo/__init__.py`, `voodoo/data/base.py`).
-- **Function-level imports** — For provider SDKs (`openai`, `anthropic`, `psycopg`, `redis`, `boto3`) and circular dependency avoidance.
-
----
-
-## Testing Standards
-
-### Test Structure
-
-- **`pytest-asyncio`** with `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`.
-- **Test classes** group related tests (e.g., `TestExecutionContext`, `TestState`).
-- **Fresh instances per test** — Never share mutable state across tests. Use fixtures for isolation.
-- **Autouse fixtures** in `tests/conftest.py` handle cleanup: `_clean_page_registry`, `_reset_queue_state`, `_close_db_after_test`, `_isolated_registry`, `_clean_mesh_handlers`, `_clean_telemetry`.
-
-### Contract Tests (`tests/contracts/`)
-
-- **Mixin classes** (`DatabaseContractTests`, `QueueContractTests`, etc.) run unchanged against every adapter.
-- **Provider-specific test files** subclass the mixin and add provider-specific tests.
-- **Gated tests** use `importorskip("psycopg")` / `importorskip("redis")` / `importorskip("boto3")` + `skipif` on env vars.
-- **Env var access** in test modules must use `os.environ.get(...)` not `os.environ[...]` — module-level code runs before skip markers.
-
-### Mock Provider
-
-- `MockProvider` is deterministic and requires no network. Use it for all agent/AI tests.
-- `ToolThenTextProvider` subclass simulates tool-call sequences.
-
----
-
-## Development Process
-
-### Standard Workflow
-
-> **Before creating a PR, read `.github/instructions/pull-request.instructions.md`** — it documents branch protection rules, PR template requirements, CI checks, merge strategy, documentation sync rules, and emergency bypass procedures.
-
-```
-1. Identify the sprint or task
-2. Create a feature branch: git checkout -b feat/<scope>
-3. Implement changes following architectural rules
-4. Run quality gate: just format && just lint && just test
-5. Update documentation (MANDATORY):
-   - CHANGELOG.md under [Unreleased]
-   - docs/*.md for changed behavior (see source-path-to-doc mapping)
-   - README.md if user-facing
-   - SPRINT_PLAN.md if sprint scope changed
-   - ROADMAP.md if milestones changed
-   - ARCHITECTURE.md if layer/primitive changed
-   - test_contract_api.py if public API changed
-6. Commit with Conventional Commits
-7. Push and create a PR (fill the PR template — .github/PULL_REQUEST_TEMPLATE.md)
-8. Wait for CI to pass (Python 3.12 + 3.13, lint, test)
-9. Get Code Owner review (1 approval required, enforced for admins)
-10. Resolve all review comments (conversation resolution required)
-11. Merge with squash: gh pr merge --squash --delete-branch
-12. Release: just release X.Y.Z (if sprint complete)
+```text
+Application
+    |
+    v
+Voodoo Runtime
+    |
+    +-- Model / Data
+    +-- Queue / Jobs
+    +-- Scheduler / Cron / Triggers
+    +-- Events / Outbox
+    +-- Objects
+    +-- Execution / Workflow / Goal / HITL
+    +-- Identity
+    +-- Edge
+    |
+    v
+.voodoo/application.vstore
 ```
 
-**Documentation sync is mandatory.** A PR with code changes but no doc updates is incomplete and will be blocked in review. See `.github/instructions/pull-request.instructions.md` → "Documentation Sync" for the full mapping table.
+PostgreSQL, SQLite, Redis and S3 are explicit adapters. Never restore them as
+silent defaults just to make a test pass.
 
-**Branch protection on `main`:** enforce_admins=true, 1 review required, Code Owner reviews on, required status check "CI", required_linear_history=true, required_conversation_resolution=true. See `.github/instructions/pull-request.instructions.md` for full details.
+## Architectural invariants
 
-### Sprint Protocol
+1. **One Runtime / one canonical Execution lifecycle.** Do not create competing execution engines for AI, workers, Edge or remote nodes.
+2. **AI is Compute, not authority.** Capability + Policy govern effects.
+3. **Identity is separate from authority.** Authentication, roles/scopes and node advertisements do not automatically grant Capability.
+4. **Store-first local durability.** Fresh applications use Voodoo Store.
+5. **One process owns one live local Store writer.** Do not open competing handles to the same `.vstore`.
+6. **No shared-file multi-writer scaling.** Multiple Voodoo Nodes own separate local Stores.
+7. **Distributed ownership before distributed storage.** Do not invent replication/sync before it is explicitly designed and tested.
+8. **Scaling changes topology, not app architecture.** Application code must not need node addresses/retry plumbing merely because nodes are added.
+9. **Remote work remains governed.** Routing/discovery never bypass Capability + Policy + Execution.
+10. **No false guarantees.** Do not claim distributed consensus, global serializable transactions or global exactly-once execution.
+11. **Effect != Observation.** A sent command is not proof that the World changed.
+12. **Stable Framework contracts may use compatibility layers.** Store 0.2.x does not yet expose every richer native subsystem through Python.
 
-1. Open `SPRINT_PLAN.md`.
-2. Find the first sprint with status `TODO` or `IN_PROGRESS`.
-3. Implement **only** the checked scope items for that sprint.
-4. Run `just format && just lint && just test` — all must pass.
-5. If public API changed, update `test_contract_api.py`.
-6. Update `SPRINT_PLAN.md` → mark sprint `DONE`.
-7. Update `CHANGELOG.md`.
-8. Commit and push.
-9. Release: `just release X.Y.Z` (minor bump per sprint, patch for fixes).
-10. Verify the release workflow succeeded.
+## Store ownership rules
 
-### Conventional Commits
+Infrastructure adapters reuse the Runtime-owned `RuntimeStore`. A subsystem must
+not independently open `.voodoo/application.vstore`.
 
-```
-feat(scope): add new feature
-fix(scope): fix a bug
-docs(scope): documentation only
-refactor(scope): code restructuring, no behavior change
-test(scope): add or fix tests
-chore(deps): dependency updates
-```
-
-Common scopes: `core`, `runtime`, `ai`, `ui`, `data`, `mesh`, `mcp`, `workers`, `auth`, `security`, `telemetry`, `cli`, `config`, `ci`, `docs`.
-
----
-
-## Provider/Adapter System
-
-### Adding a New Provider
-
-1. Implement the relevant Protocol (`VoodooDatabase`, `VoodooQueue`, `VoodooEventBus`, `VoodooObjectStore`, `VoodooCache`).
-2. Create a `*Capabilities` frozen dataclass with boolean flags.
-3. Register the factory in `voodoo/adapters/registry.py` → `_register_defaults()`.
-4. Add provider-specific contract tests in `tests/contracts/`.
-5. Gate on `importorskip` + env vars.
-6. Add optional extra in `pyproject.toml` if new dependency.
-7. Update `voodoo doctor` capability matrix if applicable.
-
-### Adding a New LLM Provider
-
-1. Subclass `LLMProvider` ABC (`voodoo.ai.providers`).
-2. Implement `complete()` and `stream()`.
-3. Register in `_PROVIDER_CLASSES` dict in `voodoo/ai/providers/__init__.py`.
-4. Use lazy `importlib.import_module()` for SDK imports.
-5. Add to `[ai]` optional extra in `pyproject.toml` if new dependency.
-6. Test with `MockProvider` patterns.
-
----
-
-## File Organization
-
-```
-src/voodoo/
-├── __init__.py          # Public API, __version__, deprecation shims
-├── core/               # App facade, routing, errors, events, state
-├── primitives/         # 8 architectural primitives (State, Capability, Intent, ...)
-├── runtime/            # ExecutionEngine, context, planner, adaptive, human, persistence
-├── ai/                 # Agent, LLM providers, tool registry
-├── adapters/           # Provider registry, capability system, style adapters
-├── storage/            # Database, queue, events, execution, objects, cache adapters
-├── ui/                 # Component system, reactive state, styles, theme
-├── routing/            # Page registry, API routing
-├── mesh/               # Realtime event bus
-├── mcp/                # Model Context Protocol server/client
-├── workers/            # @task decorator, queue runtime
-├── data/               # Async ORM (BaseModel, Model)
-├── auth/               # JWT, passwords, users, guards, middleware
-├── security/           # CORS, CSRF, rate limit, security headers
-├── telemetry/          # Trace store, middleware, metrics
-├── cli/                # Typer CLI (new, dev, generate, inspect, recover, ...)
-├── config.py           # Config loading, env interpolation
-├── i18n.py             # Internationalization
-├── schedule.py         # Durable scheduler
-├── seo.py              # SEO/OpenGraph metadata
-└── status.py           # Health check endpoint
+```text
+Process / Runtime
+       |
+       v
+ RuntimeStore
+       |
+       v
+application.vstore
 ```
 
----
+Standalone infrastructure used before `App` startup may acquire the shared
+Runtime Store. `App` adopts a compatible shared handle. A conflicting *live*
+writer is an error; an inert failed-startup registration may be replaced.
 
-## Instruction Files
+## Provider defaults
 
-For domain-specific guidance, read the relevant instruction file before making changes:
+Effective fresh-app defaults:
 
-| Domain | File |
-|---|---|
-| Architecture & layering | `.github/instructions/architecture.instructions.md` |
-| Runtime engine & execution | `.github/instructions/runtime.instructions.md` |
-| Provider/adapter system | `.github/instructions/providers.instructions.md` |
-| Durable persistence | `.github/instructions/execution.instructions.md` |
-| AI agents & tools | `.github/instructions/ai.instructions.md` |
-| Testing & contracts | `.github/instructions/testing.instructions.md` |
-| **PR & repo rules** | **`.github/instructions/pull-request.instructions.md`** |
+```toml
+[store]
+provider = "voodoo"
+path = ".voodoo/application.vstore"
 
----
+[database]
+provider = "voodoo"
 
-## Skills
+[queue]
+provider = "voodoo"
 
-Structured workflows for common tasks:
+[events]
+provider = "voodoo"
 
-| Skill | When to use |
-|---|---|
-| `architecture-review` | Before merging major changes |
-| `implement-sprint` | When starting a new sprint |
-| `add-provider` | When adding a database/queue/cache/etc. adapter |
-| `runtime-feature` | When adding runtime engine features |
-| `testing` | When writing or fixing tests |
-| `documentation` | When updating docs |
-| `release` | When cutting a release |
+[objects]
+provider = "voodoo"
 
----
+[cache]
+provider = "memory"
+```
 
-## Critical Gotchas
+Cache is transient by default. Durable application infrastructure belongs in
+Voodoo Store.
 
-1. **PostgreSQL FK ordering** — `execution_events.execution_id → executions.id` is enforced. Always upsert the parent row BEFORE appending journal events.
-2. **PostgreSQL dict rows** — psycopg returns dict-like rows, so use `row["col"]` not `row[0]`.
-3. **Test env vars** — `os.environ["VAR"]` at module level runs BEFORE skip markers. Always use `os.environ.get(...)`.
-4. **`_protocol_check`** — Place Protocol compliance checks at file BOTTOM under `if TYPE_CHECKING:`.
-5. **Queue handler registry** — Handlers register at import time. The `_reset_queue_state` fixture resets provider + worker tasks but NOT the handler registry.
-6. **mypy is NOT in `just lint`** — Ruff is the lint gate. Run `uv run mypy src/voodoo` separately for type checking.
-7. **WAL mode** — `SQLiteExecutionStore` uses WAL mode with `busy_timeout=5000` for concurrent access.
-8. **`voodoo.toml`/`voodoo.yaml`** — Config precedence: explicit file > `VOODOO_*` env vars > local defaults.
+If the installed Store binding lacks a required capability, fail clearly and
+tell the user to upgrade. **Never silently fall back to SQLite.**
+
+## Runtime concepts
+
+Use the existing ontology before introducing another abstraction:
+
+```text
+Entity / Identity
+State
+Goal
+Intent
+Capability
+Policy
+Execution
+Effect
+Observation
+Compute
+Time
+Resource
+Constraint
+```
+
+An `Execution` represents meaningful work worth authorizing, recovering,
+observing, accounting for or waiting on. Do not create an Execution for every
+helper call/render/state read.
+
+## Data
+
+`voodoo.Model` is Store-first. `BaseModel` / `init_db()` preserve explicit SQL
+compatibility.
+
+Legacy SQL-string `rls_policy()` is not valid Store semantics; the Store path
+must fail clearly rather than silently bypassing it. Use an explicit SQL adapter
+for applications that still depend on SQL-predicate RLS.
+
+## Queue / workers
+
+The default durable queue is `VoodooStoreQueue`, backed by Store Jobs. Leases,
+heartbeat, retry and idempotency belong to the queue; application attempts enter
+canonical Execution. External effects are not globally exactly-once.
+
+## Transactions / outbox
+
+`RuntimeTransaction` can atomically combine supported local Store KV/Collection
+mutations and an `OutboxMessage`. Outbox delivery is at-least-once and is
+outside the local transaction. Do not extend the atomicity claim to another
+node or arbitrary external systems.
+
+## Scheduler / Events / Objects limitations
+
+- Store 0.2.2 cannot arbitrarily reposition an existing schedule cursor.
+- Events currently use a Store-backed compatibility boundary; richer native Topics/Streams Python APIs are not exposed yet.
+- Objects currently use a Store-backed compatibility boundary; richer native Object Python APIs are not exposed yet.
+
+Preserve public contracts and document these limitations honestly.
+
+## Identity / node fabric
+
+Identity kinds include user, agent, service, device and node. The Runtime Fabric
+supports durable membership, health, discovery, placement, ownership, leases and
+bounded failover. Advertised capabilities are discovery metadata, not grants.
+
+Each node owns its local Store:
+
+```text
+Runtime Fabric
+  +-- node-a -> a.vstore
+  +-- node-b -> b.vstore
+  `-- node-c -> c.vstore
+```
+
+Retry/failover must respect work semantics. Do not automatically reissue
+ambiguous physical/external effects when work is non-retryable.
+
+## Edge
+
+Edge device/credential/session/effect/replay state is Store-backed by default
+and shares the Runtime Store. `SQLiteDeviceStore` is an explicit adapter only.
+
+## Dependencies and imports
+
+- Keep provider SDKs lazy and optional (`ai`, `postgres`, `redis`, `s3`, `otel`, `edge`, `sqlite`).
+- Voodoo Store is a base dependency because it is the default durable substrate.
+- Primitives must not depend on higher Runtime/UI/AI layers.
+- Preserve compatibility import paths during the 2.x line.
+- Public concepts should live in the namespace that owns them; the package root is a compatibility facade.
+
+## Code style
+
+- `from __future__ import annotations` in new Python modules.
+- Type hints on public/new code.
+- Prefer `str | None`, `list[T]`, `dict[K, V]`.
+- Double quotes; Ruff formatting; 88-character target.
+- Broad exception catches require a reason and `# noqa: BLE001` when appropriate.
+- Raise structured Voodoo errors instead of silently swallowing configuration failures.
+- Use Conventional Commits (`feat(scope): ...`, `fix(scope): ...`, etc.).
+
+## Testing rules
+
+- Fresh mutable instances per test.
+- Contract tests for adapters remain authoritative.
+- Python 3.12 and 3.13 must pass.
+- Ruff, the declared mypy boundary and CodeQL must pass.
+- Store lifecycle/restart behavior must be tested with close/reopen when durability is claimed.
+- Fresh-user DX changes must execute the generated scaffold, not merely assert template strings.
+- Never weaken architectural defaults to satisfy legacy tests; update tests that encode superseded defaults.
+
+## Documentation sync
+
+When behavior changes, update the public docs and these agent instructions in the
+same PR. In particular verify:
+
+- `README.md`
+- `ARCHITECTURE.md`
+- relevant `docs/*.md`
+- `.github/instructions/*.md`
+- examples/scaffolds
+- Sprint/roadmap docs when scope changes.
+
+## Development / PR discipline
+
+1. Work on the intended feature/sprint branch.
+2. Implement the smallest coherent semantic slice.
+3. Add/update tests including failure paths and durability if applicable.
+4. Run Ruff, mypy boundary and full pytest matrix.
+5. Update documentation.
+6. Keep the PR draft until the work is actually review-ready.
+7. Do **not** merge or publish a release merely because a sprint is marked DONE; merge/release are separate explicit decisions.
+
+## Current honest boundaries
+
+Do not claim that Voodoo already provides:
+
+- Store replication/sync between nodes;
+- shared multi-writer `.vstore` files;
+- distributed consensus;
+- globally serializable cross-node transactions;
+- global exactly-once execution;
+- production PKI/OIDC/mTLS identity infrastructure;
+- a managed Voodoo Cloud/fleet control plane.
+
+When in doubt, prefer truthful explicit limitations over an implicit fallback or
+an architectural shortcut.

@@ -1,131 +1,265 @@
 # Runtime Engine
 
-> **Status:** Implemented (Sprints 1–7). Durable by default since v1.5.0.
-> Architecture-stabilized in v2.5.2 — Agent converged with ExecutionEngine,
-> tool calls create child Executions, lifecycle and durability semantics formalized.
+> **Status:** Store-first Runtime infrastructure convergence is complete on this branch.
 
 The Voodoo Runtime Engine is the unified execution model that makes the
-computational model operational. Every meaningful operation —
-HTTP request, agent run, task, workflow step, tool invocation, MCP call,
-worker job, human approval, event handler — is represented as an
-**Execution** produced by a single `ExecutionEngine`.
+computational model operational. Meaningful work converges on one canonical
+`ExecutionEngine`; persistence and infrastructure converge on one Runtime-owned
+Voodoo Store by default.
 
-## The Execution Lifecycle
+## Execution lifecycle
 
-```mermaid
-flowchart LR
-    Intent --> Capability
-    Capability --> Planner
-    Planner --> Compute
-    Compute --> Effect
-    Effect --> Event
-    Event --> State
-    State --> Observation
-    Observation --> Adapt
-    Adapt --> Intent
+```text
+Observation / Goal
+        |
+        v
+      Intent
+        |
+        v
+Identity / Principal
+        |
+        v
+Capability + Policy
+        |
+        v
+canonical Execution
+        |
+        v
+Compute -> Effect -> observed evidence -> World
 ```
 
-## Core Concepts
+AI is one form of Compute. Node membership, authentication and network location
+do not create authority by themselves.
 
-### Execution
+## Store-first Runtime
 
-An `Execution` is the universal unit of work. Every operation produces
-one, regardless of whether it's an HTTP request, an agent run, or a
-background task.
+A fresh application uses:
 
-```python
-from voodoo.runtime import Execution, ExecutionStatus
-
-# Executions flow through these statuses:
-# PENDING → RUNNING → COMPLETED | FAILED | CANCELLED | WAITING
+```text
+Application
+    |
+    v
+Voodoo Runtime
+    |
+    +-- Model / Data
+    +-- Jobs / Queue
+    +-- Scheduler / Cron / Triggers
+    +-- Events / Outbox
+    +-- Objects
+    +-- Execution / Workflow / Goal / HITL
+    +-- Identity
+    +-- Edge / device state
+    |
+    v
+RuntimeStore
+    |
+    v
+.voodoo/application.vstore
 ```
 
-### ExecutionEngine
+The framework depends on `voodoo-store>=0.2.2,<0.3` on this branch. Application
+code should not import native `voodoo_store` objects for normal Runtime use;
+Store implementation details remain behind Voodoo-owned contracts.
 
-The `ExecutionEngine` (singleton: `engine`) drives the lifecycle:
+## Runtime Store ownership
+
+One process owns one Store handle:
+
+```text
+Process / Runtime
+       |
+       v
+ RuntimeStore
+       |
+       v
+application.vstore
+```
+
+Infrastructure touched before `App` startup acquires the process-shared
+RuntimeStore. App startup adopts that compatible handle rather than opening a
+second writer. A live Store with a conflicting configuration is rejected.
+
+This is a single-writer law, not a limitation Voodoo tries to hide. Multiple
+processes must not write the same `.vstore` file.
+
+## Execution
+
+An `Execution` is meaningful work worth observing, authorizing, recovering,
+accounting for, waiting on, or reasoning about. Internal helper calls do not
+become executions merely because they occur inside Voodoo.
 
 ```python
-from voodoo.runtime import execute, Intent
+from voodoo.primitives import Intent
+from voodoo.runtime import ExecutionEngine
 
-result = await execute(
-    Intent("qualify_customer", customer_id=123),
-    capabilities=["customers:read", "customers:write"],
+engine = ExecutionEngine()
+
+
+async def compute(ctx):
+    return {"ok": True}
+
+
+execution = await engine.execute(
+    Intent(name="customer.refresh"),
+    compute,
+    actor="service:crm",
 )
 ```
 
-### ExecutionContext
+App startup attaches the Store-backed execution persistence adapter to the
+canonical engine. Execution materialized state, journal events, artifacts and
+HITL approvals share the Runtime Store.
 
-Every execution carries an `ExecutionContext` with:
+## Identity and authority
 
-- **Correlation ID** — links related executions across the system
-- **Causation ID** — links an execution to the one that caused it
-- **Actor** — who initiated the execution
-- **Capabilities** — what the execution is allowed to do
-- **Resource budget** — compute, time, cost limits
+Runtime Identity is separate from authentication evidence and authority:
 
-### Durable Persistence
-
-Executions are persisted to SQLite by default (`.voodoo/state/data.db`).
-The `SQLiteExecutionStore` maintains:
-
-- **`executions` table** — materialized execution state
-- **`execution_events` table** — append-only journal of events
-
-```bash
-# Inspect executions
-voodoo executions
-voodoo execution <id>    # full timeline from journal
-voodoo events            # event stream
-
-# Recover unfinished executions after a restart
-voodoo recover
+```text
+Identity
+   |
+AuthenticationEvidence
+   |
+Principal
+   |
+Capability + Policy
+   |
+Execution
 ```
 
-## Checkpoints & Resume
+Supported identity kinds include user, agent, service, device and node.
+Authentication, roles/scopes or node advertisements do **not** automatically
+grant Runtime Capability.
 
-Executions checkpoint at meaningful boundaries:
+## Durable workflows, Goals and HITL
 
-- After model completion
-- After tool completion
-- After state mutation
-- After task scheduling
-- Before waiting (human approval)
+- execution checkpoints survive Store restart;
+- Goal checkpoints have a Store-backed provider;
+- Workflow orchestration checkpoints persist references to canonical
+  Executions rather than creating a second execution truth;
+- HITL approvals persist and can be rehydrated by `ExecutionEngine.recover()`
+  after restart.
 
-If the process crashes, `voodoo recover` restores unfinished executions
-from their last checkpoint. Completed steps are not re-executed.
+Durability does not mean global exactly-once. External effects still require
+idempotency and domain-appropriate recovery semantics.
 
-## Artifacts & Provenance
+## Runtime transactions and outbox
 
-Agent and tool outputs can be stored as **artifacts** with full
-provenance tracking:
+The supported local atomic boundary is explicit:
 
-```bash
-voodoo artifacts <execution_id>   # view artifact chain
+```python
+from voodoo.runtime import OutboxMessage, transaction
+
+with transaction() as tx:
+    tx.upsert_record(
+        b"orders",
+        b"42",
+        b'{"status":"created"}',
+    )
+    tx.stage_outbox(
+        OutboxMessage(
+            id="order-42-created",
+            topic="order.created",
+            payload={"order_id": "42"},
+        )
+    )
 ```
+
+The Collection/KV mutation and outbox insertion commit atomically in one local
+Store transaction. Outbox delivery is at-least-once; consumers should use the
+message id as an idempotency key where duplicate suppression matters.
+
+Jobs, arbitrary external effects, and operations on another node are not
+claimed to be part of this local transaction.
+
+## Transparent node scaling
+
+> **Scaling a Voodoo application changes deployment topology, not application architecture.**
+
+```text
+same application semantics
+         |
+         v
+   Runtime Fabric
+     /    |    \
+ node-a node-b node-c
+   |      |      |
+ a.vstore b.vstore c.vstore
+```
+
+The Runtime Fabric provides:
+
+- authenticated node Principals;
+- durable membership and heartbeat lifecycle;
+- health-aware discovery;
+- capability/service/ownership filtering;
+- load/locality/data-owner aware placement;
+- durable lease generations;
+- bounded failover for work explicitly declared retryable;
+- stable idempotency keys across attempts.
+
+A node advertising a capability is not the same as being authorized to use it.
+Remote work still enters Capability + Policy + canonical Execution.
+
+## Protocol boundary
+
+Node advertisement, membership and fabric work request/outcome semantics are
+represented in transport-neutral Protocol models. The transport may evolve
+without changing Runtime authority or Execution semantics.
+
+## Edge
+
+When Edge is enabled, device/credential/session/effect/replay state uses the
+same Runtime Store by default. `SQLiteDeviceStore` remains an explicit adapter,
+not a hidden Edge default.
 
 ## Configuration
 
-The runtime is configured via `voodoo.yaml` (or environment variables):
+A fresh Runtime is equivalent to:
 
-```yaml
-database:
-  provider: sqlite          # sqlite (default) | postgres
-queue:
-  provider: sqlite          # sqlite (default) | postgres | redis
-events:
-  provider: sqlite          # sqlite (default) | postgres | memory
-objects:
-  provider: local           # local (default) | s3
-cache:
-  provider: memory          # memory (default) | redis
+```toml
+[store]
+provider = "voodoo"
+path = ".voodoo/application.vstore"
+
+[database]
+provider = "voodoo"
+
+[queue]
+provider = "voodoo"
+
+[events]
+provider = "voodoo"
+
+[objects]
+provider = "voodoo"
 ```
 
-All defaults are local-first and require zero external infrastructure.
+Those blocks normally do not need to be written. PostgreSQL, SQLite, Redis and
+S3 are explicit domain overrides.
 
-## See Also
+## Current honest boundaries
 
-- [Computational Model](primitives.md)
-- [Human-in-the-Loop](hitl.md)
-- [Planner & Adaptive Runtime](adaptive.md)
+Voodoo does not currently claim:
+
+- shared-file multi-writer Store semantics;
+- Store replication/sync between node-local Stores;
+- distributed consensus;
+- globally serializable transactions;
+- global exactly-once execution;
+- production PKI/OIDC/mTLS identity infrastructure;
+- a managed cloud/fleet control plane.
+
+Store 0.2.2 also does not expose arbitrary schedule cursor repositioning or the
+richer native Topics/Streams and Objects subsystems through the Python binding.
+Framework adapters preserve stable contracts without pretending those native
+bindings already exist.
+
+## See also
+
+- [Sprint 28 closure](sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)
 - [Architecture](architecture.md)
-- [ROADMAP.md — Part V: Core Execution Model](../ROADMAP.md)
+- [Data & Models](data.md)
+- [Workers](workers.md)
+- [Deployment](deployment.md)
+- [Human-in-the-Loop](hitl.md)
+- [Protocol](protocol.md)

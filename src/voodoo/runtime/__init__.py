@@ -36,6 +36,16 @@ from voodoo.runtime.errors import (
     WorkflowFailure,
 )
 from voodoo.runtime.execution import Execution, ExecutionStatus
+from voodoo.runtime.fabric import (
+    FabricLease,
+    FabricRoutingError,
+    FabricWork,
+    NoEligibleNodeError,
+    PlacementDecision,
+    PlacementRequirement,
+    RuntimeFabric,
+    WorkNotFailoverSafeError,
+)
 from voodoo.runtime.goal import (
     Goal,
     GoalDecomposer,
@@ -44,7 +54,7 @@ from voodoo.runtime.goal import (
     GoalRuntime,
     GoalStatus,
 )
-from voodoo.runtime.goal_store import GoalStore, SQLiteGoalStore
+from voodoo.runtime.goal_store import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
 from voodoo.runtime.graph import ExecutionGraph, ExecutionNode
 from voodoo.runtime.human import (
     Approval,
@@ -52,6 +62,20 @@ from voodoo.runtime.human import (
     ApprovalStatus,
     Human,
     ask_human,
+)
+from voodoo.runtime.identity import (
+    AuthenticationEvidence,
+    Identity,
+    IdentityKind,
+    IdentityStatus,
+    Principal,
+)
+from voodoo.runtime.identity_store import IdentityStore, VoodooStoreIdentityStore
+from voodoo.runtime.membership import (
+    MemberStatus,
+    NodeAdvertisement,
+    NodeMembership,
+    VoodooStoreMembershipStore,
 )
 from voodoo.runtime.operations import OperationalRuntime
 from voodoo.runtime.persistence import (
@@ -67,8 +91,31 @@ from voodoo.runtime.policy import (
     PolicyResult,
     PolicyRule,
 )
+from voodoo.runtime.store import (
+    DEFAULT_STORE_PATH,
+    RuntimeStore,
+    StoreConfig,
+    StoreHealth,
+    StoreProvider,
+    StoreProviderError,
+    StoreProviderRegistry,
+    VoodooStoreProvider,
+    bind_active_runtime_store,
+    create_store_provider,
+    get_active_runtime_store,
+    store_registry,
+)
 from voodoo.runtime.task import Task, TaskStatus
+from voodoo.runtime.transaction import (
+    OutboxDispatcher,
+    OutboxMessage,
+    RuntimeTransaction,
+    dispatch_events,
+    dispatch_outbox,
+    transaction,
+)
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
+from voodoo.runtime.workflow_store import VoodooStoreWorkflowStore, WorkflowStore
 from voodoo.runtime.world_execution import (
     bind_world,
     resolve_target_entity_id,
@@ -106,11 +153,32 @@ __all__ = [
     "ValidationError",
     "ApprovalRequired",
     "WorkflowFailure",
+    "IdentityKind",
+    "IdentityStatus",
+    "Identity",
+    "AuthenticationEvidence",
+    "Principal",
+    "IdentityStore",
+    "VoodooStoreIdentityStore",
+    "MemberStatus",
+    "NodeAdvertisement",
+    "NodeMembership",
+    "VoodooStoreMembershipStore",
+    "PlacementRequirement",
+    "PlacementDecision",
+    "FabricWork",
+    "FabricLease",
+    "RuntimeFabric",
+    "FabricRoutingError",
+    "NoEligibleNodeError",
+    "WorkNotFailoverSafeError",
     "Task",
     "TaskStatus",
     "Workflow",
     "WorkflowRun",
     "WorkflowStrategy",
+    "WorkflowStore",
+    "VoodooStoreWorkflowStore",
     "ExecutionGraph",
     "ExecutionNode",
     "Approval",
@@ -121,6 +189,24 @@ __all__ = [
     "ExecutionStore",
     "InMemoryExecutionStore",
     "JSONFileExecutionStore",
+    "DEFAULT_STORE_PATH",
+    "StoreConfig",
+    "StoreHealth",
+    "StoreProvider",
+    "StoreProviderError",
+    "StoreProviderRegistry",
+    "RuntimeStore",
+    "VoodooStoreProvider",
+    "bind_active_runtime_store",
+    "create_store_provider",
+    "get_active_runtime_store",
+    "store_registry",
+    "RuntimeTransaction",
+    "OutboxMessage",
+    "OutboxDispatcher",
+    "transaction",
+    "dispatch_outbox",
+    "dispatch_events",
     "ComputeParticipant",
     "Plan",
     "PlanStep",
@@ -137,6 +223,7 @@ __all__ = [
     "GoalDecomposer",
     "GoalStore",
     "SQLiteGoalStore",
+    "VoodooStoreGoalStore",
     "OperationalRuntime",
     "runtime_dashboard",
     "bind_world",
@@ -153,6 +240,7 @@ async def execute(
     compute: ComputeFn | None = None,
     *,
     actor: str = "system",
+    principal: Principal | None = None,
     capabilities: list[str] | None = None,
     output_type: type | None = None,
     parent: ExecutionContext | None = None,
@@ -162,6 +250,7 @@ async def execute(
         intent,
         compute,
         actor=actor,
+        principal=principal,
         capabilities=capabilities,
         output_type=output_type,
         parent=parent,

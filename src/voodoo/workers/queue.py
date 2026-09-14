@@ -1,14 +1,13 @@
 """Durable async queue & worker runtime.
 
-Workers poll a ``VoodooQueue`` provider (SQLite by default, memory optional)
-for claimable tasks. Each claimed task performs exactly one execution attempt.
-On failure the durable queue owns retry scheduling and backoff, so retry budget
-survives worker/process failure instead of living only in memory.
+Workers poll a ``VoodooQueue`` provider for claimable tasks. Each claimed task
+performs exactly one canonical Runtime execution attempt. The queue owns durable
+delivery, leasing, retry scheduling, and crash recovery; it never executes
+application code itself.
 
 The ``@queue`` decorator and ``enqueue``/``start_workers``/``stop_workers``
-functions form the public API; swapping the provider (see
-``VOODOO_QUEUE_PROVIDER``) changes the backend without touching application
-code.
+functions form the public API; swapping the provider changes infrastructure
+without touching application code.
 """
 
 from __future__ import annotations
@@ -46,14 +45,19 @@ async def _get_queue() -> VoodooQueue:
 
     from voodoo.adapters.registry import registry
     from voodoo.config import get_config
-    from voodoo.data.base import _database, get_db
 
     cfg = get_config().queue
     provider = cfg.provider.lower()
 
-    if provider == "memory":
+    if provider == "voodoo":
+        from voodoo.storage.queue.store import VoodooStoreQueue
+
+        _queue = VoodooStoreQueue()
+    elif provider in {"memory", "redis"}:
         _queue = registry.get_queue(cfg)
     else:
+        from voodoo.data.base import _database, get_db
+
         db = _database
         if db is None:
             await get_db()
@@ -84,11 +88,7 @@ async def enqueue(
     max_attempts: int = 1,
     idempotency_key: str | None = None,
 ) -> None:
-    """Enqueue *payload* as a durable task of type *name*.
-
-    ``max_attempts`` is persisted by the queue provider. It therefore remains
-    authoritative across worker crashes and process restarts.
-    """
+    """Enqueue *payload* as a durable task of type *name*."""
     from voodoo.telemetry import trace_id_var
 
     q = await _get_queue()
@@ -179,9 +179,12 @@ async def start_workers() -> None:
 
 
 async def stop_workers() -> None:
-    """Cancel all worker tasks; expired leases are reclaimed durably later."""
+    """Cancel worker tasks and release cached provider handles for next lifecycle."""
+    global _queue
+
     for worker_task in _worker_tasks:
         worker_task.cancel()
     if _worker_tasks:
         await asyncio.gather(*_worker_tasks, return_exceptions=True)
     _worker_tasks.clear()
+    _queue = None

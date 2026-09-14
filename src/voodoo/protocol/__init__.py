@@ -1,13 +1,21 @@
 """Voodoo protocol — stable semantic schemas for cross-language interop.
 
 The protocol is the boundary for participants that must understand Voodoo
-semantics without importing Python runtime internals. Sprint 27 extends the
-original entity set with World, Goal and governed remote-execution schemas.
+semantics without importing Python runtime internals. Sprint 28 extends the
+operational protocol with governed node-fabric membership and routed work.
 """
 
 from __future__ import annotations
 
 from .export import export_json_schemas, export_json_schemas_json, schema_for
+from .fabric import (
+    FABRIC_PROTOCOL_ENTITIES,
+    FABRIC_SCHEMA_VERSION,
+    FabricWorkOutcome,
+    FabricWorkRequest,
+    NodeAdvertisement,
+    NodeMembership,
+)
 from .operational import (
     OPERATIONAL_PROTOCOL_ENTITIES,
     Entity,
@@ -51,15 +59,18 @@ from .schemas import (
     TimeSpec,
 )
 
-# Public protocol registry means *all* stable entities available at the
-# semantic boundary. The original 18-entity registry remains internal to
-# schemas.py so existing implementation modules can compose it without cycles.
-PROTOCOL_ENTITIES = {**CORE_PROTOCOL_ENTITIES, **OPERATIONAL_PROTOCOL_ENTITIES}
+PROTOCOL_ENTITIES = {
+    **CORE_PROTOCOL_ENTITIES,
+    **OPERATIONAL_PROTOCOL_ENTITIES,
+    **FABRIC_PROTOCOL_ENTITIES,
+}
 
 __all__ = [
     "SCHEMA_VERSION",
+    "FABRIC_SCHEMA_VERSION",
     "PROTOCOL_ENTITIES",
     "OPERATIONAL_PROTOCOL_ENTITIES",
+    "FABRIC_PROTOCOL_ENTITIES",
     "ExecutionStatus",
     "IntentStatus",
     "EffectStatus",
@@ -95,6 +106,10 @@ __all__ = [
     "RemoteOutcomeStatus",
     "RemoteExecutionRequest",
     "RemoteExecutionOutcome",
+    "NodeAdvertisement",
+    "NodeMembership",
+    "FabricWorkRequest",
+    "FabricWorkOutcome",
     "export_json_schemas",
     "export_json_schemas_json",
     "schema_for",

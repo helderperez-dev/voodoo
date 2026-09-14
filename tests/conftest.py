@@ -46,20 +46,20 @@ def _reset_queue_state():
 
 @pytest_asyncio.fixture(autouse=True)
 async def _close_db_after_test():
-    """Close lazily-opened async DB resources before the test loop is torn down.
+    """Close every async SQLite resource before the test loop is torn down.
 
-    aiosqlite owns a worker thread whose futures are bound to the event loop
-    that opened the connection. Closing it later with ``asyncio.run`` creates a
-    second loop and can leave the worker trying to report into an already-closed
-    one. Keeping cleanup in an async fixture guarantees teardown happens while
-    pytest's owning loop is still alive. Starlette lifespan shutdown normally
-    clears the same globals first, making this a no-op for TestClient tests.
+    ``data.base`` owns the normal application DB, while contract/provider tests
+    may instantiate independent SQLite adapters. All of them use aiosqlite
+    worker threads bound to the loop that opened them, so teardown must happen
+    here rather than after pytest closes that loop.
     """
     yield
     from voodoo.data import base
+    from voodoo.storage.database.sqlite import _close_open_sqlite_databases
 
     if base._db_connection is not None:
         await voodoo.data.close_db()
+    await _close_open_sqlite_databases()
 
 
 @pytest.fixture

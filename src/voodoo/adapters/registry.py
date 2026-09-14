@@ -1,8 +1,8 @@
 """Provider registry mapping configuration names to adapter factories (Spec §31, §28).
 
-All adapters implemented across Sprints 1–7 are registered here. Future
-adapters (Postgres, S3/R2 hardening, Redis, etc.) register their factories
-alongside these defaults.
+All built-in adapters register here. Sprint 28 adds Voodoo Store as the
+Runtime-owned local-first infrastructure substrate while preserving external
+providers as explicit overrides.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from voodoo.config import (
 )
 from voodoo.core.errors import ConfigurationError
 
-# Type alias for provider factories
 DatabaseFactory = Callable[[DatabaseConfig], Any]
 QueueFactory = Callable[[QueueConfig], Any]
 EventsFactory = Callable[[EventsConfig], Any]
@@ -37,35 +36,30 @@ class ProviderRegistry:
         self._events_providers: dict[str, EventsFactory] = {}
         self._objects_providers: dict[str, ObjectsFactory] = {}
         self._cache_providers: dict[str, CacheFactory] = {}
-
         self._register_defaults()
 
     def _register_defaults(self) -> None:
-        """Register built-in adapters from Sprints 1–7."""
-        # 1. Database providers
+        """Register built-in adapters."""
         self.register_database("sqlite", self._create_sqlite_database)
         self.register_database("postgres", self._create_postgres_database)
 
-        # 2. Queue providers
+        self.register_queue("voodoo", self._create_voodoo_queue)
         self.register_queue("sqlite", self._create_sqlite_queue)
         self.register_queue("memory", self._create_memory_queue)
         self.register_queue("postgres", self._create_postgres_queue)
         self.register_queue("redis", self._create_redis_queue)
 
-        # 3. Events providers
+        self.register_events("voodoo", self._create_voodoo_events)
         self.register_events("sqlite", self._create_sqlite_events)
         self.register_events("local", self._create_local_events)
         self.register_events("postgres", self._create_postgres_events)
 
-        # 4. Objects providers
+        self.register_objects("voodoo", self._create_voodoo_objects)
         self.register_objects("local", self._create_local_objects)
         self.register_objects("s3", self._create_s3_objects)
 
-        # 5. Cache providers
         self.register_cache("memory", self._create_memory_cache)
         self.register_cache("redis", self._create_redis_cache)
-
-    # --- Registration methods ---
 
     def register_database(self, name: str, factory: DatabaseFactory) -> None:
         self._database_providers[name.lower()] = factory
@@ -81,8 +75,6 @@ class ProviderRegistry:
 
     def register_cache(self, name: str, factory: CacheFactory) -> None:
         self._cache_providers[name.lower()] = factory
-
-    # --- Factory invocation methods ---
 
     def get_database(
         self, cfg: DatabaseConfig | None = None, migrations: Sequence[Any] = ()
@@ -106,8 +98,6 @@ class ProviderRegistry:
                 f"Unknown queue provider '{name}'. Available providers: {available}. "
                 "Check your voodoo.yaml or VOODOO_QUEUE_PROVIDER setting."
             )
-        # Database-backed queues (SQLite/Postgres) require a database
-        # instance; allow passing one or create the default.
         if name in ("sqlite", "postgres"):
             return self._queue_providers[name](cfg, db=db)
         return self._queue_providers[name](cfg)
@@ -145,8 +135,6 @@ class ProviderRegistry:
             )
         return self._cache_providers[name](cfg)
 
-    # --- Built-in provider factory implementations ---
-
     def _create_sqlite_database(
         self, cfg: DatabaseConfig, migrations: Sequence[Any] = ()
     ) -> Any:
@@ -162,17 +150,6 @@ class ProviderRegistry:
     def _create_postgres_database(
         self, cfg: DatabaseConfig, migrations: Sequence[Any] = ()
     ) -> Any:
-        """Build a :class:`~voodoo.storage.database.postgres.PostgresDatabase`.
-
-        URL resolution order (Sprint 10):
-        1. ``cfg.url`` from ``voodoo.yaml`` (``database.url``);
-        2. ``VOODOO_DATABASE_URL`` environment variable;
-        3. parts in ``cfg.extra`` (``host``/``port``/``dbname``/``user``/
-           ``password``) — assembled into a ``postgresql://`` URL.
-
-        Raises a clear ``ConfigurationError`` when none is available so the
-        user is told exactly what to set, rather than failing inside psycopg.
-        """
         import os
 
         from voodoo.storage.database.postgres import PostgresDatabase
@@ -190,6 +167,11 @@ class ProviderRegistry:
             url = f"postgresql://{creds}{host}:{port}/{dbname}"
         return PostgresDatabase(url, migrations=migrations)
 
+    def _create_voodoo_queue(self, cfg: QueueConfig) -> Any:
+        from voodoo.storage.queue.store import VoodooStoreQueue
+
+        return VoodooStoreQueue()
+
     def _create_sqlite_queue(self, cfg: QueueConfig, db: Any = None) -> Any:
         from voodoo.storage.queue.sqlite import SQLiteQueue
 
@@ -202,9 +184,6 @@ class ProviderRegistry:
 
         if db is None:
             db = self.get_database()
-        # The caller (app/worker) may hand us a Postgres database already
-        # connected; assert it so a mixed provider (memory queue over
-        # postgres db) still fails loudly at startup.
         if not hasattr(db, "provider") or db.provider != "postgres":
             raise ConfigurationError(
                 "The 'postgres' queue provider requires a postgres database; "
@@ -218,19 +197,6 @@ class ProviderRegistry:
         return MemoryQueue()
 
     def _create_redis_queue(self, cfg: QueueConfig) -> Any:
-        """Build a :class:`~voodoo.storage.queue.redis.RedisQueue`.
-
-        URL resolution order (Sprint 13):
-        1. ``cfg.url`` from ``voodoo.yaml`` (``queue.url``);
-        2. ``VOODOO_QUEUE_URL`` environment variable;
-        3. ``VOODOO_REDIS_URL`` environment variable;
-        4. parts in ``cfg.extra`` (``host``/``port``/``db``) — assembled into
-           a ``redis://`` URL;
-        5. ``redis://localhost:6379/0``.
-
-        Raises a clear ``ConfigurationError`` when the ``[redis]`` extra is
-        not installed (lazy import, mirrors the postgres factory).
-        """
         import os
 
         from voodoo.storage.queue.redis import RedisQueue
@@ -247,6 +213,11 @@ class ProviderRegistry:
             db = cfg.extra.get("db") or "0"
             url = f"redis://{host}:{port}/{db}"
         return RedisQueue(url)
+
+    def _create_voodoo_events(self, cfg: EventsConfig) -> Any:
+        from voodoo.storage.events.store import VoodooStoreEventBus
+
+        return VoodooStoreEventBus()
 
     def _create_sqlite_events(self, cfg: EventsConfig) -> Any:
         from voodoo.storage.events.sqlite import SQLiteEventBus
@@ -279,6 +250,11 @@ class ProviderRegistry:
                 "in voodoo.yaml, or export VOODOO_EVENTS_URL / VOODOO_DATABASE_URL."
             )
         return PostgresEventStore(url)
+
+    def _create_voodoo_objects(self, cfg: ObjectsConfig) -> Any:
+        from voodoo.storage.objects.store import VoodooStoreObjectStore
+
+        return VoodooStoreObjectStore()
 
     def _create_local_objects(self, cfg: ObjectsConfig) -> Any:
         from voodoo.storage.objects.local import LocalObjectStore
@@ -333,18 +309,6 @@ class ProviderRegistry:
         return MemoryCache()
 
     def _create_redis_cache(self, cfg: CacheConfig) -> Any:
-        """Build a :class:`~voodoo.storage.cache.redis.RedisCache`.
-
-        URL resolution order (Sprint 13):
-        1. ``cfg.url`` from ``voodoo.yaml`` (``cache.url``);
-        2. ``VOODOO_CACHE_URL`` environment variable;
-        3. ``VOODOO_REDIS_URL`` environment variable;
-        4. parts in ``cfg.extra`` (``host``/``port``/``db``);
-        5. ``redis://localhost:6379/0``.
-
-        Raises a clear ``ConfigurationError`` when the ``[redis]`` extra is
-        not installed (lazy import, mirrors the postgres factory).
-        """
         import os
 
         from voodoo.storage.cache.redis import RedisCache
@@ -363,5 +327,4 @@ class ProviderRegistry:
         return RedisCache(url)
 
 
-# Global provider registry instance
 registry = ProviderRegistry()

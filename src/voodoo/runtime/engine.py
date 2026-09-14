@@ -40,6 +40,7 @@ from voodoo.runtime.errors import (
     ExecutionTimeout,
 )
 from voodoo.runtime.execution import Execution, ExecutionStatus
+from voodoo.runtime.identity import Principal
 
 __all__ = [
     "ComputeFn",
@@ -398,12 +399,15 @@ class ExecutionEngine:
         compute: ComputeFn | None = None,
         *,
         actor: str = "system",
+        principal: Principal | None = None,
         capabilities: list[str] | None = None,
         output_type: type | None = None,
         parent: ExecutionContext | None = None,
     ) -> Execution:
         """Execute an intent through the canonical pipeline."""
-        ctx = self._build_context(intent, actor=actor, parent=parent)
+        ctx = self._build_context(
+            intent, actor=actor, principal=principal, parent=parent
+        )
         if capabilities:
             from voodoo.primitives.capability import Capability
 
@@ -416,7 +420,7 @@ class ExecutionEngine:
             trace_id=ctx.trace_id,
             parent_execution_id=ctx.parent_execution_id,
             intent=intent,
-            actor=actor,
+            actor=ctx.actor,
             capabilities=[c.name for c in ctx.capabilities],
         )
         if ctx.intent is not None:
@@ -618,13 +622,22 @@ class ExecutionEngine:
     # -- internals ---------------------------------------------------------
 
     def _build_context(
-        self, intent: Intent, *, actor: str, parent: ExecutionContext | None
+        self,
+        intent: Intent,
+        *,
+        actor: str,
+        principal: Principal | None,
+        parent: ExecutionContext | None,
     ) -> ExecutionContext:
         if parent is not None:
             ctx = parent.child(actor=actor)
+            if principal is not None:
+                ctx.principal = principal
+                if actor == "system":
+                    ctx.actor = principal.actor
             ctx.intent = intent
             return ctx
-        ctx = ExecutionContext(actor=actor, intent=intent)
+        ctx = ExecutionContext(actor=actor, principal=principal, intent=intent)
         ctx.engine = self
         for c in intent.constraints:
             ctx.constrain(c)

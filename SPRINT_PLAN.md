@@ -5,7 +5,7 @@ Source architecture: [`ROADMAP.md`](ROADMAP.md).
 This file is the **current source of truth for implementation progress**.
 Detailed historical plans live in Git history and under `docs/sprints/`.
 
-> Updated 2026-09-13 after Sprint 27 — Runtime Convergence & 3.0 Readiness.
+> Updated 2026-09-13 after starting Sprint 28 — Runtime Infrastructure Convergence.
 
 ## North Star
 
@@ -13,10 +13,9 @@ Detailed historical plans live in Git history and under `docs/sprints/`.
 systems.**
 
 ```text
-Entity → State → Intent → Capability → Execution → Effect → State
+World → Observation → Goal → Intent → Plan → Capability + Policy
+     → Execution → Effect → Participant → ACK → Observation → World
 ```
-
-`Compute`, `Time`, `Resource` and `Constraint` govern execution.
 
 Core laws:
 
@@ -26,8 +25,10 @@ Core laws:
 - authority is capability-mediated and may be narrowed by contextual Policy;
 - `Observation` is evidence about what actually happened;
 - an `Effect` is attempted action, not automatically observed truth;
-- Edge/devices are external participants in the same Runtime;
-- local-first remains the default.
+- Edge/devices and remote nodes are governed participants in the same Runtime model;
+- Voodoo Store is the target default durable application infrastructure;
+- local-first remains the default;
+- scaling changes deployment topology, not application architecture.
 
 ## Current position
 
@@ -40,13 +41,11 @@ Core laws:
 | Sprint 25 — UI Magic | **DONE** |
 | Sprint 26 — Trusted Distributed Execution Fabric | **DONE** |
 | Sprint 27 — Runtime Convergence & 3.0 Readiness | **DONE** |
-| Next implementation sprint | **NOT SELECTED — post-Sprint-27 architecture/product review first** |
-| Release checkpoint | `main` remains ahead of published v2.6.2; release is a separate operation |
+| Sprint 28 — Runtime Infrastructure Convergence | **ACTIVE — 28.1 Store provider foundation** |
+| Release checkpoint | release cutting remains a separate explicit operation |
 
-Sprint completion and public release state are intentionally separate.
-`CHANGELOG.md` records published releases; unreleased sprint evidence lives in
-this tracker and the corresponding sprint completion documents until a release
-is explicitly cut.
+Sprint 28 execution plan:
+[`docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md`](docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)
 
 ---
 
@@ -89,124 +88,108 @@ Implementation path: PRs #33, #37–#41.
 Completion record:
 [`docs/sprints/SPRINT_26_TRUSTED_DISTRIBUTED_RUNTIME.md`](docs/sprints/SPRINT_26_TRUSTED_DISTRIBUTED_RUNTIME.md)
 
-Delivered the governed remote path:
-
-```text
-Remote participant
-  ↓
-Credential / participant evidence
-  ↓
-Resolved identity
-  ↓
-RemoteExecutionRequest
-  ↓
-Intent
-  ↓
-Server-side authority
-  ↓
-Capability + contextual Policy
-  ↓
-ExecutionEngine
-  ↓
-COMPLETED / FAILED / WAITING
-  ↓
-RemoteExecutionOutcome
-```
+Delivered governed remote execution where network transport can move an Intent but
+cannot move execution outside the Runtime authority boundary.
 
 Implementation path: PRs #43–#46, #49–#50.
 
-> **The network may move an Intent. It may never move execution outside the Runtime.**
-
 ---
 
-# Sprint 27 — Runtime Convergence & 3.0 Readiness
+## Sprint 27 — Runtime Convergence & 3.0 Readiness
 
 **Status: DONE · closed 2026-09-13**
 
 Execution/completion record:
 [`docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md`](docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md)
 
-Sprint 27 connected the mature pieces already present rather than adding
-unrelated surface area.
-
-Delivered closed loop:
-
-```text
-World
-  ↓
-Observation
-  ↓
-Goal / Intent
-  ↓
-Context-aware planning
-  ↓
-Capability + Policy
-  ↓
-Execution
-  ↓
-Effect
-  ↓
-Software / Human / Device
-  ↓
-ACK / observed evidence
-  ↓
-Observation
-  └──────────────→ World
-```
-
-| Slice | Goal | State |
-|---|---|---|
-| 27.1 | Edge → World semantic evidence ingestion | **DONE** |
-| 27.2 | World-aware Goal/planning convergence | **DONE** |
-| 27.3 | Protocol convergence for World/Goal/distributed semantics | **DONE** |
-| 27.4 | 3.0 public API / import law | **DONE** |
-| 27.5 | Canonical examples + operational closed-loop canary | **DONE** |
-| 27.6 | Documentation/repository truth reconciliation | **DONE** |
-| 27.7 | Warning-zero/type-check release-quality gate | **DONE** |
-| 27.8 | Final acceptance, tracker closure and next-phase readiness | **DONE** |
+Delivered Edge → World evidence ingestion, context-aware planning, Protocol
+convergence, 3.0 public API law, canonical operational closed-loop acceptance,
+documentation truth reconciliation and release-quality gates.
 
 Primary implementation: PR #52 (`e73a718`).
 
-Acceptance evidence on the final PR head (`1e742a3`):
+---
 
-- Ruff format/lint: green;
-- scoped mypy boundary: green;
-- Python 3.12 service-backed suite: green;
-- Python 3.13 service-backed suite: green;
-- CodeQL: green;
-- runtime/unhandled-thread warning classes are CI errors;
-- operational closed-loop, Edge→World, protocol round-trip and public API
-  convergence tests are part of the merged suite.
+# Sprint 28 — Runtime Infrastructure Convergence
 
-### Definition of Done — satisfied
+**Status: ACTIVE · started 2026-09-13**
 
-A Voodoo system can now:
+Execution plan:
+[`docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md`](docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)
 
-1. ingest device evidence through Edge into the World Model;
-2. preserve source/time/trace/execution lineage and duplicate safety;
-3. use explicit operational World context while choosing already-authorized
-   compute participants;
-4. pursue a durable Goal through the canonical Runtime;
-5. issue Effects without confusing attempted action with observed truth;
-6. close the loop through device ACK/evidence → Observation → World;
-7. expose World/Goal/remote semantics through the language-neutral Protocol;
-8. teach current callable-UI/runtime semantics through canonical examples;
-9. present one coherent architecture across README, Roadmap and sprint docs;
-10. enforce formatting, lint, Python 3.12/3.13, security analysis, warning-zero
-    runtime classes and an explicit typed convergence boundary.
+Sprint 28 connects the infrastructure seams deliberately left open by prior sprints.
+Its target is a Voodoo application that starts with one Runtime and one local
+`.vstore`, while retaining an architecture that can transparently grow into multiple
+authenticated Voodoo Nodes.
 
-### Explicit next-phase work, not Sprint 27 correctness gaps
+```text
+Application
+    |
+    v
+Voodoo Runtime
+    |
+    +-- Identity -> Capability -> Policy -> Execution
+    +-- Data / Jobs / Scheduler / Events / Objects / Workflow
+    |
+    v
+Voodoo Store (default)
+    |
+application.vstore
+```
 
-- production PKI/OIDC/mTLS identity platform;
-- cognitive Memory consolidation/reflection/belief strategies;
-- generated full TypeScript/Go/Rust SDK families;
-- fleet scheduling / large multi-device mission orchestration;
-- production cloud control plane;
-- large physical robot reference implementation;
-- distributed consensus or global exactly-once claims.
+SQLite, PostgreSQL, Redis, S3 and future infrastructure become explicit adapters.
+Store owns durable mechanics; Runtime owns semantics, authority and intelligence.
 
-The semantic seams for those systems are now stable enough for the next review
-to choose direction deliberately.
+Multi-node direction:
+
+```text
+same application semantics
+        |
+        v
+   Runtime Router
+     /    |    \
+ node-a node-b node-c
+   |      |      |
+ a.vstore b.vstore c.vstore
+```
+
+Distributed ownership comes before distributed Store replication. Sprint 28 does not
+claim shared-file multi-writer semantics, distributed consensus or global
+exactly-once.
+
+| Slice | Goal | State |
+|---|---|---|
+| 28.1 | Store provider foundation and lifecycle boundary | **ACTIVE** |
+| 28.2 | Voodoo Store zero-config default / legacy defaults become adapters | TODO |
+| 28.3 | Data/Model Store integration | TODO |
+| 28.4 | Durable Jobs/Queues Store integration | TODO |
+| 28.5 | Scheduler/Cron/Triggers Store integration | TODO |
+| 28.6 | Events/Streams/Outbox Store integration | TODO |
+| 28.7 | ObjectStore integration | TODO |
+| 28.8 | Execution/Workflow/HITL durability | TODO |
+| 28.9 | Voodoo Identity semantic foundation | TODO |
+| 28.10 | Identity/Actor/Capability/Policy convergence | TODO |
+| 28.11 | Unified cross-domain transactions | TODO |
+| 28.12 | Node Identity and authenticated membership | TODO |
+| 28.13 | Node discovery/health/membership lifecycle | TODO |
+| 28.14 | Transparent routing and distributed ownership | TODO |
+| 28.15 | Capability/Policy/load-aware placement | TODO |
+| 28.16 | Failure detection, leases and bounded failover | TODO |
+| 28.17 | Mesh/Protocol node-fabric convergence | TODO |
+| 28.18 | External adapter compatibility | TODO |
+| 28.19 | CLI/DX | TODO |
+| 28.20 | Legacy migration/compatibility | TODO |
+| 28.21 | Single-node zero-infrastructure acceptance | TODO |
+| 28.22 | Multi-node topology-transparent acceptance | TODO |
+| 28.23 | Edge/distributed closed-loop acceptance and closure | TODO |
+
+### Current work — 28.1
+
+- audit current provider/default assumptions;
+- audit actual `voodoo-store` Python binding coverage;
+- define a Runtime-owned Store/provider contract;
+- implement deterministic provider lifecycle;
+- add contract/failure tests before switching defaults.
 
 ---
 
@@ -222,15 +205,13 @@ For every implementation sprint:
    declared type-check boundary;
 6. merge only with required gates green;
 7. update trackers only after implementation truth exists;
-8. treat release cutting as an explicit operation, never as an implied side
-   effect of merge.
+8. treat release cutting as an explicit operation, never as an implied side effect
+   of merge.
 
 ## References
 
 - [`ROADMAP.md`](ROADMAP.md)
 - [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - [`docs/public-api-3.md`](docs/public-api-3.md)
-- [`docs/sprint-24-agency-foundation.md`](docs/sprint-24-agency-foundation.md)
-- [`docs/sprints/SPRINT_25_UI_MAGIC.md`](docs/sprints/SPRINT_25_UI_MAGIC.md)
-- [`docs/sprints/SPRINT_26_TRUSTED_DISTRIBUTED_RUNTIME.md`](docs/sprints/SPRINT_26_TRUSTED_DISTRIBUTED_RUNTIME.md)
 - [`docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md`](docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md)
+- [`docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md`](docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)

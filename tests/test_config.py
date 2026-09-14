@@ -78,12 +78,13 @@ def test_config_precedence():
         assert cfg_env.runtime.mode == "staging"
         assert cfg_env.queue.provider == "memory"
 
-        # 3. Default zero-infra when nothing specified
+        # 3. Default zero-infra converges on Voodoo Store
         os.environ.pop("VOODOO_QUEUE_PROVIDER", None)
         cfg_default = get_config(str(yaml_path))
-        assert cfg_default.queue.provider == "sqlite"
-        assert cfg_default.database.provider == "sqlite"
-        assert cfg_default.objects.provider == "local"
+        assert cfg_default.queue.provider == "voodoo"
+        assert cfg_default.database.provider == "voodoo"
+        assert cfg_default.events.provider == "voodoo"
+        assert cfg_default.objects.provider == "voodoo"
 
 
 def test_provider_registry_and_errors():
@@ -142,9 +143,7 @@ def test_theme_block_parses_and_keeps_extra_keys():
         cfg = get_config(str(yaml_path))
         assert isinstance(cfg.theme, ThemeConfig)
         assert cfg.theme.mode == "light"
-        # Unknown sub-blocks are preserved for the theme adapter.
         assert cfg.theme.colors == {"primary": "#ff0000"}
-        # And it does not leak into ``extra``.
         assert "theme" not in cfg.extra
 
 
@@ -172,15 +171,12 @@ def test_ai_block_parses_and_env_fallbacks():
                 assert cfg.ai.provider == "openai"
                 assert cfg.ai.model == "deepseek-chat"
                 assert cfg.ai.base_url == "https://api.deepseek.com/v1"
-                # ${VAR} refs in the ai block are interpolated at load time.
                 assert cfg.ai.api_key == "sk-test-123"
                 assert cfg.ai.aliases == {"agent": "openai:deepseek-chat"}
-                # The ai block does not leak into ``extra``.
                 assert "ai" not in cfg.extra
         finally:
             os.environ.pop("DEEPSEEK_TEST_KEY", None)
 
-        # Env-var fallbacks when the file has no ai block.
         with open(yaml_path, "w") as f:
             yaml.dump({"runtime": {"mode": "development"}}, f)
 
@@ -207,7 +203,6 @@ def test_ai_block_parses_and_env_fallbacks():
 
 
 def test_runtime_run_api_through_runtime_flag():
-    # File config: runtime.run_api_through_runtime = false.
     with tempfile.TemporaryDirectory() as tmpdir:
         yaml_path = Path(tmpdir) / "voodoo.yaml"
         with open(yaml_path, "w") as f:
@@ -218,7 +213,6 @@ def test_runtime_run_api_through_runtime_flag():
         cfg = get_config(str(yaml_path))
         assert cfg.runtime.run_api_through_runtime is False
 
-    # Env var: VOODOO_RUN_API_THROUGH_RUNTIME=0 → False.
     key = "VOODOO_RUN_API_THROUGH_RUNTIME"
     saved = os.environ.get(key)
     try:
