@@ -100,7 +100,9 @@ def _primary_key(record_id: int) -> bytes:
 
 def _ensure_collection(store: Any, collection: str) -> None:
     if _supports_native_collections(store):
-        store.create_collection(_collection_key(collection), schema_version=1, codec=b"json")
+        store.create_collection(
+            _collection_key(collection), schema_version=1, codec=b"json"
+        )
 
 
 def _record_prefix(collection: str) -> bytes:
@@ -140,7 +142,9 @@ def insert_record(collection: str, values: dict[str, Any]) -> int:
     record["id"] = next_id
     encoded = _encode(record)
     tx.put(sequence_key, str(next_id + 1).encode())
-    if _supports_native_collections(store) and _supports_transactional_collection_upsert(tx):
+    if _supports_native_collections(
+        store
+    ) and _supports_transactional_collection_upsert(tx):
         tx.upsert_record(
             _collection_key(collection),
             _primary_key(next_id),
@@ -156,7 +160,9 @@ def get_record(collection: str, record_id: int) -> dict[str, Any] | None:
     store = _native()
     if _supports_native_collections(store):
         _ensure_collection(store, collection)
-        native_record = store.get_record(_collection_key(collection), _primary_key(record_id))
+        native_record = store.get_record(
+            _collection_key(collection), _primary_key(record_id)
+        )
         if native_record is not None:
             return _decode(bytes(native_record[1]))
 
