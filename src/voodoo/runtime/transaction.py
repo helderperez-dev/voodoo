@@ -56,6 +56,8 @@ class RuntimeTransaction:
         if self.runtime_store is None:
             raise StoreProviderError("No active RuntimeStore for transaction")
         provider = self.runtime_store.provider
+        if provider is None or not provider.opened:
+            raise StoreProviderError("RuntimeStore must be started before a transaction")
         if provider.name != "voodoo":
             raise StoreProviderError(
                 "RuntimeTransaction currently requires the Voodoo Store provider"
