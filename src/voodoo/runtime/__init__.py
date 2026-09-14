@@ -44,7 +44,7 @@ from voodoo.runtime.goal import (
     GoalRuntime,
     GoalStatus,
 )
-from voodoo.runtime.goal_store import GoalStore, SQLiteGoalStore
+from voodoo.runtime.goal_store import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
 from voodoo.runtime.graph import ExecutionGraph, ExecutionNode
 from voodoo.runtime.human import (
     Approval,
@@ -163,6 +163,7 @@ __all__ = [
     "GoalDecomposer",
     "GoalStore",
     "SQLiteGoalStore",
+    "VoodooStoreGoalStore",
     "OperationalRuntime",
     "runtime_dashboard",
     "bind_world",
