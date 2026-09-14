@@ -149,14 +149,16 @@ message, use the Runtime transaction boundary rather than opening a second
 storage system:
 
 ```python
-from voodoo.runtime import transaction
+from voodoo.runtime import OutboxMessage, transaction
 
 with transaction() as tx:
     tx.upsert_record(b"orders", b"42", b'{"status":"created"}')
     tx.stage_outbox(
-        id="order-42-created",
-        topic="order.created",
-        payload={"order_id": "42"},
+        OutboxMessage(
+            id="order-42-created",
+            topic="order.created",
+            payload={"order_id": "42"},
+        )
     )
 ```
 
