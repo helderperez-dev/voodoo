@@ -90,6 +90,13 @@ from voodoo.runtime.store import (
     store_registry,
 )
 from voodoo.runtime.task import Task, TaskStatus
+from voodoo.runtime.transaction import (
+    OutboxDispatcher,
+    OutboxMessage,
+    RuntimeTransaction,
+    dispatch_outbox,
+    transaction,
+)
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
 from voodoo.runtime.workflow_store import VoodooStoreWorkflowStore, WorkflowStore
 from voodoo.runtime.world_execution import (
@@ -165,6 +172,11 @@ __all__ = [
     "create_store_provider",
     "get_active_runtime_store",
     "store_registry",
+    "RuntimeTransaction",
+    "OutboxMessage",
+    "OutboxDispatcher",
+    "transaction",
+    "dispatch_outbox",
     "ComputeParticipant",
     "Plan",
     "PlanStep",
