@@ -25,6 +25,7 @@ __all__ = [
     "OutboxDispatcher",
     "OutboxMessage",
     "RuntimeTransaction",
+    "dispatch_events",
     "dispatch_outbox",
     "transaction",
 ]
@@ -209,6 +210,18 @@ class OutboxDispatcher:
             delivered += 1
         return delivered
 
+    def dispatch_events(self, event_bus: Any | None = None, *, limit: int | None = None) -> int:
+        """Dispatch pending messages through the configured Runtime EventBus."""
+        if event_bus is None:
+            from voodoo.adapters.registry import registry
+
+            event_bus = registry.get_events()
+
+        def publish(topic: str, payload: dict[str, Any], metadata: dict[str, Any]) -> Any:
+            return event_bus.publish(topic, payload, **metadata)
+
+        return self.dispatch(publish, limit=limit)
+
 
 def transaction(runtime_store: RuntimeStore | None = None) -> RuntimeTransaction:
     """Create an atomic transaction over the active Runtime Store."""
@@ -223,3 +236,13 @@ def dispatch_outbox(
 ) -> int:
     """Dispatch pending Runtime outbox records using a caller-owned publisher."""
     return OutboxDispatcher(runtime_store).dispatch(publish, limit=limit)
+
+
+def dispatch_events(
+    *,
+    event_bus: Any | None = None,
+    runtime_store: RuntimeStore | None = None,
+    limit: int | None = None,
+) -> int:
+    """Dispatch pending Runtime outbox records through the configured EventBus."""
+    return OutboxDispatcher(runtime_store).dispatch_events(event_bus, limit=limit)
