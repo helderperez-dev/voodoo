@@ -78,7 +78,9 @@ def _clear_cascades() -> None:
 
 
 class ModelMeta(type):
-    def __init__(cls, name: str, bases: tuple[type, ...], attrs: dict[str, Any]) -> None:
+    def __init__(
+        cls, name: str, bases: tuple[type, ...], attrs: dict[str, Any]
+    ) -> None:
         super().__init__(name, bases, attrs)
         if name not in ("BaseModel", "Model"):
             _models.append(cls)
@@ -104,6 +106,8 @@ def on_update(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., A
 
 
 def rls_policy(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Register a Store-native row policy accepting ``(row, context)``."""
+
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         _rls_policies[_get_table_name(model_cls)] = func
         return func
@@ -146,6 +150,18 @@ def _fire_hooks(table: str, event: str, obj: Any) -> None:
             hook(obj)
 
 
+def _identity_context() -> dict[str, Any] | None:
+    try:
+        from voodoo.auth import current_user
+
+        user = current_user.get()
+    except Exception:
+        return None
+    if not user or not user.is_authenticated:
+        return None
+    return user.to_dict()
+
+
 class BaseModel(metaclass=ModelMeta):
     """Store-native persistence base.
 
@@ -159,22 +175,24 @@ class BaseModel(metaclass=ModelMeta):
     @classmethod
     async def find_all(cls, user_context: dict | None = None) -> list[Any]:
         table = _get_table_name(cls)
-        if table in _rls_policies and user_context:
-            predicate = _rls_policies[table]
-            rows = scan_records(table)
-            selected: list[Any] = []
-            for row in rows:
-                try:
-                    allowed = predicate(row, user_context)
-                except TypeError:
-                    raise RuntimeError(
-                        "SQL-string rls_policy callbacks are not supported by the "
-                        "Store-native Model; use a predicate accepting (row, context)."
-                    ) from None
-                if allowed:
-                    selected.append(_hydrate(cls, row))
-            return selected
-        return [_hydrate(cls, row) for row in scan_records(table)]
+        context = user_context if user_context is not None else _identity_context()
+        rows = scan_records(table)
+        if table not in _rls_policies or context is None:
+            return [_hydrate(cls, row) for row in rows]
+
+        predicate = _rls_policies[table]
+        selected: list[Any] = []
+        for row in rows:
+            try:
+                allowed = predicate(row, context)
+            except TypeError:
+                raise RuntimeError(
+                    "Store-native rls_policy callbacks must accept (row, context) "
+                    "and return bool; SQL policy strings are not supported."
+                ) from None
+            if allowed:
+                selected.append(_hydrate(cls, row))
+        return selected
 
     async def insert(self) -> BaseModel:
         table = _get_table_name(self)
