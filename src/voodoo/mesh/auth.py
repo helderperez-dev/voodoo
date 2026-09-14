@@ -93,9 +93,7 @@ class InMemoryParticipantResolver:
     """Zero-infrastructure credential resolver for local/development systems."""
 
     def __init__(self) -> None:
-        self._participants: dict[
-            str, tuple[str, IdentityKind, dict[str, Any]]
-        ] = {}
+        self._participants: dict[str, tuple[str, IdentityKind, dict[str, Any]]] = {}
 
     @staticmethod
     def _hash(credential: str) -> str:

@@ -394,7 +394,9 @@ class MeshNetwork:
                         )
                         request = self.bind_participant(request, participant)
                         principal = (
-                            participant.to_principal() if participant is not None else None
+                            participant.to_principal()
+                            if participant is not None
+                            else None
                         )
                     except Exception as error:
                         await self._send_protocol_error(
