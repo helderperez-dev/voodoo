@@ -1,9 +1,9 @@
-"""Voodoo queue capability — durable background work (spec §12).
+"""Voodoo queue capability with Voodoo Store as the default backend."""
 
-Voodoo Store is the target local-first durable provider. SQLite, Postgres,
-Redis, and memory remain available as explicit adapters while Sprint 28
-converges defaults onto the shared application Store.
-"""
+from __future__ import annotations
+
+from importlib import import_module
+from typing import Any
 
 from voodoo.storage.queue.interfaces import (
     ACTIVE_STATUSES,
@@ -14,9 +14,6 @@ from voodoo.storage.queue.interfaces import (
     VoodooQueue,
 )
 from voodoo.storage.queue.memory import MemoryQueue
-from voodoo.storage.queue.postgres import PostgresQueue
-from voodoo.storage.queue.redis import RedisQueue
-from voodoo.storage.queue.sqlite import TASKS_MIGRATION, TASKS_TABLE, SQLiteQueue
 from voodoo.storage.queue.store import VoodooStoreQueue
 
 __all__ = [
@@ -34,3 +31,21 @@ __all__ = [
     "VoodooQueue",
     "VoodooStoreQueue",
 ]
+
+_LAZY_EXPORTS = {
+    "PostgresQueue": ("voodoo.storage.queue.postgres", "PostgresQueue"),
+    "RedisQueue": ("voodoo.storage.queue.redis", "RedisQueue"),
+    "SQLiteQueue": ("voodoo.storage.queue.sqlite", "SQLiteQueue"),
+    "TASKS_MIGRATION": ("voodoo.storage.queue.sqlite", "TASKS_MIGRATION"),
+    "TASKS_TABLE": ("voodoo.storage.queue.sqlite", "TASKS_TABLE"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    target = _LAZY_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module 'voodoo.storage.queue' has no attribute {name!r}")
+    module_name, symbol = target
+    value = getattr(import_module(module_name), symbol)
+    globals()[name] = value
+    return value
