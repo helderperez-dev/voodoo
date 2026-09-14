@@ -53,6 +53,14 @@ from voodoo.runtime.human import (
     Human,
     ask_human,
 )
+from voodoo.runtime.identity import (
+    AuthenticationEvidence,
+    Identity,
+    IdentityKind,
+    IdentityStatus,
+    Principal,
+)
+from voodoo.runtime.identity_store import IdentityStore, VoodooStoreIdentityStore
 from voodoo.runtime.operations import OperationalRuntime
 from voodoo.runtime.persistence import (
     ExecutionStore,
@@ -121,6 +129,13 @@ __all__ = [
     "ValidationError",
     "ApprovalRequired",
     "WorkflowFailure",
+    "IdentityKind",
+    "IdentityStatus",
+    "Identity",
+    "AuthenticationEvidence",
+    "Principal",
+    "IdentityStore",
+    "VoodooStoreIdentityStore",
     "Task",
     "TaskStatus",
     "Workflow",
