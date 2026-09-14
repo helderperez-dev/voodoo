@@ -36,6 +36,16 @@ from voodoo.runtime.errors import (
     WorkflowFailure,
 )
 from voodoo.runtime.execution import Execution, ExecutionStatus
+from voodoo.runtime.fabric import (
+    FabricLease,
+    FabricRoutingError,
+    FabricWork,
+    NoEligibleNodeError,
+    PlacementDecision,
+    PlacementRequirement,
+    RuntimeFabric,
+    WorkNotFailoverSafeError,
+)
 from voodoo.runtime.goal import (
     Goal,
     GoalDecomposer,
@@ -154,6 +164,14 @@ __all__ = [
     "NodeAdvertisement",
     "NodeMembership",
     "VoodooStoreMembershipStore",
+    "PlacementRequirement",
+    "PlacementDecision",
+    "FabricWork",
+    "FabricLease",
+    "RuntimeFabric",
+    "FabricRoutingError",
+    "NoEligibleNodeError",
+    "WorkNotFailoverSafeError",
     "Task",
     "TaskStatus",
     "Workflow",
