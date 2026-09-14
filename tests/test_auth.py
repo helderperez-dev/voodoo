@@ -238,22 +238,14 @@ async def test_auth_middleware_and_guards(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_rls_auto_user_context(tmp_path):
-    db_file = str(tmp_path / "test_rls.db")
-    config.db_path = db_file
-    await init_db(db_file)
-
+async def test_rls_auto_user_context(model_store):
     class Document(BaseModel):
-        id: int
         title: str
         owner_id: int
 
     @rls_policy(Document)
-    def document_policy(context: dict):
-        uid = context.get("id")
-        return f"owner_id = {uid}" if uid else "1=0"
-
-    await Document._create_table()
+    def document_policy(row: dict, context: dict) -> bool:
+        return row.get("owner_id") == context.get("id")
 
     doc1 = Document()
     doc1.title = "Alice Doc"
@@ -266,10 +258,10 @@ async def test_rls_auto_user_context(tmp_path):
     await doc2.insert()
 
     alice_auth = AuthUser(id=1, email="alice@test.com", is_authenticated=True)
-    t = current_user.set(alice_auth)
+    token = current_user.set(alice_auth)
     try:
         docs = await Document.find_all()
         assert len(docs) == 1
         assert docs[0].title == "Alice Doc"
     finally:
-        current_user.reset(t)
+        current_user.reset(token)
