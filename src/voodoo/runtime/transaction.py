@@ -10,15 +10,27 @@ boundary.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
-from voodoo.runtime.store import RuntimeStore, StoreProviderError, get_active_runtime_store
+from voodoo.runtime.store import (
+    RuntimeStore,
+    StoreProviderError,
+    get_active_runtime_store,
+)
 
-__all__ = ["OutboxMessage", "RuntimeTransaction", "transaction"]
+__all__ = [
+    "OutboxDispatcher",
+    "OutboxMessage",
+    "RuntimeTransaction",
+    "dispatch_outbox",
+    "transaction",
+]
 
-_OUTBOX_PREFIX = b"runtime:outbox:pending:"
+_OUTBOX_PENDING_PREFIX = b"runtime:outbox:pending:"
+_OUTBOX_DELIVERED_PREFIX = b"runtime:outbox:delivered:"
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +54,16 @@ class OutboxMessage:
             separators=(",", ":"),
         ).encode()
 
+    @classmethod
+    def decode(cls, raw: bytes) -> OutboxMessage:
+        envelope = json.loads(raw.decode("utf-8"))
+        return cls(
+            id=envelope["id"],
+            topic=envelope["topic"],
+            payload=envelope["payload"],
+            metadata=envelope.get("metadata", {}),
+        )
+
 
 class RuntimeTransaction:
     """One atomic transaction over the active Runtime-owned Voodoo Store.
@@ -57,7 +79,9 @@ class RuntimeTransaction:
             raise StoreProviderError("No active RuntimeStore for transaction")
         provider = self.runtime_store.provider
         if provider is None or not provider.opened:
-            raise StoreProviderError("RuntimeStore must be started before a transaction")
+            raise StoreProviderError(
+                "RuntimeStore must be started before a transaction"
+            )
         if provider.name != "voodoo":
             raise StoreProviderError(
                 "RuntimeTransaction currently requires the Voodoo Store provider"
@@ -101,7 +125,7 @@ class RuntimeTransaction:
 
     def stage_outbox(self, message: OutboxMessage) -> str:
         """Atomically stage a durable message beside state mutations."""
-        self.put(_OUTBOX_PREFIX + message.id.encode(), message.encode())
+        self.put(_OUTBOX_PENDING_PREFIX + message.id.encode(), message.encode())
         return message.id
 
     def commit(self) -> None:
@@ -129,6 +153,73 @@ class RuntimeTransaction:
         return False
 
 
+class OutboxDispatcher:
+    """Dispatch durable local outbox records with at-least-once semantics.
+
+    The local state mutation and outbox insertion are atomic. Delivery itself is
+    intentionally outside that transaction. If a process fails after publish but
+    before acknowledgement, the message can be published again after restart.
+    Consumers that need duplicate suppression should use ``message.id`` as their
+    idempotency key.
+    """
+
+    def __init__(self, runtime_store: RuntimeStore | None = None) -> None:
+        self.runtime_store = runtime_store or get_active_runtime_store()
+        if self.runtime_store is None:
+            raise StoreProviderError("No active RuntimeStore for outbox dispatch")
+        provider = self.runtime_store.provider
+        if provider is None or not provider.opened:
+            raise StoreProviderError("RuntimeStore must be started for outbox dispatch")
+        if provider.name != "voodoo":
+            raise StoreProviderError(
+                "OutboxDispatcher currently requires the Voodoo Store provider"
+            )
+        self._native = getattr(provider, "native", None)
+        if self._native is None:
+            raise StoreProviderError("Active Voodoo Store has no native handle")
+
+    def pending(self) -> list[OutboxMessage]:
+        """Return durable pending messages in Store key order."""
+        return [
+            OutboxMessage.decode(bytes(raw_value))
+            for _key, raw_value in self._native.scan_prefix(_OUTBOX_PENDING_PREFIX)
+        ]
+
+    def dispatch(
+        self,
+        publish: Callable[[str, dict[str, Any], dict[str, Any]], Any],
+        *,
+        limit: int | None = None,
+    ) -> int:
+        """Publish pending messages and acknowledge successful deliveries.
+
+        A failed publish leaves the message pending. A successful publish moves
+        its durable record from ``pending`` to ``delivered`` in one local Store
+        transaction.
+        """
+        delivered = 0
+        for message in self.pending():
+            if limit is not None and delivered >= limit:
+                break
+            publish(message.topic, message.payload, message.metadata)
+            tx = self._native.transaction()
+            tx.delete(_OUTBOX_PENDING_PREFIX + message.id.encode())
+            tx.put(_OUTBOX_DELIVERED_PREFIX + message.id.encode(), message.encode())
+            tx.commit()
+            delivered += 1
+        return delivered
+
+
 def transaction(runtime_store: RuntimeStore | None = None) -> RuntimeTransaction:
     """Create an atomic transaction over the active Runtime Store."""
     return RuntimeTransaction(runtime_store)
+
+
+def dispatch_outbox(
+    publish: Callable[[str, dict[str, Any], dict[str, Any]], Any],
+    *,
+    runtime_store: RuntimeStore | None = None,
+    limit: int | None = None,
+) -> int:
+    """Dispatch pending Runtime outbox records using a caller-owned publisher."""
+    return OutboxDispatcher(runtime_store).dispatch(publish, limit=limit)
