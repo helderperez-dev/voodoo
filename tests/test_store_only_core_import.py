@@ -37,7 +37,7 @@ assert "voodoo.storage.scheduler.sqlite" not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
-def test_runtime_startup_does_not_require_aiosqlite() -> None:
+def test_runtime_startup_does_not_require_aiosqlite(tmp_path) -> None:
     code = r"""
 import importlib.abc
 import sys
@@ -61,6 +61,7 @@ assert "voodoo.storage.scheduler.sqlite" not in sys.modules
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
+        cwd=tmp_path,
         text=True,
         capture_output=True,
         check=False,
