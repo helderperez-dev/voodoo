@@ -13,7 +13,10 @@ from voodoo.runtime import (
     GoalRuntime,
     GoalStatus,
     Planner,
+    RuntimeStore,
     SQLiteGoalStore,
+    StoreConfig,
+    VoodooStoreGoalStore,
 )
 
 
@@ -40,6 +43,44 @@ def test_sqlite_goal_store_survives_reopen(tmp_path: Path):
     assert reopened.load("goal-1") == payload
     assert reopened.load_unfinished() == [payload]
     reopened.close()
+
+
+def test_voodoo_store_goal_checkpoints_share_application_store(tmp_path: Path):
+    path = tmp_path / "application.vstore"
+    runtime_store = RuntimeStore(StoreConfig(path=path))
+    runtime_store.start()
+    store = VoodooStoreGoalStore(runtime_store)
+    running = {
+        "goal": {
+            "id": "goal-1",
+            "status": "running",
+            "updated_at": "2026-09-13T00:00:00+00:00",
+        },
+        "value": {"nested": [1, 2, 3]},
+    }
+    completed = {
+        "goal": {
+            "id": "goal-2",
+            "status": "completed",
+            "updated_at": "2026-09-13T00:01:00+00:00",
+        }
+    }
+
+    store.save("goal-1", running)
+    store.save("goal-2", completed)
+    assert store.provider == "voodoo"
+    assert store.load("goal-1") == running
+    assert store.load_unfinished() == [running]
+    store.close()
+    assert runtime_store.started
+    runtime_store.stop()
+
+    reopened_runtime = RuntimeStore(StoreConfig(path=path))
+    reopened_runtime.start()
+    reopened = VoodooStoreGoalStore(reopened_runtime)
+    assert reopened.load("goal-1") == running
+    assert reopened.load_unfinished() == [running]
+    reopened_runtime.stop()
 
 
 async def test_goal_runtime_checkpoints_completed_goal(tmp_path: Path):
