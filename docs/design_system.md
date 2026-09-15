@@ -5,6 +5,11 @@ engine, a default semantic CSS adapter, and a library of polished components.
 New apps look professional with **zero configuration** — no CSS files, no
 utility classes, no build step.
 
+The current native layer is **Voodoo Design System 3**. It adds the Voodoo
+purple brand language, premium light/dark surfaces, tighter typography and
+production-quality defaults while preserving `Theme` as the public source of
+truth for application customization.
+
 ## Architecture
 
 ```
@@ -52,6 +57,12 @@ Derived accent tokens (`--vd-color-secondary-soft`, `-line`, `-glow`,
 `--vd-color-border-soft`) are computed with `color-mix` at use time, so they
 track light/dark automatically without re-defining them per mode.
 
+Design System 3 also resolves a visual token layer (`--vd-brand`, `--vd-canvas`,
+`--vd-panel`, `--vd-line`, `--vd-ink`, and related derived tokens). These are
+implementation-facing tokens: the framework derives them from `Theme` and the
+approved DS3 defaults. Applications should customize the semantic `Theme`
+colors rather than writing these visual tokens directly.
+
 ### Theming your app
 
 Use `create_theme` for simple overrides, or build a full `Theme` model:
@@ -70,12 +81,20 @@ app = App(
 )
 ```
 
-The default theme is minimalist and modern (Apple × Linear × Vercel × Raycast
-aesthetic): generous whitespace, clean typography, subtle borders, moderate
-radius, discreet shadows, and excellent dark mode. The `primary` action color
-inverts per mode — near-black in light mode, near-white in dark mode — while the
-indigo `secondary` token drives links, focus rings, and accents so interactive
-elements stay visible in every theme.
+The stock Design System 3 look is minimalist and modern, with a distinct Voodoo
+purple (`#7c3aed`) brand accent, generous whitespace, clean typography, subtle
+borders, compact premium controls, discreet shadows and a first-class dark
+mode.
+
+`Theme` remains authoritative. An explicit `primary` override becomes the DS3
+brand/action color. If `primary` remains at its stock value and `secondary` is
+explicitly customized, DS3 uses that custom secondary as the brand accent. A
+shared `background`, `surface`, `text`, or `border` override also applies to the
+premium light/dark surface layer unless the full `Theme` supplies a dedicated
+light-mode override.
+
+This preserves the zero-config Voodoo identity while keeping branded
+applications fully themeable.
 
 ## Style adapters
 
@@ -155,7 +174,9 @@ voodoo.setTheme("light");
 ```
 
 `to_css_variables()` emits `:root` (light values) and `.dark` (dark values), so
-toggling `.dark` re-themes every component without a re-render.
+toggling `.dark` re-themes every component without a re-render. The DS3 theme
+contract is emitted after the native visual layer, ensuring semantic `Theme`
+overrides remain authoritative over the premium defaults.
 
 ## Chrome components
 
@@ -218,7 +239,8 @@ built-ins stay zero-network by referencing faces by name with system fallbacks.
 
 ### Built-in presets
 
-- **`default`** — the stock, minimalist Apple × Linear × Vercel × Raycast look.
+- **`default`** — the stock Voodoo Design System 3 look with the purple brand
+  language and premium light/dark surfaces.
 - **`ember-paper`** — warm paper surfaces, an ember accent (`#E8A33D` dark /
   `#B45309` light), and editorial type (Fraunces display, Schibsted Grotesk
   body, IBM Plex Mono) with a soft `--vd-glow` halo token.

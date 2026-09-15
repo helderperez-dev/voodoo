@@ -127,7 +127,8 @@ def test_native_render_includes_design_system_layer():
     original = _with_native_adapter()
     try:
         html = render_page(Button("Deploy", loading=True))
-        assert "Voodoo Design System 2" in html
+        assert "Voodoo Design System 3" in html
+        assert "Voodoo Design System 3 — Theme contract" in html
         assert "--vd-control-height-md" in html
         assert "prefers-reduced-motion" in html
         assert 'data-vd-loading="true"' in html
