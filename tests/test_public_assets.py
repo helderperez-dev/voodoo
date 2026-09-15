@@ -5,7 +5,9 @@ from starlette.testclient import TestClient
 from voodoo import App
 
 
-def test_public_assets_are_served_from_root_without_shadowing_pages(tmp_path, monkeypatch):
+def test_public_assets_are_served_from_root_without_shadowing_pages(
+    tmp_path, monkeypatch
+):
     monkeypatch.chdir(tmp_path)
 
     app_dir = tmp_path / "app"
