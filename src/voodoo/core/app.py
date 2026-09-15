@@ -355,6 +355,14 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
         Middleware(AuthMiddleware),
     ]
 
+    # ``public/`` is the filesystem root for static assets, not part of their
+    # public URL. Keep the explicit ``/public`` mount above for 2.x compatibility,
+    # then add a root mount last so application/runtime routes always win.
+    if os.path.isdir(public_dir):
+        routes.append(
+            Mount("/", app=StaticFiles(directory=public_dir), name="public-root")
+        )
+
     app = Starlette(
         debug=config.debug,
         routes=routes,
