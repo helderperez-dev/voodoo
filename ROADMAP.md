@@ -72,26 +72,35 @@ and why. World history says what evidence reports actually happened.
 
 ## Current repository position
 
-Implemented foundations include:
+The post-Sprint-28 repository now includes:
 
-- reactive/server-driven Python UI and Design System 2;
-- routing/APIs, data, auth/security and infrastructure adapters;
-- workers, queues, scheduler, object storage and event infrastructure;
+- reactive/server-driven Python UI and **Design System 3** with premium light/dark
+  zero-custom-CSS defaults and Theme-authoritative branding;
+- routing/APIs, data, auth/security and explicit infrastructure adapters;
+- Voodoo Store as the zero-config durable application substrate;
+- Store-backed data/models, jobs/queues, scheduling, events, objects and Runtime state;
 - canonical `ExecutionEngine`, durable recovery and HITL;
 - capability security and contextual operational Policy;
 - Agents, tools, providers, MCP integration and persistent Memory;
 - Ontology/World Model with `Entity`, `Relationship` and `Observation`;
 - durable Goal Runtime and bounded adaptive supervision;
-- Edge device identity/auth/protocol/effect lifecycle;
+- Edge device identity/auth/protocol/effect lifecycle backed by the Runtime Store;
 - governed distributed execution with replay/idempotency and WAITING/HITL;
+- authenticated node membership, discovery, health, placement, leases and bounded
+  failover;
 - language-neutral JSON Schema protocol surface;
-- operational runtime/system UI components.
+- operational runtime/system UI components;
+- clean-install release gates proving the default Runtime lifecycle does not require
+  optional SQL infrastructure.
 
-The repository is therefore materially beyond the earlier “Python web
-framework” phase. `SPRINT_PLAN.md` remains the implementation source of truth;
-this document defines direction rather than claiming future work already exists.
+The latest published release is **v2.7.2**. `main` is ahead of that release with Design
+System 3 and its Theme-contract hardening. `SPRINT_PLAN.md` remains the implementation
+source of truth; this document defines direction rather than claiming future work already
+exists.
 
-## Current convergence target — Sprint 27
+## Completed convergence — Sprints 27 and 28
+
+Sprint 27 closed the adaptive operational loop:
 
 ```text
 World
@@ -116,8 +125,42 @@ Observation
   └──────────────→ World
 ```
 
-Sprint 27 closes this loop and prepares the contracts for the next phase. See
-[`docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md`](docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md).
+Sprint 28 then made the infrastructure model operational:
+
+```text
+Application
+    ↓
+Voodoo Runtime
+    ↓
+Identity → Capability + Policy → Execution
+    ↓
+Data / Jobs / Scheduler / Events / Objects / Goal / Workflow / HITL
+    ↓
+application.vstore
+```
+
+and established topology-transparent multi-node execution:
+
+```text
+                         Application
+                             ↓
+                       Voodoo Runtime
+                             ↓
+                       Runtime Fabric
+                    /           |           \
+                 Node A       Node B       Node C
+                    |           |           |
+                A.vstore    B.vstore    C.vstore
+```
+
+Each Store remains node-local. Voodoo does not claim Store-file multi-writer semantics,
+distributed consensus, global exactly-once execution or globally serializable
+transactions.
+
+Completion records:
+
+- [`docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md`](docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md)
+- [`docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md`](docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)
 
 ## Developer-experience law
 
@@ -125,10 +168,59 @@ Voodoo must preserve progressive complexity. `voodoo create` should produce a
 useful local application without requiring World, Planner, AI or distributed
 infrastructure. Those capabilities compose in only when the problem needs them.
 
+A fresh default application should require no external database, queue, object service or
+event server. Its durable substrate is `.voodoo/application.vstore`. External
+PostgreSQL/SQLite/Redis/S3 infrastructure is an explicit adapter choice, not a hidden
+fallback.
+
 The 3.0 import law lives in [`docs/public-api-3.md`](docs/public-api-3.md).
 Package-root imports are a compatibility/happy-path facade; subsystem catalogs
 belong to their semantic namespaces such as `voodoo.ui`, `voodoo.runtime`,
 `voodoo.world`, `voodoo.edge` and `voodoo.protocol`.
+
+## UI and Design System
+
+Voodoo UI is part of the Runtime developer experience, not a separate frontend
+framework. The native visual layer is Design System 3:
+
+- intentional Voodoo purple identity by default;
+- premium light/dark surfaces;
+- responsive page geometry and component defaults;
+- accessible focus and reduced-motion behavior;
+- Theme-authoritative customization for branded applications;
+- no custom CSS required for the normal application path.
+
+Themes remain semantic. DS3 visual tokens derive from the public `Theme` contract rather
+than becoming a second, hard-coded theming system. Tailwind remains an opt-in adapter,
+not a framework dependency.
+
+## Store-first infrastructure
+
+Store owns durable mechanics; Runtime owns semantics, authority and intelligence.
+
+```text
+Voodoo Runtime
+    |
+    +-- Model / Data
+    +-- Jobs / Queue
+    +-- Scheduler / Cron / Triggers
+    +-- Events / durable outbox
+    +-- Objects
+    +-- Execution / Goal / Workflow / HITL
+    +-- Identity
+    +-- Edge state
+    |
+    v
+RuntimeStore
+    |
+application.vstore
+```
+
+The Store-first path must remain clean of accidental optional-adapter imports. Release
+quality therefore includes a wheel-level clean-install gate with optional SQLite blocked.
+
+Future Store evolution may expose richer native Topics/Streams, Objects and replication,
+but Framework semantics must not pretend unsupported guarantees exist.
 
 ## World and operational intelligence
 
@@ -194,7 +286,10 @@ an Intent, passes server-side Capability + Policy, and executes through the same
 `ExecutionEngine`. Remote outcomes preserve COMPLETED / FAILED / WAITING rather
 than inventing a transport-specific lifecycle.
 
-Voodoo does not claim distributed consensus or global exactly-once execution.
+Sprint 28 adds governed node membership, health, discovery, placement, ownership,
+leases and bounded retry/failover while preserving node-local Stores.
+
+Voodoo still does not claim distributed consensus or global exactly-once execution.
 
 ## Protocol and SDK strategy
 
@@ -219,6 +314,31 @@ Identity productization, Store/ecosystem packaging, deployment, logs, domains
 and rollback. These surfaces must sit **above** Runtime contracts and must not
 duplicate Execution, Identity, Policy or World semantics. Cloud remains
 optional.
+
+## Next-phase selection gate
+
+No Sprint 29 is declared merely because Sprint 28 is finished. The next numbered sprint
+should be chosen after a product/architecture review that applies real pressure to the
+Runtime and identifies the smallest coherent capability set that unlocks the next class
+of products.
+
+Candidate directions, roughly by dependency and validation value, are:
+
+1. **Protocol/SDK productization** — prove the language-neutral boundary with a real
+   non-Python client.
+2. **Real Edge reference canary** — run the closed loop against an ESP32/robot and expose
+   operational gaps in identity, reconnect, replay, telemetry and evidence.
+3. **Multi-device mission/fleet orchestration** — only after the single-device canary is
+   reliable.
+4. **Studio / operational product surface** — inspect and operate World, Goals,
+   Executions, devices and nodes without inventing parallel semantics.
+5. **Managed Runtime / cloud control plane** — deployment/fleet/operator services above
+   the existing Runtime contracts.
+6. **3.0 public API consolidation** — remove compatibility debt only when the product
+   surface and contracts justify the break.
+
+A candidate wins only if it validates existing primitives, has recurring product value,
+creates a strong end-to-end acceptance target and makes later work simpler.
 
 ## Long-horizon pressure test
 
@@ -252,19 +372,6 @@ miscellaneous standard library, cloud lock-in product, runtime where every
 helper call is an Execution, or system where AI receives ambient unrestricted
 authority.
 
-## Candidate phases after convergence
-
-The exact next numbered sprint is selected only after Sprint 27 acceptance.
-Candidate directions, roughly by dependency, are:
-
-1. protocol/SDK productization;
-2. small real ESP32/robot reference canary;
-3. multi-device mission/fleet orchestration;
-4. Studio / operational product surface;
-5. managed Cloud/control plane.
-
-These are directions, not implementation claims.
-
 ## Architectural invariants
 
 1. No subsystem invents its own execution lifecycle.
@@ -287,6 +394,8 @@ These are directions, not implementation claims.
 18. Failure and restart are normal conditions.
 19. Physical actions require observed evidence before World truth changes.
 20. Every new primitive requires recurring architectural justification.
+21. Scaling changes deployment topology, not application architecture.
+22. Store mechanics never become a second authority model.
 
 ## Final principle
 
