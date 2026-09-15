@@ -12,6 +12,7 @@ Voodoo::
     Button("Save", on_click=save)
 """
 
+from voodoo.ui.brand import Brand
 from voodoo.ui.component import Component, Html, escape, tone_to_color_var
 from voodoo.ui.events import UIEvent
 from voodoo.ui.interactive import (
@@ -36,7 +37,6 @@ from voodoo.ui.library import (
     BackLink,
     Badge,
     Box,
-    Brand,
     Card,
     ChatBox,
     ChatMessage,
