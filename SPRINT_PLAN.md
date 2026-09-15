@@ -5,7 +5,8 @@ Source architecture: [`ROADMAP.md`](ROADMAP.md).
 This file is the **current source of truth for implementation progress**.
 Detailed historical plans live in Git history and under `docs/sprints/`.
 
-> Updated 2026-09-13 after starting Sprint 28 — Runtime Infrastructure Convergence.
+> Updated 2026-09-14 after Sprint 28 closure, the 2.7.x Store-first hardening
+> releases, and Design System 3 integration.
 
 ## North Star
 
@@ -26,7 +27,7 @@ Core laws:
 - `Observation` is evidence about what actually happened;
 - an `Effect` is attempted action, not automatically observed truth;
 - Edge/devices and remote nodes are governed participants in the same Runtime model;
-- Voodoo Store is the target default durable application infrastructure;
+- Voodoo Store is the zero-config durable application substrate;
 - local-first remains the default;
 - scaling changes deployment topology, not application architecture.
 
@@ -34,18 +35,21 @@ Core laws:
 
 | Item | State |
 |---|---|
-| Latest published release | **v2.6.2** |
-| Package version on `main` | **2.6.2** |
+| Latest published release | **v2.7.2** |
+| Package version on `main` | **2.7.2** |
 | Sprints through 23 | **DONE** |
 | Sprint 24 — Agency Foundation | **DONE** |
 | Sprint 25 — UI Magic | **DONE** |
 | Sprint 26 — Trusted Distributed Execution Fabric | **DONE** |
 | Sprint 27 — Runtime Convergence & 3.0 Readiness | **DONE** |
-| Sprint 28 — Runtime Infrastructure Convergence | **ACTIVE — 28.1 Store provider foundation** |
+| Sprint 28 — Runtime Infrastructure Convergence | **DONE** |
+| Post-Sprint 28 | **Design System 3 merged; Theme authority hardened** |
+| Next numbered sprint | **Not selected yet — architecture/product review first** |
 | Release checkpoint | release cutting remains a separate explicit operation |
 
-Sprint 28 execution plan:
-[`docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md`](docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)
+Latest published release evidence: v2.7.2 contains the Store-only scheduler/lifecycle
+hardening. `main` is ahead of that release with Design System 3 and its Theme-contract
+follow-up.
 
 ---
 
@@ -79,6 +83,9 @@ with zero application JavaScript and zero custom CSS.
 
 Implementation path: PRs #33, #37–#41.
 
+Design System 2 remains the historical Sprint 25 delivery. The current native visual
+layer on `main` is Design System 3, integrated after Sprint 28.
+
 ---
 
 ## Sprint 26 — Trusted Distributed Execution Fabric
@@ -110,17 +117,16 @@ Primary implementation: PR #52 (`e73a718`).
 
 ---
 
-# Sprint 28 — Runtime Infrastructure Convergence
+## Sprint 28 — Runtime Infrastructure Convergence
 
-**Status: ACTIVE · started 2026-09-13**
+**Status: DONE · closed 2026-09-14**
 
-Execution plan:
+Completion record:
 [`docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md`](docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)
 
-Sprint 28 connects the infrastructure seams deliberately left open by prior sprints.
-Its target is a Voodoo application that starts with one Runtime and one local
-`.vstore`, while retaining an architecture that can transparently grow into multiple
-authenticated Voodoo Nodes.
+Sprint 28 made the Store-first architecture operational and established the path from
+one local Runtime to multiple governed Voodoo Nodes without changing application
+semantics.
 
 ```text
 Application
@@ -128,68 +134,107 @@ Application
     v
 Voodoo Runtime
     |
-    +-- Identity -> Capability -> Policy -> Execution
-    +-- Data / Jobs / Scheduler / Events / Objects / Workflow
+    +-- Identity -> Capability + Policy -> Execution
+    +-- Data / Jobs / Scheduler / Events / Objects
+    +-- Goal / Workflow / HITL
+    +-- Edge / World / Agency
     |
     v
-Voodoo Store (default)
-    |
 application.vstore
 ```
 
-SQLite, PostgreSQL, Redis, S3 and future infrastructure become explicit adapters.
-Store owns durable mechanics; Runtime owns semantics, authority and intelligence.
-
-Multi-node direction:
+Multi-node topology remains node-local Store ownership plus Runtime routing:
 
 ```text
 same application semantics
         |
         v
-   Runtime Router
+   Runtime Fabric
      /    |    \
  node-a node-b node-c
    |      |      |
  a.vstore b.vstore c.vstore
 ```
 
-Distributed ownership comes before distributed Store replication. Sprint 28 does not
-claim shared-file multi-writer semantics, distributed consensus or global
-exactly-once.
+All slices 28.1–28.23 are closed. The implemented contract includes:
 
-| Slice | Goal | State |
-|---|---|---|
-| 28.1 | Store provider foundation and lifecycle boundary | **ACTIVE** |
-| 28.2 | Voodoo Store zero-config default / legacy defaults become adapters | TODO |
-| 28.3 | Data/Model Store integration | TODO |
-| 28.4 | Durable Jobs/Queues Store integration | TODO |
-| 28.5 | Scheduler/Cron/Triggers Store integration | TODO |
-| 28.6 | Events/Streams/Outbox Store integration | TODO |
-| 28.7 | ObjectStore integration | TODO |
-| 28.8 | Execution/Workflow/HITL durability | TODO |
-| 28.9 | Voodoo Identity semantic foundation | TODO |
-| 28.10 | Identity/Actor/Capability/Policy convergence | TODO |
-| 28.11 | Unified cross-domain transactions | TODO |
-| 28.12 | Node Identity and authenticated membership | TODO |
-| 28.13 | Node discovery/health/membership lifecycle | TODO |
-| 28.14 | Transparent routing and distributed ownership | TODO |
-| 28.15 | Capability/Policy/load-aware placement | TODO |
-| 28.16 | Failure detection, leases and bounded failover | TODO |
-| 28.17 | Mesh/Protocol node-fabric convergence | TODO |
-| 28.18 | External adapter compatibility | TODO |
-| 28.19 | CLI/DX | TODO |
-| 28.20 | Legacy migration/compatibility | TODO |
-| 28.21 | Single-node zero-infrastructure acceptance | TODO |
-| 28.22 | Multi-node topology-transparent acceptance | TODO |
-| 28.23 | Edge/distributed closed-loop acceptance and closure | TODO |
+- one application-owned/process-shared `RuntimeStore`;
+- Store-backed Data/Model, Queue/Jobs, Scheduler, Events, Objects and Runtime state;
+- canonical durable Execution, Goal, Workflow and HITL recovery;
+- Runtime Identity with Principal → Capability + Policy → Execution authority;
+- local Store transaction + durable outbox boundary;
+- authenticated node membership, health, discovery, placement, leases and bounded
+  failover;
+- protocol schemas for node-fabric semantics;
+- Store-backed Edge state;
+- explicit SQLite/PostgreSQL/Redis/S3 compatibility adapters;
+- single-node, multi-node and Edge acceptance paths;
+- Store-first CLI/DX and migration guidance.
 
-### Current work — 28.1
+Sprint 28 deliberately does **not** claim Store replication, distributed consensus,
+global exactly-once, globally serializable transactions, production PKI/OIDC/mTLS or
+a managed cloud control plane.
 
-- audit current provider/default assumptions;
-- audit actual `voodoo-store` Python binding coverage;
-- define a Runtime-owned Store/provider contract;
-- implement deterministic provider lifecycle;
-- add contract/failure tests before switching defaults.
+### Post-closure 2.7.x hardening
+
+The first real clean-install path exposed accidental SQL coupling that subsystem tests
+had not caught. The 2.7.x line therefore hardened the Store-first contract:
+
+- public/core imports no longer require SQLite adapters;
+- SQLite/PostgreSQL/Redis/S3 remain optional/explicit;
+- the scheduler SQLite adapter is lazy-loaded;
+- default Runtime startup/shutdown does not import `aiosqlite`;
+- release CI builds a clean wheel without extras, scaffolds an app, boots its full
+  Runtime lifecycle and verifies `application.vstore` durability.
+
+Published baseline: **v2.7.2**.
+
+---
+
+## Post-Sprint 28 — Design System 3
+
+**Status: MERGED on `main` · not yet cut as a release checkpoint**
+
+Design System 3 moves the approved Voodoo visual identity into the framework rather
+than a template. Native VoodooCSS applications now receive premium light/dark defaults,
+a Voodoo purple brand language, stronger page geometry and production-quality controls
+with zero custom CSS.
+
+The follow-up Theme-contract hardening preserves the public theming law:
+
+- DS3 purple remains the zero-config default;
+- explicit `Theme` primary/secondary values control brand color;
+- background/surface/text/border overrides propagate into premium surfaces;
+- explicit light-mode Theme overrides remain authoritative;
+- regression tests cover both the DS3 defaults and custom branded themes.
+
+Implementation: PR #60 plus follow-up PR #61.
+
+---
+
+## Next selection gate
+
+No Sprint 29 is declared by this tracker yet. Before assigning the number, evaluate the
+post-Sprint-28 architecture against real product pressure and choose a coherent next
+phase rather than accumulating unrelated features.
+
+Candidate directions already supported by the architecture:
+
+1. protocol/SDK productization;
+2. real Edge/ESP32 reference canary;
+3. multi-device mission/fleet orchestration;
+4. Studio / operational product surface;
+5. managed Runtime/cloud control plane;
+6. 3.0 public API consolidation and compatibility cleanup.
+
+Selection criteria:
+
+- recurring user/product demand;
+- validates existing Runtime primitives rather than duplicating them;
+- keeps local-first progressive complexity;
+- produces a strong end-to-end acceptance canary;
+- preserves Capability + Policy + canonical Execution authority;
+- makes future product work simpler.
 
 ---
 
@@ -213,5 +258,6 @@ For every implementation sprint:
 - [`ROADMAP.md`](ROADMAP.md)
 - [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - [`docs/public-api-3.md`](docs/public-api-3.md)
+- [`docs/design_system.md`](docs/design_system.md)
 - [`docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md`](docs/sprints/SPRINT_27_CONVERGENCE_3_0_READINESS.md)
 - [`docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md`](docs/sprints/SPRINT_28_RUNTIME_INFRASTRUCTURE_CONVERGENCE.md)
