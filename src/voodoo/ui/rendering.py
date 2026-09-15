@@ -40,6 +40,7 @@ def render_page(component: Any, seo: Any = None) -> str:
     """Render a complete HTML document for a Voodoo component tree."""
     from voodoo.config import config
     from voodoo.seo import SEO
+    from voodoo.ui.brand import BRAND_CSS
     from voodoo.ui.component import Component
     from voodoo.ui.styles.theme import default_theme
 
@@ -161,6 +162,9 @@ def render_page(component: Any, seo: Any = None) -> str:
 
             /* Stable primitive component layer */
             {component_css}
+
+            /* Brand asset switching */
+            {BRAND_CSS}
 
             /* Voodoo Design System 3 */
             {design_system_css}
