@@ -113,15 +113,13 @@ def _mode_tokens(theme: Theme, *, light: bool) -> dict[str, str]:
         ),
         "line": _dark_value(colors.border, _DEFAULTS.border, "#252532"),
         "ink": _dark_value(colors.text, _DEFAULTS.text, "#f7f7fb"),
-        "ink-muted": _dark_value(
-            colors.text_muted, _DEFAULTS.text_muted, "#aaaab7"
-        ),
+        "ink-muted": _dark_value(colors.text_muted, _DEFAULTS.text_muted, "#aaaab7"),
     }
 
 
 def _render_scope(selector: str, tokens: dict[str, str]) -> str:
     return f"""{selector} {{
-    --vd-brand: {tokens['brand']};
+    --vd-brand: {tokens["brand"]};
     --vd-brand-hover: color-mix(in srgb, var(--vd-brand) 88%, black);
     --vd-brand-strong: color-mix(in srgb, var(--vd-brand) 76%, black);
     --vd-brand-soft: color-mix(in srgb, var(--vd-brand) 10%, transparent);
@@ -130,14 +128,14 @@ def _render_scope(selector: str, tokens: dict[str, str]) -> str:
     --vd-brand-glow: color-mix(in srgb, var(--vd-brand) 20%, transparent);
     --vd-focus-ring: color-mix(in srgb, var(--vd-brand) 28%, transparent);
 
-    --vd-canvas: {tokens['canvas']};
-    --vd-panel: {tokens['panel']};
+    --vd-canvas: {tokens["canvas"]};
+    --vd-panel: {tokens["panel"]};
     --vd-panel-subtle: color-mix(in srgb, var(--vd-panel) 72%, var(--vd-canvas));
-    --vd-panel-muted: {tokens['panel-muted']};
-    --vd-line: {tokens['line']};
+    --vd-panel-muted: {tokens["panel-muted"]};
+    --vd-line: {tokens["line"]};
     --vd-line-strong: color-mix(in srgb, var(--vd-line) 82%, var(--vd-ink));
-    --vd-ink: {tokens['ink']};
-    --vd-ink-muted: {tokens['ink-muted']};
+    --vd-ink: {tokens["ink"]};
+    --vd-ink-muted: {tokens["ink-muted"]};
     --vd-ink-faint: color-mix(in srgb, var(--vd-ink-muted) 72%, transparent);
     --vd-surface-hover: color-mix(in srgb, var(--vd-ink) 4%, var(--vd-panel));
     --vd-surface-pressed: color-mix(in srgb, var(--vd-ink) 7%, var(--vd-panel));
