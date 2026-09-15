@@ -10,7 +10,6 @@ from typing import Any
 
 from voodoo.ui.component import Component
 
-
 BRAND_CSS = """
 /* Brand image contract */
 .vd-brand-logo {
