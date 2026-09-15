@@ -16,6 +16,7 @@ from voodoo.cli import (
     recover,
     routes,
     schedules,
+    start,
     status,
     tasks,
     theme,
@@ -36,6 +37,7 @@ app = typer.Typer(
 app.command()(new.new)
 app.command()(create.create)
 app.command()(dev.dev)
+app.command()(start.start)
 app.command()(generate.generate)
 app.add_typer(auth_app, name="auth")
 app.add_typer(ai.ai_app, name="ai")
