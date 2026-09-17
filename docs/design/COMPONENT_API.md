@@ -154,3 +154,69 @@ The default visual language prioritizes:
 A component is complete only when its API, rendering, keyboard behavior, accessibility, responsive behavior, states, theme behavior and tests are coherent.
 
 A screenshot is not the component.
+
+## Catalog roadmap
+
+Voodoo should grow by interface capability, not by matching another library's
+component count. Each phase must be complete across native CSS, Tailwind,
+keyboard behavior, accessibility, light/dark themes, and tests.
+
+### Foundation: available
+
+- feedback: `Alert`, `Progress`, `Spinner`, `Skeleton`;
+- navigation: `Breadcrumb`;
+- grouping: `ButtonGroup`;
+- disclosure: `Accordion`;
+- content: `Kbd`, `AspectRatio`.
+
+### Interaction kernel: available
+
+The shared browser runtime now provides:
+
+- focus trapping and focus restoration;
+- dismissable layers and outside-click handling;
+- native top-layer stacking;
+- roving keyboard focus for tabs and menus;
+- anchored positioning;
+- live-region announcements and timed toast dismissal;
+- persistent adaptive sidebar state with component-owned mode policies;
+- integrated sidebar controls with a separate hidden-state launcher.
+
+It powers `Tabs`, `DropdownMenu`, `Drawer`, modal controls, `Toast`,
+`Snackbar`, and adaptive navigation. Building those behaviors once keeps
+component APIs consistent and avoids a separate JavaScript implementation in
+every primitive.
+
+### Interaction extensions: next
+
+- alert dialog with consequence-aware confirmation;
+- toggle and segmented-control groups;
+- pagination;
+- menu subgroups, checkbox items, and typeahead;
+- command palette;
+- swipe-to-dismiss notifications on touch devices.
+
+### Advanced inputs
+
+After the interaction kernel:
+
+- `Combobox` and autocomplete;
+- `Slider` and range inputs;
+- `DatePicker` and calendar;
+- `InputGroup` and password input;
+- file upload and drop zone;
+- checkbox/radio card groups.
+
+### Rich application surfaces
+
+Add only when the underlying use cases demand them:
+
+- command palette;
+- data list and description list;
+- scroll area and resizable panels;
+- carousel;
+- charts;
+- tree view.
+
+The priority order is intentional: navigation, feedback, forms, and overlays
+unlock more real products than decorative or specialized widgets.

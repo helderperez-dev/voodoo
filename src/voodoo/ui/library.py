@@ -8,9 +8,13 @@ components render through the single :meth:`Component.render` path.
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from typing import Any
 
 from voodoo.ui.component import Component, escape, tone_to_color_var
+from voodoo.ui.events import bind_event
+
+EventHandler = Callable[..., Any] | str
 
 # ---------------------------------------------------------------------------
 # Layout
@@ -173,8 +177,47 @@ class Button(Component):
 
 
 class Card(Component):
+    """A bounded content surface with standardized elevation and spacing.
+
+    ``variant`` controls visual emphasis without custom CSS. ``padding`` uses
+    the design-system spacing scale and defaults to the historical card inset.
+    """
+
     tag = "div"
     style = "card"
+    _VARIANTS = frozenset({"default", "elevated", "outline", "ghost", "interactive"})
+    _PADDINGS = frozenset({"none", "sm", "md", "lg", "xl"})
+
+    def __init__(
+        self,
+        *children: Any,
+        variant: str = "default",
+        padding: str = "lg",
+        on_click: EventHandler | None = None,
+        **kwargs: Any,
+    ) -> None:
+        if variant not in self._VARIANTS:
+            raise ValueError(
+                f"invalid Card variant {variant!r}; expected one of "
+                f"{sorted(self._VARIANTS)}"
+            )
+        if padding not in self._PADDINGS:
+            raise ValueError(
+                f"invalid Card padding {padding!r}; expected one of "
+                f"{sorted(self._PADDINGS)}"
+            )
+        super().__init__(*children, **kwargs)
+        if on_click is not None:
+            self.attrs["data_vd_event_click"] = bind_event(on_click)
+            self.attrs.setdefault("role", "button")
+            self.attrs.setdefault("tabindex", "0")
+            if variant == "default":
+                variant = "interactive"
+        self.props = {
+            "variant": None if variant == "default" else variant,
+            "padding": padding,
+            "interactive": on_click is not None or variant == "interactive",
+        }
 
 
 class Text(Component):
@@ -296,7 +339,8 @@ class Dialog(Component):
     style = "dialog"
 
     def __init__(self, *children: Any, open: bool = False, **kwargs: Any) -> None:
-        super().__init__(*children, **kwargs)
+        kwargs.setdefault("tabindex", "-1")
+        super().__init__(*children, data_vd_layer=True, **kwargs)
         if open:
             self.attrs["open"] = True
 
@@ -314,7 +358,8 @@ class Modal(Component):
         labelled_by: str | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(*children, **kwargs)
+        kwargs.setdefault("tabindex", "-1")
+        super().__init__(*children, data_vd_layer=True, **kwargs)
         self.attrs["role"] = "dialog"
         self.attrs["aria-modal"] = "true"
         if labelled_by:
@@ -557,14 +602,75 @@ class Composer(Component):
 
 
 class Sidebar(Component):
-    """App sidebar shell (title, nav children, optional new-action button).
+    """Adaptive app sidebar with expanded, icon-rail, and hidden modes.
 
     ::
 
-        Sidebar(heading="Chats", Nav(...), new_event="new_chat")
+        Sidebar(Nav(...), mode="expanded", collapsible=True)
     """
 
+    tag = "aside"
     style = "sidebar"
+
+    def __init__(
+        self,
+        *children: Any,
+        mode: str = "expanded",
+        modes: tuple[str, ...] = ("expanded", "rail"),
+        collapsible: bool = True,
+        mobile_mode: str = "hidden",
+        dismiss_mode: str = "hidden",
+        brand: Any | None = "Voodoo",
+        logo: Any | None = "V.",
+        brand_href: str | None = None,
+        brand_label: str | None = None,
+        label: str = "Primary navigation",
+        **kwargs: Any,
+    ) -> None:
+        valid_modes = {"expanded", "rail", "hidden"}
+        if mode not in valid_modes:
+            raise ValueError(
+                "invalid Sidebar mode; expected 'expanded', 'rail', or 'hidden'"
+            )
+        if (
+            not modes
+            or len(set(modes)) != len(modes)
+            or any(candidate not in valid_modes for candidate in modes)
+        ):
+            raise ValueError(
+                "Sidebar modes must be unique and use expanded, rail, or hidden"
+            )
+        if mobile_mode not in valid_modes:
+            raise ValueError(
+                "Sidebar mobile_mode must be expanded, rail, or hidden"
+            )
+        if dismiss_mode not in valid_modes:
+            raise ValueError(
+                "Sidebar dismiss_mode must be expanded, rail, or hidden"
+            )
+        super().__init__(*children, aria_label=label, **kwargs)
+        self.props = {
+            "mode": mode,
+            "modes": modes,
+            "collapsible": collapsible,
+            "mobile_mode": mobile_mode,
+            "dismiss_mode": dismiss_mode,
+            "brand": brand,
+            "logo": logo,
+            "brand_href": brand_href,
+            "brand_label": brand_label,
+        }
+        self.attrs["data_vd_sidebar"] = True
+        self.attrs["data_vd_sidebar_mode"] = mode
+        self.attrs["data_vd_sidebar_default"] = mode
+        self.attrs["data_vd_sidebar_modes"] = ",".join(modes)
+        self.attrs["data_vd_sidebar_mobile_mode"] = mobile_mode
+        self.attrs["data_vd_sidebar_dismiss_mode"] = dismiss_mode
+        if collapsible:
+            self.attrs["data_vd_sidebar_collapsible"] = True
+        if mode == "hidden":
+            self.attrs["aria_hidden"] = "true"
+            self.attrs["inert"] = True
 
 
 # ---------------------------------------------------------------------------

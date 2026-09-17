@@ -1,12 +1,16 @@
+import pytest
+
 from voodoo.theme import (
     Theme,
     ThemeColors,
+    ThemePalette,
     ThemeShadows,
     ThemeSpacing,
     create_theme,
     default_theme,
     set_theme,
 )
+from voodoo.ui.styles.palette import color
 
 
 def test_default_theme():
@@ -82,3 +86,34 @@ def test_set_theme():
         assert voodoo.theme.default_theme.mode == "light"
     finally:
         set_theme(original_theme)
+
+
+def test_default_palette_emits_tailwind_compatible_steps():
+    css_vars = Theme().to_css_variables()
+    assert "--vd-color-violet-50: oklch(" in css_vars
+    assert "--vd-color-violet-500: oklch(" in css_vars
+    assert "--vd-color-violet-950: oklch(" in css_vars
+    assert color("violet", 500) == "var(--vd-color-violet-500)"
+
+
+def test_custom_palette_extends_defaults_and_exports_to_tailwind():
+    theme = create_theme(palette={"brand": {50: "#f5f3ff", 500: "#7c3aed"}})
+    assert theme.palette.scales["brand"][500] == "#7c3aed"
+    assert "zinc" in theme.palette.scales
+
+    css_vars = theme.to_css_variables()
+    assert "--vd-color-brand-500: #7c3aed;" in css_vars
+
+    tailwind = theme.to_tailwind_config()
+    assert '"brand"' in tailwind
+    assert '"500": "var(--vd-color-brand-500)"' in tailwind
+
+
+def test_palette_rejects_nonstandard_steps():
+    with pytest.raises(ValueError, match="invalid palette step"):
+        ThemePalette(scales={"brand": {550: "#7c3aed"}})
+
+
+def test_palette_rejects_values_that_can_escape_css_declarations():
+    with pytest.raises(ValueError, match="invalid CSS color value"):
+        ThemePalette(scales={"brand": {500: "red; display: none"}})

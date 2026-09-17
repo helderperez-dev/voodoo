@@ -53,6 +53,49 @@ re-styles every component instantly, at runtime, without re-rendering HTML.
 | Code | `--vd-code-*` | `background`, `surface`, `border`, `text`, `comment`, `keyword`, `function`, `string`, `live` |
 | Typography | `--vd-text-*`, `--vd-leading-*`, `--vd-weight-*`, `--vd-font-*` | size scale, line heights, weights, font families (incl. `--vd-font-display`) |
 
+### Color palette
+
+Voodoo includes focused, perceptually uniform OKLCH scales for `zinc`,
+`violet`, `blue`, `emerald`, `amber`, and `red`. Every scale uses the familiar
+Tailwind steps `50, 100, 200, ... 900, 950`:
+
+```python
+from voodoo import Card, Text, color
+
+panel = Card(
+    Text("Token-driven color", color="violet-200"),
+    background="violet-950",
+    border_color="violet-700",
+)
+
+accent = color("violet", 500)  # var(--vd-color-violet-500)
+```
+
+The universal `color`, `background`, and `border_color` props are available on
+every component. They accept either a semantic role (`"primary"`, `"danger"`)
+or a palette reference in dash/dot notation (`"violet-500"`,
+`"violet.500"`). Voodoo validates names and emits CSS-variable references, so
+applications get precise color control without writing CSS or hard-coding
+values.
+
+Add or override scales when creating a theme:
+
+```python
+theme = create_theme(
+    palette={
+        "brand": {
+            50: "oklch(97% 0.02 290)",
+            500: "oklch(61% 0.24 290)",
+            950: "oklch(28% 0.13 290)",
+        }
+    }
+)
+```
+
+Custom scales extend the defaults and are exported by
+`Theme.to_tailwind_config()` as nested colors, so `brand-500` has the same
+meaning in native Voodoo CSS and Tailwind.
+
 Derived accent tokens (`--vd-color-secondary-soft`, `-line`, `-glow`,
 `--vd-color-border-soft`) are computed with `color-mix` at use time, so they
 track light/dark automatically without re-defining them per mode.
@@ -143,6 +186,22 @@ ui = Page(
     )
 )
 ```
+
+## Surface variants
+
+`Card` provides a consistent surface vocabulary and token-based padding:
+
+```python
+Card("Default")
+Card("More depth", variant="elevated")
+Card("Quiet boundary", variant="outline")
+Card("No chrome", variant="ghost")
+Card("Clickable object", variant="interactive")
+Card("Edge-to-edge media", padding="none")
+```
+
+Supported padding values are `none`, `sm`, `md`, `lg` (default), and `xl`.
+The same semantic API works with the native and Tailwind adapters.
 
 ### Gap scale
 

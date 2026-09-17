@@ -226,6 +226,25 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     box-shadow: var(--vd-shadow-card);
 }
 .vd-card:hover { border-color: var(--vd-line-strong); }
+.vd-card--elevated {
+    background: var(--vd-panel-muted);
+    box-shadow: var(--vd-shadow-float);
+}
+.vd-card--outline { background: transparent; box-shadow: none; }
+.vd-card--ghost { background: transparent; border-color: transparent; box-shadow: none; }
+.vd-card--ghost:hover { border-color: transparent; }
+.vd-card--interactive {
+    cursor: pointer;
+    transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.vd-card--interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--vd-shadow-float);
+}
+.vd-card--pad-none { padding: 0; }
+.vd-card--pad-sm { padding: 0.5rem; }
+.vd-card--pad-md { padding: 0.75rem; }
+.vd-card--pad-xl { padding: 2rem; }
 
 .vd-divider { border-color: var(--vd-line); }
 

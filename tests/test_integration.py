@@ -10,6 +10,7 @@ All tests use the deterministic mock provider — no network calls.
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 from starlette.testclient import TestClient
 
 import voodoo.data
@@ -57,7 +58,7 @@ def _clean_subsystems():
     ws_manager.broadcast_patch = saved_broadcast
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_db():
     await voodoo.data.init_db(":memory:")
     db = await voodoo.data.get_db()

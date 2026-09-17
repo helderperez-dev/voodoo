@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from voodoo.ui.styles.palette import ThemePalette
+
 # ---------------------------------------------------------------------------
 # Token groups
 # ---------------------------------------------------------------------------
@@ -250,6 +252,7 @@ class Theme(BaseModel):
 
     mode: str = "dark"  # dark, light, system
     colors: ThemeColors = Field(default_factory=ThemeColors)
+    palette: ThemePalette = Field(default_factory=ThemePalette)
     spacing: ThemeSpacing = Field(default_factory=ThemeSpacing)
     radius: ThemeRadius = Field(default_factory=ThemeRadius)
     shadows: ThemeShadows = Field(default_factory=ThemeShadows)
@@ -276,6 +279,10 @@ class Theme(BaseModel):
                 **self.colors.semantic(),
                 **self.colors.light_overrides(),
             }.items()
+        ]
+        palette_vars = [
+            f"--vd-color-{name}: {value};"
+            for name, value in self.palette.css_tokens().items()
         ]
         spacing_vars = [
             f"--vd-space-{name}: {value};"
@@ -339,7 +346,8 @@ class Theme(BaseModel):
         ]
         # Mode-independent tokens shared by ``:root`` and ``.dark``.
         shared_vars = (
-            spacing_vars
+            palette_vars
+            + spacing_vars
             + radius_vars
             + shadow_vars
             + motion_vars
@@ -361,7 +369,18 @@ class Theme(BaseModel):
 
     def to_tailwind_config(self) -> str:
         """Generate a Tailwind config JSON using ``--vd-*`` variables."""
-        colors = {name: f"var(--vd-color-{name})" for name in self.colors.semantic()}
+        colors: dict[str, Any] = {
+            name: f"var(--vd-color-{name})" for name in self.colors.semantic()
+        }
+        colors.update(
+            {
+                name: {
+                    str(step): f"var(--vd-color-{name}-{step})"
+                    for step in sorted(scale)
+                }
+                for name, scale in self.palette.scales.items()
+            }
+        )
         config = {
             "darkMode": "class",
             "theme": {
@@ -417,6 +436,7 @@ def create_theme(
     display_font: str | None = None,
     radius: str | None = None,
     mode: str = "dark",
+    palette: dict[str, dict[int | str, str]] | None = None,
     **extra_colors: str,
 ) -> Theme:
     """Create a theme with sensible defaults and simple overrides.
@@ -455,6 +475,11 @@ def create_theme(
     return Theme(
         mode=mode,
         colors=colors,
+        palette=(
+            ThemePalette.model_validate({"scales": palette})
+            if palette is not None
+            else ThemePalette()
+        ),
         typography=typography,
         radius=radius_obj,
     )
@@ -477,6 +502,7 @@ __all__ = [
     "ThemeCode",
     "ThemeColors",
     "ThemeMotion",
+    "ThemePalette",
     "ThemeRadius",
     "ThemeShadows",
     "ThemeSpacing",

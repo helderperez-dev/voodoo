@@ -28,6 +28,8 @@ from collections.abc import Iterable, Mapping
 from typing import Any, ClassVar
 from uuid import uuid4
 
+from voodoo.ui.styles.palette import color_reference
+
 SELF_CLOSING_TAGS = frozenset({"input", "img", "br", "hr"})
 
 #: Tones that map to theme color tokens.
@@ -100,18 +102,34 @@ class Component:
         *children: Any,
         id: str | None = None,
         css: Mapping[str, Any] | None = None,
+        color: str | None = None,
+        background: str | None = None,
+        border_color: str | None = None,
         **kwargs: Any,
     ) -> None:
         self.children: tuple[Any, ...] = _flatten(children)
         self.props: dict[str, Any] = {}
         self.attrs: dict[str, Any] = {}
         self._inline_css: str = ""
+        raw_style = kwargs.pop("style", None)
         if id is None and self.auto_id:
             id = f"vd-{uuid4().hex[:8]}"
         if id is not None:
             self.attrs["id"] = id
         if css:
             self._inline_css = _css_to_inline(css)
+        visual_tokens = {
+            "color": color,
+            "background-color": background,
+            "border-color": border_color,
+        }
+        for property_name, token in visual_tokens.items():
+            if token:
+                self._append_inline_css(
+                    f"{property_name}: {color_reference(token)}"
+                )
+        if raw_style:
+            self._append_inline_css(str(raw_style).strip().rstrip(";"))
         self.attrs.update(kwargs)
 
     # -- public API ----------------------------------------------------------
@@ -142,6 +160,12 @@ class Component:
             if self.attrs.get(key)
         ]
         return " ".join(parts)
+
+    def _append_inline_css(self, declaration: str) -> None:
+        """Append one generated declaration to the component's inline style."""
+        self._inline_css = (
+            f"{self._inline_css}; {declaration}" if self._inline_css else declaration
+        )
 
     def framework_classes(self, user_class: str = "") -> str:
         """Classes contributed by the active style adapter for this style key."""

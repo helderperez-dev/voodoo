@@ -48,9 +48,30 @@ def _reset_queue_state():
 async def _close_db_after_test():
     """Close optional SQLite resources before the test loop is torn down."""
     yield
+    import voodoo.data.base as _db_base
+    from voodoo.data import store_backend
+    from voodoo.runtime import store as _runtime_store_mod
     from voodoo.storage.database.sqlite import _close_open_sqlite_databases
 
     await _close_open_sqlite_databases()
+    # Reset the global connection references so the next test's get_db()
+    # doesn't return a stale/closed connection and fall back to the
+    # default file-based database.
+    _db_base._db_connection = None
+    _db_base._database = None
+    # Reset the Voodoo Store runtime so the Store-backed Model doesn't
+    # accumulate records across tests.
+    if _runtime_store_mod._shared_runtime_store is not None:
+        _runtime_store_mod._shared_runtime_store.stop()
+        _runtime_store_mod._shared_runtime_store = None
+    _runtime_store_mod._active_runtime_store = None
+    store_backend._runtime_store = None
+    # Remove the Store's on-disk file so the next test starts fresh.
+    import shutil
+    from pathlib import Path
+    voodoo_dir = Path.cwd() / ".voodoo"
+    if voodoo_dir.exists():
+        shutil.rmtree(voodoo_dir, ignore_errors=True)
 
 
 @pytest.fixture

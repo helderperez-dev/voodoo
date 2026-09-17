@@ -327,6 +327,82 @@ def test_css_prop_underscore_to_hyphen():
     assert "border-radius: 8px" in rendered
 
 
+def test_component_visual_props_resolve_semantic_and_palette_tokens():
+    card = Card(
+        "Token driven",
+        id="c1",
+        color="violet-200",
+        background="violet.950",
+        border_color="violet-700",
+    )
+    rendered = card.render()
+    assert "color: var(--vd-color-violet-200)" in rendered
+    assert "background-color: var(--vd-color-violet-950)" in rendered
+    assert "border-color: var(--vd-color-violet-700)" in rendered
+
+
+def test_component_visual_props_reject_invalid_token_names():
+    with pytest.raises(ValueError, match="invalid color token"):
+        Card("Unsafe", background="red; display: none")
+
+
+def test_component_merges_css_tokens_and_raw_style_into_one_attribute():
+    rendered = Card(
+        "Merged",
+        css={"padding": "1rem"},
+        color="violet-200",
+        style="opacity: 0.9;",
+    ).render()
+    assert rendered.count('style="') == 1
+    assert "padding: 1rem" in rendered
+    assert "color: var(--vd-color-violet-200)" in rendered
+    assert "opacity: 0.9" in rendered
+
+
+@pytest.mark.parametrize(
+    ("variant", "expected"),
+    [
+        ("elevated", "vd-card--elevated"),
+        ("outline", "vd-card--outline"),
+        ("ghost", "vd-card--ghost"),
+        ("interactive", "vd-card--interactive"),
+    ],
+)
+def test_voodoo_css_card_variants(voodoo_css_adapter, variant, expected):
+    rendered = Card("Body", variant=variant, id="c1").render()
+    assert expected in rendered
+
+
+def test_voodoo_css_card_padding(voodoo_css_adapter):
+    assert "vd-card--pad-none" in Card("Body", padding="none").render()
+    assert "vd-card--pad-sm" in Card("Body", padding="sm").render()
+    assert "vd-card--pad-xl" in Card("Body", padding="xl").render()
+
+
+def test_card_rejects_unknown_variant_and_padding():
+    with pytest.raises(ValueError, match="invalid Card variant"):
+        Card("Body", variant="floating")
+    with pytest.raises(ValueError, match="invalid Card padding"):
+        Card("Body", padding="huge")
+
+
+def test_card_on_click_is_keyboard_accessible_and_visually_interactive(
+    voodoo_css_adapter,
+):
+    rendered = Card("Open", on_click=lambda: None).render()
+    assert 'role="button"' in rendered
+    assert 'tabindex="0"' in rendered
+    assert "data-vd-event-click" in rendered
+    assert "vd-card--interactive" in rendered
+
+
+def test_tailwind_card_variant_and_padding(tailwind_adapter):
+    rendered = Card("Body", variant="elevated", padding="xl").render()
+    assert "bg-[var(--vd-color-surface-raised)]" in rendered
+    assert "shadow-md" in rendered
+    assert "p-8" in rendered
+
+
 def test_text_tone_muted():
     text = Text("Subtitle", tone="muted", id="t1")
     rendered = text.render()

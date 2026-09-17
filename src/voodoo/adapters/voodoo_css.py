@@ -79,7 +79,86 @@ class VoodooCSSAdapter:
         if component == "list":
             classes.extend(self._list_classes(props))
 
+        classes.extend(self._app_shell_classes(component, props))
+        classes.extend(self._card_classes(component, props))
+        classes.extend(self._foundation_classes(component, props))
         classes.extend(self._chrome_classes(component, props))
+        return classes
+
+    @staticmethod
+    def _app_shell_classes(component: str, props: dict[str, Any]) -> list[str]:
+        if component != "app-shell.content":
+            return []
+        return [f"vd-app-shell-content--pad-{props.get('padding', 'lg')}"]
+
+    @staticmethod
+    def _card_classes(component: str, props: dict[str, Any]) -> list[str]:
+        if component != "card":
+            return []
+
+        classes: list[str] = []
+        padding = props.get("padding", "lg")
+        if padding != "lg":
+            classes.append(f"vd-card--pad-{padding}")
+        if props.get("interactive") and props.get("variant") != "interactive":
+            classes.append("vd-card--interactive")
+        return classes
+
+    @staticmethod
+    def _foundation_classes(component: str, props: dict[str, Any]) -> list[str]:
+        """Modifier classes for feedback, navigation and disclosure primitives."""
+        return VoodooCSSAdapter._feedback_classes(
+            component, props
+        ) + VoodooCSSAdapter._interaction_classes(component, props)
+
+    @staticmethod
+    def _feedback_classes(component: str, props: dict[str, Any]) -> list[str]:
+        classes: list[str] = []
+        if component in {"alert", "progress"}:
+            classes.append(f"vd-{component}--{props.get('tone', 'primary')}")
+        if component in {"progress", "spinner"}:
+            size = props.get("size", "md")
+            if size != "md":
+                classes.append(f"vd-{component}--{size}")
+        if component == "toast-region":
+            classes.append(f"vd-toast-region--{props.get('position', 'bottom-right')}")
+        if component == "toast":
+            classes.extend(
+                (
+                    f"vd-toast--{props.get('tone', 'default')}",
+                    f"vd-toast--{props.get('variant', 'toast')}",
+                )
+            )
+        return classes
+
+    @staticmethod
+    def _interaction_classes(component: str, props: dict[str, Any]) -> list[str]:
+        classes: list[str] = []
+        if component == "button-group":
+            classes.append(f"vd-button-group--{props.get('orientation', 'horizontal')}")
+            if props.get("attached", True):
+                classes.append("vd-button-group--attached")
+        if component == "sidebar":
+            classes.append(f"vd-sidebar--{props.get('mode', 'expanded')}")
+        if component == "sidebar-toggle":
+            classes.append(
+                f"vd-sidebar-toggle--{props.get('placement', 'standalone')}"
+            )
+        if component == "sidebar-item" and props.get("active"):
+            classes.append("vd-sidebar-item--active")
+        if component == "bottom-nav-item" and props.get("active"):
+            classes.append("vd-bottom-nav-item--active")
+        if component == "drawer":
+            classes.extend(
+                (
+                    f"vd-drawer--{props.get('side', 'left')}",
+                    f"vd-drawer--{props.get('size', 'md')}",
+                )
+            )
+        if component == "menu-item" and props.get("destructive"):
+            classes.append("vd-menu-item--destructive")
+        if component == "tabs":
+            classes.append(f"vd-tabs--{props.get('orientation', 'horizontal')}")
         return classes
 
     @staticmethod
@@ -243,6 +322,20 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     border-radius: {r}xl); padding: {s}xl);
     box-shadow: {sh}sm);
 }}
+.vd-card--elevated {{
+    background: var(--vd-color-surface-raised); box-shadow: {sh}md);
+}}
+.vd-card--outline {{ background: transparent; box-shadow: none; }}
+.vd-card--ghost {{ background: transparent; border-color: transparent; box-shadow: none; }}
+.vd-card--interactive {{
+    cursor: pointer; transition: transform {m}normal), border-color {m}normal),
+        box-shadow {m}normal);
+}}
+.vd-card--interactive:hover {{ transform: translateY(-2px); box-shadow: {sh}md); }}
+.vd-card--pad-none {{ padding: 0; }}
+.vd-card--pad-sm {{ padding: {s}sm); }}
+.vd-card--pad-md {{ padding: {s}md); }}
+.vd-card--pad-xl {{ padding: {s}xxl); }}
 
 /* Form */
 .vd-form {{ display: flex; flex-direction: column; gap: {s}md); }}
@@ -347,6 +440,153 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     justify-content: center; border-radius: {r}full);
     background: var(--vd-color-surface);
     color: var(--vd-color-text); font-size: {t}sm); font-weight: var(--vd-weight-medium);
+}}
+
+/* Feedback */
+.vd-alert {{
+    --vd-alert-color: var(--vd-color-info);
+    display: grid; gap: {s}xs); padding: {s}md) {s}lg);
+    border: 1px solid color-mix(in srgb, var(--vd-alert-color) 28%, transparent);
+    border-radius: {r}lg);
+    background: color-mix(in srgb, var(--vd-alert-color) 8%, transparent);
+    color: var(--vd-color-text);
+}}
+.vd-alert--primary {{ --vd-alert-color: var(--vd-color-primary); }}
+.vd-alert--info {{ --vd-alert-color: var(--vd-color-info); }}
+.vd-alert--success {{ --vd-alert-color: var(--vd-color-success); }}
+.vd-alert--warning {{ --vd-alert-color: var(--vd-color-warning); }}
+.vd-alert--danger {{ --vd-alert-color: var(--vd-color-danger); }}
+.vd-alert--outline {{ background: transparent; }}
+.vd-alert--solid {{
+    background: var(--vd-alert-color); border-color: var(--vd-alert-color); color: white;
+}}
+.vd-alert--solid.vd-alert--warning {{ color: #171717; }}
+.vd-alert-title {{ font-size: {t}sm); font-weight: var(--vd-weight-semibold); }}
+.vd-alert-content {{ font-size: {t}sm); line-height: 1.55; color: inherit; opacity: 0.88; }}
+
+.vd-progress {{
+    --vd-progress-color: var(--vd-color-primary);
+    display: block; width: 100%; height: 0.5rem;
+    overflow: hidden; border: 0; border-radius: {r}full);
+    background: var(--vd-color-surface-raised); appearance: none;
+}}
+.vd-progress::-webkit-progress-bar {{
+    background: var(--vd-color-surface-raised); border-radius: inherit;
+}}
+.vd-progress::-webkit-progress-value {{
+    background: var(--vd-progress-color); border-radius: inherit;
+    transition: width {m}slow) ease;
+}}
+.vd-progress::-moz-progress-bar {{
+    background: var(--vd-progress-color); border-radius: inherit;
+}}
+.vd-progress:not([value]) {{ animation: vd-pulse 1.4s ease-in-out infinite; }}
+.vd-progress--primary {{ --vd-progress-color: var(--vd-color-primary); }}
+.vd-progress--info {{ --vd-progress-color: var(--vd-color-info); }}
+.vd-progress--success {{ --vd-progress-color: var(--vd-color-success); }}
+.vd-progress--warning {{ --vd-progress-color: var(--vd-color-warning); }}
+.vd-progress--danger {{ --vd-progress-color: var(--vd-color-danger); }}
+.vd-progress--sm {{ height: 0.25rem; }}
+.vd-progress--lg {{ height: 0.75rem; }}
+
+.vd-spinner {{
+    display: inline-flex; align-items: center; justify-content: center;
+    vertical-align: middle;
+}}
+.vd-spinner-glyph {{
+    width: 1.125rem; height: 1.125rem; border-radius: 50%;
+    border: 2px solid color-mix(in srgb, currentColor 20%, transparent);
+    border-top-color: currentColor; animation: vd-spin 700ms linear infinite;
+}}
+.vd-spinner--sm .vd-spinner-glyph {{ width: 0.875rem; height: 0.875rem; }}
+.vd-spinner--lg .vd-spinner-glyph {{ width: 1.5rem; height: 1.5rem; border-width: 2.5px; }}
+
+/* Navigation and grouping */
+.vd-breadcrumb {{ min-width: 0; }}
+.vd-breadcrumb-list {{
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+    list-style: none; color: var(--vd-color-text-muted); font-size: {t}sm);
+}}
+.vd-breadcrumb-item {{ display: inline-flex; align-items: center; gap: 0.4rem; }}
+.vd-breadcrumb-item:not(:last-child)::after {{
+    content: "/"; color: var(--vd-color-text-muted); opacity: 0.65; user-select: none;
+}}
+.vd-breadcrumb-link {{
+    color: inherit; text-decoration: none; transition: color {m}fast);
+}}
+.vd-breadcrumb-link:hover {{ color: var(--vd-color-text); text-decoration: none; }}
+.vd-breadcrumb-current {{ color: var(--vd-color-text); font-weight: var(--vd-weight-medium); }}
+
+.vd-button-group {{ display: inline-flex; align-items: stretch; }}
+.vd-button-group--vertical {{ flex-direction: column; }}
+.vd-button-group:not(.vd-button-group--attached) {{ gap: {s}sm); }}
+.vd-button-group--attached > .vd-button {{ position: relative; border-radius: 0; }}
+.vd-button-group--attached > .vd-button:hover,
+.vd-button-group--attached > .vd-button:focus-visible {{ z-index: 1; }}
+.vd-button-group--horizontal.vd-button-group--attached > .vd-button + .vd-button {{
+    margin-left: -1px;
+}}
+.vd-button-group--horizontal.vd-button-group--attached > .vd-button:first-child {{
+    border-radius: {r}md) 0 0 {r}md);
+}}
+.vd-button-group--horizontal.vd-button-group--attached > .vd-button:last-child {{
+    border-radius: 0 {r}md) {r}md) 0;
+}}
+.vd-button-group--vertical.vd-button-group--attached > .vd-button + .vd-button {{
+    margin-top: -1px;
+}}
+.vd-button-group--vertical.vd-button-group--attached > .vd-button:first-child {{
+    border-radius: {r}md) {r}md) 0 0;
+}}
+.vd-button-group--vertical.vd-button-group--attached > .vd-button:last-child {{
+    border-radius: 0 0 {r}md) {r}md);
+}}
+
+/* Disclosure and content helpers */
+.vd-accordion {{ display: grid; gap: {s}sm); }}
+.vd-accordion--contained {{
+    gap: 0; border: 1px solid var(--vd-color-border);
+    border-radius: {r}lg); overflow: hidden;
+}}
+.vd-accordion-item {{
+    border: 1px solid var(--vd-color-border); border-radius: {r}lg);
+    background: var(--vd-color-surface);
+}}
+.vd-accordion--contained > .vd-accordion-item {{ border: 0; border-radius: 0; }}
+.vd-accordion--contained > .vd-accordion-item + .vd-accordion-item {{
+    border-top: 1px solid var(--vd-color-border);
+}}
+.vd-accordion--ghost > .vd-accordion-item {{
+    border-color: transparent; background: transparent;
+}}
+.vd-accordion-summary {{
+    display: flex; align-items: center; justify-content: space-between;
+    gap: {s}md); padding: {s}md) {s}lg); cursor: pointer;
+    font-size: {t}sm); font-weight: var(--vd-weight-medium); list-style: none;
+}}
+.vd-accordion-summary::-webkit-details-marker {{ display: none; }}
+.vd-accordion-summary::after {{
+    content: "+"; color: var(--vd-color-text-muted); font-size: 1.15em;
+    transition: transform {m}normal);
+}}
+.vd-accordion-item[open] > .vd-accordion-summary::after {{ transform: rotate(45deg); }}
+.vd-accordion-content {{
+    padding: 0 {s}lg) {s}lg); color: var(--vd-color-text-muted);
+    font-size: {t}sm); line-height: 1.65;
+}}
+.vd-kbd {{
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.5rem; min-height: 1.5rem; padding: 0 0.4rem;
+    border: 1px solid var(--vd-color-border); border-bottom-width: 2px;
+    border-radius: {r}sm); background: var(--vd-color-surface-raised);
+    color: var(--vd-color-text); font-family: var(--vd-font-mono);
+    font-size: {t}xs); line-height: 1; box-shadow: {sh}sm);
+}}
+.vd-aspect-ratio {{ position: relative; width: 100%; overflow: hidden; }}
+.vd-aspect-ratio > * {{ width: 100%; height: 100%; object-fit: cover; }}
+.vd-visually-hidden {{
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }}
 
 /* Divider */
@@ -474,25 +714,349 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
 
 /* Sidebar shell */
 .vd-sidebar {{
-    display: flex; flex-direction: column; gap: {s}sm);
+    position: relative; display: flex; flex-direction: column; gap: {s}sm);
     width: 16rem; padding: {s}md); flex-shrink: 0;
     border-right: 1px solid var(--vd-color-border);
     background: var(--vd-color-surface); color: var(--vd-color-text);
-    overflow-y: auto;
+    overflow-x: hidden; overflow-y: auto;
+    transition: width {m}slow) ease, padding {m}slow) ease,
+        transform {m}slow) ease, opacity {m}normal) ease, visibility 0s;
+}}
+.vd-sidebar--expanded, .vd-sidebar--rail,
+.vd-sidebar[data-vd-sidebar-mode="expanded"],
+.vd-sidebar[data-vd-sidebar-mode="rail"] {{ visibility: visible; }}
+.vd-sidebar--rail, .vd-sidebar[data-vd-sidebar-mode="rail"] {{
+    width: 4.5rem; padding-inline: {s}sm); padding-bottom: 4rem;
+}}
+.vd-sidebar--rail [data-vd-sidebar-label],
+.vd-sidebar[data-vd-sidebar-mode="rail"] [data-vd-sidebar-label] {{
+    width: 0; opacity: 0; overflow: hidden; pointer-events: none;
+}}
+.vd-sidebar--hidden, .vd-sidebar[data-vd-sidebar-mode="hidden"] {{
+    width: 0; min-width: 0; padding-inline: 0; border-inline-width: 0;
+    opacity: 0; transform: translateX(-100%); pointer-events: none;
+    visibility: hidden; transition-delay: 0s, 0s, 0s, 0s, {m}slow);
 }}
 .vd-sidebar-heading {{
     font-size: {t}xs); font-weight: var(--vd-weight-semibold);
     text-transform: uppercase; letter-spacing: 0.08em;
     color: var(--vd-color-text-muted); padding: 0 {s}xs);
 }}
+.vd-sidebar-item {{
+    display: flex; align-items: center; gap: {s}sm); width: 100%;
+    min-height: 2.5rem; padding: {s}sm); border: 0; border-radius: {r}md);
+    background: transparent; color: var(--vd-color-text-muted);
+    font-size: {t}sm); text-decoration: none; cursor: pointer;
+    transition: color {m}fast), background {m}fast);
+}}
+.vd-sidebar-item:hover {{ background: var(--vd-color-surface-raised); color: var(--vd-color-text); }}
+.vd-sidebar-item:disabled, .vd-sidebar-item[aria-disabled="true"] {{
+    opacity: 0.45; cursor: not-allowed; pointer-events: none;
+}}
+.vd-sidebar-item--active {{
+    background: var(--vd-color-secondary-soft); color: var(--vd-color-secondary);
+}}
+.vd-sidebar-item-icon {{
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.5rem; height: 1.5rem; flex: 0 0 1.5rem;
+}}
+.vd-sidebar-item-label {{
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    transition: opacity {m}fast), width {m}slow);
+}}
+.vd-sidebar-item-badge {{
+    margin-left: auto; font-size: {t}xs); color: var(--vd-color-text-muted);
+}}
+.vd-sidebar--rail .vd-sidebar-item,
+.vd-sidebar[data-vd-sidebar-mode="rail"] .vd-sidebar-item {{
+    justify-content: center; gap: 0;
+}}
+.vd-sidebar-header {{
+    display: flex; align-items: center; justify-content: space-between;
+    gap: {s}sm); min-height: 2.5rem; flex: 0 0 auto;
+}}
+.vd-sidebar-brand {{
+    display: flex; align-items: center; gap: {s}sm);
+    min-width: 0; color: var(--vd-color-text); text-decoration: none;
+}}
+.vd-sidebar-brand-mark {{
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2rem; height: 2rem; flex: 0 0 2rem;
+    border: 1px solid var(--vd-color-border); border-radius: {r}md);
+    background: var(--vd-color-surface-raised);
+    font-size: {t}sm); font-weight: var(--vd-weight-bold);
+    letter-spacing: -0.03em;
+}}
+.vd-sidebar-brand-text {{
+    min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font-size: {t}sm);
+    font-weight: var(--vd-weight-semibold); letter-spacing: -0.01em;
+}}
+.vd-sidebar-controls {{
+    display: flex; align-items: center; justify-content: flex-end;
+    min-height: 2.5rem; flex: 0 0 auto;
+}}
+.vd-sidebar--rail .vd-sidebar-header,
+.vd-sidebar[data-vd-sidebar-mode="rail"] .vd-sidebar-header {{
+    flex-direction: column; justify-content: flex-start;
+}}
+.vd-sidebar--rail .vd-sidebar-brand,
+.vd-sidebar[data-vd-sidebar-mode="rail"] .vd-sidebar-brand {{
+    justify-content: center; gap: 0;
+}}
+.vd-sidebar--rail .vd-sidebar-controls,
+.vd-sidebar[data-vd-sidebar-mode="rail"] .vd-sidebar-controls {{
+    position: absolute; inset: auto {s}sm) {s}md);
+    justify-content: center; gap: 0;
+}}
+.vd-sidebar-toggle {{
+    position: relative; z-index: 95;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.5rem; height: 2.5rem; padding: 0; border-radius: {r}md);
+    border: 1px solid var(--vd-color-border); background: var(--vd-color-surface);
+    color: var(--vd-color-text-muted); cursor: pointer;
+}}
+.vd-sidebar-toggle:hover {{ background: var(--vd-color-surface-raised); color: var(--vd-color-text); }}
+.vd-sidebar-toggle--inside {{ flex: 0 0 auto; }}
+.vd-sidebar--rail .vd-sidebar-toggle--inside,
+.vd-sidebar[data-vd-sidebar-mode="rail"] .vd-sidebar-toggle--inside {{
+    border-color: transparent; background: transparent;
+}}
+.vd-sidebar-toggle--launcher {{
+    display: none; position: fixed; z-index: 95;
+    inset: max({s}md), env(safe-area-inset-top)) auto auto
+        max({s}md), env(safe-area-inset-left));
+    box-shadow: {sh}sm);
+}}
+.vd-sidebar-toggle--launcher[data-vd-sidebar-current-mode="hidden"] {{
+    display: inline-flex;
+}}
+.vd-sidebar-toggle-glyph {{
+    position: relative; width: 1rem; height: 0.75rem;
+    border-top: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+}}
+.vd-sidebar-toggle-glyph::after {{
+    content: ""; position: absolute; inset: 50% 0 auto; border-top: 1.5px solid currentColor;
+}}
+.vd-sidebar-toggle--inside .vd-sidebar-toggle-glyph {{
+    width: 0.5rem; height: 0.5rem;
+    border: solid currentColor; border-width: 0 1.5px 1.5px 0;
+    transform: rotate(135deg);
+    transition: transform {m}fast);
+}}
+.vd-sidebar-toggle--inside .vd-sidebar-toggle-glyph::after {{ display: none; }}
+.vd-sidebar-toggle--inside[data-vd-sidebar-current-mode="rail"]
+    .vd-sidebar-toggle-glyph {{
+    transform: rotate(-45deg);
+}}
+.vd-sidebar-scrim {{
+    position: fixed; inset: 0; z-index: 89; padding: 0; border: 0;
+    background: rgb(0 0 0 / 0.42); backdrop-filter: blur(1px);
+    animation: vd-overlay-in {m}normal) ease both;
+}}
 
-/* App shell — full-viewport sidebar + main layout (chat apps) */
+/* Interactive overlays */
+.vd-drawer-shell, .vd-dropdown-shell {{ display: contents; }}
+.vd-drawer {{
+    width: min(24rem, calc(100vw - 1rem)); max-width: none;
+    height: 100dvh; max-height: none; margin: 0; padding: 0;
+    border: 0; background: var(--vd-color-surface); color: var(--vd-color-text);
+    box-shadow: {sh}xl); overflow: hidden;
+}}
+.vd-drawer::backdrop {{
+    background: rgb(0 0 0 / 0.52); backdrop-filter: blur(2px);
+    animation: vd-overlay-in {m}normal) ease both;
+}}
+.vd-drawer[open] {{ display: flex; flex-direction: column; animation: vd-drawer-in {m}slow) ease both; }}
+.vd-drawer[data-vd-closing] {{ animation: vd-drawer-out {m}normal) ease both; }}
+.vd-drawer--left {{ inset: 0 auto 0 0; }}
+.vd-drawer--right {{ inset: 0 0 0 auto; }}
+.vd-drawer--right[open] {{ animation-name: vd-drawer-right-in; }}
+.vd-drawer--right[data-vd-closing] {{ animation-name: vd-drawer-right-out; }}
+.vd-drawer--top {{
+    inset: 0 0 auto; width: 100vw; height: min(28rem, calc(100dvh - 1rem));
+}}
+.vd-drawer--top[open] {{ animation-name: vd-drawer-top-in; }}
+.vd-drawer--top[data-vd-closing] {{ animation-name: vd-drawer-top-out; }}
+.vd-drawer--bottom {{
+    inset: auto 0 0; width: 100vw; height: min(28rem, calc(100dvh - 1rem));
+    border-radius: {r}xl) {r}xl) 0 0;
+}}
+.vd-drawer--bottom[open] {{ animation-name: vd-drawer-bottom-in; }}
+.vd-drawer--bottom[data-vd-closing] {{ animation-name: vd-drawer-bottom-out; }}
+.vd-drawer--left.vd-drawer--sm, .vd-drawer--right.vd-drawer--sm {{
+    width: min(20rem, calc(100vw - 1rem));
+}}
+.vd-drawer--left.vd-drawer--lg, .vd-drawer--right.vd-drawer--lg {{
+    width: min(32rem, calc(100vw - 1rem));
+}}
+.vd-drawer--top.vd-drawer--sm, .vd-drawer--bottom.vd-drawer--sm {{
+    height: min(16rem, calc(100dvh - 1rem));
+}}
+.vd-drawer--top.vd-drawer--lg, .vd-drawer--bottom.vd-drawer--lg {{
+    height: min(36rem, calc(100dvh - 1rem));
+}}
+.vd-drawer--full {{ width: 100vw; height: 100dvh; }}
+.vd-drawer-header {{
+    display: grid; grid-template-columns: 1fr auto; gap: {s}xs) {s}md);
+    align-items: center; padding: {s}lg); border-bottom: 1px solid var(--vd-color-border);
+}}
+.vd-drawer-title {{ font-size: {t}lg); font-weight: var(--vd-weight-semibold); }}
+.vd-drawer-description {{ color: var(--vd-color-text-muted); font-size: {t}sm); }}
+.vd-drawer-header > .vd-button {{ grid-column: 2; grid-row: 1 / span 2; }}
+.vd-drawer-body {{ flex: 1; min-height: 0; padding: {s}lg); overflow-y: auto; }}
+
+.vd-dropdown-menu {{
+    position: fixed; inset: auto; left: var(--vd-anchor-x, 0);
+    top: var(--vd-anchor-y, 0); z-index: 100; min-width: 12rem;
+    max-width: min(22rem, calc(100vw - 1rem)); margin: 0; padding: {s}xs);
+    border: 1px solid var(--vd-color-border); border-radius: {r}lg);
+    background: var(--vd-color-surface); color: var(--vd-color-text);
+    box-shadow: {sh}lg); opacity: 0; transform: translateY(-0.25rem) scale(0.98);
+}}
+.vd-dropdown-menu:popover-open,
+.vd-dropdown-menu[data-vd-fallback-open] {{
+    opacity: 1; transform: translateY(0) scale(1);
+    transition: opacity {m}fast), transform {m}fast);
+}}
+.vd-menu-item {{
+    display: flex; align-items: center; justify-content: space-between; gap: {s}lg);
+    width: 100%; min-height: 2.25rem; padding: {s}sm);
+    border: 0; border-radius: {r}md); background: transparent;
+    color: var(--vd-color-text); font-size: {t}sm); text-decoration: none;
+    text-align: left; cursor: pointer;
+}}
+.vd-menu-item:hover, .vd-menu-item:focus-visible {{
+    background: var(--vd-color-surface-raised); outline: none;
+}}
+.vd-menu-item--destructive {{ color: var(--vd-color-danger); }}
+.vd-menu-item:disabled {{ opacity: 0.45; cursor: not-allowed; }}
+.vd-menu-shortcut {{ margin-left: auto; color: var(--vd-color-text-muted); font-size: {t}xs); }}
+.vd-menu-separator {{ height: 1px; margin: {s}xs) 0; border: 0; background: var(--vd-color-border); }}
+
+/* Tabs */
+.vd-tabs {{ display: flex; flex-direction: column; min-width: 0; }}
+.vd-tabs--vertical {{ flex-direction: row; gap: {s}lg); }}
+.vd-tabs-list {{
+    display: flex; align-items: center; gap: {s}xs);
+    border-bottom: 1px solid var(--vd-color-border);
+}}
+.vd-tabs--vertical > .vd-tabs-list {{
+    flex-direction: column; align-items: stretch; border-bottom: 0;
+    border-right: 1px solid var(--vd-color-border);
+}}
+.vd-tabs--vertical .vd-tabs-trigger::after {{
+    inset: {s}sm) -1px {s}sm) auto; width: 2px; height: auto;
+}}
+.vd-tabs-trigger {{
+    position: relative; min-height: 2.5rem; padding: {s}sm) {s}md);
+    border: 0; background: transparent; color: var(--vd-color-text-muted);
+    font-size: {t}sm); font-weight: var(--vd-weight-medium); cursor: pointer;
+}}
+.vd-tabs-trigger::after {{
+    content: ""; position: absolute; inset: auto {s}md) -1px;
+    height: 2px; border-radius: {r}full); background: transparent;
+}}
+.vd-tabs-trigger[aria-selected="true"] {{ color: var(--vd-color-text); }}
+.vd-tabs-trigger[aria-selected="true"]::after {{ background: var(--vd-color-secondary); }}
+.vd-tabs-trigger:disabled {{ opacity: 0.45; cursor: not-allowed; }}
+.vd-tabs-panel {{ padding-block: {s}lg); min-width: 0; }}
+
+/* Toasts and snackbars */
+.vd-toast-region {{
+    position: fixed; z-index: 120; display: flex; flex-direction: column;
+    gap: {s}sm); width: min(24rem, calc(100vw - 2rem));
+    pointer-events: none;
+}}
+.vd-toast-region--top-left {{ top: max(1rem, env(safe-area-inset-top)); left: max(1rem, env(safe-area-inset-left)); }}
+.vd-toast-region--top-right {{ top: max(1rem, env(safe-area-inset-top)); right: max(1rem, env(safe-area-inset-right)); }}
+.vd-toast-region--bottom-left {{ bottom: max(1rem, env(safe-area-inset-bottom)); left: max(1rem, env(safe-area-inset-left)); }}
+.vd-toast-region--bottom-right {{ bottom: max(1rem, env(safe-area-inset-bottom)); right: max(1rem, env(safe-area-inset-right)); }}
+.vd-toast {{
+    --vd-toast-accent: var(--vd-color-secondary);
+    display: flex; align-items: center; gap: {s}md); width: 100%;
+    padding: {s}md); border: 1px solid var(--vd-color-border);
+    border-left: 3px solid var(--vd-toast-accent); border-radius: {r}lg);
+    background: var(--vd-color-surface-raised); color: var(--vd-color-text);
+    box-shadow: {sh}lg); pointer-events: auto;
+    animation: vd-toast-in {m}slow) ease both;
+}}
+.vd-toast[data-vd-closing] {{ animation: vd-toast-out {m}normal) ease both; }}
+.vd-toast--info {{ --vd-toast-accent: var(--vd-color-info); }}
+.vd-toast--success {{ --vd-toast-accent: var(--vd-color-success); }}
+.vd-toast--warning {{ --vd-toast-accent: var(--vd-color-warning); }}
+.vd-toast--danger {{ --vd-toast-accent: var(--vd-color-danger); }}
+.vd-toast--snackbar {{ border-left-width: 1px; }}
+.vd-toast-content {{ min-width: 0; flex: 1; }}
+.vd-toast-title {{ font-size: {t}sm); font-weight: var(--vd-weight-semibold); }}
+.vd-toast-message {{ color: var(--vd-color-text-muted); font-size: {t}sm); line-height: 1.45; }}
+.vd-toast-actions {{ display: flex; align-items: center; gap: {s}xs); }}
+.vd-toast-dismiss {{
+    min-width: 2rem; min-height: 2rem; padding: 0 {s}sm); border: 0;
+    border-radius: {r}sm); background: transparent;
+    color: var(--vd-color-text-muted); cursor: pointer;
+}}
+.vd-toast-dismiss:hover {{ background: var(--vd-color-surface); color: var(--vd-color-text); }}
+
+@keyframes vd-overlay-in {{ from {{ opacity: 0; }} }}
+@keyframes vd-drawer-in {{ from {{ opacity: 0; transform: translateX(-1.5rem); }} }}
+@keyframes vd-drawer-out {{ to {{ opacity: 0; transform: translateX(-1rem); }} }}
+@keyframes vd-drawer-right-in {{ from {{ opacity: 0; transform: translateX(1.5rem); }} }}
+@keyframes vd-drawer-right-out {{ to {{ opacity: 0; transform: translateX(1rem); }} }}
+@keyframes vd-drawer-top-in {{ from {{ opacity: 0; transform: translateY(-1.5rem); }} }}
+@keyframes vd-drawer-top-out {{ to {{ opacity: 0; transform: translateY(-1rem); }} }}
+@keyframes vd-drawer-bottom-in {{ from {{ opacity: 0; transform: translateY(1.5rem); }} }}
+@keyframes vd-drawer-bottom-out {{ to {{ opacity: 0; transform: translateY(1rem); }} }}
+@keyframes vd-toast-in {{
+    from {{ opacity: 0; transform: translateY(0.75rem) scale(0.98); }}
+}}
+@keyframes vd-toast-out {{
+    to {{ opacity: 0; transform: translateX(1rem) scale(0.98); }}
+}}
+
+
 .vd-app-shell {{
     display: flex; align-items: stretch;
     width: 100%; height: 100dvh; overflow: hidden;
 }}
 .vd-app-shell > .vd-sidebar {{
     height: 100dvh; border-right: 1px solid var(--vd-color-border);
+}}
+.vd-app-shell-content {{
+    min-width: 0; min-height: 0; flex: 1;
+    overflow: auto; padding: clamp({s}lg), 3vw, {s}xl));
+}}
+.vd-app-shell-content--pad-none {{ padding: 0; }}
+.vd-app-shell-content--pad-sm {{ padding: {s}md); }}
+.vd-app-shell-content--pad-md {{
+    padding: clamp({s}md), 2vw, {s}lg));
+}}
+.vd-app-shell-content--pad-xl {{
+    padding: clamp({s}xl), 4vw, {s}xxl));
+}}
+.vd-bottom-nav {{
+    display: none; position: fixed; z-index: 80; inset: auto 0 0;
+    align-items: stretch; justify-content: space-around;
+    min-height: calc(3.75rem + env(safe-area-inset-bottom));
+    padding: {s}xs) {s}sm) env(safe-area-inset-bottom);
+    border-top: 1px solid var(--vd-color-border);
+    background: color-mix(in srgb, var(--vd-color-surface) 92%, transparent);
+    backdrop-filter: blur(18px) saturate(140%);
+}}
+.vd-bottom-nav-item {{
+    display: flex; flex: 1; min-width: 0; min-height: 3.25rem;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.2rem; border-radius: {r}md); color: var(--vd-color-text-muted);
+    font-size: {t}xs); text-decoration: none;
+}}
+.vd-bottom-nav-item:hover {{ color: var(--vd-color-text); text-decoration: none; }}
+.vd-bottom-nav-item--active {{ color: var(--vd-color-secondary); }}
+.vd-bottom-nav-item-icon {{
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.5rem; height: 1.5rem;
+}}
+.vd-bottom-nav-item-label {{
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }}
 .vd-chat-main {{
     flex: 1; min-width: 0; display: flex; flex-direction: column;
@@ -797,6 +1361,28 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
         grid-template-columns: 1fr;
     }}
     .vd-navbar {{ justify-content: center; }}
+    .vd-sidebar {{
+        position: fixed; inset: 0 auto 0 0; z-index: 90; height: 100dvh;
+        box-shadow: {sh}xl);
+    }}
+    .vd-sidebar[data-vd-sidebar-mode="rail"] {{
+        position: relative; inset: auto; width: 4.5rem; box-shadow: none;
+    }}
+    .vd-bottom-nav {{ display: flex; }}
+    .vd-app-shell:has(> .vd-bottom-nav) {{
+        padding-bottom: calc(3.75rem + env(safe-area-inset-bottom));
+    }}
+    .vd-toast-region {{
+        right: max(0.75rem, env(safe-area-inset-right));
+        bottom: max(0.75rem, env(safe-area-inset-bottom));
+        left: max(0.75rem, env(safe-area-inset-left));
+        width: auto;
+    }}
+    .vd-tabs--vertical {{ flex-direction: column; }}
+    .vd-tabs--vertical > .vd-tabs-list {{
+        flex-direction: row; overflow-x: auto; border-right: 0;
+        border-bottom: 1px solid var(--vd-color-border);
+    }}
 }}
 
 /* Respect reduced-motion preferences */

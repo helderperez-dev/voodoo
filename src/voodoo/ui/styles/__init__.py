@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
+from voodoo.ui.styles.palette import ThemePalette, color
 from voodoo.ui.styles.theme import Theme
 
 
@@ -65,3 +66,12 @@ def _install_default() -> None:
 
 
 _install_default()
+
+__all__ = [
+    "NoopAdapter",
+    "StyleAdapter",
+    "ThemePalette",
+    "color",
+    "current_adapter",
+    "set_style_adapter",
+]

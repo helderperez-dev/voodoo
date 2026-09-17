@@ -16,6 +16,7 @@ from voodoo.ui.styles.theme import (  # noqa: F401
     ThemeCode,
     ThemeColors,
     ThemeMotion,
+    ThemePalette,
     ThemeRadius,
     ThemeShadows,
     ThemeSpacing,

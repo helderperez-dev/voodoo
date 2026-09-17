@@ -1,5 +1,61 @@
 # Changelog
 
+## [2.9.0] — 2026-09-17
+
+### Added — UI Component Library Expansion
+
+Major expansion of the Voodoo UI component surface. Adds ~67 new component
+classes across 7 new modules, with full Tailwind and VoodooCSS adapter
+support and 238 new tests.
+
+- **Controls** (`ui.controls`) — Button, IconButton, ButtonGroup, Toggle,
+  ToggleGroup, DropdownMenu, ContextMenu, Slider, Switch, Checkbox,
+  RadioGroup, Badge, Chip, Avatar, AvatarGroup, Progress, Spinner,
+  Kbd, Command.
+- **Data views** (`ui.data_extended`) — DataTable (sortable, paginated,
+  selectable), DataGrid, Timeline, CalendarView, CalendarDay,
+  KanbanBoard, KanbanColumn, KanbanCard, ListView, ListItem,
+  TreeViewNode, DescriptionList, DescriptionItem, Stat, StatGroup,
+  CodeBlock, JsonViewer.
+- **Forms** (`ui.forms_extended`) — FormField, TextInput, TextArea,
+  Select, RadioInput, FileUpload, DatePicker, SearchInput, OTPInput,
+  ColorPicker, RangeSlider, FormSection, FormActions, FormRow,
+  FormGrid.
+- **Navigation** (`ui.navigation`, `ui.navigation_extended`) —
+  Sidebar, SidebarGroup, SidebarItem, Pagination, Stepper,
+  Breadcrumbs, Tabs (re-export), VerticalTabs, BackToTop, SkipLink,
+  FloatingActionButton, CommandPalette, BottomSheet.
+- **Interactions** (`ui.interactions`) — Dialog, AlertDialog, Toast,
+  ToastProvider, Tooltip, HoverCard, Popover, Drawer,
+  ConfirmationDialog.
+- **Workspace** (`ui.workspace`) — SplitPane, SplitHandle,
+  PanelGroup, Panel, ScrollArea, ResizableBox, Masonry, Stack,
+  Container, Divider, Spacer, AspectRatio.
+- **Foundation** (`ui.foundation`) — Skeleton, EmptyState, ErrorState,
+  LoadingOverlay, LoadingDots, Placeholder, Callout, Banner,
+  Spotlight, Highlight, VisuallyHidden.
+- **Interaction kernel** (`ui.interaction_kernel`) — FocusTrap,
+  KeyboardShortcut, SwipeGesture, LongPress, DragPreview, ResizeObserver.
+- **Styles extended** (`ui.styles.extended`, `ui.styles.palette`) —
+  component variant presets, ThemePalette, color helper.
+
+### Fixed — Test infrastructure
+
+- **Store-backed Model isolation** (`tests`) — `conftest.py` teardown
+  now resets both SQL and Voodoo Store state between tests, preventing
+  data accumulation across the suite. Removes `.voodoo/` disk state
+  after each test.
+- **Async fixture decorator** (`tests`) — `test_integration.py::test_db`
+  corrected from `@pytest.fixture` to `@pytest_asyncio.fixture`.
+
+### Changed — Adapters
+
+- Tailwind adapter extended with class mappings for all new components.
+- VoodooCSS adapter extended with style generation for all new components.
+- `client.js` extended with DOM handling for new interactive components.
+
+**Full suite:** 1803 passed, 61 skipped, 0 failed (ruff clean).
+
 ## [2.6.2] — 2026-09-12
 
 ### Fixed — Runtime durability hardening

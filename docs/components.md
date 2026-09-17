@@ -61,7 +61,173 @@ profile = Card(
     Heading("Ada Lovelace", level=2),
     Badge("Admin"),
     Text("ada@example.com"),
+    variant="elevated",
+    padding="xl",
 )
+```
+
+Cards support `default`, `elevated`, `outline`, `ghost`, and `interactive`
+variants with `none`, `sm`, `md`, `lg`, or `xl` padding. Every component also
+accepts token-based `color`, `background`, and `border_color` props such as
+`background="violet-950"`; see [Design System](./design_system.md#color-palette).
+
+### Interface foundations
+
+Common feedback, navigation, disclosure, and content patterns are available
+without custom CSS:
+
+```python
+from voodoo import (
+    Accordion,
+    AccordionItem,
+    Alert,
+    Breadcrumb,
+    BreadcrumbItem,
+    Button,
+    ButtonGroup,
+    Kbd,
+    Progress,
+    Spinner,
+)
+
+page_tools = ButtonGroup(
+    Button("List", variant="outline"),
+    Button("Grid", variant="outline"),
+    label="View",
+)
+
+navigation = Breadcrumb(
+    BreadcrumbItem("Projects", "/projects"),
+    BreadcrumbItem("Voodoo", "/projects/voodoo"),
+    BreadcrumbItem("Settings"),
+)
+
+status = Alert(
+    "The new configuration is active.",
+    title="Deployment complete",
+    tone="success",
+)
+
+details = Accordion(
+    AccordionItem("Runtime", "Execution and worker settings", open=True),
+    AccordionItem("Security", "Authentication and access policies"),
+    variant="contained",
+)
+
+loading = Progress(72, label="Deployment progress", tone="success")
+shortcut = Kbd("Cmd+K")
+```
+
+`Alert` supports `soft`, `outline`, and `solid` variants with semantic tones.
+`Progress` can be determinate or indeterminate. `Accordion` uses native
+`details`/`summary` elements, preserving keyboard behavior without application
+JavaScript.
+
+### Adaptive application UI
+
+Voodoo includes the interaction patterns needed by desktop, mobile, and
+installable PWA interfaces:
+
+```python
+from voodoo import (
+    AppShell,
+    BottomNav,
+    BottomNavItem,
+    Button,
+    Drawer,
+    DropdownMenu,
+    Icon,
+    MenuItem,
+    Sidebar,
+    SidebarItem,
+    Snackbar,
+    Tab,
+    Tabs,
+    ToastRegion,
+)
+
+sidebar = Sidebar(
+    SidebarItem("Home", href="/", icon=Icon("home"), active=True),
+    SidebarItem("Settings", href="/settings", icon=Icon("settings")),
+    brand="Acme",
+    logo="A",
+    brand_href="/",
+    brand_label="Acme home",
+    mode="expanded",
+    modes=("expanded", "rail"),
+    mobile_mode="hidden",
+    dismiss_mode="hidden",
+)
+
+shell = AppShell(
+    Main("Application content"),
+    sidebar=sidebar,
+    content_padding="lg",
+    bottom_nav=BottomNav(
+        BottomNavItem("Home", "/", icon=Icon("home"), active=True),
+        BottomNavItem("Settings", "/settings", icon=Icon("settings")),
+    ),
+)
+
+account_menu = DropdownMenu(
+    Button("Account", variant="ghost"),
+    MenuItem("Profile", href="/profile"),
+    MenuItem("Sign out", on_select=sign_out, destructive=True),
+)
+
+mobile_filters = Drawer(
+    Button("Filters", variant="outline"),
+    filter_form,
+    title="Filters",
+    side="bottom",
+)
+
+content = Tabs(
+    Tab("overview", "Overview", overview),
+    Tab("activity", "Activity", activity),
+)
+
+notifications = ToastRegion(
+    Snackbar("Changes saved", action=Button("Undo", on_click=undo))
+)
+```
+
+Sidebars support `expanded`, `rail`, and `hidden` modes. Their behavior belongs
+to the `Sidebar` itself: `modes` defines the toggle cycle, `mobile_mode`
+defines its compact-viewport starting state, and `dismiss_mode` defines where
+the mobile backdrop returns it. The default toggle cycle is
+`("expanded", "rail")`, so compacting the sidebar does not unexpectedly hide
+it on the next click. Include `"hidden"` explicitly when full closing is part
+of the product design.
+
+`AppShell` automatically renders a compact `V.` / `Voodoo` placeholder brand,
+uses a directional chevron for the desktop expand/collapse action, and exposes
+a separate hamburger launcher only while the sidebar is fully hidden. In
+expanded mode the chevron sits in the sidebar header; in rail mode it moves to
+the bottom so branding and primary destinations remain uninterrupted.
+Customize the lockup with `brand=` and `logo=`, make it navigable with
+`brand_href=`, and provide an explicit accessible name with `brand_label=`
+when the visual brand is a custom component. Pass both `brand` and `logo` as
+`None` to remove the lockup. Set `sidebar_toggle=False` to disable the
+generated controls. Modes are persisted independently for mobile and desktop.
+Below `768px`, `BottomNav` becomes visible with safe-area padding.
+
+`AppShell` also owns the default content gutter. `content_padding="lg"` uses a
+responsive 16–24px inset so page headings and controls do not touch the
+sidebar divider or viewport edges. Use `"none"` for intentionally edge-to-edge
+surfaces such as maps, canvases, and full-bleed dashboards; `"sm"`, `"md"`,
+and `"xl"` provide the other standard token-based options.
+
+Drawers use native modal dialogs with focus restoration, Escape handling,
+backdrop dismissal, and reduced-motion-aware transitions. Dropdown menus use
+native popovers with anchored placement and Arrow/Home/End keyboard navigation.
+Tabs implement linked ARIA states and roving keyboard focus.
+
+Client-side code may also show transient feedback without constructing markup:
+
+```javascript
+voodoo.toast("Deployment complete", {title: "Ready", tone: "success"});
+voodoo.snackbar("Connection restored");
 ```
 
 ### Forms
@@ -177,7 +343,7 @@ set_style_adapter(TailwindAdapter())
 
 - `Component` — base class for all UI elements.
 - `Component.render()` — serialize to HTML.
-- Built-in components: `Div`, `Flex`, `Stack`, `Grid`, `Box`, `Container`, `Page`, `Button`, `Card`, `Text`, `Heading`, `Badge`, `Avatar`, `Divider`, `Dialog`, `Modal`, `Form`, `Label`, `Input`, `Textarea`, `Select`, `Option`, `Checkbox`, `Radio`, `Table`, `List`, `ListItem`, `Nav`, `Header`, `Footer`, `Main`, `Section`, `Article`, `A`, `Link`.
+- Built-in components: `AppShell`, `Div`, `Flex`, `Stack`, `Grid`, `Box`, `Container`, `Page`, `Sidebar`, `SidebarItem`, `SidebarToggle`, `BottomNav`, `BottomNavItem`, `Button`, `ButtonGroup`, `Card`, `Text`, `Heading`, `Badge`, `Avatar`, `Divider`, `Alert`, `Progress`, `Spinner`, `Breadcrumb`, `BreadcrumbItem`, `Accordion`, `AccordionItem`, `Kbd`, `AspectRatio`, `Dialog`, `Modal`, `ModalTrigger`, `ModalClose`, `Drawer`, `DropdownMenu`, `MenuItem`, `MenuSeparator`, `Tabs`, `Tab`, `ToastRegion`, `Toast`, `Snackbar`, `Form`, `Label`, `Input`, `Textarea`, `Select`, `Option`, `Checkbox`, `Radio`, `Table`, `List`, `ListItem`, `Nav`, `Header`, `Footer`, `Main`, `Section`, `Article`, `A`, `Link`.
 - Chrome components: `Navbar`, `NavLink`, `Brand`, `ThemeToggle`, `Hero`, `PageHero`, `Eyebrow`, `Chip`, `CodeBlock`, `Stats`, `Stat`, `CTABand`, `BackLink`, `FeatureCard`, `LinkArrow`.
 - Semantic HTML: `Nav`, `Header`, `Footer`, `Main`, `Section`, `Article`, `Aside`, `Figure`, `FigCaption`, `Address`, `Paragraph`, `Time`, `Img`.
 - Icons & Markdown:
@@ -203,6 +369,7 @@ set_style_adapter(TailwindAdapter())
     newlines (wired by the client SDK — zero hand-written JS).
   - `Sidebar(*children)` — app sidebar shell styled by `vd-sidebar`.
 - Client JS SDK (`static/client.js`, auto-included): `voodoo.navigate(path)`,
-  `voodoo.scrollToBottom(id)`, `voodoo.onEnter(el, handler)`, plus automatic
-  chat behaviors (`setupChatBehaviors`) re-applied after every DOM patch.
+  `voodoo.scrollToBottom(id)`, `voodoo.toast(message, options)`,
+  `voodoo.snackbar(message, options)`, plus automatic interaction and chat
+  behaviors re-applied after every DOM patch.
 - `set_style_adapter(adapter)` — set the active style adapter.
