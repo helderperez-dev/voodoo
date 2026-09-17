@@ -335,3 +335,97 @@ def test_cli_dev_does_not_leak_pythonpath(tmp_path: Path, monkeypatch):
 
     assert result.exit_code == 0
     assert "PYTHONPATH" not in captured
+
+
+def test_cli_start_uses_safe_production_defaults(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """start should discover main.py and preserve Store-safe server defaults."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "main.py").write_text("app = object()\n")
+    for name in (
+        "VOODOO_ENV",
+        "VOODOO_HOST",
+        "VOODOO_PORT",
+        "PORT",
+        "FORWARDED_ALLOW_IPS",
+        "WEBSOCKETS_MAX_LINE_LENGTH",
+        "WEBSOCKETS_MAX_NUM_HEADERS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    with patch("uvicorn.run") as run:
+        result = runner.invoke(app, ["start"])
+
+    assert result.exit_code == 0
+    run.assert_called_once_with(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        workers=1,
+        proxy_headers=True,
+        forwarded_allow_ips="127.0.0.1",
+        http="h11",
+        ws="websockets",
+        h11_max_incomplete_event_size=5_242_880,
+    )
+    assert os.environ["VOODOO_ENV"] == "production"
+    assert os.environ["WEBSOCKETS_MAX_LINE_LENGTH"] == "8388608"
+    assert os.environ["WEBSOCKETS_MAX_NUM_HEADERS"] == "256"
+
+
+def test_cli_start_respects_explicit_configuration(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """CLI arguments and explicit environment settings should remain authoritative."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("VOODOO_ENV", "staging")
+    monkeypatch.setenv("VOODOO_HOST", "127.0.0.2")
+    monkeypatch.setenv("PORT", "9100")
+    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "10.0.0.0/8")
+
+    with patch("uvicorn.run") as run:
+        result = runner.invoke(
+            app,
+            [
+                "start",
+                "custom.application:app",
+                "--host",
+                "127.0.0.3",
+                "--port",
+                "9200",
+            ],
+        )
+
+    assert result.exit_code == 0
+    call = run.call_args
+    assert call.args == ("custom.application:app",)
+    assert call.kwargs["host"] == "127.0.0.3"
+    assert call.kwargs["port"] == 9200
+    assert call.kwargs["forwarded_allow_ips"] == "10.0.0.0/8"
+    assert call.kwargs["workers"] == 1
+    assert os.environ["VOODOO_ENV"] == "staging"
+
+
+def test_cli_start_falls_back_to_folder_routing_app(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """Projects without main.py should use the folder-routing application."""
+    monkeypatch.chdir(tmp_path)
+
+    with patch("uvicorn.run") as run:
+        result = runner.invoke(app, ["start"])
+
+    assert result.exit_code == 0
+    assert run.call_args.args == ("voodoo.core:app",)
+
+
+def test_cli_start_does_not_offer_unsafe_multi_worker_mode():
+    """One local Store writer means the production command has no workers option."""
+    result = runner.invoke(app, ["start", "--workers", "2"])
+
+    assert result.exit_code != 0
+    assert "No such option" in result.output
