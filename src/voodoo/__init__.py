@@ -105,7 +105,7 @@ from .ui.styles import (
 from .ui.styles.theme import Theme, ThemeColors, create_theme
 from .workers import task
 
-__version__ = "2.8.2"
+__version__ = "2.8.3"
 
 __all__ = [
     # Core runtime
