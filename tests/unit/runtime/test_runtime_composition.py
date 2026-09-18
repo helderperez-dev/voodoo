@@ -232,3 +232,59 @@ async def test_runtime_cycle_is_bounded_and_structured():
     # The observation produced during compute does not recursively trigger
     # another reconciliation cycle.
     assert cycle.invalidation.revision == "cycle-1"
+
+
+@pytest.mark.asyncio
+async def test_runtime_observation_binding_drives_one_bounded_cycle():
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    runtime = Runtime(world=world)
+    runtime.engine.capabilities.register(Capability(name="conversion.adjust"))
+
+    resource_id = runtime.bind_observation("business", "conversion")
+    goal = Goal(id="observed-growth", name="observed-growth", target_entity_id="business")
+    runtime.register_goal(
+        goal,
+        observes=(resource_id,),
+        satisfied=lambda item, snapshot: (
+            snapshot is not None
+            and snapshot.entity.properties.get("conversion", 0) >= 0.10
+        ),
+        propose=lambda item, snapshot: Intent(
+            name="improve-conversion",
+            requires=["conversion.adjust"],
+        ),
+    )
+
+    async def compute(ctx):
+        return ComputeResult(value="scheduled")
+
+    cycle = await runtime.observe(
+        "business",
+        "conversion",
+        0.08,
+        source="analytics",
+        compute=compute,
+    )
+
+    assert cycle is not None
+    assert cycle.invalidation.source == resource_id
+    assert len(cycle.executions) == 1
+    assert cycle.decisions[0].action is ReconcileAction.PROPOSE_INTENT
+
+
+@pytest.mark.asyncio
+async def test_unbound_observation_updates_world_without_runtime_work():
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    runtime = Runtime(world=world)
+
+    cycle = await runtime.observe(
+        "business",
+        "visitors",
+        42,
+        source="analytics",
+    )
+
+    assert cycle is None
+    assert world.entity("business").properties["visitors"] == 42
