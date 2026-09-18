@@ -15,6 +15,7 @@ from voodoo.runtime.work_scheduler import (
     ScheduledWork,
     SchedulingDecision,
     WorkEligibility,
+    scheduled_work_from_intent,
 )
 
 
@@ -49,7 +50,7 @@ class RuntimeDispatcher:
 
         plans: list[DispatchPlan] = []
         for intent in decision.intents:
-            work = ScheduledWork(intent=intent)
+            work = scheduled_work_from_intent(intent)
             eligibility = self.scheduler.evaluate(
                 work,
                 completed=completed,
