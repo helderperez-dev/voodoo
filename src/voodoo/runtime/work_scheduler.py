@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import Any
 
 from voodoo.primitives.intent import Intent
+from voodoo.runtime.fabric import PlacementRequirement
 
 
 class WorkEligibility(StrEnum):
@@ -27,6 +28,7 @@ class ScheduledWork:
     priority: int = 0
     not_before: datetime | None = None
     dependencies: tuple[str, ...] = ()
+    placement: PlacementRequirement = field(default_factory=PlacementRequirement)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
