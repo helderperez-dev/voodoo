@@ -31,9 +31,7 @@ class AppShell(Component):
         **kwargs: Any,
     ) -> None:
         if content_padding not in {"none", "sm", "md", "lg", "xl"}:
-            raise ValueError(
-                "AppShell content_padding must be none, sm, md, lg, or xl"
-            )
+
         shell_children = list(children)
         content: list[Any] = []
         if sidebar is not None:
@@ -59,9 +57,7 @@ class AppShell(Component):
             if not brand.attrs.get("hidden"):
                 header_children.append(brand)
             if sidebar_toggle and collapsible:
-                sidebar_modes = tuple(
-                    sidebar.props.get("modes", ("expanded", "rail"))
-                )
+
                 integrated = supplied_toggle or SidebarToggle(
                     sidebar,
                     modes=sidebar_modes,
@@ -195,7 +191,7 @@ class SidebarToggle(Component):
         placement: str = "standalone",
         **kwargs: Any,
     ) -> None:
-        if not modes or any(mode not in {"expanded", "rail", "hidden"} for mode in modes):
+
             raise ValueError("SidebarToggle modes must use expanded, rail, or hidden")
         if placement not in {"standalone", "inside", "launcher"}:
             raise ValueError(
