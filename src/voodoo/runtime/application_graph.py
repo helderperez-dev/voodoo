@@ -227,6 +227,47 @@ class ApplicationGraph:
 
 
 @dataclass(frozen=True, slots=True)
+class ChangeReason(StrEnum):
+    STRUCTURE = "structure"
+    STATE = "state"
+    OBSERVATION = "observation"
+    CONFIGURATION = "configuration"
+    RESOURCE = "resource"
+
+
+@dataclass(frozen=True, slots=True)
+class Invalidation:
+    source: str
+    affected: tuple[str, ...]
+    reason: ChangeReason
+    revision: str | None = None
+
+
+class InvalidationEngine:
+    """Deterministically translate a semantic change into affected graph nodes."""
+
+    def __init__(self, graph: ApplicationGraph) -> None:
+        self.graph = graph
+
+    def invalidate(
+        self,
+        source: str,
+        *,
+        reason: ChangeReason = ChangeReason.STATE,
+        revision: str | None = None,
+        relations: set[str] | None = None,
+    ) -> Invalidation:
+        affected = tuple(
+            node.id for node in self.graph.affected(source, relations=relations)
+        )
+        return Invalidation(
+            source=source,
+            affected=affected,
+            reason=reason,
+            revision=revision,
+        )
+
+
 class ApplicationGraphChange:
     added_nodes: tuple[str, ...] = ()
     removed_nodes: tuple[str, ...] = ()
@@ -421,6 +462,9 @@ __all__ = [
     "ApplicationEdge",
     "ApplicationGraph",
     "ApplicationGraphChange",
+    "ChangeReason",
+    "Invalidation",
+    "InvalidationEngine",
     "Extension",
     "ExtensionRegistry",
     "ExtensionManifest",
