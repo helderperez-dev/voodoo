@@ -72,7 +72,7 @@ def test_resizable_panels_vertical(adapter):
 
 
 def test_panel_collapsible(adapter):
-    html = Panel("hidden", children=["Hidden"], collapsible=True).render_panel(0).render()
+
     assert "Hidden" in html
 
 
@@ -95,13 +95,7 @@ def test_scroll_area_vertical(adapter):
 
 def test_tree_view_renders(adapter):
     html = TreeView(
-        TreeNode("Documents", children=[
-            TreeNode("Report.pdf"),
-            TreeNode("Data.csv"),
-        ]),
-        TreeNode("Images", children=[
-            TreeNode("Photo.jpg"),
-        ]),
+
     ).render()
     assert 'role="tree"' in html
     assert "Documents" in html
@@ -158,13 +152,13 @@ def test_toolbar_separator(adapter):
 
 def test_menubar_renders(adapter):
     html = Menubar(
-        MenubarMenu("File",
+
             MenubarItem("New"),
             MenubarItem("Open"),
             MenubarSeparator(),
             MenubarItem("Exit"),
         ),
-        MenubarMenu("Edit",
+
             MenubarItem("Undo"),
             MenubarItem("Redo"),
         ),
