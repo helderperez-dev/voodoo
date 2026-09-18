@@ -1,6 +1,7 @@
 import pytest
 
 from voodoo.primitives.capability import Capability
+from voodoo.runtime import ComputeParticipant, GoalStatus
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import (
     ApplicationNodeKind,
@@ -138,3 +139,29 @@ def test_runtime_goal_registration_is_idempotent_but_rejects_identity_conflict()
     other = Goal(id="growth", name="different")
     with pytest.raises(ValueError, match="conflicts with Goal"):
         runtime.register_goal(other, satisfied=lambda item, snapshot: True)
+
+
+@pytest.mark.asyncio
+async def test_runtime_owns_adaptive_goal_execution():
+    runtime = Runtime()
+    runtime.engine.capabilities.register(Capability(name="inventory.read"))
+    runtime.register_compute(
+        ComputeParticipant(
+            name="reader",
+            kind="compute",
+            capabilities=["inventory.read"],
+            compute=lambda ctx: {"stock": 2},
+        )
+    )
+
+    goal = Goal(name="inspect-inventory")
+    run = await runtime.achieve(
+        goal,
+        intents=[Intent(name="inspect").require("inventory.read")],
+    )
+
+    assert runtime.goals.supervisor is runtime.supervisor
+    assert runtime.supervisor.engine is runtime.engine
+    assert runtime.planner.engine is runtime.engine
+    assert run.status is GoalStatus.COMPLETED
+    assert run.result == {"stock": 2}
