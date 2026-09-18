@@ -531,7 +531,6 @@ __all__ = [
     "Invalidation",
     "InvalidationEngine",
     "Extension",
-    "ExtensionRegistry",
     "ExtensionManifest",
     "ApplicationGraphContributor",
     "diff_application_graph",
