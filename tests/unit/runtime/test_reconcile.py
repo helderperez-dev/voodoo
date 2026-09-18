@@ -287,3 +287,15 @@ def test_reconciler_blocks_repeated_non_converging_outcome():
 
     assert blocked.action is ReconcileAction.BLOCKED
     assert blocked.evidence["repeated_outcomes"] == 3
+
+
+def test_reconciler_rejects_invalid_convergence_guard():
+    import pytest
+
+    graph = ApplicationGraph()
+
+    with pytest.raises(ValueError, match="cooldown_seconds"):
+        Reconciler(graph, guard=ReconcileGuard(cooldown_seconds=-1))
+
+    with pytest.raises(ValueError, match="max_repeated_outcomes"):
+        Reconciler(graph, guard=ReconcileGuard(max_repeated_outcomes=0))
