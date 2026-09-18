@@ -57,7 +57,7 @@ class Pagination(Component):
         if total_pages < 1:
             raise ValueError("Pagination total_pages must be at least 1")
         if current_page < 1 or current_page > total_pages:
-
+            raise ValueError("Pagination current_page must be between 1 and total_pages")
         if sibling_count < 0:
             raise ValueError("Pagination sibling_count must be non-negative")
 
@@ -121,7 +121,9 @@ class Pagination(Component):
         self.props = {"total_pages": total_pages, "current_page": current_page}
 
 
-
+def _pagination_range(
+    current: int, total: int, siblings: int
+) -> list[int | str]:
     """Calculate which page numbers and ellipses to show."""
     if total <= (2 * siblings + 5):
         return list(range(1, total + 1))
@@ -208,7 +210,7 @@ class Stepper(Component):
 
         rendered: list[Component] = []
         for index, step in enumerate(steps):
-
+            state = "completed" if index < current else "active" if index == current else "upcoming"
             rendered.append(step.render_step(index, state, binding))
 
         super().__init__(
@@ -256,7 +258,9 @@ class Step:
         if self.icon and state == "completed":
             indicator_children.append(self.icon)
         else:
-
+            indicator_children.append(
+                Text(str(index + 1), class_="vd-step-number")
+            )
 
         copy_children: list[Any] = [
             _StepLabel(self.label),
@@ -330,7 +334,9 @@ class AnchorNavigation(Component):
     ) -> None:
         if not links:
             raise ValueError("AnchorNavigation requires at least one AnchorLink")
-
+        list_items = tuple(
+            _AnchorItem(link.render_link()) for link in links
+        )
         super().__init__(
             _AnchorHeading(label),
             _AnchorList(
@@ -530,7 +536,9 @@ class Action(Component):
             content.append(_ActionIcon(icon))
         copy_children: list[Any] = list(children)
         if description:
-
+            copy_children.append(
+                Component(description, class_="vd-action-description")
+            )
         content.append(_ActionCopy(*copy_children))
 
         super().__init__(*content, **attrs, **kwargs)
@@ -776,7 +784,9 @@ class NavigationMenu(Component):
     ) -> None:
         if not triggers:
             raise ValueError("NavigationMenu requires at least one NavTrigger")
-
+        items = tuple(
+            _NavItem(trigger.render_trigger()) for trigger in triggers
+        )
         super().__init__(
             _NavList(*items, role="menubar", aria_label=label),
             data_vd_navigation_menu=True,
