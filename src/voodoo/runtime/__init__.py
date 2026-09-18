@@ -91,6 +91,7 @@ from voodoo.runtime.identity import (
     Principal,
 )
 from voodoo.runtime.identity_store import IdentityStore, VoodooStoreIdentityStore
+from voodoo.runtime.lineage import LineageEvent, RuntimeLineage, lineage
 from voodoo.runtime.membership import (
     MemberStatus,
     NodeAdvertisement,
@@ -240,6 +241,9 @@ __all__ = [
     "ApprovalRegistry",
     "Human",
     "ExecutionHandoff",
+    "LineageEvent",
+    "RuntimeLineage",
+    "lineage",
     "ask_human",
     "ExecutionStore",
     "InMemoryExecutionStore",
