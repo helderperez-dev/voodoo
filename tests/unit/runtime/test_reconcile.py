@@ -248,3 +248,33 @@ def test_reconciler_allows_same_intent_for_new_evidence_revision():
     assert reconciler.reconcile(first)[0].action is ReconcileAction.PROPOSE_INTENT
     assert reconciler.reconcile(first)[0].action is ReconcileAction.WAIT
     assert reconciler.reconcile(second)[0].action is ReconcileAction.PROPOSE_INTENT
+
+
+def test_reconciler_blocks_repeated_non_converging_outcome():
+    graph = ApplicationGraph()
+    resource = graph.node(ApplicationNodeKind.RESOURCE, "metric")
+    goal = graph.node(ApplicationNodeKind.GOAL, "target")
+    graph.connect(goal.id, "observes", resource.id)
+    reconciler = Reconciler(
+        graph,
+        guard=ReconcileGuard(
+            suppress_duplicates=False,
+            max_repeated_outcomes=2,
+        ),
+    ).register(
+        ApplicationNodeKind.GOAL,
+        lambda node, change, world: ReconcileDecision(
+            node_id=node.id,
+            action=ReconcileAction.PROPOSE_INTENT,
+            reason="same unresolved outcome",
+            intents=(Intent(name="adjust"),),
+        ),
+    )
+    invalidation = InvalidationEngine(graph).invalidate(resource.id, revision="obs-1")
+
+    assert reconciler.reconcile(invalidation)[0].action is ReconcileAction.PROPOSE_INTENT
+    assert reconciler.reconcile(invalidation)[0].action is ReconcileAction.PROPOSE_INTENT
+    blocked = reconciler.reconcile(invalidation)[0]
+
+    assert blocked.action is ReconcileAction.BLOCKED
+    assert blocked.evidence["repeated_outcomes"] == 3
