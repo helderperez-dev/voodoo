@@ -143,3 +143,61 @@ def test_goal_reconciliation_is_satisfied_without_proposing_work():
 
     assert decision.action is ReconcileAction.SATISFIED
     assert decision.intents == ()
+
+
+def test_reconciler_suppresses_duplicate_intent_proposals():
+    graph = ApplicationGraph()
+    resource = graph.node(ApplicationNodeKind.RESOURCE, "metric")
+    goal = graph.node(ApplicationNodeKind.GOAL, "target")
+    graph.connect(goal.id, "observes", resource.id)
+    invalidation = InvalidationEngine(graph).invalidate(resource.id)
+
+    reconciler = Reconciler(graph).register(
+        ApplicationNodeKind.GOAL,
+        lambda node, change, world: ReconcileDecision(
+            node_id=node.id,
+            action=ReconcileAction.PROPOSE_INTENT,
+            reason="target unmet",
+            intents=(Intent(name="adjust", params={"amount": 1}),),
+        ),
+    )
+
+    first = reconciler.reconcile(invalidation)[0]
+    second = reconciler.reconcile(invalidation)[0]
+
+    assert first.action is ReconcileAction.PROPOSE_INTENT
+    assert second.action is ReconcileAction.WAIT
+    assert second.reason == "duplicate intent proposal suppressed"
+
+
+def test_reconciler_allows_duplicate_after_cooldown_window():
+    from datetime import UTC, datetime, timedelta
+
+    from voodoo.runtime.reconcile import ReconcileGuard, ReconcileLedger
+
+    graph = ApplicationGraph()
+    resource = graph.node(ApplicationNodeKind.RESOURCE, "metric")
+    goal = graph.node(ApplicationNodeKind.GOAL, "target")
+    graph.connect(goal.id, "observes", resource.id)
+    invalidation = InvalidationEngine(graph).invalidate(resource.id)
+    ledger = ReconcileLedger()
+    reconciler = Reconciler(
+        graph,
+        guard=ReconcileGuard(cooldown_seconds=1),
+        ledger=ledger,
+    ).register(
+        ApplicationNodeKind.GOAL,
+        lambda node, change, world: ReconcileDecision(
+            node_id=node.id,
+            action=ReconcileAction.PROPOSE_INTENT,
+            reason="target unmet",
+            intents=(Intent(name="adjust"),),
+        ),
+    )
+
+    first = reconciler.reconcile(invalidation)[0]
+    key = ledger.intent_key(goal.id, first.intents[0])
+    ledger._proposals[key] = datetime.now(UTC) - timedelta(seconds=2)
+    second = reconciler.reconcile(invalidation)[0]
+
+    assert second.action is ReconcileAction.PROPOSE_INTENT
