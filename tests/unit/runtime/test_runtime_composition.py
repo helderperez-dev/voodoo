@@ -294,3 +294,41 @@ async def test_unbound_observation_updates_world_without_runtime_work():
 
     assert cycle is None
     assert world.entity("business").properties["visitors"] == 42
+
+
+@pytest.mark.asyncio
+async def test_runtime_convergence_has_hard_observation_bound():
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    runtime = Runtime(world=world)
+
+    result = await runtime.converge(
+        [
+            {
+                "entity_id": "business",
+                "property": "visitors",
+                "value": value,
+                "source": "analytics",
+            }
+            for value in (1, 2, 3)
+        ],
+        max_cycles=2,
+    )
+
+    assert result.processed == 2
+    assert result.exhausted is True
+    assert result.cycles == ()
+    assert world.entity("business").properties["visitors"] == 2
+
+
+@pytest.mark.asyncio
+async def test_runtime_convergence_rejects_unbounded_or_invalid_input():
+    runtime = Runtime(world=WorldModel())
+
+    with pytest.raises(ValueError, match="max_cycles"):
+        await runtime.converge([], max_cycles=0)
+
+    with pytest.raises(ValueError, match="missing required field: source"):
+        await runtime.converge(
+            [{"entity_id": "business", "property": "visitors", "value": 1}]
+        )
