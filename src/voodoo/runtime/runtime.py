@@ -87,6 +87,7 @@ class Runtime:
         self.store = store or RuntimeStore(store_config)
         self.lineage = lineage or RuntimeLineage()
         self.extensions = extensions or RuntimeExtensionRegistry()
+        self._observation_sources: dict[tuple[str, str], str] = {}
 
         self.planner = Planner(engine=self.engine)
         self.supervisor = AdaptiveSupervisor(
@@ -160,6 +161,30 @@ class Runtime:
         )
         return self
 
+    def bind_observation(
+        self,
+        entity_id: str,
+        property: str,
+        *,
+        resource_id: str | None = None,
+    ) -> str:
+        """Bind one World property to an Application Graph resource."""
+        if self.world is None:
+            raise RuntimeError("observation bindings require a WorldModel")
+        node_id = resource_id or f"resource:{entity_id}:{property}"
+        node = self.graph.get(node_id)
+        if node is None:
+            node = self.graph.node(
+                ApplicationNodeKind.RESOURCE,
+                f"{entity_id}.{property}",
+                node_id=node_id,
+                metadata={"entity_id": entity_id, "property": property},
+            )
+        elif node.kind is not ApplicationNodeKind.RESOURCE:
+            raise ValueError(f"Application node {node_id!r} is not a resource")
+        self._observation_sources[(entity_id, property)] = node.id
+        return node.id
+
     def register_compute(self, participant: ComputeParticipant) -> Runtime:
         """Register adaptive compute without creating a parallel runtime."""
         self.planner.register(participant)
@@ -202,6 +227,40 @@ class Runtime:
     def prepare(self, decision: ReconcileDecision) -> tuple[DispatchPlan, ...]:
         """Turn a reconciliation proposal into governed scheduled work."""
         return self.dispatcher.prepare(decision)
+
+    async def observe(
+        self,
+        entity_id: str,
+        property: str,
+        value: Any,
+        *,
+        source: str,
+        compute: ComputeFn | None = None,
+        actor: str = "system",
+        principal: Any | None = None,
+        **observation: Any,
+    ) -> RuntimeCycle | None:
+        """Record World evidence and reconcile its explicitly bound resource."""
+        if self.world is None:
+            raise RuntimeError("observe requires a WorldModel")
+        evidence = self.world.observe(
+            entity_id,
+            property,
+            value,
+            source=source,
+            **observation,
+        )
+        resource_id = self._observation_sources.get((entity_id, property))
+        if resource_id is None:
+            return None
+        return await self.cycle(
+            resource_id,
+            compute,
+            reason=ChangeReason.OBSERVATION,
+            revision=evidence.id,
+            actor=actor,
+            principal=principal,
+        )
 
     async def cycle(
         self,
