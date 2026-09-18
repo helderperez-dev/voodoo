@@ -16,7 +16,7 @@ def graph(
     """Show the semantic structure Voodoo knows about the application."""
     app = _load_app(app_str)
     application_graph = build_application_graph(app)
-    data = application_graph.describe()
+    data = application_graph.snapshot()
 
     if json_mode:
         typer.echo(json.dumps(data, indent=2, sort_keys=True))
@@ -30,3 +30,4 @@ def graph(
         typer.echo(f"  {node['kind']:<12} {node['name']}")
     typer.echo("")
     typer.echo(f"{len(data['nodes'])} nodes · {len(data['edges'])} relationships")
+    typer.echo(f"fingerprint {data['fingerprint'][:12]}")
