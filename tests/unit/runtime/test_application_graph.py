@@ -209,3 +209,22 @@ def test_extension_contract_has_no_vendor_dependency():
 
     assert graph.get("extension:external-analytics") is not None
     assert graph.get("capability:analytics.events.read") is not None
+
+
+def test_canonical_goal_contributes_requirements_to_graph():
+    from voodoo.runtime.application_graph import contribute_goal
+    from voodoo.runtime.goal import Goal
+
+    goal = Goal(
+        id="goal_growth",
+        name="growth",
+        objective="Increase conversion",
+        requires=["campaign.adjust"],
+    )
+    graph = ApplicationGraph()
+    node = contribute_goal(graph, goal)
+
+    assert node.id == "goal:goal_growth"
+    assert tuple(item.id for item in graph.dependencies(node.id, "requires")) == (
+        "capability:campaign.adjust",
+    )
