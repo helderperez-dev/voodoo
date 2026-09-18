@@ -76,6 +76,7 @@ def test_application_graph_describes_registered_models():
 
     previous = list(_models)
     try:
+
         class Customer(Model):
             email: str
 
