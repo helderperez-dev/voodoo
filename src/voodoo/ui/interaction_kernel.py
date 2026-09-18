@@ -164,7 +164,9 @@ class _AlertDialogFooter(Component):
 class AlertDialogTrigger(Button):
     """Button that opens an :class:`AlertDialog`."""
 
-
+    def __init__(
+        self, *children: Any, target: Component | str, **kwargs: Any
+    ) -> None:
         target_id = target.id if isinstance(target, Component) else target
         if not target_id:
             raise ValueError("AlertDialogTrigger target must have an id")
@@ -232,7 +234,8 @@ class ToggleGroup(Component):
         self.props = {"type": type, "orientation": orientation}
 
         rendered_items = tuple(
-
+            item.render_toggled(item.value in selected, disabled)
+            for item in items
         )
         self.children = rendered_items
 
@@ -757,7 +760,9 @@ class CommandGroup(Component):
         if not commands:
             raise ValueError("CommandGroup requires at least one Command")
         heading = _CommandGroupHeading(label)
-
+        items = tuple(
+            cmd.render_command(index) for index, cmd in enumerate(commands)
+        )
         super().__init__(heading, *items, role="group", aria_label=label, **kwargs)
 
 
@@ -808,7 +813,9 @@ class Command(Component):
             content.append(_CommandIcon(self._icon))
         copy: list[Any] = list(self._children_raw)
         if self._description:
-
+            copy.append(
+                Component(self._description, class_="vd-cmd-description")
+            )
         content.append(_CommandCopy(*copy))
         if self._shortcut:
             content.append(_CommandShortcut(self._shortcut))
