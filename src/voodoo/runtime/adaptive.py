@@ -339,6 +339,30 @@ class AdaptiveSupervisor:
             return False
         return execution is not None and run.status != "failed"
 
+    async def _fallback_or_fail(
+        self,
+        run: AdaptiveRun,
+        intent: Intent,
+        step: PlanStep,
+        error: Exception,
+        *,
+        context: dict[str, Any],
+        status: str = "failed",
+    ) -> bool:
+        if await self._fallback(
+            run,
+            intent,
+            step,
+            context=context,
+            results=run.step_results,
+            cause=error,
+        ):
+            return True
+        run.status = status
+        run.error = str(error)
+        self._record(run, SupervisorDecision.FAIL, str(error), step=step.participant)
+        return False
+
     async def _run_step(
         self,
         run: AdaptiveRun,
@@ -372,21 +396,9 @@ class AdaptiveSupervisor:
                 )
                 return False
             except CapabilityDenied as error:
-                if await self._fallback(
-                    run,
-                    intent,
-                    step,
-                    context=context,
-                    results=run.step_results,
-                    cause=error,
-                ):
-                    return True
-                run.status = "failed"
-                run.error = str(error)
-                self._record(
-                    run, SupervisorDecision.FAIL, str(error), step=step.participant
+                return await self._fallback_or_fail(
+                    run, intent, step, error, context=context
                 )
-                return False
             except ExecutionTimeout as error:
                 if retries < self.config.max_retries:
                     retries += 1
@@ -397,21 +409,9 @@ class AdaptiveSupervisor:
                         step=step.participant,
                     )
                     continue
-                if await self._fallback(
-                    run,
-                    intent,
-                    step,
-                    context=context,
-                    results=run.step_results,
-                    cause=error,
-                ):
-                    return True
-                run.status = "timed_out"
-                run.error = str(error)
-                self._record(
-                    run, SupervisorDecision.FAIL, str(error), step=step.participant
+                return await self._fallback_or_fail(
+                    run, intent, step, error, context=context, status="timed_out"
                 )
-                return False
             except ExecutionError as error:
                 if (
                     retries < self.config.max_retries
@@ -425,21 +425,7 @@ class AdaptiveSupervisor:
                         step=step.participant,
                     )
                     continue
-                if await self._fallback(
-                    run,
-                    intent,
-                    step,
-                    context=context,
-                    results=run.step_results,
-                    cause=error,
-                ):
-                    return True
-                run.status = "failed"
-                run.error = str(error)
-                self._record(
-                    run, SupervisorDecision.FAIL, str(error), step=step.participant
-                )
-                return False
+                return await self._fallback_or_fail(run, intent, step, error)
 
     async def run(
         self,
