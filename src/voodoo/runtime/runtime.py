@@ -33,6 +33,7 @@ from voodoo.runtime.reconcile import (
     GoalIntentFactory,
     GoalPredicate,
     GoalReconciliation,
+    ReconcileAction,
     ReconcileDecision,
     ReconcileHandler,
     Reconciler,
@@ -191,6 +192,35 @@ class Runtime:
     def prepare(self, decision: ReconcileDecision) -> tuple[DispatchPlan, ...]:
         """Turn a reconciliation proposal into governed scheduled work."""
         return self.dispatcher.prepare(decision)
+
+    async def execute_decision(
+        self,
+        decision: ReconcileDecision,
+        compute: ComputeFn | None = None,
+        *,
+        actor: str = "system",
+        principal: Any | None = None,
+    ) -> tuple[Execution, ...]:
+        """Execute only work explicitly proposed by reconciliation.
+
+        Reconciliation remains a decision boundary: satisfied, waiting, blocked,
+        failed, and human-request decisions never enter compute.
+        """
+        if decision.action is not ReconcileAction.PROPOSE_INTENT:
+            return ()
+        executions = []
+        for plan in self.prepare(decision):
+            if not plan.work.eligible:
+                continue
+            executions.append(
+                await self.execute(
+                    plan,
+                    compute,
+                    actor=actor,
+                    principal=principal,
+                )
+            )
+        return tuple(executions)
 
     async def execute(
         self,
