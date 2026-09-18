@@ -62,13 +62,21 @@ class RuntimeScheduler:
         running_counts = running or {}
         unavailable = unavailable_resources or set()
         pressured = backpressured or set()
-        if work.intent.expired:
+        if work.intent.deadline is not None and current >= work.intent.deadline:
             return SchedulingDecision(
-
+                work.intent.id,
+                WorkEligibility.EXPIRED,
+                "intent deadline has passed",
+                work.priority,
+                {"deadline": work.intent.deadline.isoformat()},
             )
         if work.not_before is not None and current < work.not_before:
             return SchedulingDecision(
-
+                work.intent.id,
+                WorkEligibility.WAITING,
+                "work is not eligible yet",
+                work.priority,
+                {"not_before": work.not_before.isoformat()},
             )
         missing = tuple(item for item in work.dependencies if item not in completed_ids)
         if missing:
@@ -189,6 +197,17 @@ def scheduled_work_from_intent(intent: Intent) -> ScheduledWork:
     max_concurrency = intent.params.get("_max_concurrency")
     priority = int(intent.params.get("_priority", 0))
     not_before = intent.params.get("_not_before")
+    if isinstance(not_before, str):
+        try:
+            not_before = datetime.fromisoformat(not_before.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("_not_before must be an ISO-8601 datetime") from exc
+    if not_before is not None and not isinstance(not_before, datetime):
+        raise TypeError("_not_before must be a datetime or ISO-8601 string")
+    if isinstance(not_before, datetime) and not_before.tzinfo:
+        not_before = not_before.astimezone(UTC)
+    elif isinstance(not_before, datetime):
+        not_before = not_before.replace(tzinfo=UTC)
     dependencies = tuple(str(item) for item in intent.params.get("_dependencies", ()))
 
     for constraint in intent.constraints:
