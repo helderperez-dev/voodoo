@@ -63,6 +63,7 @@ class PlacementRequirement:
     """Topology-neutral placement constraints for one unit of work."""
 
     capability: str | None = None
+    capabilities: tuple[str, ...] = ()
     service: str | None = None
     owner: str | None = None
     location: str | None = None
