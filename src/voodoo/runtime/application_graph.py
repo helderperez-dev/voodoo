@@ -95,8 +95,10 @@ class ApplicationGraph:
 
     def add_node(self, node: ApplicationNode) -> ApplicationNode:
         existing = self._nodes.get(node.id)
-        if existing is not None and existing != node:
-            raise ValueError(f"Application node {node.id!r} is already registered")
+        if existing is not None:
+            if existing != node:
+                raise ValueError(f"Application node {node.id!r} is already registered")
+            return existing
         self._nodes[node.id] = node
         return node
 
