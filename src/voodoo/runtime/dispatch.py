@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from voodoo.runtime.fabric import PlacementDecision, RuntimeFabric
+from voodoo.runtime.lineage import LineageEvent, lineage
 from voodoo.runtime.reconcile import ReconcileAction, ReconcileDecision
 from voodoo.runtime.work_scheduler import (
     RuntimeScheduler,
@@ -51,12 +52,29 @@ class RuntimeDispatcher:
         plans: list[DispatchPlan] = []
         for intent in decision.intents:
             work = scheduled_work_from_intent(intent)
+            lineage.record(
+                LineageEvent(
+                    kind="intent.proposed",
+                    subject_id=intent.id,
+                    parent_id=decision.node_id,
+                    reason=decision.reason,
+                )
+            )
             eligibility = self.scheduler.evaluate(
                 work,
                 completed=completed,
                 running=running,
                 unavailable_resources=unavailable_resources,
                 backpressured=backpressured,
+            )
+            lineage.record(
+                LineageEvent(
+                    kind="schedule.decision",
+                    subject_id=intent.id,
+                    parent_id=decision.node_id,
+                    reason=eligibility.reason,
+                    metadata={"status": eligibility.status.value},
+                )
             )
             if eligibility.status is not WorkEligibility.ELIGIBLE:
                 plans.append(DispatchPlan(work=work, scheduling=eligibility))
@@ -65,6 +83,15 @@ class RuntimeDispatcher:
             placement = None
             if self.fabric is not None:
                 placement = self.fabric.place(work.placement)
+                lineage.record(
+                    LineageEvent(
+                        kind="placement.decision",
+                        subject_id=intent.id,
+                        parent_id=decision.node_id,
+                        reason=", ".join(placement.reasons),
+                        metadata={"node_id": placement.node_id},
+                    )
+                )
             plans.append(
                 DispatchPlan(work=work, scheduling=eligibility, placement=placement)
             )
