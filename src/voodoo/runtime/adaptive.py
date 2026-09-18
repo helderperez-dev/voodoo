@@ -339,6 +339,108 @@ class AdaptiveSupervisor:
             return False
         return execution is not None and run.status != "failed"
 
+    async def _run_step(
+        self,
+        run: AdaptiveRun,
+        intent: Intent,
+        step: PlanStep,
+        participant: ComputeParticipant,
+        *,
+        context: dict[str, Any],
+        compute: Callable[..., Any] | None,
+    ) -> bool:
+        retries = 0
+        while True:
+            try:
+                execution = await self._execute_participant(
+                    run,
+                    intent,
+                    step,
+                    participant,
+                    context=context,
+                    results=run.step_results,
+                    compute_override=compute,
+                )
+                return execution is not None
+            except ApprovalRequired:
+                run.status = "waiting"
+                self._record(
+                    run,
+                    SupervisorDecision.REQUEST_APPROVAL,
+                    step.participant,
+                    step=step.participant,
+                )
+                return False
+            except CapabilityDenied as error:
+                if await self._fallback(
+                    run,
+                    intent,
+                    step,
+                    context=context,
+                    results=run.step_results,
+                    cause=error,
+                ):
+                    return True
+                run.status = "failed"
+                run.error = str(error)
+                self._record(
+                    run, SupervisorDecision.FAIL, str(error), step=step.participant
+                )
+                return False
+            except ExecutionTimeout as error:
+                if retries < self.config.max_retries:
+                    retries += 1
+                    self._record(
+                        run,
+                        SupervisorDecision.RETRY,
+                        f"attempt {retries}",
+                        step=step.participant,
+                    )
+                    continue
+                if await self._fallback(
+                    run,
+                    intent,
+                    step,
+                    context=context,
+                    results=run.step_results,
+                    cause=error,
+                ):
+                    return True
+                run.status = "timed_out"
+                run.error = str(error)
+                self._record(
+                    run, SupervisorDecision.FAIL, str(error), step=step.participant
+                )
+                return False
+            except ExecutionError as error:
+                if (
+                    retries < self.config.max_retries
+                    and self.engine.constraints.retry_hint(intent=intent, error=error)
+                ):
+                    retries += 1
+                    self._record(
+                        run,
+                        SupervisorDecision.RETRY,
+                        f"constraint hint ({retries})",
+                        step=step.participant,
+                    )
+                    continue
+                if await self._fallback(
+                    run,
+                    intent,
+                    step,
+                    context=context,
+                    results=run.step_results,
+                    cause=error,
+                ):
+                    return True
+                run.status = "failed"
+                run.error = str(error)
+                self._record(
+                    run, SupervisorDecision.FAIL, str(error), step=step.participant
+                )
+                return False
+
     async def run(
         self,
         intent: Intent,
@@ -392,101 +494,15 @@ class AdaptiveSupervisor:
                 )
                 return run
 
-            retries = 0
-            while True:
-                try:
-                    execution = await self._execute_participant(
-                        run,
-                        intent,
-                        step,
-                        participant,
-                        context=context,
-                        results=run.step_results,
-                        compute_override=compute,
-                    )
-                    if execution is None:
-                        return run
-                    break
-                except ApprovalRequired:
-                    run.status = "waiting"
-                    self._record(
-                        run,
-                        SupervisorDecision.REQUEST_APPROVAL,
-                        step.participant,
-                        step=step.participant,
-                    )
-                    return run
-                except CapabilityDenied as error:
-                    if await self._fallback(
-                        run,
-                        intent,
-                        step,
-                        context=context,
-                        results=run.step_results,
-                        cause=error,
-                    ):
-                        break
-                    run.status = "failed"
-                    run.error = str(error)
-                    self._record(
-                        run, SupervisorDecision.FAIL, str(error), step=step.participant
-                    )
-                    return run
-                except ExecutionTimeout as error:
-                    if retries < self.config.max_retries:
-                        retries += 1
-                        self._record(
-                            run,
-                            SupervisorDecision.RETRY,
-                            f"attempt {retries}",
-                            step=step.participant,
-                        )
-                        continue
-                    if await self._fallback(
-                        run,
-                        intent,
-                        step,
-                        context=context,
-                        results=run.step_results,
-                        cause=error,
-                    ):
-                        break
-                    run.status = "timed_out"
-                    run.error = str(error)
-                    self._record(
-                        run, SupervisorDecision.FAIL, str(error), step=step.participant
-                    )
-                    return run
-                except ExecutionError as error:
-                    if (
-                        retries < self.config.max_retries
-                        and self.engine.constraints.retry_hint(
-                            intent=intent, error=error
-                        )
-                    ):
-                        retries += 1
-                        self._record(
-                            run,
-                            SupervisorDecision.RETRY,
-                            f"constraint hint ({retries})",
-                            step=step.participant,
-                        )
-                        continue
-                    if await self._fallback(
-                        run,
-                        intent,
-                        step,
-                        context=context,
-                        results=run.step_results,
-                        cause=error,
-                    ):
-                        break
-                    run.status = "failed"
-                    run.error = str(error)
-                    self._record(
-                        run, SupervisorDecision.FAIL, str(error), step=step.participant
-                    )
-                    return run
+            if not await self._run_step(
+                run,
+                intent,
+                step,
+                participant,
+                context=context,
+                compute=compute,
+            ):
+                return run
 
         run.status = "completed"
         return run
