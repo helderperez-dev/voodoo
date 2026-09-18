@@ -104,7 +104,9 @@ class DependencyGraph:
         return Invalidation(source, affected, reason, revision)
 
     def dirty(self) -> tuple[DirtyNode, ...]:
-        return tuple(sorted(self._dirty.values(), key=lambda item: (item.sequence, item.node_id)))
+        return tuple(
+            sorted(self._dirty.values(), key=lambda item: (item.sequence, item.node_id))
+        )
 
     def consume(self, node_id: str) -> DirtyNode | None:
         return self._dirty.pop(node_id, None)
