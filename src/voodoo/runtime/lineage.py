@@ -30,6 +30,29 @@ class RuntimeLineage:
     def events(self) -> tuple[LineageEvent, ...]:
         return tuple(self._events)
 
+    def clear(self) -> None:
+        self._events.clear()
+
+    def record_transition(
+        self,
+        kind: str,
+        subject_id: str,
+        *,
+        parent_id: str | None,
+        reason: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> LineageEvent:
+        return self.record(
+            LineageEvent(
+                kind=kind,
+                subject_id=subject_id,
+                parent_id=parent_id,
+                reason=reason,
+                metadata=metadata or {},
+            )
+        )
+
+
     def why(self, subject_id: str) -> tuple[LineageEvent, ...]:
         by_subject: dict[str, list[LineageEvent]] = {}
         for event in self._events:
@@ -47,6 +70,20 @@ class RuntimeLineage:
                 if event.parent_id is not None:
                     pending.append(event.parent_id)
         return tuple(result)
+
+    def chain(self, subject_id: str) -> tuple[str, ...]:
+        """Return causal subject ids from root cause to requested subject."""
+        events = self.why(subject_id)
+        parents = {event.subject_id: event.parent_id for event in events}
+        chain = [subject_id]
+        current = subject_id
+        seen = {subject_id}
+        while (parent := parents.get(current)) is not None and parent not in seen:
+            chain.append(parent)
+            seen.add(parent)
+            current = parent
+        chain.reverse()
+        return tuple(chain)
 
     def describe(self, subject_id: str) -> list[dict[str, Any]]:
         return [
