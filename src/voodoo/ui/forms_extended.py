@@ -314,7 +314,7 @@ class Autocomplete(Component):
 
         listbox = _AutocompleteList(
             *options,
-
+            _AutocompleteEmpty(empty_text, data_vd_autocomplete_empty=True, hidden=True),
             id=listbox_id,
             role="listbox",
             hidden=True,
@@ -471,7 +471,7 @@ class CheckboxInput(Component):
             "id": field_id,
             "type": "checkbox",
             "role": "checkbox",
-
+            "aria_checked": ("mixed" if indeterminate else "true" if checked else "false"),
             "name": name,
         }
         if checked:
@@ -500,7 +500,7 @@ class CheckboxInput(Component):
             data_vd_checkbox=True,
             **kwargs,
         )
-
+        self.props = {"checked": checked, "indeterminate": indeterminate, "disabled": disabled}
 
 
 class _CheckboxCopy(Component):
@@ -549,7 +549,9 @@ class RadioInput(Component):
             Component(label, class_="vd-radio-label"),
         ]
         if description:
-
+            copy_children.append(
+                Component(description, class_="vd-radio-description")
+            )
         super().__init__(
             input_el,
             _RadioCopy(*copy_children, for_=field_id),
