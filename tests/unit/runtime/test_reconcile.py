@@ -71,3 +71,75 @@ def test_reconciler_bounds_decision_fanout():
     )
 
     assert len(reconciler.reconcile(invalidation)) == 1
+
+
+def test_goal_reconciliation_uses_observed_world_and_preserves_authority_boundary():
+    from voodoo.runtime.goal import Goal
+    from voodoo.runtime.reconcile import GoalReconciliation
+    from voodoo.world import Entity, WorldModel
+
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    world.observe("business", "conversion_rate", 0.08, source="analytics")
+
+    goal = Goal(
+        id="goal_conversion",
+        name="conversion",
+        target_entity_id="business",
+        requires=["campaign.adjust"],
+    )
+    graph = ApplicationGraph()
+    resource = graph.node(ApplicationNodeKind.RESOURCE, "conversion_rate")
+    goal_node = graph.node(
+        ApplicationNodeKind.GOAL, goal.name, node_id=f"goal:{goal.id}"
+    )
+    graph.connect(goal_node.id, "observes", resource.id)
+    invalidation = InvalidationEngine(graph).invalidate(
+        resource.id, reason=ChangeReason.OBSERVATION, revision="obs-1"
+    )
+
+    handler = GoalReconciliation(
+        goal=goal,
+        satisfied=lambda item, snapshot: snapshot is not None
+        and snapshot.entity.properties.get("conversion_rate", 0) >= 0.10,
+        propose=lambda item, snapshot: Intent(name="improve_conversion"),
+    )
+    decision = Reconciler(graph).register(
+        ApplicationNodeKind.GOAL, handler
+    ).reconcile(invalidation, world=world)[0]
+
+    assert decision.action is ReconcileAction.PROPOSE_INTENT
+    assert decision.intents[0].requires == ["campaign.adjust"]
+    assert decision.intents[0].params["_goal_id"] == goal.id
+    assert decision.intents[0].status.value == "created"
+
+
+def test_goal_reconciliation_is_satisfied_without_proposing_work():
+    from voodoo.runtime.goal import Goal
+    from voodoo.runtime.reconcile import GoalReconciliation
+    from voodoo.world import Entity, WorldModel
+
+    world = WorldModel()
+    world.put_entity(Entity(id="service", type="service"))
+    world.observe("service", "healthy", True, source="health")
+
+    goal = Goal(id="goal_health", name="health", target_entity_id="service")
+    graph = ApplicationGraph()
+    resource = graph.node(ApplicationNodeKind.RESOURCE, "health")
+    goal_node = graph.node(
+        ApplicationNodeKind.GOAL, goal.name, node_id=f"goal:{goal.id}"
+    )
+    graph.connect(goal_node.id, "observes", resource.id)
+
+    handler = GoalReconciliation(
+        goal=goal,
+        satisfied=lambda item, snapshot: snapshot is not None
+        and snapshot.entity.properties.get("healthy") is True,
+    )
+    invalidation = InvalidationEngine(graph).invalidate(resource.id)
+    decision = Reconciler(graph).register(
+        ApplicationNodeKind.GOAL, handler
+    ).reconcile(invalidation, world=world)[0]
+
+    assert decision.action is ReconcileAction.SATISFIED
+    assert decision.intents == ()
