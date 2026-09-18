@@ -54,7 +54,7 @@ class ResizablePanels(Component):
         if len(panels) > 3:
             raise ValueError("ResizablePanels supports at most 3 panels")
         if orientation not in {"horizontal", "vertical"}:
-
+            raise ValueError("ResizablePanels orientation must be horizontal or vertical")
 
         rendered: list[Any] = []
         for i, panel in enumerate(panels):
@@ -173,7 +173,7 @@ class ScrollArea(Component):
         **kwargs: Any,
     ) -> None:
         if orientation not in {"vertical", "horizontal", "both"}:
-
+            raise ValueError("ScrollArea orientation must be vertical, horizontal, or both")
 
         css: dict[str, str] = {}
         if height:
@@ -185,7 +185,7 @@ class ScrollArea(Component):
         if max_width:
             css["max-width"] = max_width
 
-
+        overflow = {"vertical": "auto hidden", "horizontal": "hidden auto", "both": "auto"}
 
         super().__init__(
             *children,
@@ -293,10 +293,10 @@ class TreeNode:
         label_children: list[Any] = []
         if self.children:
             toggle = _TreeToggle(
-
+                Icon("chevron-right", aria_hidden="true") if not self.expanded else Icon("chevron-down", aria_hidden="true"),
                 type="button",
                 aria_expanded="true" if self.expanded else "false",
-
+                data_vd_event_click=expand_binding if self.expanded else collapse_binding,
                 data_vd_tree_toggle=True,
             )
             label_children.append(toggle)
@@ -324,7 +324,7 @@ class TreeNode:
 
         if self.children:
             rendered_children = tuple(
-
+                child.render_node(depth + 1, select_binding, expand_binding, collapse_binding)
                 for child in self.children
             )
             children_list.append(
@@ -534,7 +534,9 @@ class Menubar(Component):
         if not menus:
             raise ValueError("Menubar requires at least one MenubarMenu")
 
-
+        rendered = tuple(
+            _MenubarItem(m.render_menu()) for m in menus
+        )
         super().__init__(
             _MenubarList(*rendered, role="menubar", aria_label=label),
             data_vd_menubar=True,
@@ -689,7 +691,9 @@ class Dock(Component):
         if magnification < 1.0:
             raise ValueError("Dock magnification must be >= 1.0")
 
-
+        rendered = tuple(
+            _DockSlot(item.render_item(i)) for i, item in enumerate(items)
+        )
 
         super().__init__(
             _DockList(*rendered, role="list", aria_label=label),
@@ -739,7 +743,7 @@ class DockItem:
             _DockTooltip(self.label),
         ]
         if self.badge is not None:
-
+            children.append(_DockBadge(str(self.badge), aria_label=f"{self.badge} notifications"))
 
         return _DockButton(*children, **attrs)
 
@@ -843,7 +847,9 @@ class MasterList(Component):
     style = "master-detail.list"
 
     def __init__(self, *items: MasterItem, **kwargs: Any) -> None:
-
+        rendered = tuple(
+            _MasterListItem(item.render_item()) for item in items
+        )
         super().__init__(*rendered, role="listbox", **kwargs)
 
 
@@ -966,7 +972,9 @@ class KeyboardShortcutRegistry(Component):
         visible: bool = False,
         **kwargs: Any,
     ) -> None:
-
+        rendered = tuple(
+            _ShortcutRow(b.render_binding()) for b in bindings
+        )
 
         attrs: dict[str, Any] = {
             "data_vd_shortcut_registry": True,
