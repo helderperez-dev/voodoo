@@ -166,6 +166,27 @@ class ApplicationGraph:
         }
         return tuple(self._nodes[target] for target in ids)
 
+    def affected(
+        self, node_id: str, *, relations: set[str] | None = None
+    ) -> tuple[ApplicationNode, ...]:
+        """Return transitive dependents affected by a semantic node change."""
+        if node_id not in self._nodes:
+            raise KeyError(f"Unknown application graph node: {node_id}")
+        seen: set[str] = set()
+        pending = [node_id]
+        while pending:
+            target = pending.pop()
+            for edge in self._edge_records:
+                if edge.target != target:
+                    continue
+                if relations is not None and edge.relation not in relations:
+                    continue
+                if edge.source in seen or edge.source == node_id:
+                    continue
+                seen.add(edge.source)
+                pending.append(edge.source)
+        return tuple(self._nodes[item] for item in sorted(seen))
+
     def validate(self) -> list[str]:
         errors: list[str] = []
         for edge in self._edge_records:
