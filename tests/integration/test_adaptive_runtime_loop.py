@@ -1,6 +1,5 @@
 from types import SimpleNamespace
 
-
 import pytest
 
 from voodoo.primitives.capability import Capability
@@ -13,11 +12,10 @@ from voodoo.runtime.application_graph import (
 )
 from voodoo.runtime.dispatch import RuntimeDispatcher
 from voodoo.runtime.engine import ComputeResult, ExecutionEngine
-from types import SimpleNamespace
-from voodoo.runtime.persistence import JSONFileExecutionStore
-from voodoo.runtime.policy import PolicyDecision
 from voodoo.runtime.goal import Goal
 from voodoo.runtime.handoff import ExecutionHandoff
+from voodoo.runtime.persistence import JSONFileExecutionStore
+from voodoo.runtime.policy import PolicyDecision
 from voodoo.runtime.reconcile import (
     GoalReconciliation,
     ReconcileAction,
