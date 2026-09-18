@@ -201,3 +201,20 @@ def test_reconciler_allows_duplicate_after_cooldown_window():
     second = reconciler.reconcile(invalidation)[0]
 
     assert second.action is ReconcileAction.PROPOSE_INTENT
+
+
+def test_reconciler_can_require_revision_evidence():
+    from voodoo.runtime.reconcile import ReconcileGuard
+
+    graph = ApplicationGraph()
+    resource = graph.node(ApplicationNodeKind.RESOURCE, "metric")
+    goal = graph.node(ApplicationNodeKind.GOAL, "target")
+    graph.connect(goal.id, "observes", resource.id)
+    invalidation = InvalidationEngine(graph).invalidate(resource.id)
+
+    decision = Reconciler(
+        graph, guard=ReconcileGuard(require_revision=True)
+    ).reconcile(invalidation)[0]
+
+    assert decision.action is ReconcileAction.WAIT
+    assert decision.reason == "fresh revision evidence is required"
