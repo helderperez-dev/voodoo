@@ -641,13 +641,9 @@ class Sidebar(Component):
                 "Sidebar modes must be unique and use expanded, rail, or hidden"
             )
         if mobile_mode not in valid_modes:
-            raise ValueError(
-                "Sidebar mobile_mode must be expanded, rail, or hidden"
-            )
+
         if dismiss_mode not in valid_modes:
-            raise ValueError(
-                "Sidebar dismiss_mode must be expanded, rail, or hidden"
-            )
+
         super().__init__(*children, aria_label=label, **kwargs)
         self.props = {
             "mode": mode,
