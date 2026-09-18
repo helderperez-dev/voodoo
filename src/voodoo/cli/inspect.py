@@ -97,7 +97,9 @@ def _find_in_store(execution_id: str):
 @inspect_app.command("why")
 def inspect_why(
     subject_id: str = typer.Argument(..., help="Intent/execution/semantic subject id"),
-    json_mode: bool = typer.Option(\n        False, "--json", help="Output machine-readable JSON"\n    ),
+    json_mode: bool = typer.Option(
+        False, "--json", help="Output machine-readable JSON"
+    ),
 ):
     """Explain the causal Runtime lineage for a subject."""
     from voodoo.runtime.lineage import lineage
