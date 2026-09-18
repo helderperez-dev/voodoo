@@ -112,6 +112,40 @@ class RuntimeScheduler:
             work.intent.id, WorkEligibility.ELIGIBLE, "work is eligible", work.priority
         )
 
+    def explain(
+        self,
+        work: ScheduledWork,
+        *,
+        completed: set[str] | None = None,
+        running: dict[str, int] | None = None,
+        unavailable_resources: set[str] | None = None,
+        backpressured: set[str] | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        decision = self.evaluate(
+            work,
+            completed=completed,
+            running=running,
+            unavailable_resources=unavailable_resources,
+            backpressured=backpressured,
+            now=now,
+        )
+        return {
+            "intent_id": decision.intent_id,
+            "status": decision.status.value,
+            "reason": decision.reason,
+            "priority": decision.priority,
+            "details": dict(decision.details),
+            "dependencies": list(work.dependencies),
+            "placement": {
+                "capability": work.placement.capability,
+                "service": work.placement.service,
+                "owner": work.placement.owner,
+                "location": work.placement.location,
+                "preferred_node": work.placement.preferred_node,
+            },
+        }
+
     def eligible(
         self,
         work: tuple[ScheduledWork, ...],
