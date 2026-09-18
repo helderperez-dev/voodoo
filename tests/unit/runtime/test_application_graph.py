@@ -99,3 +99,18 @@ def test_application_graph_fingerprint_is_deterministic():
 
     assert first.fingerprint == second.fingerprint
     assert first.snapshot()["fingerprint"] == first.fingerprint
+
+
+def test_application_graph_diff_reports_semantic_changes():
+    from voodoo.runtime.application_graph import diff_application_graph
+
+    previous = ApplicationGraph()
+    current = ApplicationGraph()
+    task = current.node(ApplicationNodeKind.TASK, "sync")
+    current.connect(current.application_id, "contains", task.id)
+
+    change = diff_application_graph(previous, current)
+
+    assert change.changed is True
+    assert change.added_nodes == ("task:sync",)
+    assert change.added_edges == (("application", "contains", "task:sync"),)
