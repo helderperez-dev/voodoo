@@ -184,3 +184,50 @@ async def test_runtime_executes_only_proposed_reconciliation_work():
     )
     assert await runtime.execute_decision(satisfied, compute) == ()
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_runtime_cycle_is_bounded_and_structured():
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    world.observe("business", "conversion", 0.08, source="analytics")
+
+    runtime = Runtime(world=world)
+    runtime.engine.capabilities.register(Capability(name="conversion.adjust"))
+    metric = runtime.graph.node(ApplicationNodeKind.RESOURCE, "conversion")
+    goal = Goal(id="cycle-growth", name="cycle-growth", target_entity_id="business")
+    runtime.register_goal(
+        goal,
+        observes=(metric.id,),
+        satisfied=lambda item, snapshot: (
+            snapshot is not None
+            and snapshot.entity.properties.get("conversion", 0) >= 0.10
+        ),
+        propose=lambda item, snapshot: Intent(
+            name="improve-conversion",
+            requires=["conversion.adjust"],
+        ),
+    )
+
+    calls = []
+
+    async def compute(ctx):
+        calls.append(ctx.execution_id)
+        world.observe("business", "conversion", 0.11, source="effect-ack")
+        return ComputeResult(value="adjusted")
+
+    cycle = await runtime.cycle(
+        metric.id,
+        compute,
+        reason=ChangeReason.OBSERVATION,
+        revision="cycle-1",
+    )
+
+    assert len(cycle.decisions) == 1
+    assert cycle.decisions[0].action is ReconcileAction.PROPOSE_INTENT
+    assert len(cycle.executions) == 1
+    assert len(calls) == 1
+
+    # The observation produced during compute does not recursively trigger
+    # another reconciliation cycle.
+    assert cycle.invalidation.revision == "cycle-1"
