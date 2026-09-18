@@ -40,7 +40,7 @@ from voodoo.runtime.reconcile import (
     Reconciler,
 )
 from voodoo.runtime.store import RuntimeStore, StoreConfig
-from voodoo.runtime.work_scheduler import RuntimeScheduler
+from voodoo.runtime.work_scheduler import RuntimeScheduler, WorkEligibility
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,7 +253,7 @@ class Runtime:
             return ()
         executions = []
         for plan in self.prepare(decision):
-            if not plan.work.eligible:
+            if plan.scheduling.status is not WorkEligibility.ELIGIBLE:
                 continue
             executions.append(
                 await self.execute(
