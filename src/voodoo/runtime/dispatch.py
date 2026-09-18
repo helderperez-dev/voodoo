@@ -10,12 +10,18 @@ from dataclasses import dataclass
 
 from voodoo.runtime.fabric import PlacementDecision, RuntimeFabric
 from voodoo.runtime.reconcile import ReconcileAction, ReconcileDecision
-from voodoo.runtime.work_scheduler import RuntimeScheduler, ScheduledWork
+from voodoo.runtime.work_scheduler import (
+    RuntimeScheduler,
+    ScheduledWork,
+    SchedulingDecision,
+    WorkEligibility,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class DispatchPlan:
     work: ScheduledWork
+    scheduling: SchedulingDecision
     placement: PlacementDecision | None = None
 
 
@@ -51,14 +57,16 @@ class RuntimeDispatcher:
                 unavailable_resources=unavailable_resources,
                 backpressured=backpressured,
             )
-            if eligibility.status.value != "eligible":
-                plans.append(DispatchPlan(work=work))
+            if eligibility.status is not WorkEligibility.ELIGIBLE:
+                plans.append(DispatchPlan(work=work, scheduling=eligibility))
                 continue
 
             placement = None
             if self.fabric is not None:
                 placement = self.fabric.place(work.placement)
-            plans.append(DispatchPlan(work=work, placement=placement))
+            plans.append(
+                DispatchPlan(work=work, scheduling=eligibility, placement=placement)
+            )
         return tuple(plans)
 
 
