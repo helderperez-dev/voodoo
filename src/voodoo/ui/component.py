@@ -125,9 +125,7 @@ class Component:
         }
         for property_name, token in visual_tokens.items():
             if token:
-                self._append_inline_css(
-                    f"{property_name}: {color_reference(token)}"
-                )
+
         if raw_style:
             self._append_inline_css(str(raw_style).strip().rstrip(";"))
         self.attrs.update(kwargs)
