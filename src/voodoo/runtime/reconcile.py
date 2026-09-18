@@ -164,6 +164,41 @@ class Reconciler:
         self._handlers[kind] = handler
         return self
 
+    def _deduplicate(
+        self, node: ApplicationNode, decision: ReconcileDecision
+    ) -> ReconcileDecision:
+        if (
+            decision.action is not ReconcileAction.PROPOSE_INTENT
+            or not self.guard.suppress_duplicates
+        ):
+            return decision
+        now = datetime.now(UTC)
+        accepted: list[Intent] = []
+        for intent in decision.intents:
+            key = self.ledger.intent_key(node.id, intent)
+            if self.ledger.recently_proposed(
+                key, cooldown_seconds=self.guard.cooldown_seconds, now=now
+            ):
+                continue
+            self.ledger.record(key, now=now)
+            accepted.append(intent)
+        if not accepted:
+            return ReconcileDecision(
+                node_id=node.id,
+                action=ReconcileAction.WAIT,
+                reason="duplicate intent proposal suppressed",
+                evidence=dict(decision.evidence),
+            )
+        if len(accepted) == len(decision.intents):
+            return decision
+        return ReconcileDecision(
+            node_id=decision.node_id,
+            action=decision.action,
+            reason=decision.reason,
+            intents=tuple(accepted),
+            evidence=dict(decision.evidence),
+        )
+
     def reconcile(
         self, invalidation: Invalidation, *, world: Any | None = None
     ) -> tuple[ReconcileDecision, ...]:
@@ -201,37 +236,7 @@ class Reconciler:
                 )
                 continue
             decision = handler(node, invalidation, world)
-            if (
-                decision.action is ReconcileAction.PROPOSE_INTENT
-                and self.guard.suppress_duplicates
-            ):
-                now = datetime.now(UTC)
-                accepted: list[Intent] = []
-                for intent in decision.intents:
-                    key = self.ledger.intent_key(node.id, intent)
-                    if self.ledger.recently_proposed(
-                        key,
-                        cooldown_seconds=self.guard.cooldown_seconds,
-                        now=now,
-                    ):
-                        continue
-                    self.ledger.record(key, now=now)
-                    accepted.append(intent)
-                if not accepted:
-                    decision = ReconcileDecision(
-                        node_id=node.id,
-                        action=ReconcileAction.WAIT,
-                        reason="duplicate intent proposal suppressed",
-                        evidence=dict(decision.evidence),
-                    )
-                elif len(accepted) != len(decision.intents):
-                    decision = ReconcileDecision(
-                        node_id=decision.node_id,
-                        action=decision.action,
-                        reason=decision.reason,
-                        intents=tuple(accepted),
-                        evidence=dict(decision.evidence),
-                    )
+            decision = self._deduplicate(node, decision)
             decisions.append(decision)
         return tuple(decisions)
 
