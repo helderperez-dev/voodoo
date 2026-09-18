@@ -39,6 +39,7 @@ from voodoo.runtime.constraint import ConstraintEnforcer, Decision, ResourceAcco
 from voodoo.runtime.context import ExecutionContext, current_context, use_context
 from voodoo.runtime.conventions import ApplicationLayout, discover_layout
 from voodoo.runtime.dashboard import runtime_dashboard
+from voodoo.runtime.dependency_graph import DependencyGraph, DependencyRevision, DirtyNode
 from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
 from voodoo.runtime.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
 from voodoo.runtime.errors import (
@@ -195,6 +196,9 @@ __all__ = [
     "PolicyRule",
     "ApplicationLayout",
     "discover_layout",
+    "DependencyGraph",
+    "DependencyRevision",
+    "DirtyNode",
     "ConstraintEnforcer",
     "Decision",
     "ResourceAccountant",
