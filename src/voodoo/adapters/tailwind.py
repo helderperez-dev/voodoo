@@ -420,18 +420,13 @@ def _alert(props: dict[str, Any], theme: Theme) -> str:
     if variant == "solid":
         foreground = "text-black" if tone == "warning" else "text-white"
         return f"{base} {foreground} bg-[{color}] border-[{color}]"
-    background = "bg-transparent" if variant == "outline" else f"bg-[color-mix(in_srgb,{color}_8%,transparent)]"
-    return (
-        f"{base} {background} "
-        f"border-[color-mix(in_srgb,{color}_28%,transparent)]"
+
     )
 
 
 def _progress(props: dict[str, Any], theme: Theme) -> str:
     tone = props.get("tone", "primary")
-    size = {"sm": "h-1", "md": "h-2", "lg": "h-3"}.get(
-        props.get("size", "md"), "h-2"
-    )
+
     return (
         f"block w-full {size} appearance-none overflow-hidden rounded-full "
         "bg-[var(--vd-color-surface-raised)] "
@@ -481,7 +476,7 @@ def _breadcrumb_item(props: dict[str, Any], theme: Theme) -> str:
 
 
 def _breadcrumb_link(props: dict[str, Any], theme: Theme) -> str:
-    return "text-inherit no-underline transition-colors hover:text-[var(--vd-color-text)]"
+
 
 
 def _breadcrumb_current(props: dict[str, Any], theme: Theme) -> str:
@@ -518,15 +513,12 @@ def _accordion(props: dict[str, Any], theme: Theme) -> str:
             "[&>details+details]:border-t"
         )
     if variant == "ghost":
-        return (
-            "grid gap-2 [&>details]:border-transparent "
-            "[&>details]:bg-transparent"
-        )
+
     return "grid gap-2"
 
 
 def _accordion_item(props: dict[str, Any], theme: Theme) -> str:
-    return "rounded-lg border border-[var(--vd-color-border)] bg-[var(--vd-color-surface)]"
+
 
 
 def _accordion_summary(props: dict[str, Any], theme: Theme) -> str:
@@ -793,12 +785,12 @@ _STYLES: dict[str, Callable[[dict[str, Any], Theme], str]] = {
         "bg-[var(--vd-color-surface)] px-2 pb-[env(safe-area-inset-bottom)] md:hidden"
     ),
     "bottom-nav-item": _bottom_nav_item,
-    "bottom-nav-item.icon": lambda props, theme: "inline-flex size-6 items-center justify-center",
+
     "bottom-nav-item.label": lambda props, theme: "max-w-full truncate",
     "sidebar-item": _sidebar_item,
-    "sidebar-item.icon": lambda props, theme: "inline-flex size-6 shrink-0 items-center justify-center",
+
     "sidebar-item.label": lambda props, theme: "min-w-0 truncate",
-    "sidebar-item.badge": lambda props, theme: "ml-auto text-xs text-[var(--vd-color-text-muted)]",
+
     "sidebar-header": lambda props, theme: (
         "flex min-h-10 shrink-0 items-center justify-between gap-2 "
         "[aside[data-vd-sidebar-mode=rail]_&]:flex-col "
@@ -836,14 +828,13 @@ _STYLES: dict[str, Callable[[dict[str, Any], Theme], str]] = {
         "border-b border-[var(--vd-color-border)] p-4"
     ),
     "drawer.title": lambda props, theme: "text-lg font-semibold",
-    "drawer.description": lambda props, theme: "text-sm text-[var(--vd-color-text-muted)]",
+
     "drawer.body": lambda props, theme: "min-h-0 flex-1 overflow-y-auto p-4",
     "dropdown-shell": lambda props, theme: "contents",
     "dropdown-menu": _dropdown_menu,
     "menu-item": _menu_item,
     "menu-item.label": lambda props, theme: "min-w-0 flex-1",
-    "menu-shortcut": lambda props, theme: "ml-auto text-xs text-[var(--vd-color-text-muted)]",
-    "menu-separator": lambda props, theme: "my-1 h-px border-0 bg-[var(--vd-color-border)]",
+
     "tabs": _tabs,
     "tabs.list": lambda props, theme: (
         "flex items-center gap-1 border-b border-[var(--vd-color-border)]"
