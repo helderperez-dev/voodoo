@@ -286,7 +286,8 @@ class Tabs(Component):
             aria_orientation=orientation,
         )
         panels = tuple(
-
+            tab.panel(selected, self.id or "", index)
+            for index, tab in enumerate(tabs)
         )
         self.children = (tablist, *panels)
 
