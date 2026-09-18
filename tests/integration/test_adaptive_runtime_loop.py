@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+
+
 import pytest
 
 from voodoo.primitives.capability import Capability
