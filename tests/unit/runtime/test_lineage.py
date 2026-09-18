@@ -61,3 +61,23 @@ def test_lineage_survives_restart(tmp_path):
 
     assert restarted.chain("intent-1") == ("obs-1", "intent-1")
     assert len(restarted.events()) == 2
+
+
+def test_lineage_inspection_is_stable_after_restart(tmp_path):
+    path = tmp_path / "lineage.jsonl"
+    first = RuntimeLineage(path)
+    first.record_transition(
+        "observation", "obs-1", parent_id=None, reason="conversion observed"
+    )
+    first.record_transition(
+        "intent", "intent-1", parent_id="obs-1", reason="goal below target"
+    )
+
+    inspection = RuntimeLineage(path).inspect("intent-1")
+
+    assert inspection["subject_id"] == "intent-1"
+    assert inspection["chain"] == ["obs-1", "intent-1"]
+    assert [event["kind"] for event in inspection["events"]] == [
+        "intent",
+        "observation",
+    ]
