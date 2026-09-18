@@ -222,6 +222,38 @@ def build_application_graph(app: Any, contributors: Iterable[Any] = ()) -> Appli
         # configured. Validation surfaces structural errors separately.
         pass
 
+    try:
+        from voodoo.workers.queue import _workers
+
+        for name, worker in _workers.items():
+            node = graph.node(
+                ApplicationNodeKind.TASK,
+                name,
+                source=f"{worker.__module__}:{worker.__qualname__}",
+            )
+            graph.connect(graph.application_id, "contains", node.id)
+    except Exception:
+        pass
+
+    try:
+        from voodoo.ai.tools.registry import default_registry
+
+        for spec in default_registry.all():
+            node = graph.node(
+                ApplicationNodeKind.TOOL,
+                spec.name,
+                source=spec.source or None,
+                metadata={"version": spec.version},
+            )
+            graph.connect(graph.application_id, "contains", node.id)
+            for permission in spec.permissions:
+                capability_id = f"capability:{permission}"
+                if graph.get(capability_id) is None:
+                    graph.node(ApplicationNodeKind.CAPABILITY, permission)
+                graph.connect(node.id, "requires", capability_id)
+    except Exception:
+        pass
+
     for contributor in contributors:
         contribute = getattr(contributor, "contribute", None)
         if contribute is not None:
