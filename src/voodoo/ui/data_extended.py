@@ -53,7 +53,7 @@ class DescriptionList(Component):
         **kwargs: Any,
     ) -> None:
         if orientation not in {"vertical", "horizontal"}:
-
+            raise ValueError("DescriptionList orientation must be vertical or horizontal")
 
         attrs: dict[str, Any] = {
             "data_vd_description_list": True,
@@ -106,7 +106,9 @@ class DescriptionItem:
         value_children: list[Any] = []
         for v in self.values:
             if self.href:
-
+                value_children.append(
+                    _DescLink(str(v), href=self.href)
+                )
             else:
                 value_children.append(str(v))
 
@@ -312,7 +314,9 @@ class ListBox(Component):
             raise ValueError("ListBox requires at least one ListOption")
 
         binding = bind_event(on_select) if on_select else None
-
+        rendered = tuple(
+            opt.render_option(binding, multi) for opt in options
+        )
 
         super().__init__(
             _ListBoxGroup(
@@ -438,7 +442,9 @@ class StatGroup(Component):
         if columns < 1 or columns > 12:
             raise ValueError("StatGroup columns must be between 1 and 12")
 
-
+        rendered = tuple(
+            _StatSlot(stat.render_stat()) for stat in stats
+        )
 
         super().__init__(
             *rendered,
@@ -635,7 +641,7 @@ class ColumnDef:
         if self.width:
             attrs["style"] = f"width:{self.width}"
         if self.align != "left":
-
+            attrs["style"] = (attrs.get("style", "") + f";text-align:{self.align}").lstrip(";")
         if self.truncate:
             attrs["data_vd_truncate"] = True
         if self.monospace:
@@ -711,7 +717,7 @@ class EnhancedDataTable(Component):
         if not columns:
             raise ValueError("EnhancedDataTable requires at least one ColumnDef")
         if density not in {"compact", "default", "comfortable"}:
-
+            raise ValueError("EnhancedDataTable density must be compact, default, or comfortable")
 
         sort_binding = bind_event(on_sort) if on_sort else None
         row_binding = bind_event(on_row_click) if on_row_click else None
@@ -738,7 +744,9 @@ class EnhancedDataTable(Component):
                     cell_attrs["data_vd_monospace"] = True
                 if col.format_type:
                     cell_attrs["data_vd_format"] = col.format_type
-
+                cells.append(
+                    _EnhancedTableCell(str(value), **cell_attrs)
+                )
 
             row_attrs: dict[str, Any] = {
                 "role": "row",
