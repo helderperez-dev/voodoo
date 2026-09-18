@@ -51,3 +51,15 @@ def test_scheduler_orders_by_priority_then_deadline():
         "urgent-later",
         "normal",
     )
+
+
+def test_scheduler_preserves_placement_without_deciding_location():
+    from voodoo.runtime.fabric import PlacementRequirement
+
+    requirement = PlacementRequirement(capability="camera", location="edge")
+    work = ScheduledWork(Intent(name="capture"), placement=requirement)
+
+    eligible = RuntimeScheduler().eligible((work,))
+
+    assert eligible[0].placement is requirement
+    assert not hasattr(eligible[0], "node_id")
