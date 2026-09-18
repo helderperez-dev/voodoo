@@ -89,3 +89,13 @@ def test_application_graph_describes_registered_models():
         assert model.metadata["table"] == "customer"
     finally:
         _models[:] = previous
+
+
+def test_application_graph_fingerprint_is_deterministic():
+    first = ApplicationGraph()
+    first.node(ApplicationNodeKind.RESOURCE, "store")
+    second = ApplicationGraph()
+    second.node(ApplicationNodeKind.RESOURCE, "store")
+
+    assert first.fingerprint == second.fingerprint
+    assert first.snapshot()["fingerprint"] == first.fingerprint
