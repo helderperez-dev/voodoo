@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from voodoo.primitives.intent import Intent
+from voodoo.runtime.adaptive import AdaptiveSupervisor, SupervisorConfig
 from voodoo.runtime.application_graph import (
     ApplicationGraph,
     ApplicationNodeKind,
@@ -23,12 +25,10 @@ from voodoo.runtime.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.execution import Execution
 from voodoo.runtime.extension import RuntimeExtensionRegistry
 from voodoo.runtime.fabric import RuntimeFabric
-from voodoo.runtime.adaptive import AdaptiveSupervisor, SupervisorConfig
 from voodoo.runtime.goal import Goal, GoalDecomposer, GoalRun, GoalRuntime, GoalStore
-from voodoo.runtime.planner import ComputeParticipant, Planner
 from voodoo.runtime.handoff import ExecutionHandoff
-from voodoo.primitives.intent import Intent
 from voodoo.runtime.lineage import RuntimeLineage
+from voodoo.runtime.planner import ComputeParticipant, Planner
 from voodoo.runtime.reconcile import (
     GoalIntentFactory,
     GoalPredicate,
