@@ -223,7 +223,7 @@ class VoodooStoreProvider:
                 durability=self._durability,
                 repair_torn_tail=self._repair_torn_tail,
             )
-        except Exception as exc:  # noqa: BLE001 - provider boundary normalizes SDK errors
+        except Exception as exc:
             raise StoreProviderError(
                 f"Unable to open Voodoo Store at {self._path}: {exc}"
             ) from exc
