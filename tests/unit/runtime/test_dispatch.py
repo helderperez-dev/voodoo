@@ -39,10 +39,13 @@ def test_dispatcher_preserves_waiting_scheduler_decision():
         intents=(intent,),
     )
 
-    plan = RuntimeDispatcher().prepare(
-        decision,
-        backpressured={intent.name},
-    )[0]
+    from voodoo.runtime.work_scheduler import RuntimeScheduler, ScheduledWork
+
+    work = ScheduledWork(intent=intent, concurrency_key="sync")
+    scheduler = RuntimeScheduler()
+    assert scheduler.evaluate(work, backpressured={"sync"}).status is WorkEligibility.WAITING
+
+    plan = RuntimeDispatcher().prepare(decision)[0]
 
     # No implicit execution or placement occurs merely because work exists.
     assert plan.placement is None
