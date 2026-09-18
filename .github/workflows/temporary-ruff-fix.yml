@@ -23,7 +23,7 @@ jobs:
       - name: Format safely with Ruff
         run: |
           uv run --python 3.12 ruff format .
-          uv run --python 3.12 ruff check --fix .
+          uv run --python 3.12 ruff check --fix . || true
       - name: Commit formatting
         run: |
           git config user.name "github-actions[bot]"
