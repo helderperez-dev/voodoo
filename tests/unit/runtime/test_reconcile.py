@@ -100,10 +100,13 @@ def test_goal_reconciliation_uses_observed_world_and_preserves_authority_boundar
 
     handler = GoalReconciliation(
         goal=goal,
-
+        satisfied=lambda item, snapshot: snapshot is not None
+        and snapshot.entity.properties.get("conversion_rate", 0) >= 0.10,
         propose=lambda item, snapshot: Intent(name="improve_conversion"),
     )
-
+    decision = Reconciler(graph).register(
+        ApplicationNodeKind.GOAL, handler
+    ).reconcile(invalidation, world=world)[0]
 
     assert decision.action is ReconcileAction.PROPOSE_INTENT
     assert decision.intents[0].requires == ["campaign.adjust"]
@@ -130,10 +133,13 @@ def test_goal_reconciliation_is_satisfied_without_proposing_work():
 
     handler = GoalReconciliation(
         goal=goal,
-
+        satisfied=lambda item, snapshot: snapshot is not None
+        and snapshot.entity.properties.get("healthy") is True,
     )
     invalidation = InvalidationEngine(graph).invalidate(resource.id)
-
+    decision = Reconciler(graph).register(
+        ApplicationNodeKind.GOAL, handler
+    ).reconcile(invalidation, world=world)[0]
 
     assert decision.action is ReconcileAction.SATISFIED
     assert decision.intents == ()
@@ -206,7 +212,9 @@ def test_reconciler_can_require_revision_evidence():
     graph.connect(goal.id, "observes", resource.id)
     invalidation = InvalidationEngine(graph).invalidate(resource.id)
 
-
+    decision = Reconciler(
+        graph, guard=ReconcileGuard(require_revision=True)
+    ).reconcile(invalidation)[0]
 
     assert decision.action is ReconcileAction.WAIT
     assert decision.reason == "fresh revision evidence is required"
