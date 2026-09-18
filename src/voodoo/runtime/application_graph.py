@@ -524,6 +524,7 @@ def build_application_graph(
             contribute(graph)
     return graph
 
+
 def contribute_goal(graph: ApplicationGraph, goal: Any) -> ApplicationNode:
     """Project an existing Runtime Goal without creating a second Goal registry."""
     node = graph.node(
