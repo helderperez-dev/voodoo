@@ -8,11 +8,11 @@ dependency/reconciliation mechanisms share one representation.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from enum import StrEnum
 import hashlib
 import json
-from enum import StrEnum
-from collections.abc import Iterable
 from typing import Any
 
 
@@ -268,6 +268,7 @@ class InvalidationEngine:
         )
 
 
+@dataclass(frozen=True, slots=True)
 class ApplicationGraphChange:
     added_nodes: tuple[str, ...] = ()
     removed_nodes: tuple[str, ...] = ()
