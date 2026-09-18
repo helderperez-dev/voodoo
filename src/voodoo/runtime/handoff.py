@@ -7,6 +7,7 @@ from typing import Any
 from voodoo.runtime.dispatch import DispatchPlan
 from voodoo.runtime.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.execution import Execution
+from voodoo.runtime.lineage import LineageEvent, lineage
 from voodoo.runtime.work_scheduler import WorkEligibility
 
 
@@ -35,12 +36,22 @@ class ExecutionHandoff:
                 "node_id": plan.placement.node_id,
                 "reasons": list(plan.placement.reasons),
             }
-        return await self.engine.execute(
+        execution = await self.engine.execute(
             plan.work.intent,
             compute,
             actor=actor,
             principal=principal,
         )
+        lineage.record(
+            LineageEvent(
+                kind="execution",
+                subject_id=execution.id,
+                parent_id=plan.work.intent.id,
+                reason=f"canonical execution {execution.status.value}",
+                metadata={"trace_id": execution.trace_id},
+            )
+        )
+        return execution
 
 
 __all__ = ["ExecutionHandoff"]
