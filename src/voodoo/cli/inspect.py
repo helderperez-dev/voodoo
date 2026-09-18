@@ -94,6 +94,34 @@ def _find_in_store(execution_id: str):
     )
 
 
+@inspect_app.command("why")
+def inspect_why(
+    subject_id: str = typer.Argument(..., help="Intent/execution/semantic subject id"),
+    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+):
+    """Explain the causal Runtime lineage for a subject."""
+    from voodoo.runtime.lineage import lineage
+
+    data = lineage.describe(subject_id)
+    _emit(None, json_mode)
+    if _is_json(json_mode):
+        terminal.json_output(data)
+        return
+    if not data:
+        terminal.muted(f"no causal lineage recorded for '{subject_id}'")
+        return
+    table = _table(["kind", "subject", "reason", "parent"])
+    for event in data:
+        table.add_row(
+            event["kind"],
+            event["subject_id"][:12],
+            event["reason"],
+            (event["parent_id"] or "-")[:12],
+        )
+    terminal.console.print(table)
+    terminal.blank()
+
+
 @inspect_app.command("run")
 def inspect_run(  # noqa: C901
     execution_id: str = typer.Argument(
