@@ -141,7 +141,9 @@ class VoodooCSSAdapter:
         if component == "sidebar":
             classes.append(f"vd-sidebar--{props.get('mode', 'expanded')}")
         if component == "sidebar-toggle":
-
+            classes.append(
+                f"vd-sidebar-toggle--{props.get('placement', 'standalone')}"
+            )
         if component == "sidebar-item" and props.get("active"):
             classes.append("vd-sidebar-item--active")
         if component == "bottom-nav-item" and props.get("active"):
