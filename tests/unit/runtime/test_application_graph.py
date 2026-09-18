@@ -228,3 +228,35 @@ def test_canonical_goal_contributes_requirements_to_graph():
     assert tuple(item.id for item in graph.dependencies(node.id, "requires")) == (
         "capability:campaign.adjust",
     )
+
+
+def test_application_graph_diff_detects_same_id_metadata_change():
+    from voodoo.runtime.application_graph import diff_application_graph
+
+    previous = ApplicationGraph()
+    previous.node(ApplicationNodeKind.RESOURCE, "store", metadata={"version": 1})
+    current = ApplicationGraph()
+    current.node(ApplicationNodeKind.RESOURCE, "store", metadata={"version": 2})
+
+    change = diff_application_graph(previous, current)
+
+    assert change.changed_nodes == ("resource:store",)
+    assert change.changed is True
+
+
+def test_application_graph_diff_detects_edge_metadata_change():
+    from voodoo.runtime.application_graph import diff_application_graph
+
+    previous = ApplicationGraph()
+    p_resource = previous.node(ApplicationNodeKind.RESOURCE, "store")
+    p_goal = previous.node(ApplicationNodeKind.GOAL, "durable")
+    previous.connect(p_goal.id, "observes", p_resource.id, metadata={"mode": "poll"})
+
+    current = ApplicationGraph()
+    c_resource = current.node(ApplicationNodeKind.RESOURCE, "store")
+    c_goal = current.node(ApplicationNodeKind.GOAL, "durable")
+    current.connect(c_goal.id, "observes", c_resource.id, metadata={"mode": "event"})
+
+    change = diff_application_graph(previous, current)
+
+    assert change.changed_edges == (("goal:durable", "observes", "resource:store"),)
