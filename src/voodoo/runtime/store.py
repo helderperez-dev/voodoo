@@ -235,7 +235,7 @@ class VoodooStoreProvider:
             return
         try:
             store.close()
-        except Exception as exc:  # noqa: BLE001 - provider boundary normalizes SDK errors
+        except Exception as exc:
             raise StoreProviderError(
                 f"Unable to close Voodoo Store at {self._path}: {exc}"
             ) from exc
@@ -256,7 +256,7 @@ class VoodooStoreProvider:
 
         try:
             report = store_type.verify(self._path)
-        except Exception as exc:  # noqa: BLE001 - provider boundary normalizes SDK errors
+        except Exception as exc:
             return StoreHealth(
                 provider=self.name,
                 path=self._path,
