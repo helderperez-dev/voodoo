@@ -225,7 +225,7 @@ class Workflow:
             run.status = "completed"
             run.error = None
             self._persist(run)
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             run.status = "failed"
             run.error = str(error)
             self._persist(run)
@@ -538,7 +538,7 @@ class Workflow:
             from voodoo.mesh import mesh
 
             await mesh.broadcast(event, payload)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def describe(self) -> dict[str, Any]:
