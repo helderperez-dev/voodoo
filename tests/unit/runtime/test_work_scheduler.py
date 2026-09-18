@@ -135,3 +135,25 @@ def test_scheduled_work_derives_intent_semantics():
     assert work.max_concurrency == 1
     assert work.placement.capability == "camera.capture"
     assert work.placement.location == "edge"
+
+
+def test_scheduler_blocks_terminal_intent():
+    from voodoo.primitives.intent import IntentStatus
+
+    intent = Intent(name="done")
+    intent.status = IntentStatus.COMPLETED
+    decision = RuntimeScheduler().evaluate(ScheduledWork(intent))
+
+    assert decision.status is WorkEligibility.BLOCKED
+    assert decision.details == {"intent_status": "completed"}
+
+
+def test_scheduler_waits_for_already_executing_intent():
+    from voodoo.primitives.intent import IntentStatus
+
+    intent = Intent(name="running")
+    intent.status = IntentStatus.EXECUTING
+    decision = RuntimeScheduler().evaluate(ScheduledWork(intent))
+
+    assert decision.status is WorkEligibility.WAITING
+    assert decision.details == {"intent_status": "executing"}
