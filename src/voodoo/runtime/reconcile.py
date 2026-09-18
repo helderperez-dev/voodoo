@@ -99,6 +99,7 @@ class GoalReconciliation:
 class ReconcileGuard:
     cooldown_seconds: float = 0.0
     suppress_duplicates: bool = True
+    require_revision: bool = False
 
 
 class ReconcileLedger:
@@ -164,6 +165,15 @@ class Reconciler:
     def reconcile(
         self, invalidation: Invalidation, *, world: Any | None = None
     ) -> tuple[ReconcileDecision, ...]:
+        if self.guard.require_revision and invalidation.revision is None:
+            return tuple(
+                ReconcileDecision(
+                    node_id=node_id,
+                    action=ReconcileAction.WAIT,
+                    reason="fresh revision evidence is required",
+                )
+                for node_id in invalidation.affected[: self.max_decisions]
+            )
         decisions: list[ReconcileDecision] = []
         for index, node_id in enumerate(invalidation.affected):
             if index >= self.max_decisions:
