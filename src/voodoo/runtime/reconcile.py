@@ -102,6 +102,7 @@ class ReconcileGuard:
     cooldown_seconds: float = 0.0
     suppress_duplicates: bool = True
     require_revision: bool = False
+    max_repeated_outcomes: int = 3
 
 
 class ReconcileLedger:
@@ -109,6 +110,7 @@ class ReconcileLedger:
 
     def __init__(self) -> None:
         self._proposals: dict[tuple[str, str | None], datetime] = {}
+        self._outcomes: dict[str, tuple[str, int]] = {}
 
     @staticmethod
     def intent_key(node_id: str, intent: Intent) -> str:
@@ -142,6 +144,12 @@ class ReconcileLedger:
 
     def record(self, key: str, *, revision: str | None = None, now: datetime) -> None:
         self._proposals[(key, revision)] = now
+
+    def repeated_outcome(self, node_id: str, fingerprint: str) -> int:
+        previous, count = self._outcomes.get(node_id, ("", 0))
+        count = count + 1 if previous == fingerprint else 1
+        self._outcomes[node_id] = (fingerprint, count)
+        return count
 
 
 class Reconciler:
@@ -210,6 +218,24 @@ class Reconciler:
             evidence=dict(decision.evidence),
         )
 
+    @staticmethod
+    def _decision_fingerprint(decision: ReconcileDecision) -> str:
+        payload = {
+            "action": decision.action.value,
+            "reason": decision.reason,
+            "intents": [
+                {
+                    "name": intent.name,
+                    "params": intent.params,
+                    "requires": sorted(intent.requires),
+                }
+                for intent in decision.intents
+            ],
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+
     def reconcile(
         self, invalidation: Invalidation, *, world: Any | None = None
     ) -> tuple[ReconcileDecision, ...]:
@@ -248,6 +274,21 @@ class Reconciler:
                 continue
             decision = handler(node, invalidation, world)
             decision = self._deduplicate(node, decision, invalidation.revision)
+            fingerprint = self._decision_fingerprint(decision)
+            repeats = self.ledger.repeated_outcome(node.id, fingerprint)
+            if (
+                decision.action not in {ReconcileAction.SATISFIED, ReconcileAction.WAIT}
+                and repeats > self.guard.max_repeated_outcomes
+            ):
+                decision = ReconcileDecision(
+                    node_id=node.id,
+                    action=ReconcileAction.BLOCKED,
+                    reason="reconciliation oscillation/repeated outcome guard triggered",
+                    evidence={
+                        **decision.evidence,
+                        "repeated_outcomes": repeats,
+                    },
+                )
             decisions.append(decision)
         return tuple(decisions)
 
