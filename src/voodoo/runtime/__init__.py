@@ -1,3 +1,4 @@
+from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
 """Voodoo runtime — the unified execution model.
 
 This package makes the computational model *operational*.
@@ -277,6 +278,8 @@ async def execute(
     "ScheduledWork",
     "SchedulingDecision",
     "WorkEligibility",
+    "DispatchPlan",
+    "RuntimeDispatcher",
 ] | None = None,
     output_type: type | None = None,
     parent: ExecutionContext | None = None,
