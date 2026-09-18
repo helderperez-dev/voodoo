@@ -26,3 +26,21 @@ def test_state_revision_advances_on_mutation():
     assert value.revision == "1"
     value.update(lambda current: current + 1)
     assert value.revision == "2"
+
+
+def test_state_mutation_invalidates_runtime_dependents():
+    graph = DependencyGraph()
+    value = state(1)
+    token = start_dependency_tracking(graph, "goal:growth")
+    try:
+        value.get()
+    finally:
+        stop_dependency_tracking(token)
+
+    value.set(2)
+
+    dirty = graph.dirty()
+    assert len(dirty) == 1
+    assert dirty[0].node_id == "goal:growth"
+    assert dirty[0].revision == "1"
+    assert dirty[0].sources == (value.dependency_id,)
