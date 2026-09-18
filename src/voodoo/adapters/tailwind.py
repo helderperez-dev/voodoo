@@ -420,18 +420,18 @@ def _alert(props: dict[str, Any], theme: Theme) -> str:
     if variant == "solid":
         foreground = "text-black" if tone == "warning" else "text-white"
         return f"{base} {foreground} bg-[{color}] border-[{color}]"
-
+    background = "bg-transparent" if variant == "outline" else f"bg-[color-mix(in_srgb,{color}_8%,transparent)]"
+    return (
+        f"{base} {background} "
+        f"border-[color-mix(in_srgb,{color}_28%,transparent)]"
     )
 
 
 def _progress(props: dict[str, Any], theme: Theme) -> str:
     tone = props.get("tone", "primary")
-
-    return (
-        f"block w-full {size} appearance-none overflow-hidden rounded-full "
-        "bg-[var(--vd-color-surface-raised)] "
-        "[&::-webkit-progress-bar]:bg-[var(--vd-color-surface-raised)] "
-        f"[&::-webkit-progress-value]:bg-[var(--vd-color-{tone})] "
+    size = {"sm": "h-1", "md": "h-2", "lg": "h-3"}.get(
+        props.get("size", "md"), "h-2"
+    )
         f"[&::-moz-progress-bar]:bg-[var(--vd-color-{tone})]"
     )
 
