@@ -9,10 +9,14 @@ single ExecutionEngine walking the operational model:
 
 from __future__ import annotations
 
-from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
-
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
+from voodoo.runtime.adaptive import (
+    AdaptiveRun,
+    AdaptiveSupervisor,
+    SupervisorConfig,
+    SupervisorDecision,
+)
 from voodoo.runtime.application_graph import (
     ApplicationEdge,
     ApplicationGraph,
@@ -30,17 +34,12 @@ from voodoo.runtime.application_graph import (
     contribute_goal,
     diff_application_graph,
 )
-from voodoo.runtime.adaptive import (
-    AdaptiveRun,
-    AdaptiveSupervisor,
-    SupervisorConfig,
-    SupervisorDecision,
-)
 from voodoo.runtime.capability import CapabilityResolver, Resolution
-from voodoo.runtime.conventions import ApplicationLayout, discover_layout
 from voodoo.runtime.constraint import ConstraintEnforcer, Decision, ResourceAccountant
 from voodoo.runtime.context import ExecutionContext, current_context, use_context
+from voodoo.runtime.conventions import ApplicationLayout, discover_layout
 from voodoo.runtime.dashboard import runtime_dashboard
+from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
 from voodoo.runtime.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
 from voodoo.runtime.errors import (
     AgentExecutionError,
@@ -147,20 +146,19 @@ from voodoo.runtime.transaction import (
     dispatch_outbox,
     transaction,
 )
-from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
-from voodoo.runtime.workflow_store import VoodooStoreWorkflowStore, WorkflowStore
-from voodoo.runtime.world_execution import (
-    bind_world,
-    resolve_target_entity_id,
-    world_aware,
-)
-
 from voodoo.runtime.work_scheduler import (
     RuntimeScheduler,
     ScheduledWork,
     SchedulingDecision,
     WorkEligibility,
     scheduled_work_from_intent,
+)
+from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
+from voodoo.runtime.workflow_store import VoodooStoreWorkflowStore, WorkflowStore
+from voodoo.runtime.world_execution import (
+    bind_world,
+    resolve_target_entity_id,
+    world_aware,
 )
 
 __all__ = [

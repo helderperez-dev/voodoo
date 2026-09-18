@@ -183,6 +183,7 @@ def model_table_name(model: type) -> str:
     """Public semantic table name used by Runtime inspection."""
     return _get_table_name(model)
 
+
 #: Cascade registry: parent_table → [(child_table, fk_column)] (Sprint: ORM FK).
 _cascades: dict[str, list[tuple[str, str]]] = {}
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+
 import typer
 
 from voodoo.cli.inspect import _load_app

@@ -69,6 +69,7 @@ async def _close_db_after_test():
     # Remove the Store's on-disk file so the next test starts fresh.
     import shutil
     from pathlib import Path
+
     voodoo_dir = Path.cwd() / ".voodoo"
     if voodoo_dir.exists():
         shutil.rmtree(voodoo_dir, ignore_errors=True)

@@ -44,7 +44,9 @@ class Alert(Component):
         )
         super().__init__(**kwargs)
         self.props = {"tone": tone, "variant": variant}
-        self.attrs.setdefault("role", "alert" if tone in {"warning", "danger"} else "status")
+        self.attrs.setdefault(
+            "role", "alert" if tone in {"warning", "danger"} else "status"
+        )
         if title:
             self.children = (_AlertTitle(title), _AlertContent(*children))
         else:
@@ -179,7 +181,9 @@ class BreadcrumbItem(Component):
     def _sync_content(self) -> None:
         if self.current or not self.href:
             self.children = (
-                _BreadcrumbCurrent(self.label, aria_current="page" if self.current else None),
+                _BreadcrumbCurrent(
+                    self.label, aria_current="page" if self.current else None
+                ),
             )
         else:
             self.children = (_BreadcrumbLink(self.label, href=self.href),)
@@ -300,11 +304,11 @@ class AspectRatio(Component):
     ) -> None:
         match = self._RATIO.fullmatch(ratio)
         if not match or float(match.group(1)) <= 0 or float(match.group(2)) <= 0:
-            raise ValueError("AspectRatio ratio must look like '16/9' with positive values")
+            raise ValueError(
+                "AspectRatio ratio must look like '16/9' with positive values"
+            )
         super().__init__(child, **kwargs)
-        self._append_inline_css(
-            f"aspect-ratio: {match.group(1)} / {match.group(2)}"
-        )
+        self._append_inline_css(f"aspect-ratio: {match.group(1)} / {match.group(2)}")
 
 
 __all__ = [

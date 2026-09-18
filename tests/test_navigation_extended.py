@@ -64,7 +64,8 @@ def test_pagination_disabled_prev_on_first(adapter):
 
 def test_pagination_with_event(adapter):
     html = Pagination(
-        total_pages=5, current_page=1,
+        total_pages=5,
+        current_page=1,
         on_change=lambda p: p,
     ).render()
     assert "data-vd-event-click" in html
@@ -194,7 +195,7 @@ def test_top_bar_with_title(adapter):
 
 def test_top_bar_sticky(adapter):
     html = TopBar(sticky=True).render()
-    assert 'data-vd-sticky' in html
+    assert "data-vd-sticky" in html
 
 
 # ── Navigation Menu ─────────────────────────────────────────────────────────

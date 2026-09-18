@@ -194,6 +194,7 @@ def test_segmented_control_rejects_empty():
 
 def test_context_menu_renders(adapter):
     from voodoo.ui import Text
+
     target = Text("Right-click me")
     html = ContextMenu(
         target,
@@ -212,6 +213,7 @@ def test_context_menu_renders(adapter):
 
 def test_context_menu_with_submenu(adapter):
     from voodoo.ui import Text
+
     html = ContextMenu(
         Text("Target"),
         MenuItem("Open"),
@@ -223,6 +225,7 @@ def test_context_menu_with_submenu(adapter):
 
 def test_context_menu_checkbox_item(adapter):
     from voodoo.ui import Text
+
     html = ContextMenu(
         Text("T"),
         MenuCheckboxItem("Show Grid", checked=True),
@@ -233,6 +236,7 @@ def test_context_menu_checkbox_item(adapter):
 
 def test_context_menu_radio_item(adapter):
     from voodoo.ui import Text
+
     html = ContextMenu(
         Text("T"),
         MenuRadioItem("Small", value="sm", checked=True),
@@ -244,6 +248,7 @@ def test_context_menu_radio_item(adapter):
 
 def test_context_menu_rejects_empty():
     from voodoo.ui import Text
+
     with pytest.raises(ValueError, match="at least one"):
         ContextMenu(Text("T"))
 

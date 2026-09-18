@@ -7,22 +7,22 @@ ExecutionEngine remains the only path from Intent to effects.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-import hashlib
-import json
 from enum import StrEnum
 from typing import Any
 
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.goal import Goal
 from voodoo.runtime.application_graph import (
     ApplicationGraph,
     ApplicationNode,
     ApplicationNodeKind,
     Invalidation,
 )
+from voodoo.runtime.goal import Goal
 
 
 class ReconcileAction(StrEnum):
@@ -41,7 +41,6 @@ class ReconcileDecision:
     reason: str
     intents: tuple[Intent, ...] = ()
     evidence: dict[str, Any] = field(default_factory=dict)
-
 
 
 GoalPredicate = Callable[[Goal, Any | None], bool]
