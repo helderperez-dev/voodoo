@@ -60,6 +60,11 @@ from voodoo.runtime.errors import (
     WorkflowFailure,
 )
 from voodoo.runtime.execution import Execution, ExecutionStatus
+from voodoo.runtime.extension import (
+    ExtensionState,
+    ExtensionStatus,
+    RuntimeExtensionRegistry,
+)
 from voodoo.runtime.fabric import (
     FabricLease,
     FabricRoutingError,
@@ -184,6 +189,9 @@ __all__ = [
     "diff_application_graph",
     "Execution",
     "ExecutionStatus",
+    "ExtensionState",
+    "ExtensionStatus",
+    "RuntimeExtensionRegistry",
     "ExecutionContext",
     "current_context",
     "use_context",
