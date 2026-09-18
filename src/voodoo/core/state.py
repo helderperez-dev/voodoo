@@ -9,7 +9,7 @@ follow the runtime aliasing).
 import sys
 
 from voodoo.ui import state
-from voodoo.ui.state import (  # noqa: F401
+from voodoo.ui.state import (
     State,
     StateRenderer,
     state_renderer,
