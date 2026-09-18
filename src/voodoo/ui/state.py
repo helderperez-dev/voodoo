@@ -25,9 +25,9 @@ _state_context: contextvars.ContextVar[dict[str, Any] | None] = contextvars.Cont
 _rendered_cells: contextvars.ContextVar[list[State] | None] = contextvars.ContextVar(
     "voodoo_rendered_cells", default=None
 )
-_runtime_dependency_context: contextvars.ContextVar[
-    tuple[Any, str] | None
-] = contextvars.ContextVar("voodoo_runtime_dependency_context", default=None)
+_runtime_dependency_context: contextvars.ContextVar[tuple[Any, str] | None] = (
+    contextvars.ContextVar("voodoo_runtime_dependency_context", default=None)
+)
 
 
 def start_render_tracking() -> list[State]:
@@ -50,6 +50,7 @@ def _track_read(cell: State) -> None:
     if dependency is not None:
         graph, consumer = dependency
         graph.observe(consumer, cell.dependency_id)
+        cell._attach_dependency_graph(graph)
 
 
 def start_dependency_tracking(graph: Any, consumer: str) -> contextvars.Token:
@@ -64,12 +65,19 @@ def stop_dependency_tracking(token: contextvars.Token) -> None:
 class State:
     """A small observable state cell used by the UI render graph."""
 
-    __slots__ = ("_value", "_subscribers", "dependency_id", "_revision")
+    __slots__ = (
+        "_value",
+        "_subscribers",
+        "dependency_id",
+        "_revision",
+        "_dependency_graphs",
+    )
 
     def __init__(self, initial: Any = None) -> None:
         self._value = initial
         self.dependency_id = f"state:{id(self):x}"
         self._revision = 0
+        self._dependency_graphs: list[Any] = []
         self._subscribers: list[Callable[[Any], None]] = []
 
     def get(self) -> Any:
@@ -81,6 +89,7 @@ class State:
             return
         self._value = value
         self._revision += 1
+        self._invalidate_dependencies()
         self._notify(value)
 
     def update(self, fn: Callable[[Any], Any]) -> None:
@@ -88,11 +97,20 @@ class State:
             raise StateError("update() requires a callable")
         self._value = fn(self._value)
         self._revision += 1
+        self._invalidate_dependencies()
         self._notify(self._value)
 
     @property
     def revision(self) -> str:
         return str(self._revision)
+
+    def _attach_dependency_graph(self, graph: Any) -> None:
+        if graph not in self._dependency_graphs:
+            self._dependency_graphs.append(graph)
+
+    def _invalidate_dependencies(self) -> None:
+        for graph in self._dependency_graphs:
+            graph.invalidate(self.dependency_id, revision=self.revision)
 
     def subscribe(self, fn: Callable[[Any], None]) -> Callable[[], None]:
         self._subscribers.append(fn)
