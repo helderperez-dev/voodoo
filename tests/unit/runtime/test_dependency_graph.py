@@ -85,3 +85,17 @@ def test_dependency_graph_rejects_empty_recomputation_limit():
 
     with pytest.raises(ValueError, match="at least 1"):
         graph.next_dirty(limit=0)
+
+
+def test_dependency_recomputation_remains_bounded_at_scale():
+    graph = DependencyGraph()
+    for index in range(1000):
+        graph.observe(f"consumer:{index:04d}", "state:shared")
+
+    graph.invalidate("state:shared", revision="rev-scale")
+
+    first = graph.next_dirty(limit=64)
+    assert len(first) == 64
+    graph.acknowledge(tuple(item.node_id for item in first))
+    assert len(graph.dirty()) == 936
+    assert all(item.revision == "rev-scale" for item in first)
