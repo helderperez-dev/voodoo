@@ -420,6 +420,90 @@ class ApplicationGraphContributor:
         raise NotImplementedError
 
 
+def _discover_routes(graph: ApplicationGraph, app: Any) -> None:
+    for route in getattr(app, "routes", ()):
+        path = getattr(route, "path", None)
+        if not path:
+            continue
+        methods = sorted(getattr(route, "methods", ()) or ())
+        is_websocket = "websocket" in route.__class__.__name__.lower()
+        is_api = is_websocket or (
+            methods and not set(methods).issubset({"GET", "HEAD"})
+        )
+        kind = ApplicationNodeKind.API if is_api else ApplicationNodeKind.PAGE
+        node = graph.node(
+            kind, path, node_id=f"{kind.value}:{path}", metadata={"methods": methods}
+        )
+        graph.connect(graph.application_id, "contains", node.id)
+
+
+def _discover_capabilities(graph: ApplicationGraph) -> None:
+    try:
+        from voodoo.runtime.engine import engine
+
+        names = engine.capabilities.describe().get("capabilities", ())
+    except Exception:
+        return
+    for name in names:
+        node = graph.node(ApplicationNodeKind.CAPABILITY, str(name))
+        graph.connect(graph.application_id, "provides", node.id)
+
+
+def _discover_models(graph: ApplicationGraph) -> None:
+    try:
+        from voodoo.data.base import model_table_name, registered_models
+
+        models = registered_models()
+    except Exception:
+        return
+    for model in models:
+        node = graph.node(
+            ApplicationNodeKind.MODEL,
+            model.__name__,
+            source=f"{model.__module__}:{model.__qualname__}",
+            metadata={"table": model_table_name(model)},
+        )
+        graph.connect(graph.application_id, "contains", node.id)
+
+
+def _discover_workers(graph: ApplicationGraph) -> None:
+    try:
+        from voodoo.workers.queue import registered_workers
+
+        workers = registered_workers()
+    except Exception:
+        return
+    for name, worker in workers:
+        node = graph.node(
+            ApplicationNodeKind.TASK,
+            name,
+            source=f"{worker.__module__}:{worker.__qualname__}",
+        )
+        graph.connect(graph.application_id, "contains", node.id)
+
+
+def _discover_tools(graph: ApplicationGraph) -> None:
+    try:
+        from voodoo.ai.tools.registry import default_registry
+
+        specs = default_registry.all()
+    except Exception:
+        return
+    for spec in specs:
+        node = graph.node(
+            ApplicationNodeKind.TOOL,
+            spec.name,
+            source=spec.source or None,
+            metadata={"version": spec.version},
+        )
+        graph.connect(graph.application_id, "contains", node.id)
+        for permission in spec.permissions:
+            capability_id = f"capability:{permission}"
+            if graph.get(capability_id) is None:
+                graph.node(ApplicationNodeKind.CAPABILITY, permission)
+            graph.connect(node.id, "requires", capability_id)
+
+
 def build_application_graph(
     app: Any, contributors: Iterable[Any] = ()
 ) -> ApplicationGraph:
@@ -429,96 +513,16 @@ def build_application_graph(
     exposed by Voodoo is included; arbitrary Python objects are not crawled.
     """
     graph = ApplicationGraph()
-
-    for route in getattr(app, "routes", ()):
-        path = getattr(route, "path", None)
-        if not path:
-            continue
-        methods = sorted(getattr(route, "methods", ()) or ())
-        safe_page_methods = {"GET", "HEAD"}
-        is_websocket = "websocket" in route.__class__.__name__.lower()
-        kind = (
-            ApplicationNodeKind.API
-            if (
-                is_websocket
-                or (methods and not set(methods).issubset(safe_page_methods))
-            )
-            else ApplicationNodeKind.PAGE
-        )
-        node = graph.node(
-            kind,
-            path,
-            node_id=f"{kind.value}:{path}",
-            metadata={"methods": methods},
-        )
-        graph.connect(graph.application_id, "contains", node.id)
-
-    try:
-        from voodoo.runtime.engine import engine
-
-        description = engine.capabilities.describe()
-        for name in description.get("capabilities", ()):
-            node = graph.node(ApplicationNodeKind.CAPABILITY, str(name))
-            graph.connect(graph.application_id, "provides", node.id)
-    except Exception:
-        # Inspection must remain available while an application is only partly
-        # configured. Validation surfaces structural errors separately.
-        pass
-
-    try:
-        from voodoo.data.base import model_table_name, registered_models
-
-        for model in registered_models():
-            name = model.__name__
-            node = graph.node(
-                ApplicationNodeKind.MODEL,
-                name,
-                source=f"{model.__module__}:{model.__qualname__}",
-                metadata={"table": model_table_name(model)},
-            )
-            graph.connect(graph.application_id, "contains", node.id)
-    except Exception:
-        pass
-
-    try:
-        from voodoo.workers.queue import registered_workers
-
-        for name, worker in registered_workers():
-            node = graph.node(
-                ApplicationNodeKind.TASK,
-                name,
-                source=f"{worker.__module__}:{worker.__qualname__}",
-            )
-            graph.connect(graph.application_id, "contains", node.id)
-    except Exception:
-        pass
-
-    try:
-        from voodoo.ai.tools.registry import default_registry
-
-        for spec in default_registry.all():
-            node = graph.node(
-                ApplicationNodeKind.TOOL,
-                spec.name,
-                source=spec.source or None,
-                metadata={"version": spec.version},
-            )
-            graph.connect(graph.application_id, "contains", node.id)
-            for permission in spec.permissions:
-                capability_id = f"capability:{permission}"
-                if graph.get(capability_id) is None:
-                    graph.node(ApplicationNodeKind.CAPABILITY, permission)
-                graph.connect(node.id, "requires", capability_id)
-    except Exception:
-        pass
-
+    _discover_routes(graph, app)
+    _discover_capabilities(graph)
+    _discover_models(graph)
+    _discover_workers(graph)
+    _discover_tools(graph)
     for contributor in contributors:
         contribute = getattr(contributor, "contribute", None)
         if contribute is not None:
             contribute(graph)
-
     return graph
-
 
 def contribute_goal(graph: ApplicationGraph, goal: Any) -> ApplicationNode:
     """Project an existing Runtime Goal without creating a second Goal registry."""
