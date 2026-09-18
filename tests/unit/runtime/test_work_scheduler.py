@@ -42,7 +42,9 @@ def test_scheduler_orders_by_priority_then_deadline():
         Intent(name="urgent-soon", deadline=now + timedelta(minutes=2)), priority=10
     )
 
-
+    ordered = RuntimeScheduler().eligible(
+        (normal, urgent_later, urgent_soon), now=now
+    )
 
     assert tuple(item.intent.name for item in ordered) == (
         "urgent-soon",
@@ -66,7 +68,9 @@ def test_scheduler_preserves_placement_without_deciding_location():
 def test_scheduler_waits_for_unavailable_resource():
     work = ScheduledWork(Intent(name="render"), resource_key="gpu")
 
-
+    decision = RuntimeScheduler().evaluate(
+        work, unavailable_resources={"gpu"}
+    )
 
     assert decision.status is WorkEligibility.WAITING
     assert decision.details == {"resource": "gpu"}
