@@ -43,7 +43,7 @@ def test_dispatcher_preserves_waiting_scheduler_decision():
 
     work = ScheduledWork(intent=intent, concurrency_key="sync")
     scheduler = RuntimeScheduler()
-    assert scheduler.evaluate(work, backpressured={"sync"}).status is WorkEligibility.WAITING
+    assert (\n        scheduler.evaluate(work, backpressured={"sync"}).status\n        is WorkEligibility.WAITING\n    )
 
     plan = RuntimeDispatcher().prepare(decision)[0]
 
