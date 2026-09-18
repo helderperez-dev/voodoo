@@ -339,7 +339,7 @@ class AdaptiveSupervisor:
             return False
         return execution is not None and run.status != "failed"
 
-    async def run(  # noqa: C901
+    async def run(
         self,
         intent: Intent,
         *,
