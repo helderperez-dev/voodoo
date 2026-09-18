@@ -9,7 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from voodoo.runtime.fabric import PlacementDecision, RuntimeFabric
-from voodoo.runtime.lineage import (\n    LineageEvent,\n    RuntimeLineage,\n    lineage as default_lineage,\n)
+from voodoo.runtime.lineage import (
+    LineageEvent,
+    RuntimeLineage,
+    lineage as default_lineage,
+)
 from voodoo.runtime.reconcile import ReconcileAction, ReconcileDecision
 from voodoo.runtime.work_scheduler import (
     RuntimeScheduler,
