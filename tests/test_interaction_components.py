@@ -54,7 +54,8 @@ def test_sidebar_supports_expanded_rail_and_hidden_modes(adapter):
     assert 'data-vd-sidebar-mobile-mode="hidden"' in html
     assert 'data-vd-sidebar-dismiss-mode="hidden"' in html
     assert 'aria-current="page"' in html
-
+    assert 'data-vd-sidebar-label' in html
+    assert 'data-vd-sidebar-item' in html
 
     toggle = SidebarToggle(sidebar).render()
     assert f'data-vd-sidebar-toggle="{sidebar.id}"' in toggle
@@ -109,9 +110,9 @@ def test_app_shell_supports_sidebar_and_mobile_bottom_navigation(adapter):
     assert 'aria-label="Collapse navigation"' in html
     assert html.count('data-vd-sidebar-toggle="primary-sidebar"') == 2
     assert html.index('data-vd-sidebar-placement="inside"') < html.index("</aside>")
-
+    assert 'data-vd-app-shell-content' in html
     assert 'aria-label="Voodoo"' in html
-
+    assert 'data-vd-sidebar-brand' in html
     assert ">V.<" in html
     assert ">Voodoo<" in html
     assert 'data-vd-sidebar-modes="expanded,rail"' in html
@@ -171,7 +172,9 @@ def test_app_shell_content_padding_is_configurable(adapter):
 
     assert "data-vd-app-shell-content" in html
     expected_class = (
-
+        "vd-app-shell-content--pad-none"
+        if adapter is VoodooCSSAdapter
+        else "p-0"
     )
     assert expected_class in html
 
