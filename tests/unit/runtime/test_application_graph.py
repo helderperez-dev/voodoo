@@ -114,3 +114,17 @@ def test_application_graph_diff_reports_semantic_changes():
     assert change.changed is True
     assert change.added_nodes == ("task:sync",)
     assert change.added_edges == (("application", "contains", "task:sync"),)
+
+
+def test_application_graph_affected_walks_transitive_dependents():
+    graph = ApplicationGraph()
+    resource = graph.node(ApplicationNodeKind.RESOURCE, "payments")
+    capability = graph.node(ApplicationNodeKind.CAPABILITY, "payment.read")
+    goal = graph.node(ApplicationNodeKind.GOAL, "growth")
+    graph.connect(capability.id, "requires", resource.id)
+    graph.connect(goal.id, "requires", capability.id)
+
+    assert tuple(node.id for node in graph.affected(resource.id)) == (
+        "capability:payment.read",
+        "goal:growth",
+    )
