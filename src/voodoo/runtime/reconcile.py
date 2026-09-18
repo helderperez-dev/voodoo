@@ -45,7 +45,10 @@ class ReconcileDecision:
 
 
 GoalPredicate = Callable[[Goal, Any | None], bool]
-GoalIntentFactory = Callable[[Goal, Any | None], Intent | tuple[Intent, ...]]\nReconcileHandler = Callable[\n    [ApplicationNode, Invalidation, Any | None], ReconcileDecision\n]
+GoalIntentFactory = Callable[[Goal, Any | None], Intent | tuple[Intent, ...]]
+ReconcileHandler = Callable[
+    [ApplicationNode, Invalidation, Any | None], ReconcileDecision
+]
 
 
 @dataclass(frozen=True, slots=True)
