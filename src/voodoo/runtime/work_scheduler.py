@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from voodoo.primitives.intent import Intent
+from voodoo.primitives.intent import Intent, IntentStatus
 from voodoo.runtime.fabric import PlacementRequirement
 
 
@@ -62,6 +62,30 @@ class RuntimeScheduler:
         running_counts = running or {}
         unavailable = unavailable_resources or set()
         pressured = backpressured or set()
+        if work.intent.status in {
+            IntentStatus.COMPLETED,
+            IntentStatus.REJECTED,
+            IntentStatus.EXPIRED,
+            IntentStatus.CANCELLED,
+        }:
+            return SchedulingDecision(
+                work.intent.id,
+                WorkEligibility.BLOCKED,
+                f"intent is terminal: {work.intent.status.value}",
+                work.priority,
+                {"intent_status": work.intent.status.value},
+            )
+        if work.intent.status in {
+            IntentStatus.EXECUTING,
+            IntentStatus.PAUSED,
+        }:
+            return SchedulingDecision(
+                work.intent.id,
+                WorkEligibility.WAITING,
+                f"intent is already {work.intent.status.value}",
+                work.priority,
+                {"intent_status": work.intent.status.value},
+            )
         if work.intent.deadline is not None and current >= work.intent.deadline:
             return SchedulingDecision(
                 work.intent.id,
