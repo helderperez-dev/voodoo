@@ -36,7 +36,7 @@ def test_application_graph_is_idempotent_for_same_semantic_node():
     assert first is second
 
 
-def test_application_graph_describes_tool_capability_relationship(monkeypatch):
+def test_application_graph_describes_tool_capability_relationship():
     from voodoo.ai.tools.registry import ToolSpec, default_registry
     from voodoo.runtime.application_graph import build_application_graph
 
