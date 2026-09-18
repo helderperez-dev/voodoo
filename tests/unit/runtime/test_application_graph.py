@@ -67,3 +67,25 @@ def test_application_graph_describes_tool_capability_relationship():
     finally:
         default_registry._tools.clear()
         default_registry._tools.update(previous)
+
+
+def test_application_graph_describes_registered_models():
+    from voodoo.data.base import _models
+    from voodoo.data.model import Model
+    from voodoo.runtime.application_graph import build_application_graph
+
+    previous = list(_models)
+    try:
+        class Customer(Model):
+            email: str
+
+        class EmptyApp:
+            routes = []
+
+        graph = build_application_graph(EmptyApp())
+        model = graph.get("model:Customer")
+
+        assert model is not None
+        assert model.metadata["table"] == "customer"
+    finally:
+        _models[:] = previous
