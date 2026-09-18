@@ -25,6 +25,7 @@ from voodoo.runtime.application_graph import (
     Invalidation,
     InvalidationEngine,
     build_application_graph,
+    contribute_goal,
     diff_application_graph,
 )
 from voodoo.runtime.adaptive import (
@@ -152,6 +153,7 @@ __all__ = [
     "ApplicationGraphChange",
     "ApplicationGraphContributor",
     "build_application_graph",
+    "contribute_goal",
     "diff_application_graph",
     "Execution",
     "ExecutionStatus",
