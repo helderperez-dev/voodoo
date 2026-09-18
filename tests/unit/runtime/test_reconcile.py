@@ -204,7 +204,7 @@ def test_reconciler_allows_duplicate_after_cooldown_window():
 
     first = reconciler.reconcile(invalidation)[0]
     key = ledger.intent_key(goal.id, first.intents[0])
-    ledger._proposals[key] = datetime.now(UTC) - timedelta(seconds=2)
+    ledger._proposals[(key, None)] = datetime.now(UTC) - timedelta(seconds=2)
     second = reconciler.reconcile(invalidation)[0]
 
     assert second.action is ReconcileAction.PROPOSE_INTENT
@@ -225,3 +225,26 @@ def test_reconciler_can_require_revision_evidence():
 
     assert decision.action is ReconcileAction.WAIT
     assert decision.reason == "fresh revision evidence is required"
+
+
+def test_reconciler_allows_same_intent_for_new_evidence_revision():
+    graph = ApplicationGraph()
+    resource = graph.node(ApplicationNodeKind.RESOURCE, "metric")
+    goal = graph.node(ApplicationNodeKind.GOAL, "target")
+    graph.connect(goal.id, "observes", resource.id)
+    reconciler = Reconciler(graph).register(
+        ApplicationNodeKind.GOAL,
+        lambda node, change, world: ReconcileDecision(
+            node_id=node.id,
+            action=ReconcileAction.PROPOSE_INTENT,
+            reason="target unmet",
+            intents=(Intent(name="adjust", params={"amount": 1}),),
+        ),
+    )
+
+    first = InvalidationEngine(graph).invalidate(resource.id, revision="obs-1")
+    second = InvalidationEngine(graph).invalidate(resource.id, revision="obs-2")
+
+    assert reconciler.reconcile(first)[0].action is ReconcileAction.PROPOSE_INTENT
+    assert reconciler.reconcile(first)[0].action is ReconcileAction.WAIT
+    assert reconciler.reconcile(second)[0].action is ReconcileAction.PROPOSE_INTENT
