@@ -80,7 +80,7 @@ from voodoo.runtime.goal import (
 )
 from voodoo.runtime.goal_store import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
 from voodoo.runtime.graph import ExecutionGraph, ExecutionNode
-from voodoo.runtime.handoff import ExecutionHandoff
+from voodoo.runtime.handoff import ExecutionHandoff, RemoteExecutionRequired
 from voodoo.runtime.human import (
     Approval,
     ApprovalRegistry,
@@ -250,6 +250,7 @@ __all__ = [
     "ApprovalRegistry",
     "Human",
     "ExecutionHandoff",
+    "RemoteExecutionRequired",
     "LineageEvent",
     "RuntimeLineage",
     "lineage",
