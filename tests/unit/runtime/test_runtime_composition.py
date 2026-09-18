@@ -124,3 +124,17 @@ def test_runtime_keeps_goal_reconciliation_scoped_per_goal():
     assert by_node["goal:growth"].action is ReconcileAction.PROPOSE_INTENT
     assert by_node["goal:growth"].intents[0].name == "grow"
     assert by_node["goal:retention"].action is ReconcileAction.SATISFIED
+
+
+def test_runtime_goal_registration_is_idempotent_but_rejects_identity_conflict():
+    runtime = Runtime()
+    goal = Goal(id="growth", name="growth")
+    runtime.register_goal(goal, satisfied=lambda item, snapshot: True)
+    runtime.register_goal(goal, satisfied=lambda item, snapshot: True)
+
+    conflicting = runtime.graph.get("goal:growth")
+    assert conflicting is not None
+
+    other = Goal(id="growth", name="different")
+    with pytest.raises(ValueError, match="conflicts with Goal"):
+        runtime.register_goal(other, satisfied=lambda item, snapshot: True)
