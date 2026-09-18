@@ -228,6 +228,21 @@ def build_application_graph(app: Any, contributors: Iterable[Any] = ()) -> Appli
         pass
 
     try:
+        from voodoo.data.base import _get_table_name, _models
+
+        for model in _models:
+            name = model.__name__
+            node = graph.node(
+                ApplicationNodeKind.MODEL,
+                name,
+                source=f"{model.__module__}:{model.__qualname__}",
+                metadata={"table": _get_table_name(model)},
+            )
+            graph.connect(graph.application_id, "contains", node.id)
+    except Exception:
+        pass
+
+    try:
         from voodoo.workers.queue import _workers
 
         for name, worker in _workers.items():
