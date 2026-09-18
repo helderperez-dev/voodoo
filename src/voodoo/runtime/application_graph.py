@@ -277,35 +277,63 @@ class InvalidationEngine:
 class ApplicationGraphChange:
     added_nodes: tuple[str, ...] = ()
     removed_nodes: tuple[str, ...] = ()
+    changed_nodes: tuple[str, ...] = ()
     added_edges: tuple[tuple[str, str, str], ...] = ()
     removed_edges: tuple[tuple[str, str, str], ...] = ()
+    changed_edges: tuple[tuple[str, str, str], ...] = ()
 
     @property
     def changed(self) -> bool:
         return bool(
             self.added_nodes
             or self.removed_nodes
+            or self.changed_nodes
             or self.added_edges
             or self.removed_edges
+            or self.changed_edges
         )
 
 
 def diff_application_graph(
     previous: ApplicationGraph, current: ApplicationGraph
 ) -> ApplicationGraphChange:
-    previous_nodes = {node.id for node in previous.nodes}
-    current_nodes = {node.id for node in current.nodes}
+    previous_node_records = {node.id: node for node in previous.nodes}
+    current_node_records = {node.id: node for node in current.nodes}
+    previous_nodes = set(previous_node_records)
+    current_nodes = set(current_node_records)
     previous_edges = {
         (edge.source, edge.relation, edge.target) for edge in previous.edges
     }
     current_edges = {
         (edge.source, edge.relation, edge.target) for edge in current.edges
     }
+    previous_edge_records = {
+        (edge.source, edge.relation, edge.target): edge for edge in previous.edges
+    }
+    current_edge_records = {
+        (edge.source, edge.relation, edge.target): edge for edge in current.edges
+    }
+    shared_nodes = previous_nodes & current_nodes
+    shared_edges = previous_edges & current_edges
     return ApplicationGraphChange(
         added_nodes=tuple(sorted(current_nodes - previous_nodes)),
         removed_nodes=tuple(sorted(previous_nodes - current_nodes)),
+        changed_nodes=tuple(
+            sorted(
+                node_id
+                for node_id in shared_nodes
+                if previous_node_records[node_id] != current_node_records[node_id]
+            )
+        ),
         added_edges=tuple(sorted(current_edges - previous_edges)),
         removed_edges=tuple(sorted(previous_edges - current_edges)),
+        changed_edges=tuple(
+            sorted(
+                key
+                for key in shared_edges
+                if previous_edge_records[key] != current_edge_records[key]
+            )
+        ),
     )
 
 
