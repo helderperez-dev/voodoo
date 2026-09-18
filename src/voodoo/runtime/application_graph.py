@@ -244,7 +244,12 @@ class Invalidation:
 
 
 class InvalidationEngine:
-    """Deterministically translate a semantic change into affected graph nodes."""
+    """Deterministically translate a semantic change into affected graph nodes.
+
+    This engine understands only Voodoo semantic relationships. External
+    systems integrate by contributing generic resources, observations,
+    capabilities and effects; vendor SDKs never belong in the Runtime core.
+    """
 
     def __init__(self, graph: ApplicationGraph) -> None:
         self.graph = graph
