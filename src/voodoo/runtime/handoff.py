@@ -27,7 +27,8 @@ class ExecutionHandoff:
     ) -> Execution:
         if plan.scheduling.status is not WorkEligibility.ELIGIBLE:
             raise RuntimeError(
-
+                f"cannot execute ineligible work: {plan.scheduling.status.value} "
+                f"({plan.scheduling.reason})"
             )
         metadata = plan.work.intent.params.setdefault("_runtime", {})
         if plan.placement is not None:
