@@ -9,6 +9,8 @@ dependency/reconciliation mechanisms share one representation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
+import json
 from enum import StrEnum
 from collections.abc import Iterable
 from typing import Any
@@ -176,9 +178,29 @@ class ApplicationGraph:
     def describe(self) -> dict[str, Any]:
         return {
             "application_id": self.application_id,
-            "nodes": [node.describe() for node in self.nodes],
-            "edges": [edge.describe() for edge in self.edges],
+            "nodes": [
+                node.describe() for node in sorted(self.nodes, key=lambda item: item.id)
+            ],
+            "edges": [
+                edge.describe()
+                for edge in sorted(
+                    self.edges, key=lambda item: (item.source, item.relation, item.target)
+                )
+            ],
         }
+
+    @property
+    def fingerprint(self) -> str:
+        """Stable content identity for snapshots, caches and change detection."""
+        payload = json.dumps(
+            self.describe(), sort_keys=True, separators=(",", ":"), default=str
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    def snapshot(self) -> dict[str, Any]:
+        payload = self.describe()
+        payload["fingerprint"] = self.fingerprint
+        return payload
 
 
 class ApplicationGraphContributor:
