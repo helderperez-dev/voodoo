@@ -203,6 +203,42 @@ class ApplicationGraph:
         return payload
 
 
+@dataclass(frozen=True, slots=True)
+class ApplicationGraphChange:
+    added_nodes: tuple[str, ...] = ()
+    removed_nodes: tuple[str, ...] = ()
+    added_edges: tuple[tuple[str, str, str], ...] = ()
+    removed_edges: tuple[tuple[str, str, str], ...] = ()
+
+    @property
+    def changed(self) -> bool:
+        return bool(
+            self.added_nodes
+            or self.removed_nodes
+            or self.added_edges
+            or self.removed_edges
+        )
+
+
+def diff_application_graph(
+    previous: ApplicationGraph, current: ApplicationGraph
+) -> ApplicationGraphChange:
+    previous_nodes = {node.id for node in previous.nodes}
+    current_nodes = {node.id for node in current.nodes}
+    previous_edges = {
+        (edge.source, edge.relation, edge.target) for edge in previous.edges
+    }
+    current_edges = {
+        (edge.source, edge.relation, edge.target) for edge in current.edges
+    }
+    return ApplicationGraphChange(
+        added_nodes=tuple(sorted(current_nodes - previous_nodes)),
+        removed_nodes=tuple(sorted(previous_nodes - current_nodes)),
+        added_edges=tuple(sorted(current_edges - previous_edges)),
+        removed_edges=tuple(sorted(previous_edges - current_edges)),
+    )
+
+
 class ApplicationGraphContributor:
     """Small stable seam used by Runtime subsystems and future extensions."""
 
@@ -307,7 +343,9 @@ def build_application_graph(app: Any, contributors: Iterable[Any] = ()) -> Appli
 __all__ = [
     "ApplicationEdge",
     "ApplicationGraph",
+    "ApplicationGraphChange",
     "ApplicationGraphContributor",
+    "diff_application_graph",
     "ApplicationNode",
     "ApplicationNodeKind",
     "build_application_graph",
