@@ -121,8 +121,8 @@ class Runtime:
             if self.graph.get(source_id) is None:
                 raise KeyError(f"Unknown observed application node: {source_id}")
             self.graph.connect(node.id, "observes", source_id)
-        self.reconciler.register(
-            ApplicationNodeKind.GOAL,
+        self.reconciler.register_node(
+            node.id,
             GoalReconciliation(goal, satisfied=satisfied, propose=propose),
         )
         return self
