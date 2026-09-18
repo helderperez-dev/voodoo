@@ -52,6 +52,19 @@ class RuntimeCycle:
     executions: tuple[Execution, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class RuntimeConvergence:
+    """Result of processing an explicitly bounded sequence of observations."""
+
+    cycles: tuple[RuntimeCycle, ...]
+    processed: int
+    max_cycles: int
+
+    @property
+    def exhausted(self) -> bool:
+        return self.processed >= self.max_cycles
+
+
 class Runtime:
     """Own and connect one Voodoo runtime control plane.
 
@@ -228,6 +241,52 @@ class Runtime:
         """Turn a reconciliation proposal into governed scheduled work."""
         return self.dispatcher.prepare(decision)
 
+    async def converge(
+        self,
+        observations: list[dict[str, Any]],
+        compute: ComputeFn | None = None,
+        *,
+        max_cycles: int = 16,
+        actor: str = "system",
+        principal: Any | None = None,
+    ) -> RuntimeConvergence:
+        """Process explicit observations sequentially with a hard cycle bound."""
+        if max_cycles < 1:
+            raise ValueError("max_cycles must be >= 1")
+        cycles: list[RuntimeCycle] = []
+        processed = 0
+        for item in observations:
+            if processed >= max_cycles:
+                break
+            payload = dict(item)
+            try:
+                entity_id = payload.pop("entity_id")
+                property_name = payload.pop("property")
+                value = payload.pop("value")
+                source = payload.pop("source")
+            except KeyError as error:
+                raise ValueError(
+                    f"observation is missing required field: {error.args[0]}"
+                ) from error
+            cycle = await self.observe(
+                entity_id,
+                property_name,
+                value,
+                source=source,
+                compute=compute,
+                actor=actor,
+                principal=principal,
+                **payload,
+            )
+            processed += 1
+            if cycle is not None:
+                cycles.append(cycle)
+        return RuntimeConvergence(
+            cycles=tuple(cycles),
+            processed=processed,
+            max_cycles=max_cycles,
+        )
+
     async def observe(
         self,
         entity_id: str,
@@ -341,4 +400,4 @@ class Runtime:
         )
 
 
-__all__ = ["Runtime", "RuntimeCycle"]
+__all__ = ["Runtime", "RuntimeConvergence", "RuntimeCycle"]
