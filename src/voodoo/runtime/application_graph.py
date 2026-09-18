@@ -269,6 +269,28 @@ class ExtensionManifest:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+class ExtensionRegistry:
+    """Explicit activation registry. Installed does not mean enabled."""
+
+    def __init__(self) -> None:
+        self._extensions: dict[str, Extension] = {}
+
+    def use(self, extension: Extension) -> Extension:
+        name = extension.manifest.name
+        existing = self._extensions.get(name)
+        if existing is not None and existing is not extension:
+            raise ValueError(f"Extension {name!r} is already enabled")
+        self._extensions[name] = extension
+        return extension
+
+    def all(self) -> tuple[Extension, ...]:
+        return tuple(self._extensions.values())
+
+    def contribute(self, graph: ApplicationGraph) -> None:
+        for extension in self.all():
+            extension.contribute(graph)
+
+
 class Extension:
     """Stable Runtime-facing contract for external Voodoo integrations."""
 
@@ -398,6 +420,7 @@ __all__ = [
     "ApplicationGraph",
     "ApplicationGraphChange",
     "Extension",
+    "ExtensionRegistry",
     "ExtensionManifest",
     "ApplicationGraphContributor",
     "diff_application_graph",
