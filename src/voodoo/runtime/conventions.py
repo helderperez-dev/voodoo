@@ -43,10 +43,7 @@ class ApplicationLayout:
         )
 
     def describe(self) -> dict[str, str]:
-        return {
-            name: str(getattr(self, name))
-            for name in self.present()
-        }
+        return {name: str(getattr(self, name)) for name in self.present()}
 
 
 def discover_layout(root: str | Path = ".") -> ApplicationLayout:
