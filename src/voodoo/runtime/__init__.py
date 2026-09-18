@@ -37,6 +37,7 @@ from voodoo.runtime.adaptive import (
     SupervisorDecision,
 )
 from voodoo.runtime.capability import CapabilityResolver, Resolution
+from voodoo.runtime.conventions import ApplicationLayout, discover_layout
 from voodoo.runtime.constraint import ConstraintEnforcer, Decision, ResourceAccountant
 from voodoo.runtime.context import ExecutionContext, current_context, use_context
 from voodoo.runtime.dashboard import runtime_dashboard
@@ -194,6 +195,8 @@ __all__ = [
     "PolicyRequest",
     "PolicyResult",
     "PolicyRule",
+    "ApplicationLayout",
+    "discover_layout",
     "ConstraintEnforcer",
     "Decision",
     "ResourceAccountant",
