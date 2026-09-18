@@ -273,7 +273,11 @@ async def execute(
     *,
     actor: str = "system",
     principal: Principal | None = None,
-    capabilities: list[str] | None = None,
+    capabilities: list[str    "RuntimeScheduler",
+    "ScheduledWork",
+    "SchedulingDecision",
+    "WorkEligibility",
+] | None = None,
     output_type: type | None = None,
     parent: ExecutionContext | None = None,
 ) -> Execution:
@@ -297,3 +301,10 @@ def register_capability(capability: Capability) -> None:
 def grant(context: ExecutionContext, capability: Capability) -> None:
     """Grant a capability to an in-flight execution context."""
     context.grant(capability)
+
+from voodoo.runtime.work_scheduler import (
+    RuntimeScheduler,
+    ScheduledWork,
+    SchedulingDecision,
+    WorkEligibility,
+)
