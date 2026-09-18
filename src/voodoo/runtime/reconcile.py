@@ -108,7 +108,7 @@ class ReconcileLedger:
     """Small in-process safety ledger; durable adapters may persist it later."""
 
     def __init__(self) -> None:
-        self._proposals: dict[str, datetime] = {}
+        self._proposals: dict[tuple[str, str | None], datetime] = {}
 
     @staticmethod
     def intent_key(node_id: str, intent: Intent) -> str:
@@ -126,17 +126,24 @@ class ReconcileLedger:
         return hashlib.sha256(payload).hexdigest()
 
     def recently_proposed(
-        self, key: str, *, cooldown_seconds: float, now: datetime
+        self,
+        key: str,
+        *,
+        revision: str | None = None,
+        cooldown_seconds: float,
+        now: datetime,
     ) -> bool:
-        previous = self._proposals.get(key)
+        previous = self._proposals.get((key, revision))
         if previous is None:
             return False
         if cooldown_seconds <= 0:
             return True
         return now - previous < timedelta(seconds=cooldown_seconds)
 
-    def record(self, key: str, *, now: datetime) -> None:
-        self._proposals[key] = now
+    def record(
+        self, key: str, *, revision: str | None = None, now: datetime
+    ) -> None:
+        self._proposals[(key, revision)] = now
 
 
 class Reconciler:
@@ -165,7 +172,10 @@ class Reconciler:
         return self
 
     def _deduplicate(
-        self, node: ApplicationNode, decision: ReconcileDecision
+        self,
+        node: ApplicationNode,
+        decision: ReconcileDecision,
+        revision: str | None,
     ) -> ReconcileDecision:
         if (
             decision.action is not ReconcileAction.PROPOSE_INTENT
@@ -177,10 +187,13 @@ class Reconciler:
         for intent in decision.intents:
             key = self.ledger.intent_key(node.id, intent)
             if self.ledger.recently_proposed(
-                key, cooldown_seconds=self.guard.cooldown_seconds, now=now
+                key,
+                revision=revision,
+                cooldown_seconds=self.guard.cooldown_seconds,
+                now=now,
             ):
                 continue
-            self.ledger.record(key, now=now)
+            self.ledger.record(key, revision=revision, now=now)
             accepted.append(intent)
         if not accepted:
             return ReconcileDecision(
@@ -236,7 +249,7 @@ class Reconciler:
                 )
                 continue
             decision = handler(node, invalidation, world)
-            decision = self._deduplicate(node, decision)
+            decision = self._deduplicate(node, decision, invalidation.revision)
             decisions.append(decision)
         return tuple(decisions)
 
