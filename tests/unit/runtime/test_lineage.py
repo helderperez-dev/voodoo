@@ -8,9 +8,7 @@ def test_lineage_explains_causal_parent_chain():
         LineageEvent("intent", "intent:adjust", "proposed", parent_id="goal:growth")
     )
     lineage.record(
-        LineageEvent(
-            "execution", "exec:1", "authorized", parent_id="intent:adjust"
-        )
+
     )
 
     events = lineage.why("exec:1")
