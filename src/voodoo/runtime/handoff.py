@@ -37,15 +37,17 @@ class ExecutionHandoff:
                 f"work is not eligible for execution: {plan.scheduling.status.value} "
                 f"({plan.scheduling.reason})"
             )
-        if (
-            plan.placement is not None
-            and self.local_node_id is not None
-            and plan.placement.node_id != self.local_node_id
-        ):
-            raise RemoteExecutionRequired(
-                f"work is placed on remote node {plan.placement.node_id!r}; "
-                "a FabricExecutor transport must perform the handoff"
-            )
+        if plan.placement is not None:
+            if self.local_node_id is None:
+                raise RemoteExecutionRequired(
+                    f"work is placed on node {plan.placement.node_id!r}; "
+                    "local node identity is required before execution"
+                )
+            if plan.placement.node_id != self.local_node_id:
+                raise RemoteExecutionRequired(
+                    f"work is placed on remote node {plan.placement.node_id!r}; "
+                    "a FabricExecutor transport must perform the handoff"
+                )
         metadata = plan.work.intent.params.setdefault("_runtime", {})
         if plan.placement is not None:
             metadata["placement"] = {
