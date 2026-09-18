@@ -260,3 +260,28 @@ def test_application_graph_diff_detects_edge_metadata_change():
     change = diff_application_graph(previous, current)
 
     assert change.changed_edges == (("goal:durable", "observes", "resource:store"),)
+
+
+def test_extension_contributes_generic_runtime_surfaces():
+    from voodoo.runtime.application_graph import Extension, ExtensionManifest
+
+    class Commerce(Extension):
+        manifest = ExtensionManifest(
+            name="commerce",
+            version="1.0.0",
+            capabilities=("payment.read",),
+            resources=("orders",),
+            effects=("refund",),
+            observers=("order-events",),
+            services=("payments",),
+        )
+
+    graph = ApplicationGraph()
+    Commerce().contribute(graph)
+    extension = graph.get("extension:commerce")
+
+    assert extension is not None
+    assert graph.get("resource:orders") is not None
+    assert graph.get("effect:refund") is not None
+    assert graph.get("observer:order-events") is not None
+    assert graph.get("service:payments") is not None
