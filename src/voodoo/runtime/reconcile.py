@@ -168,6 +168,10 @@ class Reconciler:
         self.graph = graph
         self.max_decisions = max_decisions
         self.guard = guard or ReconcileGuard()
+        if self.guard.cooldown_seconds < 0:
+            raise ValueError("cooldown_seconds cannot be negative")
+        if self.guard.max_repeated_outcomes < 1:
+            raise ValueError("max_repeated_outcomes must be at least 1")
         self.ledger = ledger or ReconcileLedger()
         self._handlers: dict[ApplicationNodeKind, ReconcileHandler] = {}
 
