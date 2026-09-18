@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
+import json
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,14 +20,37 @@ class LineageEvent:
 
 
 class RuntimeLineage:
-    """Append-only in-process causal index; durable stores may mirror it."""
+    """Append-only causal index with an optional durable JSONL mirror."""
 
-    def __init__(self) -> None:
+    def __init__(self, path: str | Path | None = None) -> None:
         self._events: list[LineageEvent] = []
+        self._path = Path(path) if path is not None else None
+        if self._path is not None:
+            self._load()
 
     def record(self, event: LineageEvent) -> LineageEvent:
         self._events.append(event)
+        if self._path is not None:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            payload = asdict(event)
+            payload["recorded_at"] = event.recorded_at.isoformat()
+            with self._path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, default=str) + "\n")
         return event
+
+    def _load(self) -> None:
+        if self._path is None or not self._path.exists():
+            return
+        with self._path.open(encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    payload = json.loads(line)
+                    payload["recorded_at"] = datetime.fromisoformat(
+                        payload["recorded_at"]
+                    )
+                    self._events.append(LineageEvent(**payload))
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    continue
 
     def events(self) -> tuple[LineageEvent, ...]:
         return tuple(self._events)
