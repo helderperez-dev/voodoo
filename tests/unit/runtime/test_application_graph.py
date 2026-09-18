@@ -128,3 +128,23 @@ def test_application_graph_affected_walks_transitive_dependents():
         "capability:payment.read",
         "goal:growth",
     )
+
+
+def test_extension_contributes_provider_without_granting_authority():
+    from voodoo.runtime.application_graph import Extension, ExtensionManifest
+
+    class Payments(Extension):
+        manifest = ExtensionManifest(
+            name="payments",
+            version="1.0.0",
+            capabilities=("payment.refund",),
+        )
+
+    graph = ApplicationGraph()
+    Payments().contribute(graph)
+
+    extension = graph.get("extension:payments")
+    capability = graph.get("capability:payment.refund")
+    assert extension is not None
+    assert capability is not None
+    assert graph.dependencies(extension.id, "provides") == (capability,)
