@@ -272,8 +272,12 @@ def test_reconciler_blocks_repeated_non_converging_outcome():
     )
     invalidation = InvalidationEngine(graph).invalidate(resource.id, revision="obs-1")
 
-    assert reconciler.reconcile(invalidation)[0].action is ReconcileAction.PROPOSE_INTENT
-    assert reconciler.reconcile(invalidation)[0].action is ReconcileAction.PROPOSE_INTENT
+    assert (
+        reconciler.reconcile(invalidation)[0].action is ReconcileAction.PROPOSE_INTENT
+    )
+    assert (
+        reconciler.reconcile(invalidation)[0].action is ReconcileAction.PROPOSE_INTENT
+    )
     blocked = reconciler.reconcile(invalidation)[0]
 
     assert blocked.action is ReconcileAction.BLOCKED
