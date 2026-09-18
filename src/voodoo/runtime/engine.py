@@ -464,7 +464,7 @@ class ExecutionEngine:
             )
             self._build_checkpoint(execution)
             self._persist(execution)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             await self._handle_failure(
                 execution,
                 ctx,
@@ -693,7 +693,7 @@ class ExecutionEngine:
             from voodoo.security.redaction import redact
 
             await mesh.broadcast(event, redact(payload))
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def _record_telemetry(self, execution: Execution) -> None:
@@ -706,7 +706,7 @@ class ExecutionEngine:
                 (execution.duration_seconds or 0.0) * 1000,
                 error=execution.failed,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
 
