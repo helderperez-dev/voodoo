@@ -24,6 +24,30 @@ class ApplicationLayout:
     effects: Path | None = None
     public: Path | None = None
 
+    def present(self) -> tuple[str, ...]:
+        return tuple(
+            name
+            for name in (
+                "pages",
+                "api",
+                "agents",
+                "workers",
+                "goals",
+                "workflows",
+                "models",
+                "capabilities",
+                "effects",
+                "public",
+            )
+            if getattr(self, name) is not None
+        )
+
+    def describe(self) -> dict[str, str]:
+        return {
+            name: str(getattr(self, name))
+            for name in self.present()
+        }
+
 
 def discover_layout(root: str | Path = ".") -> ApplicationLayout:
     base = Path(root)
