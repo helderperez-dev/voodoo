@@ -132,7 +132,7 @@ from voodoo.runtime.reconcile import (
     ReconcileLedger,
     Reconciler,
 )
-from voodoo.runtime.runtime import Runtime
+from voodoo.runtime.runtime import Runtime, RuntimeCycle
 from voodoo.runtime.store import (
     DEFAULT_STORE_PATH,
     RuntimeStore,
@@ -173,6 +173,7 @@ from voodoo.runtime.world_execution import (
 
 __all__ = [
     "Runtime",
+    "RuntimeCycle",
     "ApplicationNodeKind",
     "ChangeReason",
     "Extension",
