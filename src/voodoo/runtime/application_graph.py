@@ -226,7 +226,6 @@ class ApplicationGraph:
         return payload
 
 
-@dataclass(frozen=True, slots=True)
 class ChangeReason(StrEnum):
     STRUCTURE = "structure"
     STATE = "state"
