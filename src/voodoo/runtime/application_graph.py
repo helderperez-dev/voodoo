@@ -534,7 +534,6 @@ def contribute_goal(graph: ApplicationGraph, goal: Any) -> ApplicationNode:
         metadata={
             "objective": str(getattr(goal, "objective", "")),
             "target_entity_id": getattr(goal, "target_entity_id", None),
-            "status": getattr(getattr(goal, "status", None), "value", None),
         },
     )
     graph.connect(graph.application_id, "contains", node.id)
