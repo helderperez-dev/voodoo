@@ -10,6 +10,7 @@ from voodoo.cli import (
     executions,
     fabric,
     generate,
+    graph,
     new,
     objects,
     protocol,
@@ -39,6 +40,7 @@ app.command()(create.create)
 app.command()(dev.dev)
 app.command()(start.start)
 app.command()(generate.generate)
+app.command()(graph.graph)
 app.add_typer(auth_app, name="auth")
 app.add_typer(ai.ai_app, name="ai")
 app.add_typer(inspect_app, name="inspect")
