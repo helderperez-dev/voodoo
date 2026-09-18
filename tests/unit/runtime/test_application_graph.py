@@ -34,3 +34,36 @@ def test_application_graph_is_idempotent_for_same_semantic_node():
     second = graph.node(ApplicationNodeKind.RESOURCE, "payments")
 
     assert first is second
+
+
+def test_application_graph_describes_tool_capability_relationship(monkeypatch):
+    from voodoo.ai.tools.registry import ToolSpec, default_registry
+    from voodoo.runtime.application_graph import build_application_graph
+
+    previous = dict(default_registry._tools)
+    default_registry._tools.clear()
+    try:
+        default_registry.register(
+            ToolSpec(
+                name="refund",
+                description="Refund payment",
+                input_schema={},
+                output_schema={},
+                permissions=["payment.refund"],
+                source="tests:test_refund:1",
+            )
+        )
+
+        class EmptyApp:
+            routes = []
+
+        graph = build_application_graph(EmptyApp())
+        tool = graph.get("tool:refund")
+        capability = graph.get("capability:payment.refund")
+
+        assert tool is not None
+        assert capability is not None
+        assert graph.dependencies(tool.id, "requires") == (capability,)
+    finally:
+        default_registry._tools.clear()
+        default_registry._tools.update(previous)
