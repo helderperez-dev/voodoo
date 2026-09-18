@@ -114,6 +114,17 @@ class DependencyGraph:
     def revision(self, source: str) -> DependencyRevision | None:
         return self._revisions.get(source)
 
+    def next_dirty(self, *, limit: int = 100) -> tuple[DirtyNode, ...]:
+        """Return a bounded deterministic recomputation batch."""
+        if limit < 1:
+            raise ValueError("recomputation limit must be at least 1")
+        return self.dirty()[:limit]
+
+    def acknowledge(self, nodes: tuple[str, ...]) -> None:
+        """Clear dirty state only after callers successfully recompute nodes."""
+        for node_id in nodes:
+            self._dirty.pop(node_id, None)
+
     def explain(self, node_id: str) -> dict[str, Any]:
         dirty = self._dirty.get(node_id)
         return {
