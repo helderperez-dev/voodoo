@@ -23,7 +23,9 @@ from voodoo.runtime.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.execution import Execution
 from voodoo.runtime.extension import RuntimeExtensionRegistry
 from voodoo.runtime.fabric import RuntimeFabric
-from voodoo.runtime.goal import Goal
+from voodoo.runtime.adaptive import AdaptiveSupervisor, SupervisorConfig
+from voodoo.runtime.goal import Goal, GoalDecomposer, GoalRun, GoalRuntime, GoalStore
+from voodoo.runtime.planner import ComputeParticipant, Planner
 from voodoo.runtime.handoff import ExecutionHandoff
 from voodoo.runtime.lineage import RuntimeLineage
 from voodoo.runtime.reconcile import (
@@ -58,6 +60,8 @@ class Runtime:
         store_config: StoreConfig | None = None,
         lineage: RuntimeLineage | None = None,
         extensions: RuntimeExtensionRegistry | None = None,
+        goal_store: GoalStore | None = None,
+        supervisor_config: SupervisorConfig | None = None,
         local_node_id: str | None = None,
     ) -> None:
         if store is not None and store_config is not None:
@@ -71,6 +75,18 @@ class Runtime:
         self.store = store or RuntimeStore(store_config)
         self.lineage = lineage or RuntimeLineage()
         self.extensions = extensions or RuntimeExtensionRegistry()
+
+        self.planner = Planner(engine=self.engine)
+        self.supervisor = AdaptiveSupervisor(
+            self.planner,
+            engine=self.engine,
+            config=supervisor_config,
+        )
+        self.goals = GoalRuntime(
+            self.supervisor,
+            world=self.world,
+            store=goal_store,
+        )
 
         self.invalidations = InvalidationEngine(self.graph)
         self.reconciler = Reconciler(self.graph)
@@ -131,6 +147,31 @@ class Runtime:
             GoalReconciliation(goal, satisfied=satisfied, propose=propose),
         )
         return self
+
+    def register_compute(self, participant: ComputeParticipant) -> Runtime:
+        """Register adaptive compute without creating a parallel runtime."""
+        self.planner.register(participant)
+        return self
+
+    async def achieve(
+        self,
+        goal: Goal,
+        *,
+        intents: list[Any] | None = None,
+        decomposer: GoalDecomposer | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> GoalRun:
+        """Run a durable/adaptive Goal through the Runtime-owned executor."""
+        return await self.goals.achieve(
+            goal,
+            intents=intents,
+            decomposer=decomposer,
+            context=context,
+        )
+
+    async def resume_goal(self, goal_id: str) -> GoalRun:
+        """Resume a durable Goal run owned by this Runtime."""
+        return await self.goals.resume(goal_id)
 
     def invalidate(
         self,
