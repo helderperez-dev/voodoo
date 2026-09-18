@@ -11,11 +11,18 @@ from voodoo.runtime.lineage import LineageEvent, lineage
 from voodoo.runtime.work_scheduler import WorkEligibility
 
 
+class RemoteExecutionRequired(RuntimeError):
+    """Placement selected another node; transport must perform the handoff."""
+
+
 class ExecutionHandoff:
     """Submit only eligible prepared work to the canonical ExecutionEngine."""
 
-    def __init__(self, engine: ExecutionEngine) -> None:
+    def __init__(
+        self, engine: ExecutionEngine, *, local_node_id: str | None = None
+    ) -> None:
         self.engine = engine
+        self.local_node_id = local_node_id
 
     async def execute(
         self,
@@ -29,6 +36,15 @@ class ExecutionHandoff:
             raise RuntimeError(
                 f"work is not eligible for execution: {plan.scheduling.status.value} "
                 f"({plan.scheduling.reason})"
+            )
+        if (
+            plan.placement is not None
+            and self.local_node_id is not None
+            and plan.placement.node_id != self.local_node_id
+        ):
+            raise RemoteExecutionRequired(
+                f"work is placed on remote node {plan.placement.node_id!r}; "
+                "a FabricExecutor transport must perform the handoff"
             )
         metadata = plan.work.intent.params.setdefault("_runtime", {})
         if plan.placement is not None:
@@ -54,4 +70,4 @@ class ExecutionHandoff:
         return execution
 
 
-__all__ = ["ExecutionHandoff"]
+__all__ = ["ExecutionHandoff", "RemoteExecutionRequired"]
