@@ -11,7 +11,7 @@ from voodoo.runtime.application_graph import build_application_graph
 
 def graph(
     app_str: str = typer.Option(None, "--app", help="App instance (e.g. main:app)"),
-    json_mode: bool = typer.Option(False, "--json", help="Output machine-readable JSON"),
+    json_mode: bool = typer.Option(\n        False, "--json", help="Output machine-readable JSON"\n    ),
 ) -> None:
     """Show the semantic structure Voodoo knows about the application."""
     app = _load_app(app_str)
