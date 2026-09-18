@@ -154,7 +154,7 @@ class ApplicationGraph:
         ids = {
             edge.source
             for edge in self._edge_records
-            if edge.target == node_id and (relation is None or edge.relation == relation)
+            if edge.target == node_id\n            and (relation is None or edge.relation == relation)
         }
         return tuple(self._nodes[node_id] for node_id in ids)
 
@@ -164,7 +164,7 @@ class ApplicationGraph:
         ids = {
             edge.target
             for edge in self._edge_records
-            if edge.source == node_id and (relation is None or edge.relation == relation)
+            if edge.source == node_id\n            and (relation is None or edge.relation == relation)
         }
         return tuple(self._nodes[target] for target in ids)
 
@@ -207,7 +207,7 @@ class ApplicationGraph:
             "edges": [
                 edge.describe()
                 for edge in sorted(
-                    self.edges, key=lambda item: (item.source, item.relation, item.target)
+                    self.edges,\n                    key=lambda item: (item.source, item.relation, item.target),
                 )
             ],
         }
@@ -393,7 +393,7 @@ class Extension:
                 graph.node(ApplicationNodeKind.CAPABILITY, capability)
             graph.connect(extension.id, "provides", capability_id)
         contributions = (
-            (ApplicationNodeKind.RESOURCE, "provides_resource", self.manifest.resources),
+            (\n                ApplicationNodeKind.RESOURCE,\n                "provides_resource",\n                self.manifest.resources,\n            ),
             (ApplicationNodeKind.EFFECT, "handles", self.manifest.effects),
             (ApplicationNodeKind.OBSERVER, "observes_via", self.manifest.observers),
             (ApplicationNodeKind.SERVICE, "provides_service", self.manifest.services),
@@ -413,7 +413,7 @@ class ApplicationGraphContributor:
         raise NotImplementedError
 
 
-def build_application_graph(app: Any, contributors: Iterable[Any] = ()) -> ApplicationGraph:
+def build_application_graph(\n    app: Any, contributors: Iterable[Any] = ()\n) -> ApplicationGraph:
     """Build a useful graph from stable Runtime surfaces.
 
     Discovery is deliberately conservative. Only semantic information already
