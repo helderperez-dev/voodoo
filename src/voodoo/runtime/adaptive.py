@@ -425,7 +425,9 @@ class AdaptiveSupervisor:
                         step=step.participant,
                     )
                     continue
-                return await self._fallback_or_fail(run, intent, step, error)
+                return await self._fallback_or_fail(
+                    run, intent, step, error, context=context
+                )
 
     async def run(
         self,
