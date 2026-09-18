@@ -148,3 +148,23 @@ def test_extension_contributes_provider_without_granting_authority():
     assert extension is not None
     assert capability is not None
     assert graph.dependencies(extension.id, "provides") == (capability,)
+
+
+def test_extension_registry_requires_explicit_activation():
+    from voodoo.runtime.application_graph import (
+        Extension,
+        ExtensionManifest,
+        ExtensionRegistry,
+    )
+
+    class Analytics(Extension):
+        manifest = ExtensionManifest(name="analytics", version="1.0.0")
+
+    registry = ExtensionRegistry()
+    extension = Analytics()
+    registry.use(extension)
+
+    graph = ApplicationGraph()
+    registry.contribute(graph)
+
+    assert graph.get("extension:analytics") is not None
