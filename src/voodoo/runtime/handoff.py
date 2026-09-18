@@ -7,7 +7,11 @@ from typing import Any
 from voodoo.runtime.dispatch import DispatchPlan
 from voodoo.runtime.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.execution import Execution
-from voodoo.runtime.lineage import (\n    LineageEvent,\n    RuntimeLineage,\n    lineage as default_lineage,\n)
+from voodoo.runtime.lineage import (
+    LineageEvent,
+    RuntimeLineage,
+    lineage as default_lineage,
+)
 from voodoo.runtime.work_scheduler import WorkEligibility
 
 
