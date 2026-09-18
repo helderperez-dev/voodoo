@@ -109,6 +109,25 @@ class RuntimeLineage:
         chain.reverse()
         return tuple(chain)
 
+    def inspect(self, subject_id: str) -> dict[str, Any]:
+        """Return a stable causal inspection payload for CLI and tooling."""
+        events = self.why(subject_id)
+        return {
+            "subject_id": subject_id,
+            "chain": list(self.chain(subject_id)),
+            "events": [
+                {
+                    "kind": event.kind,
+                    "subject_id": event.subject_id,
+                    "reason": event.reason,
+                    "parent_id": event.parent_id,
+                    "metadata": dict(event.metadata),
+                    "recorded_at": event.recorded_at.isoformat(),
+                }
+                for event in events
+            ],
+        }
+
     def describe(self, subject_id: str) -> list[dict[str, Any]]:
         return [
             {
