@@ -192,3 +192,20 @@ def test_invalidation_records_reason_revision_and_affected_nodes():
     assert invalidation.affected == (goal.id,)
     assert invalidation.reason is ChangeReason.OBSERVATION
     assert invalidation.revision == "obs-42"
+
+
+def test_extension_contract_has_no_vendor_dependency():
+    from voodoo.runtime.application_graph import Extension, ExtensionManifest
+
+    class ExternalAnalytics(Extension):
+        manifest = ExtensionManifest(
+            name="external-analytics",
+            version="1.0.0",
+            capabilities=("analytics.events.read",),
+        )
+
+    graph = ApplicationGraph()
+    ExternalAnalytics().contribute(graph)
+
+    assert graph.get("extension:external-analytics") is not None
+    assert graph.get("capability:analytics.events.read") is not None
