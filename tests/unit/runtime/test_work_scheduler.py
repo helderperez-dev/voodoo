@@ -157,3 +157,19 @@ def test_scheduler_waits_for_already_executing_intent():
 
     assert decision.status is WorkEligibility.WAITING
     assert decision.details == {"intent_status": "executing"}
+
+
+def test_scheduled_work_preserves_all_required_capabilities():
+    from voodoo.runtime.work_scheduler import scheduled_work_from_intent
+
+    intent = Intent(name="capture-and-store")
+    intent.require("camera.capture")
+    intent.require("storage.write")
+
+    work = scheduled_work_from_intent(intent)
+
+    assert work.placement.capability == "camera.capture"
+    assert work.placement.capabilities == (
+        "camera.capture",
+        "storage.write",
+    )
