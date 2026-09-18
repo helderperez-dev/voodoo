@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 
 class ApplicationNodeKind(StrEnum):
@@ -143,7 +144,9 @@ class ApplicationGraph:
         self._edge_records.append(edge)
         return edge
 
-    def dependents(self, node_id: str, relation: str | None = None) -> tuple[ApplicationNode, ...]:
+    def dependents(
+        self, node_id: str, relation: str | None = None
+    ) -> tuple[ApplicationNode, ...]:
         ids = {
             edge.source
             for edge in self._edge_records
@@ -151,7 +154,9 @@ class ApplicationGraph:
         }
         return tuple(self._nodes[node_id] for node_id in ids)
 
-    def dependencies(self, node_id: str, relation: str | None = None) -> tuple[ApplicationNode, ...]:
+    def dependencies(
+        self, node_id: str, relation: str | None = None
+    ) -> tuple[ApplicationNode, ...]:
         ids = {
             edge.target
             for edge in self._edge_records
