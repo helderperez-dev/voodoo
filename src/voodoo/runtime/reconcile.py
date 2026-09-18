@@ -140,9 +140,7 @@ class ReconcileLedger:
             return True
         return now - previous < timedelta(seconds=cooldown_seconds)
 
-    def record(
-        self, key: str, *, revision: str | None = None, now: datetime
-    ) -> None:
+    def record(self, key: str, *, revision: str | None = None, now: datetime) -> None:
         self._proposals[(key, revision)] = now
 
 
