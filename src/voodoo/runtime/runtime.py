@@ -15,6 +15,7 @@ from voodoo.runtime.application_graph import (
     ChangeReason,
     Invalidation,
     InvalidationEngine,
+    contribute_goal,
 )
 from voodoo.runtime.dependency_graph import DependencyGraph
 from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
@@ -22,9 +23,13 @@ from voodoo.runtime.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.execution import Execution
 from voodoo.runtime.extension import RuntimeExtensionRegistry
 from voodoo.runtime.fabric import RuntimeFabric
+from voodoo.runtime.goal import Goal
 from voodoo.runtime.handoff import ExecutionHandoff
 from voodoo.runtime.lineage import RuntimeLineage
 from voodoo.runtime.reconcile import (
+    GoalIntentFactory,
+    GoalPredicate,
+    GoalReconciliation,
     ReconcileDecision,
     ReconcileHandler,
     Reconciler,
@@ -100,6 +105,26 @@ class Runtime:
         handler: ReconcileHandler,
     ) -> Runtime:
         self.reconciler.register(kind, handler)
+        return self
+
+    def register_goal(
+        self,
+        goal: Goal,
+        *,
+        satisfied: GoalPredicate,
+        propose: GoalIntentFactory | None = None,
+        observes: tuple[str, ...] = (),
+    ) -> Runtime:
+        """Project a Goal into the graph and register canonical reconciliation."""
+        node = contribute_goal(self.graph, goal)
+        for source_id in observes:
+            if self.graph.get(source_id) is None:
+                raise KeyError(f"Unknown observed application node: {source_id}")
+            self.graph.connect(node.id, "observes", source_id)
+        self.reconciler.register(
+            ApplicationNodeKind.GOAL,
+            GoalReconciliation(goal, satisfied=satisfied, propose=propose),
+        )
         return self
 
     def invalidate(
