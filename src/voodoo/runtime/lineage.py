@@ -52,7 +52,6 @@ class RuntimeLineage:
             )
         )
 
-
     def why(self, subject_id: str) -> tuple[LineageEvent, ...]:
         by_subject: dict[str, list[LineageEvent]] = {}
         for event in self._events:
