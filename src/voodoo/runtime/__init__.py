@@ -110,6 +110,17 @@ from voodoo.runtime.policy import (
     PolicyResult,
     PolicyRule,
 )
+from voodoo.runtime.reconcile import (
+    GoalIntentFactory,
+    GoalPredicate,
+    GoalReconciliation,
+    ReconcileAction,
+    ReconcileDecision,
+    ReconcileGuard,
+    ReconcileHandler,
+    ReconcileLedger,
+    Reconciler,
+)
 from voodoo.runtime.store import (
     DEFAULT_STORE_PATH,
     RuntimeStore,
@@ -271,6 +282,15 @@ __all__ = [
     "bind_world",
     "world_aware",
     "resolve_target_entity_id",
+    "GoalIntentFactory",
+    "GoalPredicate",
+    "GoalReconciliation",
+    "ReconcileAction",
+    "ReconcileDecision",
+    "ReconcileGuard",
+    "ReconcileHandler",
+    "ReconcileLedger",
+    "Reconciler",
     "RuntimeScheduler",
     "ScheduledWork",
     "SchedulingDecision",
