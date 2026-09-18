@@ -5,7 +5,12 @@ from voodoo.runtime.application_graph import (
     ChangeReason,
     InvalidationEngine,
 )
-from voodoo.runtime.reconcile import ReconcileAction, ReconcileDecision, Reconciler
+from voodoo.runtime.reconcile import (
+    ReconcileAction,
+    ReconcileDecision,
+    ReconcileGuard,
+    Reconciler,
+)
 
 
 def test_reconciler_proposes_intent_without_executing_it():
