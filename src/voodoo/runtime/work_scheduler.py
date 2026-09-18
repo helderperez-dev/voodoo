@@ -171,6 +171,7 @@ class RuntimeScheduler:
             "dependencies": list(work.dependencies),
             "placement": {
                 "capability": work.placement.capability,
+                "capabilities": list(work.placement.capabilities),
                 "service": work.placement.service,
                 "owner": work.placement.owner,
                 "location": work.placement.location,
@@ -240,6 +241,7 @@ def _placement_from_intent(intent: Intent) -> tuple[PlacementRequirement, str | 
             placement_kwargs["service"] = str(constraint.value)
     if intent.requires:
         placement_kwargs["capability"] = intent.requires[0]
+        placement_kwargs["capabilities"] = tuple(intent.requires)
     return PlacementRequirement(**placement_kwargs), resource_key
 
 
