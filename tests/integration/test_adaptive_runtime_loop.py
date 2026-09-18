@@ -40,7 +40,8 @@ async def test_observation_to_goal_to_execution_to_satisfied_loop():
 
     handler = GoalReconciliation(
         goal,
-
+        satisfied=lambda item, snapshot: snapshot is not None
+        and snapshot.entity.properties.get("conversion", 0) >= 0.10,
         propose=lambda item, snapshot: Intent(name="improve-conversion"),
     )
     reconciler = Reconciler(graph).register(ApplicationNodeKind.GOAL, handler)
