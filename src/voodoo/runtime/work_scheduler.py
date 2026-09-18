@@ -64,11 +64,11 @@ class RuntimeScheduler:
         pressured = backpressured or set()
         if work.intent.expired:
             return SchedulingDecision(
-                work.intent.id, WorkEligibility.EXPIRED, "intent deadline passed", work.priority
+
             )
         if work.not_before is not None and current < work.not_before:
             return SchedulingDecision(
-                work.intent.id, WorkEligibility.WAITING, "not_before has not arrived", work.priority
+
             )
         missing = tuple(item for item in work.dependencies if item not in completed_ids)
         if missing:
