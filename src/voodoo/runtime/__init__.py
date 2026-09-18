@@ -1,4 +1,3 @@
-from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
 """Voodoo runtime — the unified execution model.
 
 This package makes the computational model *operational*.
@@ -9,6 +8,8 @@ single ExecutionEngine walking the operational model:
 """
 
 from __future__ import annotations
+
+from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
 
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
@@ -140,6 +141,14 @@ from voodoo.runtime.world_execution import (
     world_aware,
 )
 
+from voodoo.runtime.work_scheduler import (
+    RuntimeScheduler,
+    ScheduledWork,
+    SchedulingDecision,
+    WorkEligibility,
+    scheduled_work_from_intent,
+)
+
 __all__ = [
     "ApplicationNodeKind",
     "ChangeReason",
@@ -262,6 +271,13 @@ __all__ = [
     "bind_world",
     "world_aware",
     "resolve_target_entity_id",
+    "RuntimeScheduler",
+    "ScheduledWork",
+    "SchedulingDecision",
+    "WorkEligibility",
+    "scheduled_work_from_intent",
+    "DispatchPlan",
+    "RuntimeDispatcher",
     "execute",
     "register_capability",
     "grant",
@@ -274,13 +290,7 @@ async def execute(
     *,
     actor: str = "system",
     principal: Principal | None = None,
-    capabilities: list[str    "RuntimeScheduler",
-    "ScheduledWork",
-    "SchedulingDecision",
-    "WorkEligibility",
-    "DispatchPlan",
-    "RuntimeDispatcher",
-] | None = None,
+    capabilities: list[str] | None = None,
     output_type: type | None = None,
     parent: ExecutionContext | None = None,
 ) -> Execution:
@@ -304,10 +314,3 @@ def register_capability(capability: Capability) -> None:
 def grant(context: ExecutionContext, capability: Capability) -> None:
     """Grant a capability to an in-flight execution context."""
     context.grant(capability)
-
-from voodoo.runtime.work_scheduler import (
-    RuntimeScheduler,
-    ScheduledWork,
-    SchedulingDecision,
-    WorkEligibility,
-)
