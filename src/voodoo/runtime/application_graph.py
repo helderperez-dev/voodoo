@@ -428,9 +428,11 @@ def build_application_graph(app: Any, contributors: Iterable[Any] = ()) -> Appli
             continue
         methods = sorted(getattr(route, "methods", ()) or ())
         safe_page_methods = {"GET", "HEAD"}
+        is_websocket = "websocket" in route.__class__.__name__.lower()
         kind = (
             ApplicationNodeKind.API
-            if methods and not set(methods).issubset(safe_page_methods)
+            if is_websocket
+            or (methods and not set(methods).issubset(safe_page_methods))
             else ApplicationNodeKind.PAGE
         )
         node = graph.node(
