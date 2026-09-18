@@ -114,3 +114,28 @@ def test_scheduler_explains_placement_without_selecting_node():
     assert explanation["placement"]["capability"] == "camera"
     assert explanation["placement"]["location"] == "edge"
     assert "node_id" not in explanation["placement"]
+
+
+def test_scheduled_work_derives_intent_semantics():
+    from voodoo.primitives.constraint import Constraint
+    from voodoo.runtime.work_scheduler import scheduled_work_from_intent
+
+    intent = Intent(
+        name="capture",
+        params={
+            "_priority": 7,
+            "_dependencies": ["boot"],
+            "_concurrency_key": "camera",
+            "_max_concurrency": 1,
+        },
+        constraints=[Constraint.locality("edge")],
+    ).require("camera.capture")
+
+    work = scheduled_work_from_intent(intent)
+
+    assert work.priority == 7
+    assert work.dependencies == ("boot",)
+    assert work.concurrency_key == "camera"
+    assert work.max_concurrency == 1
+    assert work.placement.capability == "camera.capture"
+    assert work.placement.location == "edge"
