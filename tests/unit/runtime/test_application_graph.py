@@ -285,3 +285,19 @@ def test_extension_contributes_generic_runtime_surfaces():
     assert graph.get("effect:refund") is not None
     assert graph.get("observer:order-events") is not None
     assert graph.get("service:payments") is not None
+
+
+def test_application_graph_classifies_websocket_route_as_api():
+    from voodoo.runtime.application_graph import build_application_graph
+
+    class WebSocketRoute:
+        path = "/events"
+        methods = None
+
+    class App:
+        routes = [WebSocketRoute()]
+
+    graph = build_application_graph(App())
+
+    assert graph.get("api:/events") is not None
+    assert graph.get("page:/events") is None
