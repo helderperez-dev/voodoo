@@ -121,7 +121,6 @@ from voodoo.runtime.policy import (
     PolicyResult,
     PolicyRule,
 )
-from voodoo.runtime.runtime import Runtime
 from voodoo.runtime.reconcile import (
     GoalIntentFactory,
     GoalPredicate,
@@ -133,6 +132,7 @@ from voodoo.runtime.reconcile import (
     ReconcileLedger,
     Reconciler,
 )
+from voodoo.runtime.runtime import Runtime
 from voodoo.runtime.store import (
     DEFAULT_STORE_PATH,
     RuntimeStore,
