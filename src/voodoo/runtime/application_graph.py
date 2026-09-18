@@ -260,6 +260,38 @@ def diff_application_graph(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class ExtensionManifest:
+    name: str
+    version: str
+    requires_voodoo: str | None = None
+    capabilities: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+class Extension:
+    """Stable Runtime-facing contract for external Voodoo integrations."""
+
+    manifest: ExtensionManifest
+
+    def contribute(self, graph: ApplicationGraph) -> None:
+        extension = graph.node(
+            ApplicationNodeKind.EXTENSION,
+            self.manifest.name,
+            metadata={
+                "version": self.manifest.version,
+                "requires_voodoo": self.manifest.requires_voodoo,
+                **self.manifest.metadata,
+            },
+        )
+        graph.connect(graph.application_id, "uses", extension.id)
+        for capability in self.manifest.capabilities:
+            capability_id = f"capability:{capability}"
+            if graph.get(capability_id) is None:
+                graph.node(ApplicationNodeKind.CAPABILITY, capability)
+            graph.connect(extension.id, "provides", capability_id)
+
+
 class ApplicationGraphContributor:
     """Small stable seam used by Runtime subsystems and future extensions."""
 
@@ -365,6 +397,8 @@ __all__ = [
     "ApplicationEdge",
     "ApplicationGraph",
     "ApplicationGraphChange",
+    "Extension",
+    "ExtensionManifest",
     "ApplicationGraphContributor",
     "diff_application_graph",
     "ApplicationNode",
