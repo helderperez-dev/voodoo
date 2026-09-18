@@ -121,6 +121,7 @@ from voodoo.runtime.policy import (
     PolicyResult,
     PolicyRule,
 )
+from voodoo.runtime.runtime import Runtime
 from voodoo.runtime.reconcile import (
     GoalIntentFactory,
     GoalPredicate,
@@ -171,6 +172,7 @@ from voodoo.runtime.world_execution import (
 )
 
 __all__ = [
+    "Runtime",
     "ApplicationNodeKind",
     "ChangeReason",
     "Extension",
