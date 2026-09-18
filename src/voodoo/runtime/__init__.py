@@ -18,6 +18,8 @@ from voodoo.runtime.application_graph import (
     ApplicationGraphContributor,
     ApplicationNode,
     ApplicationNodeKind,
+    Extension,
+    ExtensionManifest,
     build_application_graph,
     diff_application_graph,
 )
@@ -134,6 +136,8 @@ from voodoo.runtime.world_execution import (
 
 __all__ = [
     "ApplicationNodeKind",
+    "Extension",
+    "ExtensionManifest",
     "ApplicationNode",
     "ApplicationEdge",
     "ApplicationGraph",
