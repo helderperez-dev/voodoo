@@ -14,10 +14,12 @@ from voodoo.primitives.intent import Intent
 from voodoo.runtime.application_graph import (
     ApplicationEdge,
     ApplicationGraph,
+    ApplicationGraphChange,
     ApplicationGraphContributor,
     ApplicationNode,
     ApplicationNodeKind,
     build_application_graph,
+    diff_application_graph,
 )
 from voodoo.runtime.adaptive import (
     AdaptiveRun,
@@ -135,8 +137,10 @@ __all__ = [
     "ApplicationNode",
     "ApplicationEdge",
     "ApplicationGraph",
+    "ApplicationGraphChange",
     "ApplicationGraphContributor",
     "build_application_graph",
+    "diff_application_graph",
     "Execution",
     "ExecutionStatus",
     "ExecutionContext",
