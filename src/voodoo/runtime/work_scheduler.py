@@ -181,9 +181,43 @@ class RuntimeScheduler:
         return tuple(selected)
 
 
+def scheduled_work_from_intent(intent: Intent) -> ScheduledWork:
+    """Translate canonical Intent semantics into scheduler/placement semantics."""
+    placement_kwargs: dict[str, Any] = {}
+    resource_key: str | None = None
+    concurrency_key = intent.params.get("_concurrency_key")
+    max_concurrency = intent.params.get("_max_concurrency")
+    priority = int(intent.params.get("_priority", 0))
+    not_before = intent.params.get("_not_before")
+    dependencies = tuple(str(item) for item in intent.params.get("_dependencies", ()))
+
+    for constraint in intent.constraints:
+        if constraint.kind == "locality" and constraint.operator == "==":
+            placement_kwargs["location"] = str(constraint.value)
+        elif constraint.kind == "resource" and constraint.operator == "==":
+            resource_key = str(constraint.value)
+        elif constraint.kind == "service" and constraint.operator == "==":
+            placement_kwargs["service"] = str(constraint.value)
+
+    if intent.requires:
+        placement_kwargs["capability"] = intent.requires[0]
+
+    return ScheduledWork(
+        intent=intent,
+        priority=priority,
+        not_before=not_before,
+        dependencies=dependencies,
+        placement=PlacementRequirement(**placement_kwargs),
+        concurrency_key=str(concurrency_key) if concurrency_key is not None else None,
+        max_concurrency=int(max_concurrency) if max_concurrency is not None else None,
+        resource_key=resource_key,
+    )
+
+
 __all__ = [
     "RuntimeScheduler",
     "ScheduledWork",
+    "scheduled_work_from_intent",
     "SchedulingDecision",
     "WorkEligibility",
 ]
