@@ -62,3 +62,26 @@ def test_dirty_reasons_coalesce_until_consumed():
     assert dirty.reasons == (ChangeReason.CONFIGURATION, ChangeReason.STATE)
     assert dirty.revision == "config-2"
     assert graph.consume("goal:growth") is None
+
+
+def test_dependency_graph_returns_bounded_recomputation_batch():
+    graph = DependencyGraph()
+    graph.observe("goal:a", "state:value")
+    graph.observe("goal:b", "state:value")
+    graph.observe("page:c", "goal:a")
+    graph.invalidate("state:value", revision="rev-1")
+
+    batch = graph.next_dirty(limit=2)
+
+    assert len(batch) == 2
+    graph.acknowledge(tuple(item.node_id for item in batch))
+    assert len(graph.dirty()) == 1
+
+
+def test_dependency_graph_rejects_empty_recomputation_limit():
+    graph = DependencyGraph()
+
+    import pytest
+
+    with pytest.raises(ValueError, match="at least 1"):
+        graph.next_dirty(limit=0)
