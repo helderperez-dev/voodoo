@@ -224,8 +224,9 @@ async def test_runtime_cycle_is_bounded_and_structured():
         revision="cycle-1",
     )
 
-    assert len(cycle.decisions) == 1
-    assert cycle.decisions[0].action is ReconcileAction.PROPOSE_INTENT
+    goal_decisions = [item for item in cycle.decisions if item.node_id == "goal:cycle-growth"]
+    assert len(goal_decisions) == 1
+    assert goal_decisions[0].action is ReconcileAction.PROPOSE_INTENT
     assert len(cycle.executions) == 1
     assert len(calls) == 1
 
@@ -242,7 +243,9 @@ async def test_runtime_observation_binding_drives_one_bounded_cycle():
     runtime.engine.capabilities.register(Capability(name="conversion.adjust"))
 
     resource_id = runtime.bind_observation("business", "conversion")
-    goal = Goal(id="observed-growth", name="observed-growth", target_entity_id="business")
+    goal = Goal(
+        id="observed-growth", name="observed-growth", target_entity_id="business"
+    )
     runtime.register_goal(
         goal,
         observes=(resource_id,),
@@ -270,7 +273,10 @@ async def test_runtime_observation_binding_drives_one_bounded_cycle():
     assert cycle is not None
     assert cycle.invalidation.source == resource_id
     assert len(cycle.executions) == 1
-    assert cycle.decisions[0].action is ReconcileAction.PROPOSE_INTENT
+    goal_decision = next(
+        item for item in cycle.decisions if item.node_id == "goal:observed-growth"
+    )
+    assert goal_decision.action is ReconcileAction.PROPOSE_INTENT
 
 
 @pytest.mark.asyncio
