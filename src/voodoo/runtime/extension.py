@@ -57,7 +57,9 @@ class RuntimeExtensionRegistry:
         self._require(name)
         current = self._status[name].state
         if current not in {ExtensionState.CONFIGURED, ExtensionState.INACTIVE}:
-            raise RuntimeError(f"Extension {name!r} must be configured before activation")
+            raise RuntimeError(
+                f"Extension {name!r} must be configured before activation"
+            )
         return self._set(name, ExtensionState.ACTIVE, healthy=True)
 
     def health(
