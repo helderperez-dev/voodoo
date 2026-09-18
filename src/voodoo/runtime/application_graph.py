@@ -343,6 +343,10 @@ class ExtensionManifest:
     version: str
     requires_voodoo: str | None = None
     capabilities: tuple[str, ...] = ()
+    resources: tuple[str, ...] = ()
+    effects: tuple[str, ...] = ()
+    observers: tuple[str, ...] = ()
+    services: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -389,6 +393,18 @@ class Extension:
             if graph.get(capability_id) is None:
                 graph.node(ApplicationNodeKind.CAPABILITY, capability)
             graph.connect(extension.id, "provides", capability_id)
+        contributions = (
+            (ApplicationNodeKind.RESOURCE, "provides_resource", self.manifest.resources),
+            (ApplicationNodeKind.EFFECT, "handles", self.manifest.effects),
+            (ApplicationNodeKind.OBSERVER, "observes_via", self.manifest.observers),
+            (ApplicationNodeKind.SERVICE, "provides_service", self.manifest.services),
+        )
+        for kind, relation, names in contributions:
+            for name in names:
+                node_id = f"{kind.value}:{name}"
+                if graph.get(node_id) is None:
+                    graph.node(kind, name)
+                graph.connect(extension.id, relation, node_id)
 
 
 class ApplicationGraphContributor:
