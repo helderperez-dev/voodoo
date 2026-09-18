@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+import hashlib
+import json
 from enum import StrEnum
 from typing import Any
 
@@ -92,14 +95,64 @@ class GoalReconciliation:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class ReconcileGuard:
+    cooldown_seconds: float = 0.0
+    suppress_duplicates: bool = True
+
+
+class ReconcileLedger:
+    """Small in-process safety ledger; durable adapters may persist it later."""
+
+    def __init__(self) -> None:
+        self._proposals: dict[str, datetime] = {}
+
+    @staticmethod
+    def intent_key(node_id: str, intent: Intent) -> str:
+        payload = json.dumps(
+            {
+                "node_id": node_id,
+                "name": intent.name,
+                "params": intent.params,
+                "requires": sorted(intent.requires),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    def recently_proposed(
+        self, key: str, *, cooldown_seconds: float, now: datetime
+    ) -> bool:
+        previous = self._proposals.get(key)
+        if previous is None:
+            return False
+        if cooldown_seconds <= 0:
+            return True
+        return now - previous < timedelta(seconds=cooldown_seconds)
+
+    def record(self, key: str, *, now: datetime) -> None:
+        self._proposals[key] = now
+
+
 class Reconciler:
     """Bounded, vendor-neutral semantic reconciliation dispatcher."""
 
-    def __init__(self, graph: ApplicationGraph, *, max_decisions: int = 128) -> None:
+    def __init__(
+        self,
+        graph: ApplicationGraph,
+        *,
+        max_decisions: int = 128,
+        guard: ReconcileGuard | None = None,
+        ledger: ReconcileLedger | None = None,
+    ) -> None:
         if max_decisions < 1:
             raise ValueError("max_decisions must be positive")
         self.graph = graph
         self.max_decisions = max_decisions
+        self.guard = guard or ReconcileGuard()
+        self.ledger = ledger or ReconcileLedger()
         self._handlers: dict[ApplicationNodeKind, ReconcileHandler] = {}
 
     def register(
@@ -135,13 +188,47 @@ class Reconciler:
                     )
                 )
                 continue
-            decisions.append(handler(node, invalidation, world))
+            decision = handler(node, invalidation, world)
+            if (
+                decision.action is ReconcileAction.PROPOSE_INTENT
+                and self.guard.suppress_duplicates
+            ):
+                now = datetime.now(UTC)
+                accepted: list[Intent] = []
+                for intent in decision.intents:
+                    key = self.ledger.intent_key(node.id, intent)
+                    if self.ledger.recently_proposed(
+                        key,
+                        cooldown_seconds=self.guard.cooldown_seconds,
+                        now=now,
+                    ):
+                        continue
+                    self.ledger.record(key, now=now)
+                    accepted.append(intent)
+                if not accepted:
+                    decision = ReconcileDecision(
+                        node_id=node.id,
+                        action=ReconcileAction.WAIT,
+                        reason="duplicate intent proposal suppressed",
+                        evidence=dict(decision.evidence),
+                    )
+                elif len(accepted) != len(decision.intents):
+                    decision = ReconcileDecision(
+                        node_id=decision.node_id,
+                        action=decision.action,
+                        reason=decision.reason,
+                        intents=tuple(accepted),
+                        evidence=dict(decision.evidence),
+                    )
+            decisions.append(decision)
         return tuple(decisions)
 
 
 __all__ = [
     "ReconcileAction",
     "ReconcileDecision",
+    "ReconcileGuard",
+    "ReconcileLedger",
     "ReconcileHandler",
     "GoalPredicate",
     "GoalIntentFactory",
