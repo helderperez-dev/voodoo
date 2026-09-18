@@ -25,7 +25,7 @@ _state_context: contextvars.ContextVar[dict[str, Any] | None] = contextvars.Cont
 _rendered_cells: contextvars.ContextVar[list[State] | None] = contextvars.ContextVar(
     "voodoo_rendered_cells", default=None
 )
-_runtime_dependency_context: contextvars.ContextVar[tuple[Any, str] | None] = (
+_runtime_dependency_context: contextvars.ContextVar[tuple[Any, str, set[str]] | None] = (
     contextvars.ContextVar("voodoo_runtime_dependency_context", default=None)
 )
 
@@ -48,18 +48,24 @@ def _track_read(cell: State) -> None:
         cells.append(cell)
     dependency = _runtime_dependency_context.get()
     if dependency is not None:
-        graph, consumer = dependency
-        graph.observe(consumer, cell.dependency_id)
+        graph, _consumer, sources = dependency
+        sources.add(cell.dependency_id)
         cell._attach_dependency_graph(graph)
 
 
 def start_dependency_tracking(graph: Any, consumer: str) -> contextvars.Token:
     """Bridge UI State reads into the Runtime dependency overlay."""
-    return _runtime_dependency_context.set((graph, consumer))
+    return _runtime_dependency_context.set((graph, consumer, set()))
 
 
 def stop_dependency_tracking(token: contextvars.Token) -> None:
-    _runtime_dependency_context.reset(token)
+    dependency = _runtime_dependency_context.get()
+    try:
+        if dependency is not None:
+            graph, consumer, sources = dependency
+            graph.replace(consumer, sources)
+    finally:
+        _runtime_dependency_context.reset(token)
 
 
 class State:
