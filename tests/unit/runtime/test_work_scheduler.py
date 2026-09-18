@@ -98,3 +98,19 @@ def test_scheduler_respects_backpressure_without_rejecting_work():
     assert decision.status is WorkEligibility.WAITING
     assert decision.reason == "work class is backpressured"
     assert work.intent.status.value == "created"
+
+
+def test_scheduler_explains_placement_without_selecting_node():
+    from voodoo.runtime.fabric import PlacementRequirement
+
+    work = ScheduledWork(
+        Intent(name="capture"),
+        placement=PlacementRequirement(capability="camera", location="edge"),
+    )
+
+    explanation = RuntimeScheduler().explain(work)
+
+    assert explanation["status"] == "eligible"
+    assert explanation["placement"]["capability"] == "camera"
+    assert explanation["placement"]["location"] == "edge"
+    assert "node_id" not in explanation["placement"]
