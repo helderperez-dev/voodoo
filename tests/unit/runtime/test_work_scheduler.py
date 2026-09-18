@@ -63,3 +63,38 @@ def test_scheduler_preserves_placement_without_deciding_location():
 
     assert eligible[0].placement is requirement
     assert not hasattr(eligible[0], "node_id")
+
+
+def test_scheduler_waits_for_unavailable_resource():
+    work = ScheduledWork(Intent(name="render"), resource_key="gpu")
+
+    decision = RuntimeScheduler().evaluate(
+        work, unavailable_resources={"gpu"}
+    )
+
+    assert decision.status is WorkEligibility.WAITING
+    assert decision.details == {"resource": "gpu"}
+
+
+def test_scheduler_enforces_concurrency_limit():
+    work = ScheduledWork(
+        Intent(name="send"),
+        concurrency_key="outbound",
+        max_concurrency=2,
+    )
+
+    decision = RuntimeScheduler().evaluate(work, running={"outbound": 2})
+
+    assert decision.status is WorkEligibility.WAITING
+    assert decision.reason == "concurrency limit reached"
+    assert decision.details["limit"] == 2
+
+
+def test_scheduler_respects_backpressure_without_rejecting_work():
+    work = ScheduledWork(Intent(name="sync"), concurrency_key="sync")
+
+    decision = RuntimeScheduler().evaluate(work, backpressured={"sync"})
+
+    assert decision.status is WorkEligibility.WAITING
+    assert decision.reason == "work class is backpressured"
+    assert work.intent.status.value == "created"
