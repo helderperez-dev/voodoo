@@ -25,9 +25,9 @@ _state_context: contextvars.ContextVar[dict[str, Any] | None] = contextvars.Cont
 _rendered_cells: contextvars.ContextVar[list[State] | None] = contextvars.ContextVar(
     "voodoo_rendered_cells", default=None
 )
-_runtime_dependency_context: contextvars.ContextVar[tuple[Any, str, set[str]] | None] = (
-    contextvars.ContextVar("voodoo_runtime_dependency_context", default=None)
-)
+_runtime_dependency_context: contextvars.ContextVar[
+    tuple[Any, str, set[str]] | None
+] = contextvars.ContextVar("voodoo_runtime_dependency_context", default=None)
 
 
 def start_render_tracking() -> list[State]:
