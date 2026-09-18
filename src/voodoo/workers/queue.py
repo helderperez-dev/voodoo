@@ -31,6 +31,11 @@ _queue: VoodooQueue | None = None
 logger = logging.getLogger("voodoo.queue")
 
 
+def registered_workers() -> tuple[tuple[str, Callable], ...]:
+    """Public, read-only worker registry for Runtime inspection."""
+    return tuple(sorted(_workers.items(), key=lambda item: item[0]))
+
+
 def _get_provider() -> str:
     from voodoo.config import get_config
 

@@ -63,6 +63,7 @@ class PlacementRequirement:
     """Topology-neutral placement constraints for one unit of work."""
 
     capability: str | None = None
+    capabilities: tuple[str, ...] = ()
     service: str | None = None
     owner: str | None = None
     location: str | None = None
@@ -206,7 +207,10 @@ class RuntimeFabric:
             if member.node_id in excluded or member.status is not MemberStatus.ACTIVE:
                 continue
             ad = member.advertisement
-            if requirement.capability and requirement.capability not in ad.capabilities:
+            required_capabilities = requirement.capabilities or (
+                (requirement.capability,) if requirement.capability else ()
+            )
+            if any(item not in ad.capabilities for item in required_capabilities):
                 continue
             if requirement.service and requirement.service not in ad.services:
                 continue
@@ -253,8 +257,10 @@ class RuntimeFabric:
             if requirement.location and requirement.location == ad.location:
                 score += 100.0
                 reasons.append("locality")
-            if requirement.capability:
-                reasons.append(f"capability:{requirement.capability}")
+            required_capabilities = requirement.capabilities or (
+                (requirement.capability,) if requirement.capability else ()
+            )
+            reasons.extend(f"capability:{item}" for item in required_capabilities)
             if requirement.service:
                 reasons.append(f"service:{requirement.service}")
             ranked.append(

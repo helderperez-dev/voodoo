@@ -158,7 +158,9 @@ def color(name: str, step: int | None = None) -> str:
     if not _TOKEN_NAME.fullmatch(name):
         raise ValueError(f"invalid color token name: {name!r}")
     if step is not None and step not in PALETTE_STEPS:
-        raise ValueError(f"invalid palette step {step}; expected one of {PALETTE_STEPS}")
+        raise ValueError(
+            f"invalid palette step {step}; expected one of {PALETTE_STEPS}"
+        )
     suffix = f"-{step}" if step is not None else ""
     return f"var(--vd-color-{name}{suffix})"
 

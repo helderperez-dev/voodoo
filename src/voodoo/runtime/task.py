@@ -215,7 +215,7 @@ class Task:
                         import json
 
                         value = output_type.model_validate(json.loads(run.output))
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         pass
                 return ComputeResult(
                     value=value,

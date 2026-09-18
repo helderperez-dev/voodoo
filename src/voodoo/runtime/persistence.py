@@ -80,7 +80,7 @@ class JSONFileExecutionStore:
                     continue
                 try:
                     executions.append(Execution.model_validate_json(line))
-                except Exception:  # noqa: BLE001 — skip corrupt lines
+                except Exception:
                     continue
         return executions
 

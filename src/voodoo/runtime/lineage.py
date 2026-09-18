@@ -1,0 +1,147 @@
+"""Causal lineage records for Runtime inspection."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+
+@dataclass(frozen=True, slots=True)
+class LineageEvent:
+    kind: str
+    subject_id: str
+    reason: str
+    parent_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    recorded_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+class RuntimeLineage:
+    """Append-only causal index with an optional durable JSONL mirror."""
+
+    def __init__(self, path: str | Path | None = None) -> None:
+        self._events: list[LineageEvent] = []
+        self._path = Path(path) if path is not None else None
+        if self._path is not None:
+            self._load()
+
+    def record(self, event: LineageEvent) -> LineageEvent:
+        self._events.append(event)
+        if self._path is not None:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            payload = asdict(event)
+            payload["recorded_at"] = event.recorded_at.isoformat()
+            with self._path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, default=str) + "\n")
+        return event
+
+    def _load(self) -> None:
+        if self._path is None or not self._path.exists():
+            return
+        with self._path.open(encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    payload = json.loads(line)
+                    payload["recorded_at"] = datetime.fromisoformat(
+                        payload["recorded_at"]
+                    )
+                    self._events.append(LineageEvent(**payload))
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    continue
+
+    def events(self) -> tuple[LineageEvent, ...]:
+        return tuple(self._events)
+
+    def clear(self) -> None:
+        self._events.clear()
+
+    def record_transition(
+        self,
+        kind: str,
+        subject_id: str,
+        *,
+        parent_id: str | None,
+        reason: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> LineageEvent:
+        return self.record(
+            LineageEvent(
+                kind=kind,
+                subject_id=subject_id,
+                parent_id=parent_id,
+                reason=reason,
+                metadata=metadata or {},
+            )
+        )
+
+    def why(self, subject_id: str) -> tuple[LineageEvent, ...]:
+        by_subject: dict[str, list[LineageEvent]] = {}
+        for event in self._events:
+            by_subject.setdefault(event.subject_id, []).append(event)
+        result: list[LineageEvent] = []
+        pending = [subject_id]
+        seen: set[str] = set()
+        while pending:
+            current = pending.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            for event in by_subject.get(current, ()):
+                result.append(event)
+                if event.parent_id is not None:
+                    pending.append(event.parent_id)
+        return tuple(result)
+
+    def chain(self, subject_id: str) -> tuple[str, ...]:
+        """Return causal subject ids from root cause to requested subject."""
+        events = self.why(subject_id)
+        parents = {event.subject_id: event.parent_id for event in events}
+        chain = [subject_id]
+        current = subject_id
+        seen = {subject_id}
+        while (parent := parents.get(current)) is not None and parent not in seen:
+            chain.append(parent)
+            seen.add(parent)
+            current = parent
+        chain.reverse()
+        return tuple(chain)
+
+    def inspect(self, subject_id: str) -> dict[str, Any]:
+        """Return a stable causal inspection payload for CLI and tooling."""
+        events = self.why(subject_id)
+        return {
+            "subject_id": subject_id,
+            "chain": list(self.chain(subject_id)),
+            "events": [
+                {
+                    "kind": event.kind,
+                    "subject_id": event.subject_id,
+                    "reason": event.reason,
+                    "parent_id": event.parent_id,
+                    "metadata": dict(event.metadata),
+                    "recorded_at": event.recorded_at.isoformat(),
+                }
+                for event in events
+            ],
+        }
+
+    def describe(self, subject_id: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "kind": event.kind,
+                "subject_id": event.subject_id,
+                "reason": event.reason,
+                "parent_id": event.parent_id,
+                "metadata": dict(event.metadata),
+                "recorded_at": event.recorded_at.isoformat(),
+            }
+            for event in self.why(subject_id)
+        ]
+
+
+lineage = RuntimeLineage()
+
+__all__ = ["LineageEvent", "RuntimeLineage", "lineage"]

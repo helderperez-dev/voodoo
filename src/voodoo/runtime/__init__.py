@@ -17,10 +17,33 @@ from voodoo.runtime.adaptive import (
     SupervisorConfig,
     SupervisorDecision,
 )
+from voodoo.runtime.application_graph import (
+    ApplicationEdge,
+    ApplicationGraph,
+    ApplicationGraphChange,
+    ApplicationGraphContributor,
+    ApplicationNode,
+    ApplicationNodeKind,
+    ChangeReason,
+    Extension,
+    ExtensionManifest,
+    Invalidation,
+    InvalidationEngine,
+    build_application_graph,
+    contribute_goal,
+    diff_application_graph,
+)
 from voodoo.runtime.capability import CapabilityResolver, Resolution
 from voodoo.runtime.constraint import ConstraintEnforcer, Decision, ResourceAccountant
 from voodoo.runtime.context import ExecutionContext, current_context, use_context
+from voodoo.runtime.conventions import ApplicationLayout, discover_layout
 from voodoo.runtime.dashboard import runtime_dashboard
+from voodoo.runtime.dependency_graph import (
+    DependencyGraph,
+    DependencyRevision,
+    DirtyNode,
+)
+from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
 from voodoo.runtime.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
 from voodoo.runtime.errors import (
     AgentExecutionError,
@@ -36,6 +59,11 @@ from voodoo.runtime.errors import (
     WorkflowFailure,
 )
 from voodoo.runtime.execution import Execution, ExecutionStatus
+from voodoo.runtime.extension import (
+    ExtensionState,
+    ExtensionStatus,
+    RuntimeExtensionRegistry,
+)
 from voodoo.runtime.fabric import (
     FabricLease,
     FabricRoutingError,
@@ -56,6 +84,7 @@ from voodoo.runtime.goal import (
 )
 from voodoo.runtime.goal_store import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
 from voodoo.runtime.graph import ExecutionGraph, ExecutionNode
+from voodoo.runtime.handoff import ExecutionHandoff, RemoteExecutionRequired
 from voodoo.runtime.human import (
     Approval,
     ApprovalRegistry,
@@ -71,6 +100,7 @@ from voodoo.runtime.identity import (
     Principal,
 )
 from voodoo.runtime.identity_store import IdentityStore, VoodooStoreIdentityStore
+from voodoo.runtime.lineage import LineageEvent, RuntimeLineage, lineage
 from voodoo.runtime.membership import (
     MemberStatus,
     NodeAdvertisement,
@@ -90,6 +120,17 @@ from voodoo.runtime.policy import (
     PolicyRequest,
     PolicyResult,
     PolicyRule,
+)
+from voodoo.runtime.reconcile import (
+    GoalIntentFactory,
+    GoalPredicate,
+    GoalReconciliation,
+    ReconcileAction,
+    ReconcileDecision,
+    ReconcileGuard,
+    ReconcileHandler,
+    ReconcileLedger,
+    Reconciler,
 )
 from voodoo.runtime.store import (
     DEFAULT_STORE_PATH,
@@ -114,6 +155,13 @@ from voodoo.runtime.transaction import (
     dispatch_outbox,
     transaction,
 )
+from voodoo.runtime.work_scheduler import (
+    RuntimeScheduler,
+    ScheduledWork,
+    SchedulingDecision,
+    WorkEligibility,
+    scheduled_work_from_intent,
+)
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
 from voodoo.runtime.workflow_store import VoodooStoreWorkflowStore, WorkflowStore
 from voodoo.runtime.world_execution import (
@@ -123,8 +171,25 @@ from voodoo.runtime.world_execution import (
 )
 
 __all__ = [
+    "ApplicationNodeKind",
+    "ChangeReason",
+    "Extension",
+    "ExtensionManifest",
+    "Invalidation",
+    "InvalidationEngine",
+    "ApplicationNode",
+    "ApplicationEdge",
+    "ApplicationGraph",
+    "ApplicationGraphChange",
+    "ApplicationGraphContributor",
+    "build_application_graph",
+    "contribute_goal",
+    "diff_application_graph",
     "Execution",
     "ExecutionStatus",
+    "ExtensionState",
+    "ExtensionStatus",
+    "RuntimeExtensionRegistry",
     "ExecutionContext",
     "current_context",
     "use_context",
@@ -139,6 +204,11 @@ __all__ = [
     "PolicyRequest",
     "PolicyResult",
     "PolicyRule",
+    "ApplicationLayout",
+    "discover_layout",
+    "DependencyGraph",
+    "DependencyRevision",
+    "DirtyNode",
     "ConstraintEnforcer",
     "Decision",
     "ResourceAccountant",
@@ -185,6 +255,11 @@ __all__ = [
     "ApprovalStatus",
     "ApprovalRegistry",
     "Human",
+    "ExecutionHandoff",
+    "RemoteExecutionRequired",
+    "LineageEvent",
+    "RuntimeLineage",
+    "lineage",
     "ask_human",
     "ExecutionStore",
     "InMemoryExecutionStore",
@@ -229,6 +304,22 @@ __all__ = [
     "bind_world",
     "world_aware",
     "resolve_target_entity_id",
+    "GoalIntentFactory",
+    "GoalPredicate",
+    "GoalReconciliation",
+    "ReconcileAction",
+    "ReconcileDecision",
+    "ReconcileGuard",
+    "ReconcileHandler",
+    "ReconcileLedger",
+    "Reconciler",
+    "RuntimeScheduler",
+    "ScheduledWork",
+    "SchedulingDecision",
+    "WorkEligibility",
+    "scheduled_work_from_intent",
+    "DispatchPlan",
+    "RuntimeDispatcher",
     "execute",
     "register_capability",
     "grant",

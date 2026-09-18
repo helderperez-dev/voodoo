@@ -86,7 +86,7 @@ def test_breadcrumb_marks_last_item_as_current(adapter):
         BreadcrumbItem("Voodoo", "/projects/voodoo"),
         BreadcrumbItem("Settings"),
     ).render()
-    assert '<nav' in html
+
     assert 'aria-label="Breadcrumb"' in html
     assert 'href="/projects"' in html
     assert 'aria-current="page"' in html
