@@ -196,7 +196,12 @@ def build_application_graph(app: Any, contributors: Iterable[Any] = ()) -> Appli
         if not path:
             continue
         methods = sorted(getattr(route, "methods", ()) or ())
-        kind = ApplicationNodeKind.API if methods and methods != ["GET"] else ApplicationNodeKind.PAGE
+        safe_page_methods = {"GET", "HEAD"}
+        kind = (
+            ApplicationNodeKind.API
+            if methods and not set(methods).issubset(safe_page_methods)
+            else ApplicationNodeKind.PAGE
+        )
         node = graph.node(
             kind,
             path,
