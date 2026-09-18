@@ -57,20 +57,20 @@ def test_otp_input_disabled(adapter):
 
 
 def test_range_slider_renders(adapter):
-
+    html = RangeSlider(name="price", min_value=0, max_value=100, label="Price range").render()
     assert "Price range" in html
     assert 'type="range"' in html
 
 
 def test_range_slider_shows_values(adapter):
-
+    html = RangeSlider(name="x", min_value=20, max_value=80, minimum=0, maximum=100).render()
     assert "20" in html
     assert "80" in html
 
 
 def test_range_slider_with_event(adapter):
     html = RangeSlider(
-
+        name="x", min_value=0, max_value=100,
         on_change=lambda v: v,
     ).render()
     assert "data-vd-event-input" in html
@@ -190,7 +190,7 @@ def test_radio_input_renders(adapter):
 
 def test_radio_input_checked(adapter):
     html = RadioInput(label="Selected", value="s", name="x", checked=True).render()
-
+    assert 'checked' in html
 
 
 def test_radio_input_with_description(adapter):
