@@ -9,10 +9,8 @@ follow the runtime aliasing).
 import sys
 
 from voodoo.ui import state
-from voodoo.ui.state import (
-    State,
-    StateRenderer,
-    state_renderer,
-)
+State = state.State
+StateRenderer = state.StateRenderer
+state_renderer = state.state_renderer
 
 sys.modules[__name__] = state
