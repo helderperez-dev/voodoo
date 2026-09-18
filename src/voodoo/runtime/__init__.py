@@ -18,9 +18,12 @@ from voodoo.runtime.application_graph import (
     ApplicationGraphContributor,
     ApplicationNode,
     ApplicationNodeKind,
+    ChangeReason,
     Extension,
     ExtensionManifest,
     ExtensionRegistry,
+    Invalidation,
+    InvalidationEngine,
     build_application_graph,
     diff_application_graph,
 )
@@ -137,9 +140,12 @@ from voodoo.runtime.world_execution import (
 
 __all__ = [
     "ApplicationNodeKind",
+    "ChangeReason",
     "Extension",
     "ExtensionManifest",
     "ExtensionRegistry",
+    "Invalidation",
+    "InvalidationEngine",
     "ApplicationNode",
     "ApplicationEdge",
     "ApplicationGraph",
