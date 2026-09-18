@@ -8,6 +8,7 @@ from voodoo.runtime import (
     ChangeReason,
     Goal,
     ReconcileAction,
+    ReconcileDecision,
     Runtime,
 )
 from voodoo.runtime.engine import ComputeResult
@@ -165,3 +166,21 @@ async def test_runtime_owns_adaptive_goal_execution():
     assert runtime.planner.engine is runtime.engine
     assert run.status is GoalStatus.COMPLETED
     assert run.result == {"stock": 2}
+
+
+@pytest.mark.asyncio
+async def test_runtime_executes_only_proposed_reconciliation_work():
+    runtime = Runtime()
+    calls = []
+
+    async def compute(ctx):
+        calls.append(ctx.execution_id)
+        return ComputeResult(value="ran")
+
+    satisfied = ReconcileDecision(
+        node_id="goal:done",
+        action=ReconcileAction.SATISFIED,
+        reason="already done",
+    )
+    assert await runtime.execute_decision(satisfied, compute) == ()
+    assert calls == []
