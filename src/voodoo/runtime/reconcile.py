@@ -43,7 +43,7 @@ class ReconcileDecision:
     evidence: dict[str, Any] = field(default_factory=dict)
 
 
-ReconcileHandler = Callable[[ApplicationNode, Invalidation, Any | None], ReconcileDecision]
+
 GoalPredicate = Callable[[Goal, Any | None], bool]
 GoalIntentFactory = Callable[[Goal, Any | None], Intent | tuple[Intent, ...]]
 
