@@ -6,7 +6,6 @@ from voodoo.runtime import (
     ApplicationNodeKind,
     ChangeReason,
     Goal,
-    GoalReconciliation,
     ReconcileAction,
     Runtime,
 )
@@ -42,19 +41,17 @@ async def test_runtime_composes_reconcile_dispatch_and_execution():
     )
     runtime.graph.connect(goal_node.id, "observes", metric.id)
 
-    runtime.register_reconciler(
-        ApplicationNodeKind.GOAL,
-        GoalReconciliation(
-            goal,
-            satisfied=lambda item, snapshot: (
-                snapshot is not None
-                and snapshot.entity.properties.get("conversion", 0) >= 0.10
-            ),
-            propose=lambda item, snapshot: Intent(
-                name="improve-conversion",
-                params={"entity_id": "business"},
-                requires=["conversion.adjust"],
-            ),
+    runtime.register_goal(
+        goal,
+        observes=(metric.id,),
+        satisfied=lambda item, snapshot: (
+            snapshot is not None
+            and snapshot.entity.properties.get("conversion", 0) >= 0.10
+        ),
+        propose=lambda item, snapshot: Intent(
+            name="improve-conversion",
+            params={"entity_id": "business"},
+            requires=["conversion.adjust"],
         ),
     )
 
@@ -90,3 +87,40 @@ async def test_runtime_composes_reconcile_dispatch_and_execution():
         )
     )[0]
     assert settled.action is ReconcileAction.SATISFIED
+
+
+def test_runtime_keeps_goal_reconciliation_scoped_per_goal():
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    world.observe("business", "conversion", 0.08, source="analytics")
+
+    runtime = Runtime(world=world)
+    metric = runtime.graph.node(ApplicationNodeKind.RESOURCE, "conversion")
+    growth = Goal(id="growth", name="growth", target_entity_id="business")
+    retention = Goal(id="retention", name="retention", target_entity_id="business")
+
+    runtime.register_goal(
+        growth,
+        observes=(metric.id,),
+        satisfied=lambda item, snapshot: False,
+        propose=lambda item, snapshot: Intent(name="grow"),
+    )
+    runtime.register_goal(
+        retention,
+        observes=(metric.id,),
+        satisfied=lambda item, snapshot: True,
+        propose=lambda item, snapshot: Intent(name="retain"),
+    )
+
+    decisions = runtime.reconcile(
+        runtime.invalidate(
+            metric.id,
+            reason=ChangeReason.OBSERVATION,
+            revision="obs-multi",
+        )
+    )
+    by_node = {decision.node_id: decision for decision in decisions}
+
+    assert by_node["goal:growth"].action is ReconcileAction.PROPOSE_INTENT
+    assert by_node["goal:growth"].intents[0].name == "grow"
+    assert by_node["goal:retention"].action is ReconcileAction.SATISFIED
