@@ -116,7 +116,12 @@ class Runtime:
         observes: tuple[str, ...] = (),
     ) -> Runtime:
         """Project a Goal into the graph and register canonical reconciliation."""
-        node = contribute_goal(self.graph, goal)
+        node_id = f"goal:{goal.id}"
+        node = self.graph.get(node_id)
+        if node is None:
+            node = contribute_goal(self.graph, goal)
+        elif node.kind is not ApplicationNodeKind.GOAL or node.name != goal.name:
+            raise ValueError(f"Application node {node_id!r} conflicts with Goal")
         for source_id in observes:
             if self.graph.get(source_id) is None:
                 raise KeyError(f"Unknown observed application node: {source_id}")
