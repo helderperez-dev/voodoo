@@ -9,6 +9,7 @@ follow the runtime aliasing).
 import sys
 
 from voodoo.ui import state
+
 State = state.State
 StateRenderer = state.StateRenderer
 state_renderer = state.state_renderer
