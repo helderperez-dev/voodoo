@@ -502,13 +502,9 @@ class DatePicker(Input):
         if value is not None:
             attrs["value"] = value.isoformat() if isinstance(value, date) else value
         if minimum is not None:
-            attrs["min"] = (
-                minimum.isoformat() if isinstance(minimum, date) else minimum
-            )
+
         if maximum is not None:
-            attrs["max"] = (
-                maximum.isoformat() if isinstance(maximum, date) else maximum
-            )
+
         super().__init__(on_change=on_change, **attrs, **kwargs)
 
 
@@ -554,9 +550,7 @@ class Calendar(Component):
         if not 1 <= month <= 12:
             raise ValueError("Calendar month must be between 1 and 12")
         binding = bind_event(on_change) if on_change is not None else None
-        weeks = calendar_module.Calendar(firstweekday=0).monthdatescalendar(
-            year, month
-        )
+
         heading = label or f"{calendar_module.month_name[month]} {year}"
         header = _CalendarRow(
             *(
@@ -752,7 +746,7 @@ class ValidationSummary(Component):
         title: str = "Please correct the following",
         **kwargs: Any,
     ) -> None:
-        messages = list(errors.values()) if isinstance(errors, Mapping) else list(errors)
+
         super().__init__(
             _ValidationTitle(title),
             _ValidationList(
