@@ -189,44 +189,51 @@ class RuntimeScheduler:
         return tuple(selected)
 
 
-def scheduled_work_from_intent(intent: Intent) -> ScheduledWork:
-    """Translate canonical Intent semantics into scheduler/placement semantics."""
+def _normalize_not_before(value: Any) -> datetime | None:
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("_not_before must be an ISO-8601 datetime") from exc
+    if value is not None and not isinstance(value, datetime):
+        raise TypeError("_not_before must be a datetime or ISO-8601 string")
+    if value is None:
+        return None
+    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _placement_from_intent(intent: Intent) -> tuple[PlacementRequirement, str | None]:
     placement_kwargs: dict[str, Any] = {}
     resource_key: str | None = None
+    for constraint in intent.constraints:
+        if constraint.operator != "==":
+            continue
+        if constraint.kind == "locality":
+            placement_kwargs["location"] = str(constraint.value)
+        elif constraint.kind == "resource":
+            resource_key = str(constraint.value)
+        elif constraint.kind == "service":
+            placement_kwargs["service"] = str(constraint.value)
+    if intent.requires:
+        placement_kwargs["capability"] = intent.requires[0]
+    return PlacementRequirement(**placement_kwargs), resource_key
+
+
+def scheduled_work_from_intent(intent: Intent) -> ScheduledWork:
+    """Translate canonical Intent semantics into scheduler/placement semantics."""
     concurrency_key = intent.params.get("_concurrency_key")
     max_concurrency = intent.params.get("_max_concurrency")
     priority = int(intent.params.get("_priority", 0))
-    not_before = intent.params.get("_not_before")
-    if isinstance(not_before, str):
-        try:
-            not_before = datetime.fromisoformat(not_before.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise ValueError("_not_before must be an ISO-8601 datetime") from exc
-    if not_before is not None and not isinstance(not_before, datetime):
-        raise TypeError("_not_before must be a datetime or ISO-8601 string")
-    if isinstance(not_before, datetime) and not_before.tzinfo:
-        not_before = not_before.astimezone(UTC)
-    elif isinstance(not_before, datetime):
-        not_before = not_before.replace(tzinfo=UTC)
+    not_before = _normalize_not_before(intent.params.get("_not_before"))
     dependencies = tuple(str(item) for item in intent.params.get("_dependencies", ()))
-
-    for constraint in intent.constraints:
-        if constraint.kind == "locality" and constraint.operator == "==":
-            placement_kwargs["location"] = str(constraint.value)
-        elif constraint.kind == "resource" and constraint.operator == "==":
-            resource_key = str(constraint.value)
-        elif constraint.kind == "service" and constraint.operator == "==":
-            placement_kwargs["service"] = str(constraint.value)
-
-    if intent.requires:
-        placement_kwargs["capability"] = intent.requires[0]
+    placement, resource_key = _placement_from_intent(intent)
 
     return ScheduledWork(
         intent=intent,
         priority=priority,
         not_before=not_before,
         dependencies=dependencies,
-        placement=PlacementRequirement(**placement_kwargs),
+        placement=placement,
         concurrency_key=str(concurrency_key) if concurrency_key is not None else None,
         max_concurrency=int(max_concurrency) if max_concurrency is not None else None,
         resource_key=resource_key,
