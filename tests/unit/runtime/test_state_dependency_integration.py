@@ -44,3 +44,29 @@ def test_state_mutation_invalidates_runtime_dependents():
     assert dirty[0].node_id == "goal:growth"
     assert dirty[0].revision == "1"
     assert dirty[0].sources == (value.dependency_id,)
+
+
+def test_dependency_tracking_replaces_stale_state_reads():
+    graph = DependencyGraph()
+    first = state(1)
+    second = state(2)
+
+    token = start_dependency_tracking(graph, "goal:growth")
+    try:
+        first.get()
+    finally:
+        stop_dependency_tracking(token)
+
+    token = start_dependency_tracking(graph, "goal:growth")
+    try:
+        second.get()
+    finally:
+        stop_dependency_tracking(token)
+
+    assert graph.dependencies("goal:growth") == (second.dependency_id,)
+
+    first.set(3)
+    assert graph.dirty() == ()
+
+    second.set(4)
+    assert [item.node_id for item in graph.dirty()] == ["goal:growth"]
