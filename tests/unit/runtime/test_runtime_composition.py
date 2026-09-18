@@ -1,3 +1,5 @@
+import pytest
+
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import (
@@ -22,6 +24,7 @@ def test_runtime_owns_one_connected_control_plane():
     assert runtime.handoff.lineage is runtime.lineage
 
 
+@pytest.mark.asyncio
 async def test_runtime_composes_reconcile_dispatch_and_execution():
     world = WorldModel()
     world.put_entity(Entity(id="business", type="business"))
