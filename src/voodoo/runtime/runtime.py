@@ -7,6 +7,7 @@ ExecutionEngine remains the only authority boundary for executable work.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from voodoo.primitives.intent import Intent
@@ -40,6 +41,15 @@ from voodoo.runtime.reconcile import (
 )
 from voodoo.runtime.store import RuntimeStore, StoreConfig
 from voodoo.runtime.work_scheduler import RuntimeScheduler
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeCycle:
+    """Structured result of one bounded reconciliation cycle."""
+
+    invalidation: Invalidation
+    decisions: tuple[ReconcileDecision, ...]
+    executions: tuple[Execution, ...]
 
 
 class Runtime:
@@ -193,6 +203,39 @@ class Runtime:
         """Turn a reconciliation proposal into governed scheduled work."""
         return self.dispatcher.prepare(decision)
 
+    async def cycle(
+        self,
+        source: str,
+        compute: ComputeFn | None = None,
+        *,
+        reason: ChangeReason = ChangeReason.STATE,
+        revision: str | None = None,
+        actor: str = "system",
+        principal: Any | None = None,
+    ) -> RuntimeCycle:
+        """Run exactly one invalidate → reconcile → execute cycle.
+
+        A cycle is deliberately bounded: it does not recursively react to effects
+        or observations produced by its own executions.
+        """
+        invalidation = self.invalidate(source, reason=reason, revision=revision)
+        decisions = self.reconcile(invalidation)
+        executions: list[Execution] = []
+        for decision in decisions:
+            executions.extend(
+                await self.execute_decision(
+                    decision,
+                    compute,
+                    actor=actor,
+                    principal=principal,
+                )
+            )
+        return RuntimeCycle(
+            invalidation=invalidation,
+            decisions=decisions,
+            executions=tuple(executions),
+        )
+
     async def execute_decision(
         self,
         decision: ReconcileDecision,
@@ -239,4 +282,4 @@ class Runtime:
         )
 
 
-__all__ = ["Runtime"]
+__all__ = ["Runtime", "RuntimeCycle"]
