@@ -45,8 +45,11 @@ ReconcileHandler = Callable[[ApplicationNode, Invalidation, Any | None], Reconci
 class Reconciler:
     """Bounded, vendor-neutral semantic reconciliation dispatcher."""
 
-    def __init__(self, graph: ApplicationGraph) -> None:
+    def __init__(self, graph: ApplicationGraph, *, max_decisions: int = 128) -> None:
+        if max_decisions < 1:
+            raise ValueError("max_decisions must be positive")
         self.graph = graph
+        self.max_decisions = max_decisions
         self._handlers: dict[ApplicationNodeKind, ReconcileHandler] = {}
 
     def register(
@@ -59,7 +62,9 @@ class Reconciler:
         self, invalidation: Invalidation, *, world: Any | None = None
     ) -> tuple[ReconcileDecision, ...]:
         decisions: list[ReconcileDecision] = []
-        for node_id in invalidation.affected:
+        for index, node_id in enumerate(invalidation.affected):
+            if index >= self.max_decisions:
+                break
             node = self.graph.get(node_id)
             if node is None:
                 decisions.append(
