@@ -27,6 +27,7 @@ from voodoo.runtime.adaptive import AdaptiveSupervisor, SupervisorConfig
 from voodoo.runtime.goal import Goal, GoalDecomposer, GoalRun, GoalRuntime, GoalStore
 from voodoo.runtime.planner import ComputeParticipant, Planner
 from voodoo.runtime.handoff import ExecutionHandoff
+from voodoo.primitives.intent import Intent
 from voodoo.runtime.lineage import RuntimeLineage
 from voodoo.runtime.reconcile import (
     GoalIntentFactory,
@@ -157,7 +158,7 @@ class Runtime:
         self,
         goal: Goal,
         *,
-        intents: list[Any] | None = None,
+        intents: list[Intent] | None = None,
         decomposer: GoalDecomposer | None = None,
         context: dict[str, Any] | None = None,
     ) -> GoalRun:
