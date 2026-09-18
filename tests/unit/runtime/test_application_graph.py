@@ -169,3 +169,26 @@ def test_extension_registry_requires_explicit_activation():
     registry.contribute(graph)
 
     assert graph.get("extension:analytics") is not None
+
+
+def test_invalidation_records_reason_revision_and_affected_nodes():
+    from voodoo.runtime.application_graph import (
+        ChangeReason,
+        InvalidationEngine,
+    )
+
+    graph = ApplicationGraph()
+    resource = graph.node(ApplicationNodeKind.RESOURCE, "analytics")
+    goal = graph.node(ApplicationNodeKind.GOAL, "conversion")
+    graph.connect(goal.id, "observes", resource.id)
+
+    invalidation = InvalidationEngine(graph).invalidate(
+        resource.id,
+        reason=ChangeReason.OBSERVATION,
+        revision="obs-42",
+    )
+
+    assert invalidation.source == resource.id
+    assert invalidation.affected == (goal.id,)
+    assert invalidation.reason is ChangeReason.OBSERVATION
+    assert invalidation.revision == "obs-42"
