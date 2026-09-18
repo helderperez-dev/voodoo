@@ -1,12 +1,13 @@
 import pytest
 
 from voodoo.primitives.capability import Capability
-from voodoo.runtime import ComputeParticipant, GoalStatus
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import (
     ApplicationNodeKind,
     ChangeReason,
+    ComputeParticipant,
     Goal,
+    GoalStatus,
     ReconcileAction,
     ReconcileDecision,
     Runtime,
