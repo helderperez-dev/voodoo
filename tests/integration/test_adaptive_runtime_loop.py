@@ -10,7 +10,7 @@ from voodoo.runtime.application_graph import (
 )
 from voodoo.runtime.dispatch import RuntimeDispatcher
 from voodoo.runtime.engine import ComputeResult, ExecutionEngine
-from voodoo.runtime.fabric import FabricNode, RuntimeFabric
+from types import SimpleNamespace
 from voodoo.runtime.persistence import JSONFileExecutionStore
 from voodoo.runtime.policy import PolicyDecision
 from voodoo.runtime.goal import Goal
@@ -62,16 +62,15 @@ async def test_observation_to_goal_to_execution_to_satisfied_loop(tmp_path):
     proposed = reconciler.reconcile(invalidation, world=world)[0]
     assert proposed.action is ReconcileAction.PROPOSE_INTENT
 
-    fabric = RuntimeFabric()
-    fabric.join(
-        FabricNode(
-            id="runtime-1",
-            capabilities={"conversion.adjust"},
-            resources=set(),
-            services=set(),
-        )
-    )
-    plan = RuntimeDispatcher(fabric=fabric).prepare(proposed)[0]
+    class LocalFabric:
+        def place(self, requirement):
+            assert requirement.capability == "conversion.adjust"
+            return SimpleNamespace(
+                node_id="runtime-1",
+                reasons=("capability:conversion.adjust",),
+            )
+
+    plan = RuntimeDispatcher(fabric=LocalFabric()).prepare(proposed)[0]
     assert plan.placement is not None
     assert plan.placement.node_id == "runtime-1"
 
@@ -81,9 +80,11 @@ async def test_observation_to_goal_to_execution_to_satisfied_loop(tmp_path):
     engine.capabilities.register(Capability(name="conversion.adjust"))
     engine.capabilities.policy.use_world(world)
     engine.capabilities.policy.register(
-        lambda request: PolicyDecision.ALLOW
-        if request.target_entity_id == "business"
-        else PolicyDecision.DENY,
+        lambda request: (
+            PolicyDecision.ALLOW
+            if request.target_entity_id == "business"
+            else PolicyDecision.DENY
+        ),
         name="business-only",
     )
 
@@ -97,9 +98,9 @@ async def test_observation_to_goal_to_execution_to_satisfied_loop(tmp_path):
         )
         return ComputeResult(value="adjusted")
 
-    execution = await ExecutionHandoff(
-        engine, local_node_id="runtime-1"
-    ).execute(plan, compute)
+    execution = await ExecutionHandoff(engine, local_node_id="runtime-1").execute(
+        plan, compute
+    )
     assert execution.succeeded
     assert engine.capabilities.last_policy_result is not None
     assert engine.capabilities.last_policy_result.decision is PolicyDecision.ALLOW
