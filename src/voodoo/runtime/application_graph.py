@@ -464,6 +464,27 @@ def build_application_graph(app: Any, contributors: Iterable[Any] = ()) -> Appli
     return graph
 
 
+def contribute_goal(graph: ApplicationGraph, goal: Any) -> ApplicationNode:
+    """Project an existing Runtime Goal without creating a second Goal registry."""
+    node = graph.node(
+        ApplicationNodeKind.GOAL,
+        str(goal.name),
+        node_id=f"goal:{goal.id}",
+        metadata={
+            "objective": str(getattr(goal, "objective", "")),
+            "target_entity_id": getattr(goal, "target_entity_id", None),
+            "status": getattr(getattr(goal, "status", None), "value", None),
+        },
+    )
+    graph.connect(graph.application_id, "contains", node.id)
+    for capability in getattr(goal, "requires", ()):
+        capability_id = f"capability:{capability}"
+        if graph.get(capability_id) is None:
+            graph.node(ApplicationNodeKind.CAPABILITY, str(capability))
+        graph.connect(node.id, "requires", capability_id)
+    return node
+
+
 __all__ = [
     "ApplicationEdge",
     "ApplicationGraph",
@@ -479,4 +500,5 @@ __all__ = [
     "ApplicationNode",
     "ApplicationNodeKind",
     "build_application_graph",
+    "contribute_goal",
 ]
