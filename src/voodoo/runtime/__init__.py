@@ -11,6 +11,14 @@ from __future__ import annotations
 
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
+from voodoo.runtime.application_graph import (
+    ApplicationEdge,
+    ApplicationGraph,
+    ApplicationGraphContributor,
+    ApplicationNode,
+    ApplicationNodeKind,
+    build_application_graph,
+)
 from voodoo.runtime.adaptive import (
     AdaptiveRun,
     AdaptiveSupervisor,
@@ -123,6 +131,12 @@ from voodoo.runtime.world_execution import (
 )
 
 __all__ = [
+    "ApplicationNodeKind",
+    "ApplicationNode",
+    "ApplicationEdge",
+    "ApplicationGraph",
+    "ApplicationGraphContributor",
+    "build_application_graph",
     "Execution",
     "ExecutionStatus",
     "ExecutionContext",
