@@ -78,7 +78,7 @@ class ComputeResult:
                 if isinstance(self.value, dict)
                 else self.value
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise ValidationError(
                 f"Structured output validation failed: {e}",
                 context={
@@ -193,7 +193,7 @@ class ExecutionEngine:
             return []
         try:
             all_execs = self._execution_store.load_all()
-        except Exception:  # noqa: BLE001
+        except Exception:
             return []
         recovered = []
         for ex in filter_unfinished(all_execs):
