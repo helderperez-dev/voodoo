@@ -28,6 +28,51 @@ ROOT_MODULES = {
 }
 
 SEMANTIC_CORE = ("core", "runtime", "primitives", "protocol", "world")
+
+# Transitional debt baseline. This set may only shrink and is removed entirely
+# before Repository Architecture reaches 100%.
+LEGACY_NOQA_FILES = {
+    "ai/agent_legacy.py",
+    "ai/agent_runtime_truth.py",
+    "ai/providers/__init__.py",
+    "ai/providers/anthropic.py",
+    "ai/providers/gemini.py",
+    "ai/providers/ollama.py",
+    "ai/providers/openai.py",
+    "ai/tools/__init__.py",
+    "ai/tools/registry.py",
+    "auth/guards.py",
+    "auth/jwt.py",
+    "cli/doctor.py",
+    "cli/inspect.py",
+    "cli/new.py",
+    "cli/scaffolding.py",
+    "cli/theme.py",
+    "core/events.py",
+    "core/routing.py",
+    "core/sitemap.py",
+    "data/base.py",
+    "data/store_facade.py",
+    "edge/gateway.py",
+    "edge/http.py",
+    "edge/mqtt.py",
+    "edge/protocol.py",
+    "mcp/__init__.py",
+    "memory/interfaces.py",
+    "mesh/__init__.py",
+    "protocol/schemas.py",
+    "routing/api.py",
+    "security/headers.py",
+    "security/secrets.py",
+    "storage/objects/s3.py",
+    "telemetry/otlp.py",
+    "telemetry/store.py",
+    "tools/registry.py",
+    "ui/component.py",
+    "ui/styles/presets.py",
+    "workers/__init__.py",
+    "workers/queue.py",
+}
 VENDOR_ROOTS = {
     "anthropic",
     "boto3",
