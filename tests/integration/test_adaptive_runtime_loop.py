@@ -98,17 +98,13 @@ async def test_growth_bi_reacts_only_to_metrics_each_goal_observes():
 
     users_cycle = await users.set(1000, source="analytics")
     assert users_cycle is not None
-    assert any(
-        item.node_id == "goal:monetization" for item in users_cycle.decisions
-    )
+    assert any(item.node_id == "goal:monetization" for item in users_cycle.decisions)
     assert all(item.node_id != "goal:retention" for item in users_cycle.decisions)
     assert len(users_cycle.executions) == 1
 
     revenue_cycle = await revenue.set(800.0, source="billing")
     assert revenue_cycle is not None
-    assert any(
-        item.node_id == "goal:monetization" for item in revenue_cycle.decisions
-    )
+    assert any(item.node_id == "goal:monetization" for item in revenue_cycle.decisions)
     assert all(item.node_id != "goal:retention" for item in revenue_cycle.decisions)
 
     conversion_cycle = await conversion.set(0.11, source="analytics")
@@ -124,9 +120,7 @@ async def test_growth_bi_reacts_only_to_metrics_each_goal_observes():
     churn_cycle = await churn.set(0.09, source="analytics")
     assert churn_cycle is not None
     assert any(item.node_id == "goal:retention" for item in churn_cycle.decisions)
-    assert all(
-        item.node_id != "goal:monetization" for item in churn_cycle.decisions
-    )
+    assert all(item.node_id != "goal:monetization" for item in churn_cycle.decisions)
     assert len(churn_cycle.executions) == 1
 
     churn_stable = await churn.set(0.04, source="analytics")
