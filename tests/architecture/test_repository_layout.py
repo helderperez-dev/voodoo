@@ -67,8 +67,6 @@ LEGACY_NOQA_FILES = {
     "storage/objects/s3.py",
     "telemetry/otlp.py",
     "telemetry/store.py",
-    "tools/registry.py",
-    "ui/component.py",
     "ui/styles/presets.py",
     "workers/__init__.py",
     "workers/queue.py",
