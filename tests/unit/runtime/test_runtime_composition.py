@@ -402,5 +402,5 @@ def test_app_adaptive_facade_delegates_to_canonical_runtime():
 
     assert app.capability(capability) is app
     assert app.goal(goal, satisfied=lambda item, snapshot: True) is app
-    assert runtime.engine.capabilities.resolve("orders.read") is capability
+    assert runtime.engine.capabilities.resolve("orders.read").value == "allowed"
     assert runtime.graph.get("goal:orders-visible") is not None
