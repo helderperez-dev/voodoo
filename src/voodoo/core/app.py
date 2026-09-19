@@ -446,4 +446,49 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
     return Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
 
 
+def _scan_page_convention(app_dir: str, routes: list[BaseRoute]) -> None:
+    """Scan app_dir for page.py files using folder-based routing."""
+    if not os.path.exists(app_dir):
+        return
+    for root, _dirs, files in os.walk(app_dir):
+        if os.path.relpath(root, app_dir) == "pages" or "page.py" not in files:
+            continue
+        filepath = os.path.join(root, "page.py")
+        rel_path = os.path.relpath(root, app_dir)
+        route_path = (
+            "/"
+            if rel_path == "."
+            else "/" + rel_path.replace("\\", "/").replace("[", "{").replace("]", "}")
+        )
+        clean_name = route_path.replace("/", "_").replace("{", "").replace("}", "")
+        route = _load_page_file(filepath, route_path, f"page_{clean_name}")
+        if route:
+            routes.append(route)
+
+
+def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
+    """Scan app_dir/pages for file-per-page routing."""
+    pages_dir = os.path.join(app_dir, "pages")
+    if not os.path.isdir(pages_dir):
+        return
+    for root, _dirs, files in os.walk(pages_dir):
+        for fname in files:
+            if not fname.endswith(".py") or fname.startswith("_"):
+                continue
+            filepath = os.path.join(root, fname)
+            stem = os.path.relpath(filepath, pages_dir)[:-3].replace("\\", "/")
+            if stem == "index":
+                route_path = "/"
+            else:
+                parts = [
+                    part.replace("[", "{").replace("]", "}")
+                    for part in stem.split("/")
+                ]
+                route_path = "/" + "/".join(parts)
+            clean_name = route_path.replace("/", "_").replace("{", "").replace("}", "")
+            route = _load_page_file(filepath, route_path, f"pages_{clean_name}")
+            if route:
+                routes.append(route)
+
+
 app = App()
