@@ -66,7 +66,7 @@ async def _run_task(
     kwargs: dict,
 ) -> Any:
     """Execute *func* with in-process retries, timeout, and attempt telemetry."""
-    from voodoo.telemetry import telemetry_store
+    from voodoo.observability import telemetry_store
 
     is_async = inspect.iscoroutinefunction(func)
     attempt = 0

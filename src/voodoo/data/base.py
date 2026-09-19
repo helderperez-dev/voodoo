@@ -293,7 +293,7 @@ class BaseModel(metaclass=ModelMeta):
 
     @classmethod
     async def find_all(cls, user_context: dict = None) -> list[BaseModel]:
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
         db = await get_db()
@@ -332,7 +332,7 @@ class BaseModel(metaclass=ModelMeta):
             return results
 
     async def insert(self):
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
         db = await get_db()
@@ -376,7 +376,7 @@ class BaseModel(metaclass=ModelMeta):
         return self
 
     async def update(self):
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
         db = await get_db()

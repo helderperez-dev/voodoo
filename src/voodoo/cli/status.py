@@ -17,8 +17,8 @@ __all__ = ["status"]
 
 def status() -> None:
     """Show runtime health overview."""
-    from voodoo.telemetry import telemetry_store
-    from voodoo.telemetry.otlp import is_available as otlp_available
+    from voodoo.observability import telemetry_store
+    from voodoo.integrations.otel import is_available as otlp_available
 
     summary = telemetry_store.get_summary()
     console = Console()
