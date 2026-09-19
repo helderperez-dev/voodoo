@@ -240,7 +240,6 @@ class App:
         from voodoo.config import config
         from voodoo.core.errors import ConfigurationError
 
-
         host = host or config.host
         port = port if port is not None else config.port
 
@@ -484,6 +483,15 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
         Middleware(AuthMiddleware),
     ]
     return Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
+
+
+def _module_page_endpoint(page_func: Callable[..., Any]) -> Callable:
+    """Wrap a file-based page function into a Starlette endpoint."""
+
+    async def handler(request: Request) -> Response:
+        return await call_page(page_func, request)
+
+    return handler
 
 
 def _load_page_file(filepath: str, route_path: str, module_name: str) -> Route | None:
