@@ -1,4 +1,4 @@
-"""Compatibility facade for :mod:`voodoo.runtime.agency.reconcile`."""
+"""Goal-driven Runtime ownership domain."""
 
 from voodoo.runtime.agency.reconcile import (
     GoalIntentFactory,
