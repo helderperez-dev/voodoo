@@ -90,10 +90,21 @@ def _generate_robots_txt(seo_config: Any, base_url: str = "") -> str:
             lines.append(f"Disallow: {path}")
     lines.append("")
     if not seo_config.allow_ai_crawlers:
-        for crawler in ["GPTBot", "Claude-Web", "PerplexityBot", "ChatGPT-User", "anthropic-ai", "Bytespider"]:
+        for crawler in [
+            "GPTBot",
+            "Claude-Web",
+            "PerplexityBot",
+            "ChatGPT-User",
+            "anthropic-ai",
+            "Bytespider",
+        ]:
             lines.extend([f"User-agent: {crawler}", "Disallow: /", ""])
     if seo_config.sitemap_enabled:
         effective_base = seo_config.base_url or base_url
-        sitemap_url = f"{effective_base.rstrip('/')}/sitemap.xml" if effective_base else "/sitemap.xml"
+        sitemap_url = (
+            f"{effective_base.rstrip('/')}/sitemap.xml"
+            if effective_base
+            else "/sitemap.xml"
+        )
         lines.append(f"Sitemap: {sitemap_url}")
     return "\n".join(lines)
