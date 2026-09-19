@@ -35,18 +35,14 @@ async def test_public_app_observation_goal_capability_loop():
 
     first = await conversion.set(0.08, source="analytics")
     assert first is not None
-    proposed = next(
-        item for item in first.decisions if item.node_id == "goal:growth"
-    )
+    proposed = next(item for item in first.decisions if item.node_id == "goal:growth")
     assert proposed.action is ReconcileAction.PROPOSE_INTENT
     assert len(first.executions) == 1
     assert first.executions[0].succeeded
 
     second = await conversion.set(0.11, source="effect-ack")
     assert second is not None
-    settled = next(
-        item for item in second.decisions if item.node_id == "goal:growth"
-    )
+    settled = next(item for item in second.decisions if item.node_id == "goal:growth")
     assert settled.action is ReconcileAction.SATISFIED
     assert settled.intents == ()
     assert second.executions == ()
