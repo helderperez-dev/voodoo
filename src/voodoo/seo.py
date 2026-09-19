@@ -128,16 +128,16 @@ class SEO(BaseModel):
         self, tags: list[str], site_name: str, default_og_image: str
     ) -> tuple[str | None, str | None, str | None]:
         og = self.og
-        title = (og.title if og and og.title else self.title) if (og or self.title != "Voodoo App") else None
-        desc = (og.description if og and og.description else self.description) if (og or self.description) else None
-        image = (og.image if og and og.image else default_og_image) if (og or default_og_image) else None
+        title = (\n            (og.title if og and og.title else self.title)\n            if (og or self.title != "Voodoo App")\n            else None\n        )
+        desc = (\n            (og.description if og and og.description else self.description)\n            if (og or self.description)\n            else None\n        )
+        image = (\n            (og.image if og and og.image else default_og_image)\n            if (og or default_og_image)\n            else None\n        )
         values = (
             ("og:title", title),
             ("og:description", desc),
             ("og:image", image),
             ("og:type", og.type if og else "website"),
             ("og:url", og.url if og and og.url else self.canonical),
-            ("og:site_name", (og.site_name if og and og.site_name else site_name) if (og or site_name) else None),
+            (\n                "og:site_name",\n                (og.site_name if og and og.site_name else site_name)\n                if (og or site_name)\n                else None,\n            ),
             ("og:locale", og.locale if og and og.locale else None),
         )
         for name, value in values:
@@ -184,7 +184,7 @@ class SEO(BaseModel):
         if not self.hreflang:
             return
         for lang_code, href in self.hreflang.items():
-            full_href = f"{base_url}{href}" if base_url and not href.startswith("http") else href
+            full_href = (\n                f"{base_url}{href}"\n                if base_url and not href.startswith("http")\n                else href\n            )
             tags.append(
                 f'<link rel="alternate" hreflang="{_esc(lang_code)}" href="{_esc(full_href)}">'
             )
