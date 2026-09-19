@@ -4,13 +4,16 @@ from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import (
     ApplicationNodeKind,
+    Invalidation,
     ChangeReason,
     ComputeParticipant,
+    ConvergenceStatus,
     Goal,
     GoalStatus,
     ReconcileAction,
     ReconcileDecision,
     Runtime,
+    RuntimeCycle,
 )
 from voodoo.runtime.engine import ComputeResult
 from voodoo.world import Entity, WorldModel
@@ -319,6 +322,7 @@ async def test_runtime_convergence_has_hard_observation_bound():
 
     assert result.processed == 2
     assert result.exhausted is True
+    assert result.status is ConvergenceStatus.LIMIT_REACHED
     assert result.cycles == ()
     assert world.entity("business").properties["visitors"] == 2
 
@@ -334,3 +338,48 @@ async def test_runtime_convergence_rejects_unbounded_or_invalid_input():
         await runtime.converge(
             [{"entity_id": "business", "property": "visitors", "value": 1}]
         )
+
+
+@pytest.mark.asyncio
+async def test_runtime_convergence_reports_stable_when_no_semantic_work_remains():
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    runtime = Runtime(world=world)
+
+    result = await runtime.converge(
+        [
+            {
+                "entity_id": "business",
+                "property": "visitors",
+                "value": 1,
+                "source": "analytics",
+            }
+        ]
+    )
+
+    assert result.status is ConvergenceStatus.STABLE
+    assert result.exhausted is False
+
+
+def test_runtime_convergence_status_prioritizes_failure_and_blocking():
+    failed = Runtime._convergence_status(
+        [
+            RuntimeCycle(
+                invalidation=Invalidation(
+                    source="resource:x",
+                    affected=("goal:x",),
+                    reason=ChangeReason.STATE,
+                ),
+                decisions=(
+                    ReconcileDecision(
+                        node_id="goal:x",
+                        action=ReconcileAction.FAILED,
+                        reason="failed",
+                    ),
+                ),
+                executions=(),
+            )
+        ],
+        limit_reached=False,
+    )
+    assert failed is ConvergenceStatus.FAILED
