@@ -8,7 +8,11 @@ from voodoo.runtime.agency.goal import (
     GoalRuntime,
     GoalStatus,
 )
-from voodoo.runtime.agency.goal_store import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
+from voodoo.runtime.agency.goal_store import (
+    GoalStore,
+    SQLiteGoalStore,
+    VoodooStoreGoalStore,
+)
 
 __all__ = [
     "GoalStatus",
