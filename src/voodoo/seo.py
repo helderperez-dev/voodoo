@@ -281,7 +281,7 @@ class SEO(BaseModel):
     @staticmethod
     def _render_schema_blocks(schemas: list[dict]) -> str:
         blocks = [
-            f'<script type="application/ld+json">\\n{json.dumps(schema, ensure_ascii=False, indent=2)}\\n</script>'
+            f'<script type="application/ld+json">\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n</script>'
             for schema in schemas
         ]
         return "\n        ".join(blocks)
