@@ -482,3 +482,13 @@ async def test_app_goal_decorator_builds_canonical_goal_and_reconciles():
     decision = next(item for item in cycle.decisions if item.node_id == "goal:grow")
     assert decision.action is ReconcileAction.PROPOSE_INTENT
     assert decision.intents[0].name == "conversion.adjust"
+
+
+def test_app_starlette_uses_the_same_canonical_runtime():
+    runtime = Runtime()
+    app = App(runtime=runtime)
+
+    starlette = app.starlette
+
+    assert app.runtime is runtime
+    assert starlette is app._starlette
