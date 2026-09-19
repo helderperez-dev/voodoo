@@ -4,12 +4,12 @@ from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import (
     ApplicationNodeKind,
-    Invalidation,
     ChangeReason,
     ComputeParticipant,
     ConvergenceStatus,
     Goal,
     GoalStatus,
+    Invalidation,
     ReconcileAction,
     ReconcileDecision,
     Runtime,
