@@ -155,7 +155,8 @@ class Runtime:
 
     def start(self) -> Runtime:
         """Start owned infrastructure and contribute active extensions."""
-        self.store.start()
+        if self._owns_store:
+            self.store.start()
         self.extensions.contribute(self.graph)
         return self
 
