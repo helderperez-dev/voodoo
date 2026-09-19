@@ -175,7 +175,10 @@ class SEO(BaseModel):
         values = (
             ("twitter:card", tw.card if tw and tw.card else "summary_large_image"),
             ("twitter:title", tw.title if tw and tw.title else og_title),
-            (\n                "twitter:description",\n                tw.description if tw and tw.description else og_desc,\n            ),
+            (
+                "twitter:description",
+                tw.description if tw and tw.description else og_desc,
+            ),
             ("twitter:image", tw.image if tw and tw.image else og_image),
             ("twitter:creator", tw.creator if tw else None),
             ("twitter:site", tw.site if tw else None),
