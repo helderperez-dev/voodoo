@@ -435,7 +435,9 @@ def test_app_goal_accepts_observation_handles_directly():
     ) is app
     node = app.runtime.graph.get("goal:growth-handle")
     assert node is not None
-    assert conversion.resource_id in app.runtime.graph.dependencies(node.id)
+    assert conversion.resource_id in {
+        dependency.id for dependency in app.runtime.graph.dependencies(node.id)
+    }
 
 
 def test_app_capability_decorator_registers_authority_and_compute():
