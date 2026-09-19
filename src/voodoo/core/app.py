@@ -98,7 +98,7 @@ class App:
     def starlette(self) -> Starlette:
         """The underlying Starlette application (built on first access)."""
         if self._starlette is None:
-            self._starlette = create_app(app_dir=self.app_dir)
+            self._starlette = create_app(app_dir=self.app_dir, runtime=self.runtime)
             for plugin in self._plugins:
                 plugin(self)
         return self._starlette
@@ -264,7 +264,7 @@ class App:
         print("\n".join(["", *lines]), flush=True)
 
 
-def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
+def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:  # noqa: C901
     """Build a fully wired Starlette application."""
     from voodoo.config import get_config
 
@@ -378,7 +378,7 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
     from voodoo.workers.queue import start_workers, stop_workers
 
     @asynccontextmanager
-    async def lifespan(app: Starlette) -> AsyncIterator[None]:  # noqa: C901  # noqa: C901
+    async def lifespan(app: Starlette) -> AsyncIterator[None]:
         from voodoo.runtime.store import StoreConfig, activate_runtime_store
 
         application_store = activate_runtime_store(
@@ -390,8 +390,9 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
 
         bind_runtime_store(application_store)
 
-        from voodoo.runtime.engine import engine as runtime_engine
+        from voodoo.runtime.engine import engine as global_runtime_engine
 
+        runtime_engine = runtime.engine if runtime is not None else global_runtime_engine
         provider = config.database.provider.lower()
         if provider == "voodoo":
             from voodoo.storage.execution import VoodooStoreExecutionStore
@@ -468,9 +469,14 @@ def create_app(app_dir: str = "app") -> Starlette:  # noqa: C901
             except ImportError:
                 pass
 
+        if runtime is not None:
+            await runtime.start()
+
         try:
             yield
         finally:
+            if runtime is not None:
+                await runtime.stop()
             if mqtt_transport is not None:
                 await mqtt_transport.stop()
             await stop_workers()
