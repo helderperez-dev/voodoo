@@ -1,5 +1,6 @@
-"""Compatibility facade for :mod:`voodoo.runtime.scheduling.work`."""
+"""Scheduling implementation domain for the canonical Runtime."""
 
+from voodoo.runtime.scheduling.schedule_service import ScheduleService
 from voodoo.runtime.scheduling.work import (
     RuntimeScheduler,
     ScheduledWork,
@@ -10,6 +11,7 @@ from voodoo.runtime.scheduling.work import (
 
 __all__ = [
     "RuntimeScheduler",
+    "ScheduleService",
     "ScheduledWork",
     "SchedulingDecision",
     "WorkEligibility",
