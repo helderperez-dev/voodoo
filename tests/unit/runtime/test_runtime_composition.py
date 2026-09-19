@@ -428,11 +428,14 @@ def test_app_goal_accepts_observation_handles_directly():
     conversion = app.observation("business", "conversion")
     goal = Goal(id="growth-handle", name="growth-handle")
 
-    assert app.goal(
-        goal,
-        observes=(conversion,),
-        satisfied=lambda item, snapshot: True,
-    ) is app
+    assert (
+        app.goal(
+            goal,
+            observes=(conversion,),
+            satisfied=lambda item, snapshot: True,
+        )
+        is app
+    )
     node = app.runtime.graph.get("goal:growth-handle")
     assert node is not None
     assert conversion.resource_id in {
