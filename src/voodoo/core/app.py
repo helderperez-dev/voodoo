@@ -385,6 +385,8 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
             StoreConfig.from_mapping(config.store.model_dump())
         )
         app.state.runtime_store = application_store
+        if runtime is not None:
+            runtime.use_store(application_store)
 
         from voodoo.data.store_backend import bind_runtime_store
 
@@ -392,7 +394,9 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
 
         from voodoo.runtime.engine import engine as global_runtime_engine
 
-        runtime_engine = runtime.engine if runtime is not None else global_runtime_engine
+        runtime_engine = (
+            runtime.engine if runtime is not None else global_runtime_engine
+        )
         provider = config.database.provider.lower()
         if provider == "voodoo":
             from voodoo.storage.execution import VoodooStoreExecutionStore
