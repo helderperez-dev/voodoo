@@ -1,21 +1,5 @@
-"""Canonical Runtime execution ownership domain."""
+"""Canonical Runtime execution model boundary."""
 
-from voodoo.runtime.execution.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
 from voodoo.runtime.execution.model import Execution, ExecutionStatus
-from voodoo.runtime.execution.world import (
-    bind_world,
-    resolve_target_entity_id,
-    world_aware,
-)
 
-__all__ = [
-    "ComputeFn",
-    "ComputeResult",
-    "Execution",
-    "ExecutionEngine",
-    "ExecutionStatus",
-    "bind_world",
-    "engine",
-    "resolve_target_entity_id",
-    "world_aware",
-]
+__all__ = ["Execution", "ExecutionStatus"]
