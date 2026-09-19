@@ -79,6 +79,8 @@ from voodoo.primitives import Intent
 
 app = App()
 conversion = app.observation("business", "conversion")
+
+
 @app.goal(
     "grow",
     observes=(conversion,),
@@ -87,6 +89,8 @@ conversion = app.observation("business", "conversion")
 )
 def growth(world):
     return world is not None and world.entity.properties.get("conversion", 0) >= 0.10
+
+
 @app.capability("conversion.adjust")
 async def improve(ctx):
     return {"accepted": True}
