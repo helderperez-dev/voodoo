@@ -45,10 +45,16 @@ class App:
         app_dir: str = "app",
         *,
         theme: Any = None,
+        runtime: Any = None,
     ) -> None:
         self.app_dir = app_dir
         self._starlette: Starlette | None = None
         self._plugins: list[Callable[[App], Any]] = []
+        if runtime is None:
+            from voodoo.runtime import Runtime
+
+            runtime = Runtime()
+        self.runtime = runtime
         if theme is not None:
             if isinstance(theme, str):
                 from voodoo.ui.styles.presets import activate_theme
@@ -75,6 +81,25 @@ class App:
     def routes(self) -> list[BaseRoute]:
         """All registered routes (consumed by ``voodoo routes``)."""
         return list(self.starlette.routes)
+
+    @property
+    def world(self) -> Any:
+        """World model owned by the application's canonical Runtime."""
+        return self.runtime.world
+
+    def observe(self, *args: Any, **kwargs: Any) -> Any:
+        """Record evidence through the application's canonical Runtime."""
+        return self.runtime.observe(*args, **kwargs)
+
+    def goal(self, goal: Any, **kwargs: Any) -> "App":
+        """Register a desired-state Goal on the canonical Runtime."""
+        self.runtime.register_goal(goal, **kwargs)
+        return self
+
+    def capability(self, capability: Any) -> "App":
+        """Register an executable capability on the canonical Runtime."""
+        self.runtime.engine.capabilities.register(capability)
+        return self
 
     def use(self, plugin: Callable[["App"], Any]) -> "App":
         """Register a plugin callable invoked once the app is built."""
