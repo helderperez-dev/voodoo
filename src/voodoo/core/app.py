@@ -132,16 +132,57 @@ class App:
         """Record evidence through the application's canonical Runtime."""
         return self.runtime.observe(*args, **kwargs)
 
-    def goal(self, goal: Any, **kwargs: Any) -> "App":
-        """Register a desired-state Goal on the canonical Runtime."""
-        observes = kwargs.get("observes")
-        if observes is not None:
-            kwargs["observes"] = tuple(
-                item.resource_id if isinstance(item, ObservationHandle) else item
-                for item in observes
+    def goal(
+        self,
+        goal: Any,
+        *,
+        observes: tuple[Any, ...] = (),
+        propose: Any = None,
+        objective: str = "",
+        target_entity_id: str | None = None,
+        requires: tuple[str, ...] = (),
+        **kwargs: Any,
+    ) -> Any:
+        """Register an explicit Goal or decorate a desired-state predicate."""
+        from voodoo.runtime.goal import Goal
+
+        observed_ids = tuple(
+            item.resource_id if isinstance(item, ObservationHandle) else item
+            for item in observes
+        )
+        if isinstance(goal, Goal):
+            self.runtime.register_goal(
+                goal,
+                observes=observed_ids,
+                propose=propose,
+                **kwargs,
             )
-        self.runtime.register_goal(goal, **kwargs)
-        return self
+            return self
+        if not isinstance(goal, str):
+            raise TypeError("goal requires a Goal or goal name")
+
+        def decorator(predicate: Callable[..., bool]) -> Callable[..., bool]:
+            desired = Goal(
+                id=goal,
+                name=goal,
+                objective=objective,
+                target_entity_id=target_entity_id,
+                requires=list(requires),
+            )
+
+            def satisfied(item: Any, snapshot: Any) -> bool:
+                return bool(predicate(snapshot))
+
+            self.runtime.register_goal(
+                desired,
+                observes=observed_ids,
+                satisfied=satisfied,
+                propose=propose,
+                **kwargs,
+            )
+            return predicate
+
+        return decorator
 
     def capability(
         self,
