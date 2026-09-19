@@ -492,3 +492,13 @@ def test_app_starlette_uses_the_same_canonical_runtime():
 
     assert app.runtime is runtime
     assert starlette is app._starlette
+
+
+def test_runtime_can_adopt_application_lifecycle_store():
+    runtime = Runtime()
+    application_store = RuntimeStore(StoreConfig(enabled=False))
+
+    assert runtime.use_store(application_store) is runtime
+    assert runtime.store is application_store
+    assert runtime.start() is runtime
+    runtime.stop()
