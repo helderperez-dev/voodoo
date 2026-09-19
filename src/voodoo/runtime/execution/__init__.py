@@ -1,6 +1,6 @@
 """Canonical Runtime execution ownership domain."""
 
-from voodoo.runtime.execution.engine import ComputeResult, ExecutionEngine, engine
+from voodoo.runtime.execution.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
 from voodoo.runtime.execution.model import Execution, ExecutionStatus
 from voodoo.runtime.execution.world import (
     bind_world,
@@ -9,6 +9,7 @@ from voodoo.runtime.execution.world import (
 )
 
 __all__ = [
+    "ComputeFn",
     "ComputeResult",
     "Execution",
     "ExecutionEngine",
