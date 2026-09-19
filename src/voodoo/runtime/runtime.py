@@ -141,6 +141,15 @@ class Runtime:
         if self.world is not None:
             self.engine.capabilities.policy.use_world(self.world)
 
+    def use_store(self, store: RuntimeStore) -> Runtime:
+        """Adopt the RuntimeStore owned by the surrounding application lifecycle."""
+        if self.store is store:
+            return self
+        if self.store.started:
+            raise RuntimeError("cannot replace a started RuntimeStore")
+        self.store = store
+        return self
+
     def start(self) -> Runtime:
         """Start owned infrastructure and contribute active extensions."""
         self.store.start()
