@@ -261,7 +261,8 @@ class App:
         ip = _local_ip()
         if ip and host in ("0.0.0.0", "::", ""):
             lines.append(f"  ➜  Network: http://{ip}:{port}")
-        print("\n".join(["", *lines]), flush=True)
+        print("
+".join(["", *lines]), flush=True)
 
 
 def _load_app_module(app_dir: str, name: str) -> None:
@@ -275,7 +276,9 @@ def _load_app_module(app_dir: str, name: str) -> None:
         spec.loader.exec_module(module)
 
 
-def _build_routes(\n    app_dir: str, cwd: str, config: Any\n) -> tuple[list[BaseRoute], list[Any]]:
+def _build_routes(
+    app_dir: str, cwd: str, config: Any
+) -> tuple[list[BaseRoute], list[Any]]:
     from voodoo.mesh import mesh
 
     routes: list[BaseRoute] = [
@@ -287,13 +290,17 @@ def _build_routes(\n    app_dir: str, cwd: str, config: Any\n) -> tuple[list[Bas
         ("/storage", os.path.join(cwd, config.storage_dir)),
     ):
         if os.path.isdir(directory):
-            routes.append(\n                Mount(url, app=StaticFiles(directory=directory), name=url[1:])\n            )
+            routes.append(
+                Mount(url, app=StaticFiles(directory=directory), name=url[1:])
+            )
     routes.extend(page_registry.routes)
     seo = config.seo
     if seo.sitemap_enabled:
         def sitemap(request: Request) -> Response:
             base = seo.base_url or str(request.base_url).rstrip("/")
-            return Response(\n                _generate_sitemap_xml(app_dir, base), media_type="application/xml"\n            )
+            return Response(
+                _generate_sitemap_xml(app_dir, base), media_type="application/xml"
+            )
         routes.append(Route("/sitemap.xml", sitemap, methods=["GET"]))
     if seo.robots_enabled:
         def robots(request: Request) -> Response:
@@ -318,7 +325,9 @@ def _build_routes(\n    app_dir: str, cwd: str, config: Any\n) -> tuple[list[Bas
     return routes, edge_gateway
 
 
-def _configure_execution_store(\n    config: Any, runtime_engine: Any\n) -> tuple[Any, str | None]:
+def _configure_execution_store(
+    config: Any, runtime_engine: Any
+) -> tuple[Any, str | None]:
     provider = config.database.provider.lower()
     if provider == "voodoo":
         from voodoo.storage.execution import VoodooStoreExecutionStore
@@ -326,7 +335,9 @@ def _configure_execution_store(\n    config: Any, runtime_engine: Any\n) -> tupl
         schedule_path = None
     elif provider == "postgres":
         from voodoo.storage.execution import PostgresExecutionStore
-        store = PostgresExecutionStore(\n            config.database.url or os.getenv("VOODOO_DATABASE_URL", "")\n        )
+        store = PostgresExecutionStore(
+            config.database.url or os.getenv("VOODOO_DATABASE_URL", "")
+        )
         schedule_path = ".voodoo/state/schedules.db"
     elif provider == "sqlite":
         from voodoo.storage.execution import SQLiteExecutionStore
@@ -343,7 +354,9 @@ def _configure_execution_store(\n    config: Any, runtime_engine: Any\n) -> tupl
     return store, schedule_path
 
 
-async def _start_mqtt(\n    config: Any, edge_gateway: list[Any], application_store: Any\n) -> Any:
+async def _start_mqtt(
+    config: Any, edge_gateway: list[Any], application_store: Any
+) -> Any:
     if not (config.edge.enabled and config.edge.mqtt_enabled):
         return None
     try:
@@ -384,7 +397,12 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
 
     from voodoo.auth import AuthMiddleware
     from voodoo.i18n import I18nMiddleware
-    from voodoo.security import (\n        CORSMiddleware,\n        CSRFMiddleware,\n        RateLimitMiddleware,\n        SecurityHeadersMiddleware,\n    )
+    from voodoo.security import (
+        CORSMiddleware,
+        CSRFMiddleware,
+        RateLimitMiddleware,
+        SecurityHeadersMiddleware,
+    )
     from voodoo.telemetry import TelemetryMiddleware
     from voodoo.workers.queue import start_workers, stop_workers
 
