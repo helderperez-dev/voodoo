@@ -327,6 +327,11 @@ def _build_routes(
         gateway = DeviceGateway(InMemoryDeviceStore(), runtime_engine)
         edge_gateway.append(gateway)
         routes.extend(build_edge_routes(gateway))
+    public_dir = os.path.join(cwd, "public")
+    if os.path.isdir(public_dir):
+        routes.append(
+            Mount("/", app=StaticFiles(directory=public_dir), name="public-root")
+        )
     return routes, edge_gateway
 
 
@@ -354,6 +359,7 @@ def _configure_execution_store(
         schedule_path = path.replace("data.db", "schedules.db")
     else:
         from voodoo.core.errors import ConfigurationError
+
         raise ConfigurationError(
             f"Unknown execution database provider '{config.database.provider}'. "
             "Use 'voodoo' (default), 'sqlite', or 'postgres'."
@@ -419,6 +425,7 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
     @asynccontextmanager
     async def lifespan(starlette: Starlette) -> AsyncIterator[None]:
         from voodoo.runtime.store import StoreConfig, activate_runtime_store
+
         application_store = activate_runtime_store(
             StoreConfig.from_mapping(config.store.model_dump())
         )
@@ -442,6 +449,7 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
             edge_gateway[0]._store = VoodooStoreDeviceStore(application_store)
         from voodoo.runtime.scheduler import ScheduleService
         from voodoo.storage.scheduler import create_schedule_store
+
         schedule_store = create_schedule_store(schedule_path)
         scheduler = ScheduleService(schedule_store)
         await scheduler.start()
