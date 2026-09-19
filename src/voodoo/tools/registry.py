@@ -10,11 +10,13 @@ runtime aliasing).
 import sys
 
 from voodoo.ai.tools import registry
-from voodoo.ai.tools.registry import (  # noqa: F401
+from voodoo.ai.tools.registry import (
     ToolRegistry,
     ToolSpec,
     build_spec,
     default_registry,
 )
+
+__all__ = ["ToolRegistry", "ToolSpec", "build_spec", "default_registry"]
 
 sys.modules[__name__] = registry
