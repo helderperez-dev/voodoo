@@ -419,3 +419,33 @@ async def test_app_observation_handle_is_the_public_reactive_source():
     assert result is not None
     assert result.invalidation.source == conversion.resource_id
     assert world.entity("business").properties["conversion"] == 0.08
+
+
+def test_app_goal_accepts_observation_handles_directly():
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    app = App(runtime=Runtime(world=world))
+    conversion = app.observation("business", "conversion")
+    goal = Goal(id="growth-handle", name="growth-handle")
+
+    assert app.goal(
+        goal,
+        observes=(conversion,),
+        satisfied=lambda item, snapshot: True,
+    ) is app
+    node = app.runtime.graph.get("goal:growth-handle")
+    assert node is not None
+    assert conversion.resource_id in app.runtime.graph.dependencies(node.id)
+
+
+def test_app_capability_decorator_registers_authority_and_compute():
+    app = App()
+
+    @app.capability("orders.read")
+    async def read_orders(ctx):
+        return {"orders": []}
+
+    assert app.runtime.engine.capabilities.resolve("orders.read").value == "allowed"
+    participant = app.runtime.planner.participants["read_orders"]
+    assert participant.compute is read_orders
+    assert participant.capabilities == ["orders.read"]
