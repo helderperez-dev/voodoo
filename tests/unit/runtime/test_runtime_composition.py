@@ -451,3 +451,31 @@ def test_app_capability_decorator_registers_authority_and_compute():
     participant = app.runtime.planner.participants["read_orders"]
     assert participant.compute is read_orders
     assert participant.capabilities == ["orders.read"]
+
+
+@pytest.mark.asyncio
+async def test_app_goal_decorator_builds_canonical_goal_and_reconciles():
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    app = App(runtime=Runtime(world=world))
+    conversion = app.observation("business", "conversion")
+
+    @app.goal(
+        "grow",
+        observes=(conversion,),
+        target_entity_id="business",
+        propose=lambda goal, snapshot: Intent(name="conversion.adjust"),
+    )
+    def growth(snapshot):
+        return (
+            snapshot is not None
+            and snapshot.entity.properties.get("conversion", 0) >= 0.10
+        )
+
+    cycle = await conversion.set(0.08, source="analytics")
+
+    assert growth.__name__ == "growth"
+    assert cycle is not None
+    decision = next(item for item in cycle.decisions if item.node_id == "goal:grow")
+    assert decision.action is ReconcileAction.PROPOSE_INTENT
+    assert decision.intents[0].name == "conversion.adjust"
