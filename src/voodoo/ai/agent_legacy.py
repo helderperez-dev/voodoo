@@ -613,7 +613,7 @@ class Agent:
         When ``run_id`` is ``None``, a new UUID is generated.  When
         called inside an engine Execution, ``run_id`` is the execution id.
         """
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         run_id = run_id or str(uuid.uuid4())
         trace_id = (
@@ -779,7 +779,7 @@ class Agent:
     ) -> AsyncIterator[AgentEvent]:
         """Yield normalized events: text, tool_started, tool_finished, thinking, error, completed."""
         run_id = str(uuid.uuid4())
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         trace_id = (
             telemetry_store.trace_id_var.get()

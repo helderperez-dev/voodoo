@@ -284,7 +284,7 @@ class Execution(BaseModel):
     @classmethod
     def from_runtime_execution(
         cls,
-        exec: Any,  # noqa: ANN401 — runtime.Execution
+        exec: object,
     ) -> Execution:
         """Convert a runtime ``Execution`` to a protocol ``Execution``.
 
@@ -315,7 +315,7 @@ class Execution(BaseModel):
             completed_at=exec.completed_at,
         )
 
-    def to_runtime_execution(self) -> Any:  # noqa: ANN401
+    def to_runtime_execution(self) -> object:
         """Convert this protocol ``Execution`` back to a runtime ``Execution``.
 
         Requires ``voodoo.runtime.execution.Execution`` to be importable.

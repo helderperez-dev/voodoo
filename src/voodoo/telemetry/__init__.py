@@ -1,9 +1,11 @@
-from voodoo.telemetry.api import get_metrics
-from voodoo.telemetry.middleware import TelemetryMiddleware
-from voodoo.telemetry.store import (
+"""Compatibility facade for :mod:`voodoo.observability`."""
+
+from voodoo.observability import (
     Span,
+    TelemetryMiddleware,
     TelemetryStore,
     TraceFilter,
+    get_metrics,
     logger,
     new_trace_id,
     telemetry_store,

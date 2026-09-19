@@ -1,12 +1,9 @@
-"""Compatibility alias — the durable queue lives in ``voodoo.workers.queue``.
-
-This shim replaces itself with the real module in ``sys.modules`` so that
-``voodoo.queue is voodoo.workers.queue`` and mutable globals (``_workers``,
-``_worker_tasks``) are always current.
-"""
+"""Compatibility alias for :mod:`voodoo.workers.queue`."""
 
 import sys
 
-from voodoo.workers import queue  # noqa: F401
+from voodoo.workers import queue
+
+__all__ = getattr(queue, "__all__", ())
 
 sys.modules[__name__] = queue

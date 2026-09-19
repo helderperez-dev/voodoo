@@ -230,10 +230,10 @@ class LLMProvider(ABC):
 
 #: Maps provider name → fully-qualified provider class path (lazy import).
 _PROVIDER_CLASSES: dict[str, str] = {
-    "openai": "voodoo.ai.providers.openai.OpenAIProvider",
-    "anthropic": "voodoo.ai.providers.anthropic.AnthropicProvider",
-    "gemini": "voodoo.ai.providers.gemini.GeminiProvider",
-    "ollama": "voodoo.ai.providers.ollama.OllamaProvider",
+    "openai": "voodoo.integrations.ai.openai.OpenAIProvider",
+    "anthropic": "voodoo.integrations.ai.anthropic.AnthropicProvider",
+    "gemini": "voodoo.integrations.ai.gemini.GeminiProvider",
+    "ollama": "voodoo.integrations.ai.ollama.OllamaProvider",
     "mock": "voodoo.ai.providers.mock.MockProvider",
 }
 
