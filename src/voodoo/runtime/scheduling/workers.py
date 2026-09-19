@@ -141,7 +141,7 @@ async def _run_worker(name: str, worker_id: str) -> None:
                         intent, compute, actor=f"worker:{name}", parent=ctx
                     )
                 await q.complete(task.id, worker_id)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("Error in worker %s task %d: %r", name, task.id, exc)
                 await q.fail(
                     task.id,
@@ -153,7 +153,7 @@ async def _run_worker(name: str, worker_id: str) -> None:
                 trace_id_var.reset(token)
         except asyncio.CancelledError:
             break
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("Worker %s poll loop error: %r", name, exc)
             await asyncio.sleep(1.0)
 
@@ -168,7 +168,7 @@ async def _reaper() -> None:
                 logger.info("reclaimed %d expired task(s)", reclaimed)
         except asyncio.CancelledError:
             break
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("reaper error: %r", exc)
         await asyncio.sleep(5.0)
 
