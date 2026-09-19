@@ -134,13 +134,49 @@ class App:
 
     def goal(self, goal: Any, **kwargs: Any) -> "App":
         """Register a desired-state Goal on the canonical Runtime."""
+        observes = kwargs.get("observes")
+        if observes is not None:
+            kwargs["observes"] = tuple(
+                item.resource_id if isinstance(item, ObservationHandle) else item
+                for item in observes
+            )
         self.runtime.register_goal(goal, **kwargs)
         return self
 
-    def capability(self, capability: Any) -> "App":
-        """Register an executable capability on the canonical Runtime."""
-        self.runtime.engine.capabilities.register(capability)
-        return self
+    def capability(
+        self,
+        capability: Any,
+        *,
+        name: str | None = None,
+    ) -> Any:
+        """Register capability authority or decorate its compute implementation."""
+        from voodoo.primitives.capability import Capability
+        from voodoo.runtime.planner import ComputeParticipant
+
+        if isinstance(capability, Capability):
+            self.runtime.engine.capabilities.register(capability)
+            return self
+
+        capability_name = name or (
+            capability if isinstance(capability, str) else None
+        )
+        if capability_name is None:
+            raise TypeError("capability requires a Capability or capability name")
+
+        def decorator(compute: Callable[..., Any]) -> Callable[..., Any]:
+            if capability_name not in self.runtime.engine.capabilities.capabilities:
+                self.runtime.engine.capabilities.register(Capability(name=capability_name))
+            self.runtime.register_compute(
+                ComputeParticipant(
+                    name=compute.__name__,
+                    kind="compute",
+                    capabilities=[capability_name],
+                    compute=compute,
+                )
+            )
+            return compute
+
+        return decorator
 
     def use(self, plugin: Callable[["App"], Any]) -> "App":
         """Register a plugin callable invoked once the app is built."""
