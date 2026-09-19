@@ -504,3 +504,6 @@ def test_runtime_can_adopt_application_lifecycle_store():
     assert runtime.store is application_store
     assert runtime.start() is runtime
     runtime.stop()
+    assert application_store.started
+
+    application_store.stop()
