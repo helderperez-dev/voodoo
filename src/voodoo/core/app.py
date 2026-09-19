@@ -11,6 +11,7 @@ import importlib.util
 import os
 import socket
 import sys
+from dataclasses import dataclass
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Any
@@ -35,6 +36,31 @@ def _local_ip() -> str | None:
             return str(s.getsockname()[0])
     except Exception:
         return None
+
+
+@dataclass(frozen=True, slots=True)
+class ObservationHandle:
+    """Public handle connecting one World property to the Runtime graph."""
+
+    app: "App"
+    entity_id: str
+    property: str
+    resource_id: str
+
+    async def set(
+        self,
+        value: Any,
+        *,
+        source: str,
+        **observation: Any,
+    ) -> Any:
+        return await self.app.observe(
+            self.entity_id,
+            self.property,
+            value,
+            source=source,
+            **observation,
+        )
 
 
 class App:
@@ -86,6 +112,21 @@ class App:
     def world(self) -> Any:
         """World model owned by the application's canonical Runtime."""
         return self.runtime.world
+
+    def observation(
+        self,
+        entity_id: str,
+        property: str,
+        *,
+        resource_id: str | None = None,
+    ) -> ObservationHandle:
+        """Declare a World property that can drive adaptive reconciliation."""
+        bound = self.runtime.bind_observation(
+            entity_id,
+            property,
+            resource_id=resource_id,
+        )
+        return ObservationHandle(self, entity_id, property, bound)
 
     def observe(self, *args: Any, **kwargs: Any) -> Any:
         """Record evidence through the application's canonical Runtime."""
