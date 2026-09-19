@@ -474,13 +474,13 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
                 pass
 
         if runtime is not None:
-            await runtime.start()
+            runtime.start()
 
         try:
             yield
         finally:
             if runtime is not None:
-                await runtime.stop()
+                runtime.stop()
             if mqtt_transport is not None:
                 await mqtt_transport.stop()
             await stop_workers()
