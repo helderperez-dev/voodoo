@@ -8,6 +8,7 @@ ExecutionEngine remains the only authority boundary for executable work.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from voodoo.primitives.intent import Intent
@@ -52,17 +53,26 @@ class RuntimeCycle:
     executions: tuple[Execution, ...]
 
 
+class ConvergenceStatus(StrEnum):
+    STABLE = "stable"
+    WAITING = "waiting"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+    LIMIT_REACHED = "limit_reached"
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeConvergence:
-    """Result of processing an explicitly bounded sequence of observations."""
+    """Semantic result of an explicitly bounded observation convergence run."""
 
     cycles: tuple[RuntimeCycle, ...]
     processed: int
     max_cycles: int
+    status: ConvergenceStatus
 
     @property
     def exhausted(self) -> bool:
-        return self.processed >= self.max_cycles
+        return self.status is ConvergenceStatus.LIMIT_REACHED
 
 
 class Runtime:
@@ -241,6 +251,30 @@ class Runtime:
         """Turn a reconciliation proposal into governed scheduled work."""
         return self.dispatcher.prepare(decision)
 
+    @staticmethod
+    def _convergence_status(
+        cycles: list[RuntimeCycle],
+        *,
+        limit_reached: bool,
+    ) -> ConvergenceStatus:
+        if limit_reached:
+            return ConvergenceStatus.LIMIT_REACHED
+        actions = {
+            decision.action
+            for cycle in cycles
+            for decision in cycle.decisions
+            if decision.node_id != "application"
+        }
+        if ReconcileAction.FAILED in actions:
+            return ConvergenceStatus.FAILED
+        if ReconcileAction.BLOCKED in actions:
+            return ConvergenceStatus.BLOCKED
+        if ReconcileAction.REQUEST_HUMAN in actions or ReconcileAction.WAIT in actions:
+            return ConvergenceStatus.WAITING
+        if not actions or actions <= {ReconcileAction.SATISFIED}:
+            return ConvergenceStatus.STABLE
+        return ConvergenceStatus.WAITING
+
     async def converge(
         self,
         observations: list[dict[str, Any]],
@@ -281,10 +315,15 @@ class Runtime:
             processed += 1
             if cycle is not None:
                 cycles.append(cycle)
+        status = self._convergence_status(
+            cycles,
+            limit_reached=processed >= max_cycles and processed < len(observations),
+        )
         return RuntimeConvergence(
             cycles=tuple(cycles),
             processed=processed,
             max_cycles=max_cycles,
+            status=status,
         )
 
     async def observe(
@@ -400,4 +439,9 @@ class Runtime:
         )
 
 
-__all__ = ["Runtime", "RuntimeConvergence", "RuntimeCycle"]
+__all__ = [
+    "ConvergenceStatus",
+    "Runtime",
+    "RuntimeConvergence",
+    "RuntimeCycle",
+]
