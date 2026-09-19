@@ -112,8 +112,7 @@ class SEO(BaseModel):
         self._append_hreflang(tags, base_url)
         if self.extra_head:
             tags.append(self.extra_head)
-        return "
-        ".join(tags)
+        return "\n        ".join(tags)
 
     def _core_meta_tags(self) -> list[str]:
         tags: list[str] = []
@@ -279,13 +278,10 @@ class SEO(BaseModel):
     @staticmethod
     def _render_schema_blocks(schemas: list[dict]) -> str:
         blocks = [
-            f'<script type="application/ld+json">
-{json.dumps(schema, ensure_ascii=False, indent=2)}
-</script>'
+            f'<script type="application/ld+json">\\n{json.dumps(schema, ensure_ascii=False, indent=2)}\\n</script>'
             for schema in schemas
         ]
-        return "
-        ".join(blocks)
+        return "\n        ".join(blocks)
 
 
 def _esc(value: str) -> str:
