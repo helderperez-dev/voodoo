@@ -23,8 +23,8 @@ from uuid import uuid4
 
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.context import ExecutionContext
-from voodoo.runtime.execution.engine import ComputeFn, ComputeResult
 from voodoo.runtime.errors import ApprovalRequired
+from voodoo.runtime.execution.engine import ComputeFn, ComputeResult
 
 if TYPE_CHECKING:
     from voodoo.runtime.execution import Execution
