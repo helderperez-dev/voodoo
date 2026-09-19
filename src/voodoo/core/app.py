@@ -240,6 +240,7 @@ class App:
         from voodoo.config import config
         from voodoo.core.errors import ConfigurationError
 
+
         host = host or config.host
         port = port if port is not None else config.port
 
@@ -295,22 +296,27 @@ def _build_routes(
     routes.extend(page_registry.routes)
     seo = config.seo
     if seo.sitemap_enabled:
+
         def sitemap(request: Request) -> Response:
             base = seo.base_url or str(request.base_url).rstrip("/")
             return Response(
                 _generate_sitemap_xml(app_dir, base), media_type="application/xml"
             )
+
         routes.append(Route("/sitemap.xml", sitemap, methods=["GET"]))
     if seo.robots_enabled:
+
         def robots(request: Request) -> Response:
             base = seo.base_url or str(request.base_url).rstrip("/")
             return Response(_generate_robots_txt(seo, base), media_type="text/plain")
+
         routes.append(Route("/robots.txt", robots, methods=["GET"]))
     _scan_page_convention(app_dir, routes)
     _scan_pages_directory(app_dir, routes)
     for name in ("models", "workers", "api"):
         _load_app_module(app_dir, name)
     from voodoo.routing.api import api as voodoo_api
+
     routes.extend(voodoo_api.routes)
 
     edge_gateway: list[Any] = []
@@ -318,6 +324,7 @@ def _build_routes(
         from voodoo.edge import DeviceGateway, InMemoryDeviceStore
         from voodoo.edge.http import build_edge_routes
         from voodoo.runtime.engine import engine as runtime_engine
+
         gateway = DeviceGateway(InMemoryDeviceStore(), runtime_engine)
         edge_gateway.append(gateway)
         routes.extend(build_edge_routes(gateway))
@@ -330,16 +337,19 @@ def _configure_execution_store(
     provider = config.database.provider.lower()
     if provider == "voodoo":
         from voodoo.storage.execution import VoodooStoreExecutionStore
+
         store = VoodooStoreExecutionStore()
         schedule_path = None
     elif provider == "postgres":
         from voodoo.storage.execution import PostgresExecutionStore
+
         store = PostgresExecutionStore(
             config.database.url or os.getenv("VOODOO_DATABASE_URL", "")
         )
         schedule_path = ".voodoo/state/schedules.db"
     elif provider == "sqlite":
         from voodoo.storage.execution import SQLiteExecutionStore
+
         path = config.db_path.replace(":memory:", ".voodoo/state/data.db")
         store = SQLiteExecutionStore(path)
         schedule_path = path.replace("data.db", "schedules.db")
@@ -364,8 +374,10 @@ async def _start_mqtt(
         from voodoo.runtime.engine import engine as runtime_engine
     except ImportError:
         return None
-    gateway = edge_gateway[0] if edge_gateway else DeviceGateway(
-        VoodooStoreDeviceStore(application_store), runtime_engine
+    gateway = (
+        edge_gateway[0]
+        if edge_gateway
+        else DeviceGateway(VoodooStoreDeviceStore(application_store), runtime_engine)
     )
     transport = EdgeMQTTTransport(
         gateway,
@@ -408,17 +420,26 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
     @asynccontextmanager
     async def lifespan(starlette: Starlette) -> AsyncIterator[None]:
         from voodoo.runtime.store import StoreConfig, activate_runtime_store
-        application_store = activate_runtime_store(StoreConfig.from_mapping(config.store.model_dump()))
+        application_store = activate_runtime_store(
+            StoreConfig.from_mapping(config.store.model_dump())
+        )
         starlette.state.runtime_store = application_store
         if runtime is not None:
             runtime.use_store(application_store)
         from voodoo.data.store_backend import bind_runtime_store
+
         bind_runtime_store(application_store)
         from voodoo.runtime.engine import engine as global_runtime_engine
-        runtime_engine = runtime.engine if runtime is not None else global_runtime_engine
-        execution_store, schedule_path = _configure_execution_store(config, runtime_engine)
+
+        runtime_engine = (
+            runtime.engine if runtime is not None else global_runtime_engine
+        )
+        execution_store, schedule_path = _configure_execution_store(
+            config, runtime_engine
+        )
         if edge_gateway:
             from voodoo.edge import VoodooStoreDeviceStore
+
             edge_gateway[0]._store = VoodooStoreDeviceStore(application_store)
         from voodoo.runtime.scheduler import ScheduleService
         from voodoo.storage.scheduler import create_schedule_store
@@ -426,6 +447,7 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
         scheduler = ScheduleService(schedule_store)
         await scheduler.start()
         from voodoo.workers.queue import _workers
+
         worker_task = asyncio.create_task(start_workers()) if _workers else None
         mqtt_transport = await _start_mqtt(config, edge_gateway, application_store)
         if runtime is not None:
@@ -441,6 +463,7 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
             if worker_task:
                 worker_task.cancel()
             from voodoo.data import close_db
+
             await close_db()
             await scheduler.stop()
             schedule_store.close()
@@ -461,6 +484,18 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
         Middleware(AuthMiddleware),
     ]
     return Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
+
+
+def _load_page_file(filepath: str, route_path: str, module_name: str) -> Route | None:
+    """Import a single page module and return its Starlette Route."""
+    spec = importlib.util.spec_from_file_location(module_name, filepath)
+    if spec and spec.loader:
+        page_module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = page_module
+        spec.loader.exec_module(page_module)
+        if hasattr(page_module, "page"):
+            return Route(route_path, _module_page_endpoint(page_module.page))
+    return None
 
 
 def _scan_page_convention(app_dir: str, routes: list[BaseRoute]) -> None:
@@ -498,8 +533,7 @@ def _scan_pages_directory(app_dir: str, routes: list[BaseRoute]) -> None:
                 route_path = "/"
             else:
                 parts = [
-                    part.replace("[", "{").replace("]", "}")
-                    for part in stem.split("/")
+                    part.replace("[", "{").replace("]", "}") for part in stem.split("/")
                 ]
                 route_path = "/" + "/".join(parts)
             clean_name = route_path.replace("/", "_").replace("{", "").replace("}", "")
