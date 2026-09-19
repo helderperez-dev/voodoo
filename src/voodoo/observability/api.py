@@ -1,5 +1,5 @@
-from voodoo.routing.api import api
 from voodoo.observability.store import telemetry_store
+from voodoo.routing.api import api
 
 
 @api.get("/voodoo/metrics")
