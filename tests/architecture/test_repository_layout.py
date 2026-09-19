@@ -50,7 +50,6 @@ LEGACY_NOQA_FILES = {
     "cli/theme.py",
     "core/events.py",
     "core/routing.py",
-    "core/sitemap.py",
     "data/base.py",
     "data/store_facade.py",
     "edge/gateway.py",
@@ -69,7 +68,6 @@ LEGACY_NOQA_FILES = {
     "telemetry/store.py",
     "ui/styles/presets.py",
     "workers/__init__.py",
-    "workers/queue.py",
 }
 VENDOR_ROOTS = {
     "anthropic",
