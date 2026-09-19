@@ -198,15 +198,15 @@ class App:
             self.runtime.engine.capabilities.register(capability)
             return self
 
-        capability_name = name or (
-            capability if isinstance(capability, str) else None
-        )
+        capability_name = name or (capability if isinstance(capability, str) else None)
         if capability_name is None:
             raise TypeError("capability requires a Capability or capability name")
 
         def decorator(compute: Callable[..., Any]) -> Callable[..., Any]:
             if capability_name not in self.runtime.engine.capabilities.capabilities:
-                self.runtime.engine.capabilities.register(Capability(name=capability_name))
+                self.runtime.engine.capabilities.register(
+                    Capability(name=capability_name)
+                )
             self.runtime.register_compute(
                 ComputeParticipant(
                     name=compute.__name__,
