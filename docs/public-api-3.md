@@ -67,3 +67,39 @@ update to `tests/test_contract_api.py`.
 Voodoo's architecture is intentionally broad; its developer surface should not
 mirror that breadth one class at a time. The runtime may grow while the happy
 path stays small.
+
+
+## Adaptive application happy path
+
+The canonical `App` owns one canonical Runtime. Application code should declare observed facts, desired state, and executable capabilities through `App`; graph, reconciliation, scheduling, placement, and execution remain runtime internals unless an advanced integration explicitly needs them.
+
+```python
+from voodoo import App
+from voodoo.primitives import Intent
+
+app = App()
+conversion = app.observation("business", "conversion")
+
+@app.goal(
+    "grow",
+    observes=(conversion,),
+    target_entity_id="business",
+    propose=lambda goal, world: Intent(name="conversion.adjust"),
+)
+def growth(world):
+    return world is not None and world.entity.properties.get("conversion", 0) >= 0.10
+
+@app.capability("conversion.adjust")
+async def improve(ctx):
+    return {"accepted": True}
+```
+
+Public API laws for adaptive applications:
+
+1. `App` is the application facade; `Runtime` is its canonical execution and reconciliation machine, not a competing application abstraction.
+2. `app.observation(...)` returns a handle; the handle type is scoped to `voodoo.core` and is not a package-root export.
+3. `@app.goal(...)` constructs the same canonical `Goal` used by the advanced runtime API. It is syntax, not a second goal model.
+4. `@app.capability(...)` binds local compute to a capability in the same Runtime. Explicit `Capability(...)` registration remains available when constraints, delegation, or policy metadata are required.
+5. Observation handles may be passed directly to `observes`; application code does not need Application Graph resource IDs.
+6. An Observation may trigger a bounded cycle. Effects do not become Observations implicitly, and a cycle never recursively runs forever.
+7. Advanced runtime primitives remain under `voodoo.runtime`; they are not promoted to the package root merely because they are useful.
