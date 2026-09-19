@@ -20,9 +20,20 @@ default_theme = theme.default_theme
 set_theme = theme.set_theme
 
 __all__ = [
-    "ComponentOverrides", "Theme", "ThemeBreakpoints", "ThemeCode", "ThemeColors",
-    "ThemeMotion", "ThemePalette", "ThemeRadius", "ThemeShadows", "ThemeSpacing",
-    "ThemeTypography", "create_theme", "default_theme", "set_theme",
+    "ComponentOverrides",
+    "Theme",
+    "ThemeBreakpoints",
+    "ThemeCode",
+    "ThemeColors",
+    "ThemeMotion",
+    "ThemePalette",
+    "ThemeRadius",
+    "ThemeShadows",
+    "ThemeSpacing",
+    "ThemeTypography",
+    "create_theme",
+    "default_theme",
+    "set_theme",
 ]
 
 sys.modules[__name__] = theme
