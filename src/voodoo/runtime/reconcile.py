@@ -13,7 +13,13 @@ from voodoo.runtime.reconciliation.reconcile import (
 )
 
 __all__ = [
-    "GoalIntentFactory", "GoalPredicate", "GoalReconciliation", "ReconcileAction",
-    "ReconcileDecision", "ReconcileGuard", "ReconcileHandler", "ReconcileLedger",
+    "GoalIntentFactory",
+    "GoalPredicate",
+    "GoalReconciliation",
+    "ReconcileAction",
+    "ReconcileDecision",
+    "ReconcileGuard",
+    "ReconcileHandler",
+    "ReconcileLedger",
     "Reconciler",
 ]
