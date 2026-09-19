@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from voodoo.runtime.scheduling.dispatch import DispatchPlan
-from voodoo.runtime.execution.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.execution import Execution
+from voodoo.runtime.execution.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.inspection.lineage import LineageEvent, RuntimeLineage
 from voodoo.runtime.inspection.lineage import lineage as default_lineage
+from voodoo.runtime.scheduling.dispatch import DispatchPlan
 from voodoo.runtime.scheduling.work import WorkEligibility
 
 
