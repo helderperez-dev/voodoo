@@ -404,3 +404,18 @@ def test_app_adaptive_facade_delegates_to_canonical_runtime():
     assert app.goal(goal, satisfied=lambda item, snapshot: True) is app
     assert runtime.engine.capabilities.resolve("orders.read").value == "allowed"
     assert runtime.graph.get("goal:orders-visible") is not None
+
+
+@pytest.mark.asyncio
+async def test_app_observation_handle_is_the_public_reactive_source():
+    world = WorldModel()
+    world.put_entity(Entity(id="business", type="business"))
+    app = App(runtime=Runtime(world=world))
+
+    conversion = app.observation("business", "conversion")
+
+    assert conversion.resource_id == "resource:business:conversion"
+    result = await conversion.set(0.08, source="analytics")
+    assert result is not None
+    assert result.invalidation.source == conversion.resource_id
+    assert world.entity("business").properties["conversion"] == 0.08
