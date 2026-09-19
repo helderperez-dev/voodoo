@@ -18,7 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from voodoo.runtime.distributed.remote import RemoteExecutionOutcome, RemoteExecutionRequest
+from voodoo.runtime.distributed.remote import (
+    RemoteExecutionOutcome,
+    RemoteExecutionRequest,
+)
 
 
 @dataclass(frozen=True)
