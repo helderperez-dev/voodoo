@@ -108,6 +108,7 @@ class Runtime:
         self.world = world
         self.fabric = fabric
         self.store = store or RuntimeStore(store_config)
+        self._owns_store = True
         self.lineage = lineage or RuntimeLineage()
         self.extensions = extensions or RuntimeExtensionRegistry()
         self._observation_sources: dict[tuple[str, str], str] = {}
@@ -141,13 +142,15 @@ class Runtime:
         if self.world is not None:
             self.engine.capabilities.policy.use_world(self.world)
 
-    def use_store(self, store: RuntimeStore) -> Runtime:
-        """Adopt the RuntimeStore owned by the surrounding application lifecycle."""
+    def use_store(self, store: RuntimeStore, *, owned: bool = False) -> Runtime:
+        """Use a RuntimeStore and record whether this Runtime owns its lifecycle."""
         if self.store is store:
+            self._owns_store = owned
             return self
         if self.store.started:
             raise RuntimeError("cannot replace a started RuntimeStore")
         self.store = store
+        self._owns_store = owned
         return self
 
     def start(self) -> Runtime:
@@ -158,7 +161,8 @@ class Runtime:
 
     def stop(self) -> None:
         """Stop infrastructure owned by this Runtime."""
-        self.store.stop()
+        if self._owns_store:
+            self.store.stop()
 
     def register_reconciler(
         self,
