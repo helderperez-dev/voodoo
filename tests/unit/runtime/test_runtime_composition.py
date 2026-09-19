@@ -1,5 +1,6 @@
 import pytest
 
+from voodoo import App
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import (
@@ -383,3 +384,23 @@ def test_runtime_convergence_status_prioritizes_failure_and_blocking():
         limit_reached=False,
     )
     assert failed is ConvergenceStatus.FAILED
+
+
+def test_app_owns_canonical_runtime_without_building_asgi_app():
+    app = App()
+    assert isinstance(app.runtime, Runtime)
+    assert app._starlette is None
+    assert app.world is app.runtime.world
+
+
+def test_app_adaptive_facade_delegates_to_canonical_runtime():
+    world = WorldModel()
+    runtime = Runtime(world=world)
+    app = App(runtime=runtime)
+    capability = Capability(name="orders.read")
+    goal = Goal(id="orders-visible", name="orders-visible")
+
+    assert app.capability(capability) is app
+    assert app.goal(goal, satisfied=lambda item, snapshot: True) is app
+    assert runtime.engine.capabilities.resolve("orders.read") is capability
+    assert runtime.graph.get("goal:orders-visible") is not None
