@@ -500,12 +500,11 @@ def test_runtime_can_adopt_application_lifecycle_store():
     runtime = Runtime()
     application_store = RuntimeStore(StoreConfig(enabled=False))
 
-    application_store.start()
+    assert not application_store.started
     assert runtime.use_store(application_store) is runtime
     assert runtime.store is application_store
     assert runtime.start() is runtime
-    runtime.stop()
-    assert application_store.started
+    assert not application_store.started
 
-    application_store.stop()
+    runtime.stop()
     assert not application_store.started
