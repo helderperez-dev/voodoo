@@ -15,6 +15,8 @@ from voodoo.runtime import (
     ReconcileDecision,
     Runtime,
     RuntimeCycle,
+    RuntimeStore,
+    StoreConfig,
 )
 from voodoo.runtime.engine import ComputeResult
 from voodoo.world import Entity, WorldModel
