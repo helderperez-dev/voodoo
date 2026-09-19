@@ -112,7 +112,8 @@ class SEO(BaseModel):
         self._append_hreflang(tags, base_url)
         if self.extra_head:
             tags.append(self.extra_head)
-        return "\n        ".join(tags)
+        return "
+        ".join(tags)
 
     def _core_meta_tags(self) -> list[str]:
         tags: list[str] = []
@@ -128,16 +129,33 @@ class SEO(BaseModel):
         self, tags: list[str], site_name: str, default_og_image: str
     ) -> tuple[str | None, str | None, str | None]:
         og = self.og
-        title = (\n            (og.title if og and og.title else self.title)\n            if (og or self.title != "Voodoo App")\n            else None\n        )
-        desc = (\n            (og.description if og and og.description else self.description)\n            if (og or self.description)\n            else None\n        )
-        image = (\n            (og.image if og and og.image else default_og_image)\n            if (og or default_og_image)\n            else None\n        )
+        title = (
+            (og.title if og and og.title else self.title)
+            if (og or self.title != "Voodoo App")
+            else None
+        )
+        desc = (
+            (og.description if og and og.description else self.description)
+            if (og or self.description)
+            else None
+        )
+        image = (
+            (og.image if og and og.image else default_og_image)
+            if (og or default_og_image)
+            else None
+        )
         values = (
             ("og:title", title),
             ("og:description", desc),
             ("og:image", image),
             ("og:type", og.type if og else "website"),
             ("og:url", og.url if og and og.url else self.canonical),
-            (\n                "og:site_name",\n                (og.site_name if og and og.site_name else site_name)\n                if (og or site_name)\n                else None,\n            ),
+            (
+                "og:site_name",
+                (og.site_name if og and og.site_name else site_name)
+                if (og or site_name)
+                else None,
+            ),
             ("og:locale", og.locale if og and og.locale else None),
         )
         for name, value in values:
@@ -184,7 +202,11 @@ class SEO(BaseModel):
         if not self.hreflang:
             return
         for lang_code, href in self.hreflang.items():
-            full_href = (\n                f"{base_url}{href}"\n                if base_url and not href.startswith("http")\n                else href\n            )
+            full_href = (
+                f"{base_url}{href}"
+                if base_url and not href.startswith("http")
+                else href
+            )
             tags.append(
                 f'<link rel="alternate" hreflang="{_esc(lang_code)}" href="{_esc(full_href)}">'
             )
@@ -257,10 +279,13 @@ class SEO(BaseModel):
     @staticmethod
     def _render_schema_blocks(schemas: list[dict]) -> str:
         blocks = [
-            f'<script type="application/ld+json">\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n</script>'
+            f'<script type="application/ld+json">
+{json.dumps(schema, ensure_ascii=False, indent=2)}
+</script>'
             for schema in schemas
         ]
-        return "\n        ".join(blocks)
+        return "
+        ".join(blocks)
 
 
 def _esc(value: str) -> str:
