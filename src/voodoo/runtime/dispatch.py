@@ -9,7 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from voodoo.runtime.fabric import PlacementDecision, RuntimeFabric
-from voodoo.runtime.lineage import LineageEvent, lineage
+from voodoo.runtime.lineage import LineageEvent, RuntimeLineage
+from voodoo.runtime.lineage import lineage as default_lineage
 from voodoo.runtime.reconcile import ReconcileAction, ReconcileDecision
 from voodoo.runtime.work_scheduler import (
     RuntimeScheduler,
@@ -33,9 +34,11 @@ class RuntimeDispatcher:
         scheduler: RuntimeScheduler | None = None,
         *,
         fabric: RuntimeFabric | None = None,
+        lineage: RuntimeLineage | None = None,
     ) -> None:
         self.scheduler = scheduler or RuntimeScheduler()
         self.fabric = fabric
+        self.lineage = lineage or default_lineage
 
     def prepare(
         self,
@@ -52,7 +55,7 @@ class RuntimeDispatcher:
         plans: list[DispatchPlan] = []
         for intent in decision.intents:
             work = scheduled_work_from_intent(intent)
-            lineage.record(
+            self.lineage.record(
                 LineageEvent(
                     kind="intent.proposed",
                     subject_id=intent.id,
@@ -67,7 +70,7 @@ class RuntimeDispatcher:
                 unavailable_resources=unavailable_resources,
                 backpressured=backpressured,
             )
-            lineage.record(
+            self.lineage.record(
                 LineageEvent(
                     kind="schedule.decision",
                     subject_id=intent.id,
@@ -83,7 +86,7 @@ class RuntimeDispatcher:
             placement = None
             if self.fabric is not None:
                 placement = self.fabric.place(work.placement)
-                lineage.record(
+                self.lineage.record(
                     LineageEvent(
                         kind="placement.decision",
                         subject_id=intent.id,

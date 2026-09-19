@@ -7,7 +7,8 @@ from typing import Any
 from voodoo.runtime.dispatch import DispatchPlan
 from voodoo.runtime.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.execution import Execution
-from voodoo.runtime.lineage import LineageEvent, lineage
+from voodoo.runtime.lineage import LineageEvent, RuntimeLineage
+from voodoo.runtime.lineage import lineage as default_lineage
 from voodoo.runtime.work_scheduler import WorkEligibility
 
 
@@ -19,10 +20,15 @@ class ExecutionHandoff:
     """Submit only eligible prepared work to the canonical ExecutionEngine."""
 
     def __init__(
-        self, engine: ExecutionEngine, *, local_node_id: str | None = None
+        self,
+        engine: ExecutionEngine,
+        *,
+        local_node_id: str | None = None,
+        lineage: RuntimeLineage | None = None,
     ) -> None:
         self.engine = engine
         self.local_node_id = local_node_id
+        self.lineage = lineage or default_lineage
 
     async def execute(
         self,
@@ -60,7 +66,7 @@ class ExecutionHandoff:
             actor=actor,
             principal=principal,
         )
-        lineage.record(
+        self.lineage.record(
             LineageEvent(
                 kind="execution",
                 subject_id=execution.id,

@@ -174,11 +174,19 @@ class Reconciler:
             raise ValueError("max_repeated_outcomes must be at least 1")
         self.ledger = ledger or ReconcileLedger()
         self._handlers: dict[ApplicationNodeKind, ReconcileHandler] = {}
+        self._node_handlers: dict[str, ReconcileHandler] = {}
 
     def register(
         self, kind: ApplicationNodeKind, handler: ReconcileHandler
     ) -> Reconciler:
         self._handlers[kind] = handler
+        return self
+
+    def register_node(self, node_id: str, handler: ReconcileHandler) -> Reconciler:
+        """Register reconciliation for one semantic node."""
+        if self.graph.get(node_id) is None:
+            raise KeyError(f"Unknown application graph node: {node_id}")
+        self._node_handlers[node_id] = handler
         return self
 
     def _deduplicate(
@@ -266,7 +274,7 @@ class Reconciler:
                     )
                 )
                 continue
-            handler = self._handlers.get(node.kind)
+            handler = self._node_handlers.get(node.id) or self._handlers.get(node.kind)
             if handler is None:
                 decisions.append(
                     ReconcileDecision(
