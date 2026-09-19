@@ -224,7 +224,9 @@ async def test_runtime_cycle_is_bounded_and_structured():
         revision="cycle-1",
     )
 
-    goal_decisions = [item for item in cycle.decisions if item.node_id == "goal:cycle-growth"]
+    goal_decisions = [
+        item for item in cycle.decisions if item.node_id == "goal:cycle-growth"
+    ]
     assert len(goal_decisions) == 1
     assert goal_decisions[0].action is ReconcileAction.PROPOSE_INTENT
     assert len(cycle.executions) == 1
