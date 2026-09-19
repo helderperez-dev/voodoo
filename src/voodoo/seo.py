@@ -99,7 +99,7 @@ class SEO(BaseModel):
     # Escape hatch
     extra_head: str = ""
 
-    def render_meta_tags(  # noqa: C901
+    def render_meta_tags(
         self, site_name: str = "", base_url: str = "", default_og_image: str = ""
     ) -> str:
         """Renders all SEO/GEO metadata as HTML tags for injection into <head>."""
@@ -209,7 +209,7 @@ class SEO(BaseModel):
 
         return "\n        ".join(tags)
 
-    def render_structured_data(self, site_name: str = "", base_url: str = "") -> str:  # noqa: C901
+    def render_structured_data(self, site_name: str = "", base_url: str = "") -> str:
         """Renders JSON-LD structured data blocks."""
         schemas: list[dict] = []
 
