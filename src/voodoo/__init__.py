@@ -30,7 +30,6 @@ from .ai.tools import ToolRegistry, ToolSpec, tool
 from .config import config
 from .core import (
     App,
-    ObservationHandle,
     create_app,
     event,
     page,
@@ -146,7 +145,6 @@ __version__ = "2.9.0"
 __all__ = [
     # Core runtime
     "App",
-    "ObservationHandle",
     "create_app",
     "page",
     "api",
