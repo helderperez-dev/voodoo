@@ -264,7 +264,7 @@ class App:
         print("\n".join(["", *lines]), flush=True)
 
 
-def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:  # noqa: C901
+def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
     """Build a fully wired Starlette application."""
     from voodoo.config import get_config
 
