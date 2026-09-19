@@ -17,8 +17,8 @@ from uuid import uuid4
 
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.agency.adaptive import AdaptiveRun, AdaptiveSupervisor
-from voodoo.runtime.execution import ExecutionStatus
 from voodoo.runtime.agency.goal_store import GoalStore
+from voodoo.runtime.execution import ExecutionStatus
 from voodoo.runtime.world_execution import bind_world
 
 __all__ = [

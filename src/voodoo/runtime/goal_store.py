@@ -1,4 +1,4 @@
-"""Compatibility facade for :mod:\`voodoo.runtime.agency.goal_store\`."""
+"""Compatibility facade for voodoo.runtime.agency.goal_store."""
 
 from voodoo.runtime.agency.goal_store import (
     GoalStore,

@@ -1,4 +1,4 @@
-"""Compatibility facade for :mod:\`voodoo.runtime.agency.adaptive\`."""
+"""Compatibility facade for voodoo.runtime.agency.adaptive."""
 
 from voodoo.runtime.agency.adaptive import (
     AdaptiveDecisionRecord,

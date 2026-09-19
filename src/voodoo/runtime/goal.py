@@ -1,4 +1,4 @@
-"""Compatibility facade for :mod:\`voodoo.runtime.agency.goal\`."""
+"""Compatibility facade for voodoo.runtime.agency.goal."""
 
 from voodoo.runtime.agency.goal import (
     Goal,
@@ -8,6 +8,7 @@ from voodoo.runtime.agency.goal import (
     GoalRuntime,
     GoalStatus,
 )
+from voodoo.runtime.agency.goal_store import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
 
 __all__ = [
     "GoalStatus",
@@ -16,4 +17,7 @@ __all__ = [
     "GoalRun",
     "GoalDecomposer",
     "GoalRuntime",
+    "GoalStore",
+    "SQLiteGoalStore",
+    "VoodooStoreGoalStore",
 ]
