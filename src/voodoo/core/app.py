@@ -261,8 +261,7 @@ class App:
         ip = _local_ip()
         if ip and host in ("0.0.0.0", "::", ""):
             lines.append(f"  ➜  Network: http://{ip}:{port}")
-        print("
-".join(["", *lines]), flush=True)
+        print("\\n".join(["", *lines]), flush=True)
 
 
 def _load_app_module(app_dir: str, name: str) -> None:
