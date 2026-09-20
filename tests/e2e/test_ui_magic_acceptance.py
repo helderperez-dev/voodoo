@@ -21,7 +21,7 @@ def ui_magic_module() -> Generator[ModuleType, None, None]:
     callable_bindings_before = dict(ui_events._callable_bindings)
 
     module_name = "voodoo_ui_magic_acceptance"
-    path = Path(__file__).parents[1] / "examples" / "web" / "ui_magic" / "main.py"
+    path = Path(__file__).parents[2] / "examples" / "web" / "ui_magic" / "main.py"
     spec = importlib.util.spec_from_file_location(module_name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
