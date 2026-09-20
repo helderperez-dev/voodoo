@@ -322,60 +322,57 @@ def _fallback_ai_assets() -> dict[str, str]:
     }
 
 
-def _detect_ide() -> str | None:  # noqa: C901
-    """
-    Attempt to auto-detect the active AI IDE/Editor from environment variables,
-    workspace config directories, or running parent processes.
-    """
+def _ide_from_environment() -> str | None:
     env_keys = " ".join(os.environ.keys()).lower()
     term_program = os.getenv("TERM_PROGRAM", "").lower()
+    signatures = {
+        "trae": ("trae_pid", "trae_resources_path", "__trae_app_dir__"),
+        "cursor": ("cursor_trace", "cursor_port", "cursor_session_id"),
+        "windsurf": ("windsurf_port", "windsurf_initial_cwd"),
+        "vscode": ("vscode_pid", "vscode_injection"),
+    }
+    return next(
+        (
+            ide
+            for ide, keys in signatures.items()
+            if ide in term_program or any(key in env_keys for key in keys)
+        ),
+        None,
+    )
 
-    # 1. Environment variables (highest priority for current session)
-    if (
-        any(
-            k in env_keys
-            for k in ["trae_pid", "trae_resources_path", "__trae_app_dir__"]
-        )
-        or "trae" in term_program
-    ):
-        return "trae"
 
-    if (
-        any(k in env_keys for k in ["cursor_trace", "cursor_port", "cursor_session_id"])
-        or "cursor" in term_program
-    ):
-        return "cursor"
+def _ide_from_workspace() -> str | None:
+    markers = (
+        (".trae", "trae"),
+        (".cursor", "cursor"),
+        (".windsurfrules", "windsurf"),
+        (".vscode", "vscode"),
+    )
+    directories = [Path.cwd(), *Path.cwd().parents[:3]]
+    return next(
+        (
+            ide
+            for directory in directories
+            for marker, ide in markers
+            if (directory / marker).exists()
+        ),
+        None,
+    )
 
-    if (
-        any(k in env_keys for k in ["windsurf_port", "windsurf_initial_cwd"])
-        or "windsurf" in term_program
-    ):
-        return "windsurf"
 
-    if (
-        any(k in env_keys for k in ["vscode_pid", "vscode_injection"])
-        or "vscode" in term_program
-    ):
-        return "vscode"
-
-    # 2. Check directory markers in current workspace
-    curr = Path.cwd()
-    for directory in [curr, *curr.parents[:3]]:
-        if (directory / ".trae").exists():
-            return "trae"
-        if (directory / ".cursor").exists():
-            return "cursor"
-        if (directory / ".windsurfrules").exists():
-            return "windsurf"
-        if (directory / ".vscode").exists():
-            return "vscode"
-
-    # 3. Process inspection for specific IDEs
+def _ide_from_processes() -> str | None:
+    markers = (
+        ("trae", "trae"),
+        ("cursor", "cursor"),
+        ("windsurf", "windsurf"),
+        ("vscode", "vscode"),
+        ("code", "vscode"),
+    )
     try:
         curr_pid = os.getppid()
         for _ in range(4):
             if curr_pid <= 1:
-                break
+                return None
             res = subprocess.run(
                 ["ps", "-p", str(curr_pid), "-o", "comm="],
                 capture_output=True,
@@ -383,75 +380,79 @@ def _detect_ide() -> str | None:  # noqa: C901
                 timeout=1,
             )
             comm = res.stdout.strip().lower()
-            if "trae" in comm:
-                return "trae"
-            if "cursor" in comm:
-                return "cursor"
-            if "windsurf" in comm:
-                return "windsurf"
-            if "code" in comm or "vscode" in comm:
-                return "vscode"
+            match = next((ide for marker, ide in markers if marker in comm), None)
+            if match:
+                return match
             ppid_res = subprocess.run(
                 ["ps", "-p", str(curr_pid), "-o", "ppid="],
                 capture_output=True,
                 text=True,
                 timeout=1,
             )
-            ppid_str = ppid_res.stdout.strip()
-            if not ppid_str.isdigit():
-                break
-            curr_pid = int(ppid_str)
+            ppid = ppid_res.stdout.strip()
+            if not ppid.isdigit():
+                return None
+            curr_pid = int(ppid)
     except Exception:
-        pass
-
+        return None
     return None
 
 
-def _sync_ai_assets(project_dir: Path, progress: Progress, ide: str = "none") -> None:  # noqa: C901
-    _task = progress.add_task(
-        description=f"Setting up AI assets ({ide})...", total=None
-    )
-    time.sleep(0.2)
+def _detect_ide() -> str | None:
+    """Auto-detect the active AI IDE/editor."""
+    return _ide_from_environment() or _ide_from_workspace() or _ide_from_processes()
 
-    fallback_assets = _fallback_ai_assets()
-    remote_assets = {
-        ".voodoo/ai/README.md": f"{AI_DOCS_BASE_URL}/README.md",
-        ".voodoo/ai/RULES.md": f"{AI_DOCS_BASE_URL}/RULES.md",
-        ".voodoo/ai/ARCHITECTURE.md": f"{AI_DOCS_BASE_URL}/ARCHITECTURE.md",
-        ".voodoo/ai/ROUTING.md": f"{AI_DOCS_BASE_URL}/ROUTING.md",
-        ".voodoo/ai/COMPONENTS.md": f"{AI_DOCS_BASE_URL}/COMPONENTS.md",
-        ".voodoo/ai/STATE.md": f"{AI_DOCS_BASE_URL}/STATE.md",
-        ".voodoo/ai/DATABASE.md": f"{AI_DOCS_BASE_URL}/DATABASE.md",
-        ".voodoo/ai/SKILLS.md": f"{AI_DOCS_BASE_URL}/SKILLS.md",
-        ".voodoo/ai/MESH.md": f"{AI_DOCS_BASE_URL}/MESH.md",
-        ".voodoo/ai/SEO.md": f"{AI_DOCS_BASE_URL}/SEO.md",
-        ".voodoo/ai/AUTH.md": f"{AI_DOCS_BASE_URL}/AUTH.md",
-        ".voodoo/ai/SECURITY.md": f"{AI_DOCS_BASE_URL}/SECURITY.md",
+
+def _remote_ai_assets(ide: str) -> dict[str, str]:
+    names = [
+        "README",
+        "RULES",
+        "ARCHITECTURE",
+        "ROUTING",
+        "COMPONENTS",
+        "STATE",
+        "DATABASE",
+        "SKILLS",
+        "MESH",
+        "SEO",
+        "AUTH",
+        "SECURITY",
+    ]
+    assets = {
+        f".voodoo/ai/{name}.md": f"{AI_DOCS_BASE_URL}/{name}.md" for name in names
     }
-
     if ide in ("trae", "all"):
-        remote_assets[".trae/skills/voodoo-builder/SKILL.md"] = AI_TRAE_SKILL_URL
+        assets[".trae/skills/voodoo-builder/SKILL.md"] = AI_TRAE_SKILL_URL
+    return assets
 
-    for relative_path, url in remote_assets.items():
+
+def _ide_rule_assets(ide: str) -> dict[str, str]:
+    builders = {
+        "trae": (".trae/rules", _build_workspace_rules),
+        "windsurf": (".windsurfrules", _build_workspace_rules),
+        "cursor": (".cursor/rules/voodoo.mdc", _build_cursor_rules),
+        "vscode": (".github/copilot-instructions.md", _build_workspace_rules),
+    }
+    selected = (
+        builders if ide == "all" else {ide: builders[ide]} if ide in builders else {}
+    )
+    return {path: builder() for path, builder in selected.values()}
+
+
+def _write_missing_assets(project_dir: Path, assets: dict[str, str]) -> None:
+    for relative_path, content in assets.items():
         target = project_dir / relative_path
-        if target.exists():
-            continue
-        content = _fetch_text(url, timeout=3) or fallback_assets.get(relative_path, "")
-        if content:
+        if not target.exists() and content:
             _write_text_file(target, content)
 
-    ide_rules: dict[str, str] = {}
-    if ide in ("trae", "all"):
-        ide_rules[".trae/rules"] = _build_workspace_rules()
-    if ide in ("windsurf", "all"):
-        ide_rules[".windsurfrules"] = _build_workspace_rules()
-    if ide in ("cursor", "all"):
-        ide_rules[".cursor/rules/voodoo.mdc"] = _build_cursor_rules()
-    if ide in ("vscode", "all"):
-        ide_rules[".github/copilot-instructions.md"] = _build_workspace_rules()
 
-    for relative_path, content in ide_rules.items():
-        target = project_dir / relative_path
-        if target.exists():
-            continue
-        _write_text_file(target, content)
+def _sync_ai_assets(project_dir: Path, progress: Progress, ide: str = "none") -> None:
+    progress.add_task(description=f"Setting up AI assets ({ide})...", total=None)
+    time.sleep(0.2)
+    fallback_assets = _fallback_ai_assets()
+    fetched = {
+        path: _fetch_text(url, timeout=3) or fallback_assets.get(path, "")
+        for path, url in _remote_ai_assets(ide).items()
+    }
+    _write_missing_assets(project_dir, fetched)
+    _write_missing_assets(project_dir, _ide_rule_assets(ide))

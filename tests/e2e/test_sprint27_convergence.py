@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from examples.operational_closed_loop.main import run_canary
+from examples.adaptive.operational_closed_loop.main import run_canary
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import AdaptiveSupervisor, ExecutionEngine, Goal, GoalRuntime

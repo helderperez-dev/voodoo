@@ -55,7 +55,7 @@ def _flatten(children: tuple[Any, ...]) -> tuple[Any, ...]:
     for child in children:
         if child is None:
             continue
-        if isinstance(child, (str, int, float, Component)):  # noqa: UP038
+        if isinstance(child, str | int | float | Component):
             flat.append(child)
         elif isinstance(child, Iterable):
             flat.extend(_flatten(tuple(child)))

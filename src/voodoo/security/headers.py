@@ -5,46 +5,42 @@ from starlette.responses import Response
 from voodoo.config import config
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """
-    Applies industry-standard HTTP security headers to all responses.
-    """
+def _configured_headers(sec_cfg: object) -> dict[str, str]:
+    pairs = {
+        "X-Content-Type-Options": getattr(sec_cfg, "content_type_options", None),
+        "X-Frame-Options": getattr(sec_cfg, "frame_options", None),
+        "X-XSS-Protection": getattr(sec_cfg, "xss_protection", None),
+        "Referrer-Policy": getattr(sec_cfg, "referrer_policy", None),
+        "Permissions-Policy": getattr(sec_cfg, "permissions_policy", None),
+    }
+    return {name: value for name, value in pairs.items() if value}
 
-    async def dispatch(  # noqa: C901
+
+def _csp_header(sec_cfg: object) -> str | None:
+    directives = getattr(sec_cfg, "csp_directives", None) or {}
+    parts = [f"{directive} {value}" for directive, value in directives.items() if value]
+    return "; ".join(parts) or None
+
+
+def _apply_security_headers(response: Response, sec_cfg: object) -> None:
+    response.headers.update(_configured_headers(sec_cfg))
+    if getattr(sec_cfg, "hsts_enabled", False):
+        response.headers["Strict-Transport-Security"] = (
+            f"max-age={sec_cfg.hsts_max_age}; includeSubDomains"
+        )
+    csp = _csp_header(sec_cfg)
+    if csp:
+        response.headers["Content-Security-Policy"] = csp
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Applies industry-standard HTTP security headers to all responses."""
+
+    async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         response = await call_next(request)
         sec_cfg = config.security
-
-        if not sec_cfg.headers_enabled:
-            return response
-
-        # Standard hardening headers
-        if sec_cfg.content_type_options:
-            response.headers["X-Content-Type-Options"] = sec_cfg.content_type_options
-        if sec_cfg.frame_options:
-            response.headers["X-Frame-Options"] = sec_cfg.frame_options
-        if sec_cfg.xss_protection:
-            response.headers["X-XSS-Protection"] = sec_cfg.xss_protection
-        if sec_cfg.referrer_policy:
-            response.headers["Referrer-Policy"] = sec_cfg.referrer_policy
-
-        if sec_cfg.permissions_policy:
-            response.headers["Permissions-Policy"] = sec_cfg.permissions_policy
-
-        # HSTS (Strict-Transport-Security)
-        if sec_cfg.hsts_enabled:
-            response.headers["Strict-Transport-Security"] = (
-                f"max-age={sec_cfg.hsts_max_age}; includeSubDomains"
-            )
-
-        # Content-Security-Policy (CSP)
-        if sec_cfg.csp_directives:
-            csp_parts = []
-            for directive, val in sec_cfg.csp_directives.items():
-                if val:
-                    csp_parts.append(f"{directive} {val}")
-            if csp_parts:
-                response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
-
+        if sec_cfg.headers_enabled:
+            _apply_security_headers(response, sec_cfg)
         return response

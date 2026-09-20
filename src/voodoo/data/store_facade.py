@@ -50,7 +50,7 @@ class _FKRef:
 class FK:
     """Field annotation declaring a Store-native cascade relationship."""
 
-    def __class_getitem__(cls, target: type) -> _FKRef:  # noqa: N805
+    def __class_getitem__(cls, target: type) -> _FKRef:
         if not isinstance(target, type):
             raise TypeError("FK[...] requires a model class")
         return _FKRef(target)

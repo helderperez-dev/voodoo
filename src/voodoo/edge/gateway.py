@@ -691,5 +691,5 @@ class DeviceGateway:
             if trace_id:
                 body["trace_id"] = trace_id
             await mesh.broadcast(event, redact(body))
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass

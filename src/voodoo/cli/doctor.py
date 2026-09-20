@@ -1,3 +1,4 @@
+import importlib
 from pathlib import Path
 
 from voodoo.cli import terminal
@@ -113,11 +114,80 @@ def _print_capability_matrix() -> None:
         terminal.muted(f"  {flag_str}")
 
 
-def doctor():  # noqa: C901
+def _doctor_modules() -> None:
+
+    terminal.heading("modules")
+    modules = [
+        ("voodoo.mesh", "mesh"),
+        ("voodoo.mcp", "mcp"),
+        ("voodoo.ai", "ai provider"),
+        ("voodoo.workers", "workers"),
+        ("voodoo.telemetry", "telemetry"),
+    ]
+    for name, label in modules:
+        try:
+            importlib.import_module(name)
+            terminal.status(label, "ready")
+        except Exception:
+            terminal.status(label, "not found")
+
+
+def _doctor_queue() -> None:
+    import asyncio
+
+    terminal.heading("queue")
+
+    async def check() -> tuple[int, int]:
+        from voodoo.workers.queue import _get_queue, _workers
+
+        depth = 0
+        try:
+            queue = await _get_queue()
+            if hasattr(queue, "list"):
+                depth = len(await queue.list())
+            elif hasattr(queue, "depth"):
+                depth = await queue.depth()
+        except Exception:
+            pass
+        return depth, len(_workers)
+
+    try:
+        depth, workers = asyncio.run(check())
+        terminal.status("depth", str(depth))
+        terminal.status("registered workers", str(workers))
+    except Exception:
+        terminal.status("queue", "unavailable")
+
+
+def _doctor_optional_services(cfg: object) -> None:
+    terminal.heading("schedules")
+    try:
+        sched_db = Path(cfg.db_path).parent / "schedules.db"
+        terminal.status("scheduler db", "present" if sched_db.exists() else "not found")
+    except Exception:
+        terminal.status("schedules", "unavailable")
+
+    terminal.heading("otel")
+    try:
+        from voodoo.telemetry.otlp import is_available
+
+        terminal.status("otlp exporter", "active" if is_available() else "off")
+    except Exception:
+        terminal.status("otlp exporter", "off")
+
+
+def _doctor_ai_kit() -> None:
+    terminal.heading("ai kit")
+    ai_dir = Path(".voodoo/ai")
+    ready = ai_dir.exists() and (ai_dir / "README.md").exists()
+    terminal.status("context", "ready" if ready else "not found")
+    terminal.muted("  .voodoo/ai/" if ready else "  run 'voodoo ai init' to generate")
+
+
+def doctor():
     """
     Run environment and configuration diagnostics.
     """
-    import importlib
     import os
 
     from voodoo import __version__ as ver
@@ -194,86 +264,21 @@ def doctor():  # noqa: C901
         "enabled" if cfg.security.csrf_enabled else "disabled",
     )
 
-    # ── Modules ─────────────────────────────────────
-    terminal.heading("modules")
-
-    for name, label in [
-        ("voodoo.mesh", "mesh"),
-        ("voodoo.mcp", "mcp"),
-        ("voodoo.ai", "ai provider"),
-        ("voodoo.workers", "workers"),
-        ("voodoo.telemetry", "telemetry"),
-    ]:
-        try:
-            importlib.import_module(name)
-            terminal.status(label, "ready")
-        except Exception:
-            terminal.status(label, "not found")
+    _doctor_modules()
 
     # ── Providers & capability matrix ────────────────
     terminal.heading("providers")
     try:
         _print_capability_matrix()
-    except Exception:  # noqa: BLE001 - diagnostics must never crash doctor
+    except Exception:
         terminal.status("capability matrix", "unavailable")
 
-    # ── Queue depth ─────────────────────────────────
-    terminal.heading("queue")
-    try:
-        import asyncio
+    _doctor_queue()
 
-        async def _check_queue() -> tuple[int, int]:
-            from voodoo.workers.queue import _get_queue, _workers
-
-            depth = 0
-            try:
-                q = await _get_queue()
-                if hasattr(q, "list"):
-                    tasks = await q.list()
-                    depth = len(tasks)
-                elif hasattr(q, "depth"):
-                    depth = await q.depth()
-            except Exception:
-                pass
-            return depth, len(_workers)
-
-        depth, n_workers = asyncio.run(_check_queue())
-        terminal.status("depth", str(depth))
-        terminal.status("registered workers", str(n_workers))
-    except Exception:  # noqa: BLE001
-        terminal.status("queue", "unavailable")
-
-    # ── Schedules ───────────────────────────────────
-    terminal.heading("schedules")
-    try:
-        from pathlib import Path as _Path
-
-        sched_db = _Path(cfg.db_path).parent / "schedules.db"
-        if sched_db.exists():
-            terminal.status("scheduler db", "present")
-        else:
-            terminal.status("scheduler db", "not found")
-    except Exception:  # noqa: BLE001
-        terminal.status("schedules", "unavailable")
-
-    # ── OTLP ────────────────────────────────────────
-    terminal.heading("otel")
-    try:
-        from voodoo.telemetry.otlp import is_available
-
-        terminal.status("otlp exporter", "active" if is_available() else "off")
-    except Exception:  # noqa: BLE001
-        terminal.status("otlp exporter", "off")
+    # ── Schedules / OTLP ─────────────────────────────
+    _doctor_optional_services(cfg)
 
     # ── AI Kit ──────────────────────────────────────
-    terminal.heading("ai kit")
-
-    ai_dir = Path(".voodoo/ai")
-    if ai_dir.exists() and (ai_dir / "README.md").exists():
-        terminal.status("context", "ready")
-        terminal.muted("  .voodoo/ai/")
-    else:
-        terminal.status("context", "not found")
-        terminal.muted("  run 'voodoo ai init' to generate")
+    _doctor_ai_kit()
 
     terminal.blank()

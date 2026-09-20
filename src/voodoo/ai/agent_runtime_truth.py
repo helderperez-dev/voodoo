@@ -23,7 +23,7 @@ class RuntimeTruthAgent(LegacyAgent):
             from voodoo.runtime.context import current_context
 
             return current_context()
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
 
     def _canonical_execution_id(self, run_record: AgentRun) -> str | None:
@@ -113,7 +113,7 @@ class RuntimeTruthAgent(LegacyAgent):
         )
         try:
             self.memory.write(entry)
-        except Exception:  # noqa: BLE001 — memory writes never break the run
+        except Exception:
             pass
 
     async def _execute_tool_as_child_execution(

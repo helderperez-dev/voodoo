@@ -60,7 +60,7 @@ async def _json_body(request: Request) -> dict[str, Any]:
     try:
         body = await request.json()
         return body if isinstance(body, dict) else {}
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {}
 
 

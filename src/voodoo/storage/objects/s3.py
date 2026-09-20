@@ -194,7 +194,7 @@ class S3ObjectStore:
         client = self._require_client()
         try:
             response = client.get_object(Bucket=self.bucket, Key=self._full_key(key))
-        except Exception as e:  # noqa: BLE001 - 404 surfaces as ClientError
+        except Exception as e:
             raise KeyError(f"object {key!r} not found") from e
         return response["Body"].read()
 
@@ -210,14 +210,14 @@ class S3ObjectStore:
         try:
             client.head_object(Bucket=self.bucket, Key=self._full_key(key))
             return True
-        except Exception:  # noqa: BLE001 - 404 surfaces as ClientError
+        except Exception:
             return False
 
     def stat(self, key: str) -> dict[str, Any]:
         client = self._require_client()
         try:
             head = client.head_object(Bucket=self.bucket, Key=self._full_key(key))
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise KeyError(f"object {key!r} not found") from e
         return {
             "key": key,

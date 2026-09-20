@@ -139,7 +139,7 @@ class MeshNetwork:
         for node in self.active_nodes:
             try:
                 await node.send_text(message)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         self.bus.publish(
             event, payload, source="voodoo", correlation_id=envelope["correlation_id"]
@@ -176,7 +176,7 @@ class MeshNetwork:
 
             try:
                 await engine.execute(intent, compute, actor="mesh", parent=parent)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 print(f"Local mesh event handler error: {e}")
 
     async def resolve_participant(
@@ -370,7 +370,7 @@ class MeshNetwork:
             )
         )
 
-    async def _handle_websocket(self, websocket: WebSocket):  # noqa: C901
+    async def _handle_websocket(self, websocket: WebSocket):
         await websocket.accept()
         self.active_nodes.append(websocket)
         try:

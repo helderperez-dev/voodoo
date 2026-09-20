@@ -1,7 +1,7 @@
-from voodoo.routing.api import api
-from voodoo.telemetry.store import telemetry_store
+"""Compatibility alias for :mod:`voodoo.observability.api`."""
 
+import sys
 
-@api.get("/voodoo/metrics")
-async def get_metrics() -> dict[str, object]:
-    return telemetry_store.get_summary()
+from voodoo.observability import api
+
+sys.modules[__name__] = api

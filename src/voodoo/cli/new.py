@@ -179,7 +179,76 @@ def _scaffold_offline(project_dir: Path, name: str) -> None:
     )
 
 
-def new(  # noqa: C901
+def _template_url(template: str) -> str:
+    if template.startswith(("http://", "https://", "git@", "/", "file://")):
+        return template
+    if len(template.split("/")) == 2:
+        return f"https://github.com/{template}.git"
+    terminal.error("Template must be a valid Git URL, local path, or 'user/repo'")
+    raise typer.Exit(1)
+
+
+def _clone_template(project_dir: Path, template: str, variant: str) -> bool:
+    try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", _template_url(template), tmp_dir],
+                check=True,
+                capture_output=True,
+            )
+            variant_path = Path(tmp_dir) / variant
+            if not variant_path.exists() or not variant_path.is_dir():
+                if variant == "default" and not (Path(tmp_dir) / "default").exists():
+                    variant_path = Path(tmp_dir)
+                else:
+                    terminal.error(
+                        f"Variant '${variant}' not found in template repository"
+                    )
+                    raise typer.Exit(1)
+            shutil.copytree(variant_path, project_dir, dirs_exist_ok=True)
+    except subprocess.CalledProcessError:
+        return False
+    if (project_dir / ".git").exists():
+        shutil.rmtree(project_dir / ".git", ignore_errors=True)
+    return True
+
+
+def _install_project(project_dir: Path, progress: Progress) -> None:
+    if not (project_dir / "pyproject.toml").exists():
+        return
+    task = progress.add_task(description="setting up .venv...", total=None)
+    try:
+        if shutil.which("uv") is not None:
+            subprocess.run(
+                ["uv", "venv"], cwd=project_dir, check=True, capture_output=True
+            )
+            progress.update(task, description="installing dependencies...")
+            command = ["uv", "pip", "install", "-e", "."]
+        else:
+            subprocess.run(
+                [sys.executable, "-m", "venv", ".venv"],
+                cwd=project_dir,
+                check=True,
+                capture_output=True,
+            )
+            progress.update(task, description="installing dependencies...")
+            pip_exe = (
+                ".venv/bin/pip"
+                if sys.platform != "win32"
+                else ".venv\\Scripts\\pip.exe"
+            )
+            command = [str(project_dir / pip_exe), "install", "-e", "."]
+        subprocess.run(command, cwd=project_dir, check=True, capture_output=True)
+        for item in project_dir.glob("*.egg-info"):
+            if item.is_dir():
+                shutil.rmtree(item)
+    except subprocess.CalledProcessError as exc:
+        terminal.warning("Failed to set up environment or install dependencies")
+        if exc.stderr:
+            terminal.muted(exc.stderr.decode().strip())
+
+
+def new(
     project_name: str,
     template: str = typer.Option(
         "helderperez-dev/voodoo-templates",
@@ -194,9 +263,7 @@ def new(  # noqa: C901
         help="Specific template variant inside the repository",
     ),
 ):
-    """
-    Scaffold a new Voodoo project or clone a community template.
-    """
+    """Scaffold a new Voodoo project or clone a community template."""
     project_dir = Path(project_name)
     if project_dir.exists():
         terminal.error(f"Directory '{project_name}' already exists")
@@ -212,119 +279,20 @@ def new(  # noqa: C901
         TextColumn("[dim]{task.description}[/]"),
         transient=True,
     ) as progress:
+        cloned = False
         if template:
             task = progress.add_task(
-                description=f"cloning {variant} from {template}...",
-                total=None,
+                description=f"cloning {variant} from {template}...", total=None
             )
-
-            if (
-                template.startswith("http://")
-                or template.startswith("https://")
-                or template.startswith("git@")
-                or template.startswith("/")
-                or template.startswith("file://")
-            ):
-                repo_url = template
-            elif len(template.split("/")) == 2:
-                repo_url = f"https://github.com/{template}.git"
-            else:
-                terminal.error(
-                    "Template must be a valid Git URL, local path, or 'user/repo'"
-                )
-                raise typer.Exit(1)
-
-            fallback_to_offline = False
-
-            try:
-                with tempfile.TemporaryDirectory() as tmp_dir:
-                    subprocess.run(
-                        ["git", "clone", "--depth", "1", repo_url, tmp_dir],
-                        check=True,
-                        capture_output=True,
-                    )
-
-                    variant_path = Path(tmp_dir) / variant
-
-                    if not variant_path.exists() or not variant_path.is_dir():
-                        if (
-                            variant == "default"
-                            and not (Path(tmp_dir) / "default").exists()
-                        ):
-                            variant_path = Path(tmp_dir)
-                        else:
-                            terminal.error(
-                                f"Variant '{variant}' not found in template repository"
-                            )
-                            raise typer.Exit(1)
-
-                    shutil.copytree(variant_path, project_dir, dirs_exist_ok=True)
-
-            except subprocess.CalledProcessError:
+            cloned = _clone_template(project_dir, template, variant)
+            if not cloned:
                 progress.update(
                     task, description="template unavailable, using minimal scaffold..."
                 )
-                fallback_to_offline = True
-
-            if not fallback_to_offline:
-                if (project_dir / ".git").exists():
-                    shutil.rmtree(project_dir / ".git", ignore_errors=True)
-
-        if not template or fallback_to_offline:
-            progress.add_task(
-                description="scaffolding project...",
-                total=None,
-            )
-
+        if not cloned:
+            progress.add_task(description="scaffolding project...", total=None)
             _scaffold_offline(project_dir, project_dir.name)
-
-        # Set up local virtual environment and install dependencies
-        if (project_dir / "pyproject.toml").exists():
-            task = progress.add_task(
-                description="setting up .venv...",
-                total=None,
-            )
-
-            has_uv = shutil.which("uv") is not None
-            try:
-                if has_uv:
-                    subprocess.run(
-                        ["uv", "venv"], cwd=project_dir, check=True, capture_output=True
-                    )
-                    progress.update(task, description="installing dependencies...")
-                    subprocess.run(
-                        ["uv", "pip", "install", "-e", "."],
-                        cwd=project_dir,
-                        check=True,
-                        capture_output=True,
-                    )
-                else:
-                    subprocess.run(
-                        [sys.executable, "-m", "venv", ".venv"],
-                        cwd=project_dir,
-                        check=True,
-                        capture_output=True,
-                    )
-                    progress.update(task, description="installing dependencies...")
-                    pip_exe = (
-                        ".venv/bin/pip"
-                        if sys.platform != "win32"
-                        else ".venv\\Scripts\\pip.exe"
-                    )
-                    subprocess.run(
-                        [str(project_dir / pip_exe), "install", "-e", "."],
-                        cwd=project_dir,
-                        check=True,
-                        capture_output=True,
-                    )
-
-                for item in project_dir.glob("*.egg-info"):
-                    if item.is_dir():
-                        shutil.rmtree(item)
-            except subprocess.CalledProcessError as e:
-                terminal.warning("Failed to set up environment or install dependencies")
-                if e.stderr:
-                    terminal.muted(e.stderr.decode().strip())
+        _install_project(project_dir, progress)
 
     terminal.blank()
     terminal.success("ready")

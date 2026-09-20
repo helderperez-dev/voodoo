@@ -188,7 +188,7 @@ class LLMProvider(ABC):
         """Yield normalized streaming events."""
         raise NotImplementedError
         # pragma: no cover - abstract generator marker
-        yield  # type: ignore[unreachable]  # noqa: B018
+        yield  # type: ignore[unreachable]
 
     async def generate(
         self, messages: list[Message], **kwargs: Any
@@ -230,10 +230,10 @@ class LLMProvider(ABC):
 
 #: Maps provider name → fully-qualified provider class path (lazy import).
 _PROVIDER_CLASSES: dict[str, str] = {
-    "openai": "voodoo.ai.providers.openai.OpenAIProvider",
-    "anthropic": "voodoo.ai.providers.anthropic.AnthropicProvider",
-    "gemini": "voodoo.ai.providers.gemini.GeminiProvider",
-    "ollama": "voodoo.ai.providers.ollama.OllamaProvider",
+    "openai": "voodoo.integrations.ai.openai.OpenAIProvider",
+    "anthropic": "voodoo.integrations.ai.anthropic.AnthropicProvider",
+    "gemini": "voodoo.integrations.ai.gemini.GeminiProvider",
+    "ollama": "voodoo.integrations.ai.ollama.OllamaProvider",
     "mock": "voodoo.ai.providers.mock.MockProvider",
 }
 
@@ -270,7 +270,7 @@ def _routing_aliases(aliases: dict[str, str] | None) -> dict[str, str]:
 
         merged.update(config.models.aliases or {})
         merged.update(config.ai.aliases or {})
-    except Exception:  # noqa: BLE001 — config resolution is best-effort here
+    except Exception:
         pass
     if aliases:
         merged.update(aliases)
@@ -329,7 +329,7 @@ def default_model() -> str:
             provider = config.ai.provider or "openai"
             return f"{provider}:{config.ai.model}"
         return config.models.default
-    except Exception:  # noqa: BLE001 — config resolution is best-effort here
+    except Exception:
         return "mock:default"
 
 
@@ -357,7 +357,7 @@ def get_provider(model: str, **kwargs: Any) -> LLMProvider:
                 kwargs.setdefault("base_url", config.ai.base_url)
             if config.ai.api_key:
                 kwargs.setdefault("api_key", config.ai.api_key)
-        except Exception:  # noqa: BLE001 — config resolution is best-effort here
+        except Exception:
             pass
 
     return provider_cls(model=model_id, **kwargs)
