@@ -146,7 +146,9 @@ class API:
         """
         return HTMLResponse(html)
 
-    async def _model_argument(self, request: Request, model_cls: type[BaseModel]) -> BaseModel:
+    async def _model_argument(
+        self, request: Request, model_cls: type[BaseModel]
+    ) -> BaseModel:
         try:
             body: Any = await request.json()
         except Exception:
@@ -157,7 +159,9 @@ class API:
             return model_cls.model_validate(body)
         return model_cls(**body)
 
-    async def _argument_value(self, request: Request, name: str, param: inspect.Parameter) -> Any:
+    async def _argument_value(
+        self, request: Request, name: str, param: inspect.Parameter
+    ) -> Any:
         if param.annotation is Request or name == "request":
             return request
         if name == "user" or (
@@ -167,18 +171,26 @@ class API:
             from voodoo.auth import get_current_user
 
             return get_current_user(request)
-        if inspect.isclass(param.annotation) and issubclass(param.annotation, BaseModel):
+        if inspect.isclass(param.annotation) and issubclass(
+            param.annotation, BaseModel
+        ):
             return await self._model_argument(request, param.annotation)
         value = request.path_params.get(name, request.query_params.get(name))
         annotation: Any = param.annotation
-        if value is not None and annotation is not inspect._empty and callable(annotation):
+        if (
+            value is not None
+            and annotation is not inspect._empty
+            and callable(annotation)
+        ):
             try:
                 return annotation(value)
             except (ValueError, TypeError):
                 pass
         return value
 
-    async def _endpoint_kwargs(self, request: Request, func: Callable[..., Any]) -> dict[str, Any]:
+    async def _endpoint_kwargs(
+        self, request: Request, func: Callable[..., Any]
+    ) -> dict[str, Any]:
         kwargs: dict[str, Any] = {}
         for name, param in inspect.signature(func).parameters.items():
             value = await self._argument_value(request, name, param)
@@ -198,7 +210,9 @@ class API:
             return JSONResponse(result.__dict__)
         return JSONResponse(result)
 
-    def _register_openapi_route(self, path: str, method: str, func: Callable[..., Any]) -> None:
+    def _register_openapi_route(
+        self, path: str, method: str, func: Callable[..., Any]
+    ) -> None:
         self.paths.setdefault(path, {})[method.lower()] = {
             "summary": func.__name__.replace("_", " ").title(),
             "responses": {"200": {"description": "Successful Response"}},

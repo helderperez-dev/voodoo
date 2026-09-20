@@ -243,14 +243,18 @@ def _install_project(project_dir: Path, progress: Progress) -> None:
 def new(
     project_name: str,
     template: str = typer.Option(
-        "helderperez-dev/voodoo-templates",\n        "--template",\n        "-t",
+        "helderperez-dev/voodoo-templates",
+        "--template",
+        "-t",
         help="GitHub repository URL or 'user/repo' to use as a template",
     ),
     variant: str = typer.Option(
-        "default",\n        "--variant",\n        "-v",
+        "default",
+        "--variant",
+        "-v",
         help="Specific template variant inside the repository",
     ),
-):
+)
     """Scaffold a new Voodoo project or clone a community template."""
     project_dir = Path(project_name)
     if project_dir.exists():

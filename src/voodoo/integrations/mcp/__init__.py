@@ -149,14 +149,22 @@ class MCPServer:
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-    async def _handle_tool_call(self, params: dict, msg_id: object, queue: asyncio.Queue) -> None:
+    async def _handle_tool_call(
+        self, params: dict, msg_id: object, queue: asyncio.Queue
+    ) -> None:
         tool_name = params.get("name")
         args = params.get("arguments", {})
         entry = self.tools.get(tool_name)
         spec = entry.get("spec") if entry else self.registry.get(tool_name)
         func = entry["func"] if entry else spec.func if spec else None
         if func is None:
-            await queue.put({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": "Tool not found"}})
+            await queue.put(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {"code": -32601, "message": "Tool not found"},
+                }
+            )
             return
         try:
             result = await self._run_tool_call(tool_name, func, spec, args)
@@ -165,11 +173,19 @@ class MCPServer:
             payload = {"error": {"code": -32603, "message": str(exc)}}
         await queue.put({"jsonrpc": "2.0", "id": msg_id, **payload})
 
-    async def _handle_resource_read(self, params: dict, msg_id: object, queue: asyncio.Queue) -> None:
+    async def _handle_resource_read(
+        self, params: dict, msg_id: object, queue: asyncio.Queue
+    ) -> None:
         uri = params.get("uri")
         resource = self.resources.get(uri)
         if resource is None:
-            await queue.put({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32602, "message": "Resource not found"}})
+            await queue.put(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {"code": -32602, "message": "Resource not found"},
+                }
+            )
             return
         func = resource["func"]
         try:
@@ -193,17 +209,33 @@ class MCPServer:
         elif method == "notifications/initialized":
             return
         elif method == "tools/list":
-            await queue.put({"jsonrpc": "2.0", "id": msg_id, "result": {"tools": self._list_tools()}})
+            await queue.put(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {"tools": self._list_tools()},
+                }
+            )
         elif method == "tools/call":
             await self._handle_tool_call(params, msg_id, queue)
         elif method == "resources/list":
-            resources = [{"uri": uri, "name": data["name"]} for uri, data in self.resources.items()]
-            await queue.put({"jsonrpc": "2.0", "id": msg_id, "result": {"resources": resources}})
+            resources = [
+                {"uri": uri, "name": data["name"]}
+                for uri, data in self.resources.items()
+            ]
+            await queue.put(
+                {"jsonrpc": "2.0", "id": msg_id, "result": {"resources": resources}}
+            )
         elif method == "resources/read":
             await self._handle_resource_read(params, msg_id, queue)
         elif msg_id is not None:
-            await queue.put({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": "Method not found"}})
-
+            await queue.put(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {"code": -32601, "message": "Method not found"},
+                }
+            )
     async def _messages_endpoint(self, request: Request):
         try:
             session_id = request.query_params.get("sessionId")

@@ -824,7 +824,9 @@ class Agent:
                         "model": self.model,
                     },
                 )
-                async for event_type, event_data in self._stream_provider_events(messages):
+                async for event_type, event_data in self._stream_provider_events(
+                    messages
+                ):
                     if event_type == "text":
                         accumulated_text += event_data.get("text", "")
                         yield AgentEvent(type="text", data=event_data)
