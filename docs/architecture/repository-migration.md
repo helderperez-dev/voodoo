@@ -16,18 +16,28 @@ than its current owner.
 | `storage/` | keep for this release | provider implementations; do not confuse with application `data` or native Store |
 | `auth/` | keep | application authentication surface |
 | `security/` | keep | HTTP/runtime security mechanics distinct from identity/auth |
-| `ai/` | keep | AI compute/providers/tools |
+| `ai/` | keep semantic domain | provider contracts, model routing, tools and mock provider remain AI-owned; vendor SDK implementations live in `integrations/ai` |
 | `agents/` | keep | durable participant identity/registry is broader than AI |
 | `tools/` | compatibility only | canonical tool implementation is `ai/tools` |
 | `edge/` | keep | device/physical-world boundary |
 | `mesh/` | migrate deliberately | legacy distributed transport concepts overlap Runtime distributed fabric; requires dependency audit |
 | `workers/` | migrate deliberately | task/queue facade overlaps Runtime execution but remains public compatibility surface |
 | `memory/` | keep pending model review | semantic memory is used by compute/agents and is not merely AI-provider code |
-| `telemetry/` | rename only with compatibility plan | observability implementation; public imports already exist |
-| `adapters/` | keep pending split | currently mixes style adapters and provider capability negotiation; not equivalent to integrations |
+| `telemetry/` | compatibility only | canonical native implementation is `observability/`; OTLP integration is `integrations/otel.py`; legacy module aliases preserve identity |
+| `adapters/` | keep | provider capability negotiation and UI style adapters are framework abstractions, not external integrations |
 | `routing/` | keep compatibility boundary | routing implementation supports Core/App facade |
-| `mcp/` | keep optional integration boundary | protocol integration, not semantic Core |
+| `mcp/` | compatibility only | canonical MCP server/client implementation is `integrations/mcp`; legacy module aliases preserve public imports |
 | package-root facades | freeze | no new root modules; existing paths are compatibility surface |
+
+## Integration ownership
+
+External dependencies are classified by semantic ownership, not merely by whether a third-party library is imported.
+
+- `integrations/ai/` owns SDK-backed model providers (OpenAI, Anthropic, Gemini and Ollama); `ai/providers/` retains contracts, routing/registry, mock behavior and compatibility aliases.
+- `integrations/mcp/` owns MCP interoperability; `mcp/` is the compatibility surface.
+- `integrations/otel.py` owns optional OpenTelemetry export; native metrics/tracing state remains in `observability/`.
+- Redis cache/queue and S3 object storage remain in `storage/` because they implement Storage contracts. Vendor usage alone does not make a module an application integration.
+- `adapters/` remains framework-owned: capability negotiation and UI style adaptation are semantic framework mechanisms.
 
 ## Runtime grouping candidates
 
