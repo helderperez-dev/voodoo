@@ -124,6 +124,59 @@ def inspect_why(
     terminal.blank()
 
 
+def _recent_executions(engine: Any) -> list[Any]:
+    executions = engine.recent(20)
+    return executions or _load_from_store(20)
+
+
+def _render_execution_list(executions: list[Any], json_mode: bool) -> None:
+    _emit(None, json_mode)
+    if not executions and not terminal.is_json_mode():
+        terminal.muted("no executions recorded in this process")
+    if _is_json(json_mode):
+        terminal.json_output([execution.describe() for execution in executions])
+        return
+    table = _table(["id", "intent", "status", "cost", "effects", "duration"])
+    for execution in executions:
+        table.add_row(
+            execution.id[:8],
+            execution.intent.name if execution.intent else "-",
+            execution.status.value,
+            f"{execution.cost:.4f}",
+            str(len(execution.effects)),
+            f"{execution.duration_seconds:.3f}s" if execution.duration_seconds else "-",
+        )
+    terminal.console.print(table)
+    terminal.blank()
+
+
+def _render_execution(execution: Any, json_mode: bool) -> None:
+    if _is_json(json_mode):
+        terminal.json_output(execution.describe())
+        return
+    data = execution.describe()
+    terminal.status_block(
+        [
+            ("id", data["id"]),
+            ("trace", data["trace_id"]),
+            ("status", data["status"]),
+            ("intent", data["intent"] or "-"),
+            ("actor", data["actor"]),
+            ("cost", f"{data['cost']:.6f}"),
+            (
+                "duration",
+                f"{data['duration_seconds']:.3f}s" if data["duration_seconds"] else "-",
+            ),
+        ]
+    )
+    for label in ("capabilities", "effects"):
+        if data[label]:
+            terminal.label_value(label, ", ".join(data[label]))
+    if data["error"]:
+        terminal.error(data["error"])
+    terminal.blank()
+
+
 @inspect_app.command("run")
 def inspect_run(
     execution_id: str = typer.Argument(
@@ -138,61 +191,14 @@ def inspect_run(
     from voodoo.runtime import engine
 
     if execution_id is None:
-        executions = engine.recent(20)
-        if not executions:
-            executions = _load_from_store(20)
-        _emit(None, json_mode)
-        if not executions and not terminal.is_json_mode():
-            terminal.muted("no executions recorded in this process")
-        table = _table(["id", "intent", "status", "cost", "effects", "duration"])
-        for ex in executions:
-            table.add_row(
-                ex.id[:8],
-                ex.intent.name if ex.intent else "-",
-                ex.status.value,
-                f"{ex.cost:.4f}",
-                str(len(ex.effects)),
-                f"{ex.duration_seconds:.3f}s" if ex.duration_seconds else "-",
-            )
-        if _is_json(json_mode):
-            terminal.json_output([e.describe() for e in executions])
-        else:
-            terminal.console.print(table)
-            terminal.blank()
+        _render_execution_list(_recent_executions(engine), json_mode)
         return
-
-    ex = engine.get(execution_id)
-    if ex is None:
-        ex = _find_in_store(execution_id)
+    execution = engine.get(execution_id) or _find_in_store(execution_id)
     _emit(None, json_mode)
-    if ex is None:
+    if execution is None:
         terminal.error(f"execution '{execution_id}' not found")
         raise typer.Exit(1)
-    if _is_json(json_mode):
-        terminal.json_output(ex.describe())
-        return
-    d = ex.describe()
-    terminal.status_block(
-        [
-            ("id", d["id"]),
-            ("trace", d["trace_id"]),
-            ("status", d["status"]),
-            ("intent", d["intent"] or "-"),
-            ("actor", d["actor"]),
-            ("cost", f"{d['cost']:.6f}"),
-            (
-                "duration",
-                f"{d['duration_seconds']:.3f}s" if d["duration_seconds"] else "-",
-            ),
-        ]
-    )
-    if d["capabilities"]:
-        terminal.label_value("capabilities", ", ".join(d["capabilities"]))
-    if d["effects"]:
-        terminal.label_value("effects", ", ".join(d["effects"]))
-    if d["error"]:
-        terminal.error(d["error"])
-    terminal.blank()
+    _render_execution(execution, json_mode)
 
 
 @inspect_app.command("agent")
