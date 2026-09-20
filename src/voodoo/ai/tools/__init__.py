@@ -29,7 +29,7 @@ __all__ = ["tool", "ToolSpec", "ToolRegistry", "default_registry"]
 
 # Re-export the default registry instance (lives in the registry module so it
 # can be monkeypatched in tests without being shadowed by this package).
-from voodoo.ai.tools.registry import default_registry  # noqa: E402, F401
+from voodoo.ai.tools.registry import default_registry
 
 
 def _resolve_default_registry() -> ToolRegistry:
@@ -54,7 +54,7 @@ def tool(
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
-def tool(  # noqa: ANN201 — intentionally generic decorator return
+def tool(
     func: Callable[..., Any] | None = None,
     *,
     name: str | None = None,

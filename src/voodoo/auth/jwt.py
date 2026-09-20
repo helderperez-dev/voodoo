@@ -87,7 +87,7 @@ def create_access_token(
     return f"{header_b64}.{payload_b64}.{sig_b64}"
 
 
-def decode_access_token(token: str, secret_key: str | None = None) -> dict[str, Any]:  # noqa: C901
+def decode_access_token(token: str, secret_key: str | None = None) -> dict[str, Any]:
     """
     Decodes and validates an HMAC-SHA256 signed access token.
     Raises ExpiredTokenError or InvalidTokenError if invalid.

@@ -137,7 +137,7 @@ class LocalSecretStore:
         except SecretsError:
             # No key available — fall back to plain JSON
             self._data = json.loads(self._path.read_text())
-        except Exception:  # noqa: BLE001
+        except Exception:
             # Decryption failed — try plain JSON (dev convenience)
             self._data = json.loads(self._path.read_text())
         return self._data

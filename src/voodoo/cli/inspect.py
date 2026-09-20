@@ -37,7 +37,7 @@ inspect_app = typer.Typer(help="inspect runtime state", no_args_is_help=True)
 def _fetch_live(url: str) -> dict[str, Any]:
     """Fetch metrics summary from a live server."""
     endpoint = url.rstrip("/") + "/voodoo/metrics"
-    with urlopen(endpoint, timeout=5) as resp:  # noqa: S310 — user-supplied URL
+    with urlopen(endpoint, timeout=5) as resp:
         return json.loads(resp.read().decode())
 
 
@@ -125,7 +125,7 @@ def inspect_why(
 
 
 @inspect_app.command("run")
-def inspect_run(  # noqa: C901
+def inspect_run(
     execution_id: str = typer.Argument(
         None, help="Execution id (lists recent if omitted)"
     ),
@@ -470,7 +470,7 @@ def inspect_capabilities(
             for spec in default_registry.list_tools()
             if getattr(spec, "permissions", None)
         }
-    except Exception:  # noqa: BLE001
+    except Exception:
         tool_perms = {}
     _emit(None, json_mode)
     if _is_json(json_mode):

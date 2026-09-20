@@ -113,7 +113,7 @@ def _print_capability_matrix() -> None:
         terminal.muted(f"  {flag_str}")
 
 
-def doctor():  # noqa: C901
+def doctor():
     """
     Run environment and configuration diagnostics.
     """
@@ -214,7 +214,7 @@ def doctor():  # noqa: C901
     terminal.heading("providers")
     try:
         _print_capability_matrix()
-    except Exception:  # noqa: BLE001 - diagnostics must never crash doctor
+    except Exception:
         terminal.status("capability matrix", "unavailable")
 
     # ── Queue depth ─────────────────────────────────
@@ -240,7 +240,7 @@ def doctor():  # noqa: C901
         depth, n_workers = asyncio.run(_check_queue())
         terminal.status("depth", str(depth))
         terminal.status("registered workers", str(n_workers))
-    except Exception:  # noqa: BLE001
+    except Exception:
         terminal.status("queue", "unavailable")
 
     # ── Schedules ───────────────────────────────────
@@ -253,7 +253,7 @@ def doctor():  # noqa: C901
             terminal.status("scheduler db", "present")
         else:
             terminal.status("scheduler db", "not found")
-    except Exception:  # noqa: BLE001
+    except Exception:
         terminal.status("schedules", "unavailable")
 
     # ── OTLP ────────────────────────────────────────
@@ -262,7 +262,7 @@ def doctor():  # noqa: C901
         from voodoo.telemetry.otlp import is_available
 
         terminal.status("otlp exporter", "active" if is_available() else "off")
-    except Exception:  # noqa: BLE001
+    except Exception:
         terminal.status("otlp exporter", "off")
 
     # ── AI Kit ──────────────────────────────────────

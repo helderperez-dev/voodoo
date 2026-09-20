@@ -173,7 +173,7 @@ def _load_from_dir(directory: Path) -> ThemeSource:
 def _load_from_url(url: str) -> ThemeSource:
     """Fetch a ``theme.json`` (and optional sibling custom.css) over HTTP."""
     try:
-        with urllib.request.urlopen(url) as resp:  # noqa: S310
+        with urllib.request.urlopen(url) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except (OSError, ValueError) as exc:
         raise ConfigurationError(f"Could not load theme from {url}: {exc}") from exc
@@ -182,7 +182,7 @@ def _load_from_url(url: str) -> ThemeSource:
     base = url.rsplit("/", 1)[0]
     custom_css = ""
     try:
-        with urllib.request.urlopen(f"{base}/custom.css") as resp:  # noqa: S310
+        with urllib.request.urlopen(f"{base}/custom.css") as resp:
             custom_css = resp.read().decode("utf-8")
     except OSError:
         custom_css = ""

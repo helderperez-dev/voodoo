@@ -215,7 +215,7 @@ class FK:
         await conversation.delete()  # also deletes its messages
     """
 
-    def __class_getitem__(cls, target: type) -> _FKRef:  # noqa: N805
+    def __class_getitem__(cls, target: type) -> _FKRef:
         if not isinstance(target, type):
             raise TypeError("FK[...] requires a model class")
         return _FKRef(target)

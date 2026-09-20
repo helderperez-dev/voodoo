@@ -30,7 +30,7 @@ _checked: bool = False
 def is_available() -> bool:
     """Return ``True`` if OTel SDK is importable and the env var is set."""
     try:
-        import opentelemetry  # noqa: F401
+        import opentelemetry
     except ImportError:
         return False
     return bool(os.environ.get("VOODOO_OTEL_EXPORTER"))
@@ -92,7 +92,7 @@ def _get_exporter() -> OTLPExporter | None:
     if is_available():
         try:
             _exporter = OTLPExporter()
-        except Exception:  # noqa: BLE001 — graceful degradation
+        except Exception:
             logger.warning("Failed to initialise OTLP exporter", exc_info=True)
             _exporter = None
     return _exporter
@@ -104,5 +104,5 @@ def export_span(span: Any) -> None:
     if exporter is not None:
         try:
             exporter.export_span(span)
-        except Exception:  # noqa: BLE001 — never break the runtime
+        except Exception:
             logger.debug("OTLP export failed for span %s", span.span_id, exc_info=True)

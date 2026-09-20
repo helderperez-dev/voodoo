@@ -322,7 +322,7 @@ def _fallback_ai_assets() -> dict[str, str]:
     }
 
 
-def _detect_ide() -> str | None:  # noqa: C901
+def _detect_ide() -> str | None:
     """
     Attempt to auto-detect the active AI IDE/Editor from environment variables,
     workspace config directories, or running parent processes.
@@ -407,7 +407,7 @@ def _detect_ide() -> str | None:  # noqa: C901
     return None
 
 
-def _sync_ai_assets(project_dir: Path, progress: Progress, ide: str = "none") -> None:  # noqa: C901
+def _sync_ai_assets(project_dir: Path, progress: Progress, ide: str = "none") -> None:
     _task = progress.add_task(
         description=f"Setting up AI assets ({ide})...", total=None
     )

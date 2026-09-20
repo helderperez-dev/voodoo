@@ -297,7 +297,7 @@ class InMemoryMemoryStore:
 # ---------------------------------------------------------------------------
 
 # Placed at file bottom per spec: Protocol checks go under TYPE_CHECKING.
-from typing import TYPE_CHECKING  # noqa: E402
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     _memory_check: MemoryStore = InMemoryMemoryStore()  # type: ignore[assignment]

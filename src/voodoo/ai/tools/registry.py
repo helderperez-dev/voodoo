@@ -76,7 +76,7 @@ def _build_schemas(func: Callable[..., Any]) -> tuple[dict[str, Any], dict[str, 
     """Derive input/output JSON schemas from a function's type hints."""
     try:
         hints = get_type_hints(func)
-    except Exception:  # noqa: BLE001 — unresolved forward refs fall back to raw
+    except Exception:
         hints = getattr(func, "__annotations__", {}) or {}
 
     sig = inspect.signature(func)
@@ -108,7 +108,7 @@ def _source_metadata(func: Callable[..., Any]) -> str:
     try:
         file = inspect.getsourcefile(inspect.unwrap(func)) or "<unknown>"
         line = inspect.getsourcelines(inspect.unwrap(func))[1]
-    except (OSError, TypeError):  # noqa: UP024 — broad: builtins/C extensions
+    except (OSError, TypeError):
         line = 0
         file = "<unknown>"
     return f"{module}:{file}:{line}"

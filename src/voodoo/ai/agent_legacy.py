@@ -312,7 +312,7 @@ class Agent:
         )
         try:
             self.memory.write(entry)
-        except Exception:  # noqa: BLE001 — memory writes never break the run
+        except Exception:
             pass
 
     # -- helpers -----------------------------------------------------------
@@ -422,7 +422,7 @@ class Agent:
         await self._broadcast("tool.called", {"tool": name, "arguments": arguments})
         try:
             result = await self.registry.call(name, **arguments)
-        except Exception as e:  # noqa: BLE001 — capture for telemetry
+        except Exception as e:
             effect.mark_failed(str(e))
             if ctx is not None:
                 ctx.add_effect(effect)
@@ -470,7 +470,7 @@ class Agent:
                     {"tool": name, "status": "succeeded"},
                 )
                 return result
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 await self._broadcast(
                     "tool.completed",
                     {"tool": name, "status": "failed", "error": str(e)},
@@ -652,7 +652,7 @@ class Agent:
                 try:
                     desc = self.provider.describe()
                     tools_arg = self._tools_for_provider() if desc.tool_use else None
-                except Exception:  # noqa: BLE001 — best-effort capability check
+                except Exception:
                     tools_arg = self._tools_for_provider()
                 response = await self.provider.complete(messages, tools=tools_arg)
                 await self._broadcast(
@@ -724,7 +724,7 @@ class Agent:
                     output = response.content
                     break
 
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.state = AgentState.error
             error = str(e)
             await self._broadcast("agent.failed", {"run_id": run_id, "error": error})
@@ -771,7 +771,7 @@ class Agent:
 
     # -- stream ------------------------------------------------------------
 
-    async def stream(  # noqa: C901
+    async def stream(
         self,
         prompt: str,
         context: dict | None = None,
@@ -816,7 +816,7 @@ class Agent:
                 try:
                     desc = self.provider.describe()
                     tools_arg = self._tools_for_provider() if desc.tool_use else None
-                except Exception:  # noqa: BLE001 — best-effort capability check
+                except Exception:
                     tools_arg = self._tools_for_provider()
                 async for event in self.provider.stream(messages, tools=tools_arg):
                     if event.type == "text":
@@ -918,7 +918,7 @@ class Agent:
                     output = accumulated_text
                     break
 
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.state = AgentState.error
             error = str(e)
             yield AgentEvent(type="error", data={"error": error})
@@ -1083,5 +1083,5 @@ class Agent:
             from voodoo.mesh import mesh
 
             await mesh.broadcast(event, payload)
-        except Exception:  # noqa: BLE001 — mesh is optional in tests
+        except Exception:
             pass

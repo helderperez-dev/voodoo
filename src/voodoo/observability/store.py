@@ -169,7 +169,7 @@ class TelemetryStore:
             from voodoo.integrations.otel import export_span
 
             export_span(span)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     @contextmanager
@@ -234,7 +234,7 @@ class TelemetryStore:
             for key in ("recent_traces", "recent_agent_runs"):
                 summary.pop(key, None)
             self._SUMMARY_PATH.write_text(json.dumps(summary, default=str))
-        except Exception:  # noqa: BLE001 — persistence is best-effort
+        except Exception:
             pass
 
     def _load_summary(self) -> None:
@@ -246,7 +246,7 @@ class TelemetryStore:
                 self.metrics["errors_total"] = data.get("errors_total", 0)
                 self.metrics["db_queries"] = data.get("db_queries", 0)
                 self.metrics["agent_tokens"] = data.get("agent_tokens", 0)
-        except Exception:  # noqa: BLE001 — best-effort
+        except Exception:
             pass
 
     def get_summary(self) -> dict[str, Any]:

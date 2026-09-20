@@ -85,7 +85,7 @@ def use_theme(
 
     try:
         source = resolve_theme(preset)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         terminal.error(str(exc), hint="try 'voodoo theme list'")
         raise typer.Exit(1) from exc
 
@@ -116,7 +116,7 @@ def init_theme(
 
     try:
         source = resolve_theme(name)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         terminal.error(str(exc), hint="try 'voodoo theme list'")
         raise typer.Exit(1) from exc
 
@@ -159,7 +159,7 @@ def install_theme(
         terminal.status_block([("theme", name), ("status", "already installed")])
         terminal.console.print(f"  [dim]{source.origin}[/]")
         return
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
     terminal.wordmark()
@@ -179,7 +179,7 @@ def install_theme(
 
     try:
         source = _load_from_pypi(name)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         terminal.error(str(exc))
         raise typer.Exit(1) from exc
     terminal.status_block([("theme", name), ("status", "installed")])

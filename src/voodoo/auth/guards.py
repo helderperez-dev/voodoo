@@ -13,7 +13,7 @@ from voodoo.auth.user import get_current_user
 # =========================================================================
 
 
-def require_auth(  # noqa: C901
+def require_auth(
     redirect_url: str | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
@@ -81,14 +81,14 @@ def require_auth(  # noqa: C901
     return decorator
 
 
-def require_roles(  # noqa: C901
+def require_roles(
     *roles: str, redirect_url: str | None = None
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator requiring the user to hold one of the specified roles.
     """
 
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:  # noqa: C901
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         sig = inspect.signature(func)
 
         @wraps(func)
@@ -164,7 +164,7 @@ def require_roles(  # noqa: C901
     return decorator
 
 
-def require_scopes(*scopes: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:  # noqa: C901
+def require_scopes(*scopes: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator requiring specific API key scopes / permissions."""
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:

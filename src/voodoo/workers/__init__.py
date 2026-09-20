@@ -85,7 +85,7 @@ async def _run_task(
             else:
                 # Sync tasks run inline; timeout cannot pre-empt synchronous code.
                 result = func(*args, **kwargs)
-        except Exception as exc:  # noqa: BLE001 — converted to TaskError below
+        except Exception as exc:
             last_exc = exc
             latency = (time.perf_counter() - start) * 1000
             telemetry_store.record_trace(f"task:{task_name}", latency, error=True)

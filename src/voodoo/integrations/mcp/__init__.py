@@ -149,7 +149,7 @@ class MCPServer:
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-    async def _handle_message(self, body: dict, queue: asyncio.Queue):  # noqa: C901
+    async def _handle_message(self, body: dict, queue: asyncio.Queue):
         method = body.get("method")
         params = body.get("params", {})
         msg_id = body.get("id")

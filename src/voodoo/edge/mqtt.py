@@ -112,7 +112,7 @@ class EdgeMQTTTransport:
         qos: int = 1,
     ) -> None:
         try:
-            import paho.mqtt.client as mqtt  # noqa: F401 — availability probe
+            import paho.mqtt.client as mqtt
         except ImportError as e:  # pragma: no cover
             raise ImportError(
                 "MQTT transport requires the optional extra "
@@ -158,7 +158,7 @@ class EdgeMQTTTransport:
         self._client = client
         try:
             client.connect(self._broker_url, self._port, keepalive=self._keepalive)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise TransportError(f"MQTT connect failed: {e}") from e
         client.loop_start()  # background network thread
         await asyncio.wait_for(self._connected.wait(), timeout=10.0)
@@ -262,7 +262,7 @@ class EdgeMQTTTransport:
             response = await self._gateway.handle_message(
                 raw, transport=TransportKind.MQTT
             )
-        except Exception as e:  # noqa: BLE001 — broker handler must never crash
+        except Exception as e:
             logger.warning("Gateway rejected message on %s: %s", topic, e)
             return
 

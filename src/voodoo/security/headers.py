@@ -10,7 +10,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Applies industry-standard HTTP security headers to all responses.
     """
 
-    async def dispatch(  # noqa: C901
+    async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         response = await call_next(request)

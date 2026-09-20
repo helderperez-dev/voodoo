@@ -179,7 +179,7 @@ def _scaffold_offline(project_dir: Path, name: str) -> None:
     )
 
 
-def new(  # noqa: C901
+def new(
     project_name: str,
     template: str = typer.Option(
         "helderperez-dev/voodoo-templates",

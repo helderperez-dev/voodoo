@@ -16,7 +16,7 @@ def _default_run_through_runtime() -> bool:
         from voodoo.config import config
 
         return bool(config.runtime.run_api_through_runtime)
-    except Exception:  # noqa: BLE001 — best-effort config resolution
+    except Exception:
         return True
 
 
@@ -146,7 +146,7 @@ class API:
         """
         return HTMLResponse(html)
 
-    def _add_route(self, path: str, method: str, func: Callable[..., Any]) -> None:  # noqa: C901
+    def _add_route(self, path: str, method: str, func: Callable[..., Any]) -> None:
         # Register in OpenAPI paths
         if path not in self.paths:
             self.paths[path] = {}
@@ -156,7 +156,7 @@ class API:
             "responses": {"200": {"description": "Successful Response"}},
         }
 
-        async def endpoint(request: Request) -> Response:  # noqa: C901
+        async def endpoint(request: Request) -> Response:
             sig = inspect.signature(func)
             kwargs: dict[str, Any] = {}
 
