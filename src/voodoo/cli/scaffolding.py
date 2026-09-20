@@ -361,7 +361,7 @@ def _ide_from_workspace() -> str | None:
 
 
 def _ide_from_processes() -> str | None:
-    markers = (("trae", "trae"), ("cursor", "cursor"), ("windsurf", "windsurf"), ("vscode", "vscode"), ("code", "vscode"))
+    markers = (\n        ("trae", "trae"),\n        ("cursor", "cursor"),\n        ("windsurf", "windsurf"),\n        ("vscode", "vscode"),\n        ("code", "vscode"),\n    )
     try:
         curr_pid = os.getppid()
         for _ in range(4):

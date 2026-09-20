@@ -243,11 +243,11 @@ def _install_project(project_dir: Path, progress: Progress) -> None:
 def new(
     project_name: str,
     template: str = typer.Option(
-        "helderperez-dev/voodoo-templates", "--template", "-t",
+        "helderperez-dev/voodoo-templates",\n        "--template",\n        "-t",
         help="GitHub repository URL or 'user/repo' to use as a template",
     ),
     variant: str = typer.Option(
-        "default", "--variant", "-v",
+        "default",\n        "--variant",\n        "-v",
         help="Specific template variant inside the repository",
     ),
 ):

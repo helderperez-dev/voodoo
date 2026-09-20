@@ -265,10 +265,21 @@ def doctor():
         "enabled" if cfg.security.csrf_enabled else "disabled",
     )
 
-    _doctor_modules()\n\n    # ── Providers & capability matrix ────────────────\n    terminal.heading("providers")
+    _doctor_modules()
+
+    # ── Providers & capability matrix ────────────────
+    terminal.heading("providers")
     try:
         _print_capability_matrix()
     except Exception:
         terminal.status("capability matrix", "unavailable")
 
-    _doctor_queue()\n\n    # ── Schedules / OTLP ─────────────────────────────\n    _doctor_optional_services(cfg)\n\n    # ── AI Kit ──────────────────────────────────────\n    _doctor_ai_kit()\n\n    terminal.blank()
+    _doctor_queue()
+
+    # ── Schedules / OTLP ─────────────────────────────
+    _doctor_optional_services(cfg)
+
+    # ── AI Kit ──────────────────────────────────────
+    _doctor_ai_kit()
+
+    terminal.blank()
