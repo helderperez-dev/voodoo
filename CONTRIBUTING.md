@@ -1,332 +1,194 @@
 # Contributing to Voodoo
 
-First off — thank you for taking the time to contribute. Voodoo is an
-open-source project and every contribution, from a typo fix to a new
-adapter, is valued.
+Thank you for contributing to Voodoo. This guide describes the development
+workflow, architectural contract, quality gates, and release discipline.
 
-This document describes how to set up a development environment, the
-quality gates every change must pass, and the conventions the project
-follows.
+## Getting started
 
----
-
-## Table of Contents
-
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Workflow](#development-workflow)
-- [Quality Gates](#quality-gates)
-- [Architecture & Conventions](#architecture--conventions)
-- [Testing](#testing)
-- [Adding a New Adapter](#adding-a-new-adapter)
-- [Submitting Changes](#submitting-changes)
-- [Release Process](#release-process)
-
----
-
-## Code of Conduct
-
-Participation in this project is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
-By participating, you agree to abide by its terms.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- **Python ≥ 3.12**
-- [**uv**](https://docs.astral.sh/uv/) (recommended) or `pip` + `venv`
-- **just** (command runner — `brew install just` on macOS)
-- **Git**
-
-### Clone & install
+Requirements: Python 3.12+, uv, Git, and optionally just.
 
 ```bash
 git clone https://github.com/helderperez-dev/voodoo.git
 cd voodoo
 uv sync --all-extras --dev
-```
-
-### Verify the install
-
-```bash
 just test
 ```
 
-All tests should pass (some contract tests require external services and
-will skip — see [Testing](#testing)).
+Create focused branches from `main` and use Conventional Commits.
 
----
+## Quality gates
 
-## Development Workflow
-
-1. **Create a branch** from `main`:
-   ```bash
-   git checkout -b feat/my-feature
-   ```
-
-2. **Make your changes.** Keep commits focused and write clear commit
-   messages following [Conventional Commits](https://www.conventionalcommits.org/):
-   ```
-   feat(redis): add RedisQueue adapter
-   fix(queue): correct lease expiry calculation
-   docs(readme): update installation instructions
-   refactor(storage): extract object store interface
-   test(contracts): add cache contract suite
-   chore(deps): bump ruff to 0.6.0
-   ```
-
-3. **Run quality gates** before pushing (see below).
-
-4. **Open a Pull Request** against `main`. Fill in the PR template and
-   link any related issues.
-
----
-
-## Quality Gates
-
-Every PR must pass all three gates before merging:
+A change is merge-ready only when the repository gates relevant to it pass:
 
 ```bash
-just format   # ruff format + isort
-just lint     # ruff check
-just test     # pytest (full suite)
+just format
+just lint
+just typecheck
+just test
 ```
 
-Or run them all at once:
+CI additionally validates Python 3.12 and 3.13, the clean Store-first
+installation path, and architecture invariants. CodeQL must be green for the
+final PR head. Mypy/type checking is a hard CI gate.
 
-```bash
-just format && just lint && just test
+Do not add `# noqa` to source to bypass a failure. Refactor the underlying
+problem or make a deliberate lint-policy change with architectural rationale.
+
+## Architecture contract
+
+Read these before a structural or cross-domain change:
+
+- [Repository architecture](docs/architecture/repository.md)
+- [Architecture governance](docs/architecture/governance.md)
+- [Repository migration map](docs/architecture/repository-migration.md)
+
+The dependency direction is:
+
+```text
+primitives / protocol
+        ↑
+world / core contracts
+        ↑
+runtime
+        ↑
+application surfaces (ui, data, auth, ai, edge)
+        ↑
+integrations / cli
 ```
 
-### Pre-commit hooks
+Runtime implementation ownership:
 
-The repo includes a `.pre-commit-config.yaml`. Install hooks once:
-
-```bash
-pre-commit install
+```text
+runtime/
+├── execution/
+├── reconciliation/
+├── scheduling/
+├── agency/
+├── distributed/
+└── inspection/
 ```
 
-This runs `ruff format` and `ruff check` on every commit automatically.
+There is one execution authority. Workers, distributed fabric, agents, mesh,
+and edge participants must converge on it rather than introduce parallel
+execution models.
 
-### Type checking
+Vendor-backed implementations belong outside the semantic center. For example,
+AI SDK providers live in `integrations/ai`, MCP interoperability in
+`integrations/mcp`, and OpenTelemetry export in `integrations/otel.py`.
+Vendor-backed Storage implementations can remain in `storage/` when Storage
+is their semantic contract.
 
-```bash
-just typecheck   # mypy
-```
+Existing compatibility facades are not implementation owners. Put new behavior
+in the canonical owner and keep facades thin.
 
-Mypy is not currently part of the hard gate (ruff is), but new code
-should be type-clean. Files with pre-existing mypy issues are tracked
-incrementally.
+## Project structure
 
----
+The primary semantic domains are:
 
-## Architecture & Conventions
-
-### Design principles
-
-Voodoo follows a set of architectural invariants (see
-[ROADMAP.md §70](ROADMAP.md)). The most important ones for contributors:
-
-1. **Local-first, zero-infra by default.** The default install must work
-   with no external services. SQLite, local filesystem, in-process events.
-2. **Adapters over lock-in.** Every infrastructure concern (database,
-   queue, events, objects, cache) is behind a protocol with capability
-   declarations. New backends are adapters, not core changes.
-3. **Composition over configuration.** Python over DSLs. No YAML
-   required to start.
-4. **No new required dependencies.** Provider SDKs live in optional
-   extras (`[ai]`, `[postgres]`, `[redis]`, `[s3]`).
-5. **Every durability claim needs a failure-path test.** Worker crash,
-   restart, lease expiry, duplicate delivery.
-
-### Code style
-
-- **Line length:** 88 characters (enforced by ruff).
-- **Imports:** Sorted by isort (via ruff).
-- **Quotes:** Double quotes (enforced by ruff format).
-- **Async-first:** All I/O handlers, database work, and network calls
-  should be `async def`.
-- **Type hints:** Required on all public functions. Use `from __future__
-  import annotations` is not needed (Python 3.12+).
-
-### Project structure
-
-```
+```text
 src/voodoo/
-├── adapters/       # Style adapters (Tailwind, CSS)
-├── ai/             # Agent runtime, providers, tools
-├── auth/           # JWT, API keys, RBAC, session management
-├── cli/            # `voodoo` CLI commands
-├── core/           # App, runtime engine, execution context
-├── data/           # ORM, models, database init
-├── mcp/            # Model Context Protocol server
-├── mesh/           # Realtime event bus + WebSocket bridge
-├── primitives/     # State, Capability, Intent, Effect, Time, Compute, Resource, Constraint
-├── routing/        # File-based routing, API routes
-├── runtime/        # ExecutionEngine, planner, supervisor
-├── security/       # CORS, CSRF, rate limiting, security headers
-├── static/         # Client-side JS, CSS, HTML templates
-├── storage/        # Database, queue, events, objects, cache, execution stores
-├── telemetry/      # Correlation IDs, tracing, token/cost accounting
-├── tools/          # @tool decorator, tool registry
-├── ui/             # Component system, state, styles, theme
-└── workers/        # @task decorator, durable task queue
+├── core/
+├── primitives/
+├── protocol/
+├── world/
+├── runtime/
+├── ui/
+├── data/
+├── auth/
+├── ai/
+├── edge/
+├── integrations/
+├── observability/
+├── cli/
+└── _internal/
 ```
 
----
+Other existing namespaces may provide application surfaces, storage contracts,
+security mechanics, or compatibility paths. Creating a new top-level domain
+requires an explicit architecture decision and documentation update.
 
 ## Testing
 
-### Test layout
+Tests are owned semantically:
 
-```
+```text
 tests/
-├── test_*.py              # Unit & integration tests
-└── contracts/             # Adapter portability suite
-    ├── test_database.py           # DatabaseContractTests mixin
-    ├── test_database_postgres.py  # PG contract (gated on VOODOO_TEST_DATABASE_URL)
-    ├── test_queue.py              # QueueContractTests mixin
-    ├── test_queue_redis.py        # Redis contract (gated on VOODOO_TEST_REDIS_URL)
-    ├── test_cache.py              # CacheContractTests mixin
-    ├── test_cache_redis.py        # Redis cache contract
-    ├── test_objectstore.py        # ObjectStoreContractTests mixin
-    ├── test_eventbus.py           # EventBusContractTests mixin
-    └── test_capabilities.py       # Capability negotiation tests
+├── unit/
+├── integration/
+├── e2e/
+├── contracts/
+└── architecture/
 ```
 
-### Running tests
+- Unit tests belong to the closest semantic source owner.
+- Integration tests cover interactions across domains.
+- E2E tests cover developer/user journeys.
+- Contract tests define portable provider/protocol behavior.
+- Architecture tests enforce repository invariants.
+- Compatibility behavior may live in the closest unit/integration domain.
+- Do not add flat `tests/test_*.py` files.
+- Every durability claim requires failure-path coverage (crash, restart,
+  retry/lease expiry, duplicate delivery, or the relevant failure mode).
 
-```bash
-# Full suite (contract tests for external services will skip)
-just test
+Use `pytest-asyncio` for async tests and `tmp_path` for filesystem isolation.
 
-# Specific test file
-uv run pytest tests/test_app.py -v
+## Adding a provider or integration
 
-# With coverage
-uv run pytest --cov=voodoo --cov-report=html
+1. Identify the semantic contract first.
+2. Keep vendor-independent contracts in their semantic domain.
+3. Put vendor SDK implementation in the appropriate integration/provider
+   boundary.
+4. Keep third-party packages optional unless they are part of the base runtime
+   contract.
+5. Add contract tests when implementing a portable infrastructure/provider
+   interface.
+6. Update capability declarations honestly.
+7. Update docs/changelog for material behavior.
 
-# Contract tests against live services (requires Docker)
-docker run --name voodoo-pg -e POSTGRES_DB=voodoo_test \
-  -e POSTGRES_USER=voodoo -e POSTGRES_PASSWORD=voodoo -p 5432:5432 -d postgres:16
-docker run --name voodoo-redis -p 6379:6379 -d redis:7
-docker run --name voodoo-minio -p 9000:9000 \
-  -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-  -d minio/minio server /data --console-address ":9001"
+Do not introduce vendor imports into `core`, `runtime`, `primitives`,
+`protocol`, or `world`.
 
-# Set env vars (see .env.example for details)
-export VOODOO_TEST_DATABASE_URL=postgresql://voodoo:voodoo@localhost:5432/voodoo_test
-export VOODOO_TEST_REDIS_URL=redis://localhost:6379/0
-export VOODOO_TEST_S3_ENDPOINT=http://localhost:9000
-export VOODOO_TEST_S3_BUCKET=voodoo-test
-export VOODOO_TEST_S3_KEY=minioadmin
-export VOODOO_TEST_S3_SECRET=minioadmin
+## Public API and compatibility
 
-uv run pytest tests/contracts/ -v
-```
+`voodoo.__init__` is a curated application/compatibility facade, not a catalog.
 
-### Writing tests
+Before moving or removing a public symbol:
 
-- **Unit tests** go in `tests/test_*.py`.
-- **Contract tests** for new adapters go in `tests/contracts/` and must
-  use the appropriate contract mixin (e.g., `QueueContractTests`).
-- **Failure-path tests** are required for any durability claim. Test
-  crash → restart → recovery scenarios.
-- Use `pytest-asyncio` (auto mode is enabled). All async tests are
-  automatically detected.
-- Use `tmp_path` for filesystem isolation. Never write to the repo root.
+1. search documented and tested imports;
+2. preserve the old path with a compatibility facade during the 2.x line when
+   practical;
+3. add compatibility coverage;
+4. reserve intentional removals for an explicitly documented breaking release.
 
----
+## Pull request checklist
 
-## Adding a New Adapter
+- [ ] semantic owner is correct;
+- [ ] dependency direction is preserved;
+- [ ] no duplicate execution/scheduling authority exists;
+- [ ] vendor dependencies remain outside semantic Core;
+- [ ] public imports are preserved or the breaking change is explicit;
+- [ ] tests are in the correct semantic test domain;
+- [ ] durability claims have failure-path tests;
+- [ ] no source `# noqa` was introduced;
+- [ ] Ruff/format, type check, tests, Store-first, and CodeQL are green;
+- [ ] architecture tests are updated for deliberate boundary changes;
+- [ ] `CHANGELOG.md` and docs are updated for material changes.
 
-Voodoo's adapter system lets you add new infrastructure backends without
-touching core code. Every adapter implements a protocol and declares its
-capabilities.
+## Release process
 
-1. **Implement the protocol** (e.g., `VoodooQueue`, `VoodooDatabase`,
-   `VoodooEventBus`, `VoodooObjectStore`, `VoodooCache`).
+Releases are automated by `.github/workflows/release.yml`.
 
-2. **Declare capabilities** via `.capabilities()` — be honest about what
-   your adapter guarantees. The runtime uses this for negotiation.
+Before releasing:
 
-3. **Write contract tests** — run the appropriate contract mixin against
-   your adapter. If your adapter can't satisfy a contract assertion,
-   document why and mark the capability as unsupported.
+1. ensure the final `main` commit is green;
+2. convert the relevant `[Unreleased]` changelog content into the release
+   version/date;
+3. verify the requested version follows Semantic Versioning;
+4. trigger `just release X.Y.Z`;
+5. verify tag, PyPI artifact, GitHub Release, and optional Homebrew update.
 
-4. **Register the adapter** in `src/voodoo/adapters/registry.py`.
+The workflow performs the source version bump, tag, build, clean package gate,
+publication, and release asset creation.
 
-5. **Add an optional extra** in `pyproject.toml` if your adapter needs
-   a third-party package.
-
-6. **Wire CI** — add a service container in `.github/workflows/ci.yml`
-   if your adapter needs an external service for contract tests.
-
-See `src/voodoo/storage/queue/redis.py` and
-`tests/contracts/test_queue_redis.py` as a reference implementation.
-
----
-
-## Submitting Changes
-
-### Pull Request checklist
-
-- [ ] `just format && just lint && just test` is green
-- [ ] Commit messages follow Conventional Commits
-- [ ] New features have tests (including failure-path tests for
-      durability claims)
-- [ ] New adapters have contract tests
-- [ ] No new required runtime dependencies (use optional extras)
-- [ ] `__all__` updated if public exports changed
-- [ ] `CHANGELOG.md` updated (under "Unreleased" or the next version
-      header)
-- [ ] Documentation updated if behavior changed
-
-### Review process
-
-1. A maintainer will review your PR within a few days.
-2. Address feedback by pushing new commits (don't force-push during
-   review unless asked).
-3. Once approved and CI is green, a maintainer will squash-merge your PR.
-
----
-
-## Release Process
-
-Releases are fully automated via GitHub Actions:
-
-1. Maintainer updates `CHANGELOG.md` and `SPRINT_PLAN.md`.
-2. Commit and push to `main`.
-3. Trigger the release:
-   ```bash
-   just release X.Y.Z
-   ```
-4. The `release.yml` workflow automatically:
-   - Validates semver and runs the full test suite
-   - Bumps version in `src/voodoo/__init__.py`
-   - Commits, tags (`vX.Y.Z`), and pushes
-   - Builds distributions (`uv build`)
-   - Publishes to PyPI
-   - Updates the Homebrew formula
-   - Creates a GitHub Release with assets and release notes
-5. Monitor with:
-   ```bash
-   gh run watch --workflow=release.yml
-   ```
-
-Versioning follows [Semantic Versioning](https://semver.org/). Minor bump
-per feature sprint, patch for fixes, major only at breaking-change
-milestones.
-
----
-
-## Questions?
-
-- **Bug reports:** [Open an issue](https://github.com/helderperez-dev/voodoo/issues/new?template=bug_report.md)
-- **Feature requests:** [Open an issue](https://github.com/helderperez-dev/voodoo/issues/new?template=feature_request.md)
-- **Security reports:** See [SECURITY.md](SECURITY.md)
-- **Discussions:** [GitHub Discussions](https://github.com/helderperez-dev/voodoo/discussions)
-
-Thank you for contributing to Voodoo. 🪄
+Minor versions add backward-compatible capability; patches are fixes only;
+major versions are reserved for intentional compatibility breaks.

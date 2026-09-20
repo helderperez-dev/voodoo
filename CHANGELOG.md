@@ -1,5 +1,44 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed — Repository architecture convergence
+
+- Completed the RA1–RA6 repository architecture program and established
+  semantic ownership as the rule for physical source placement.
+- Grouped Runtime implementation under canonical `execution`,
+  `reconciliation`, `scheduling`, `agency`, `distributed`, and
+  `inspection` ownership boundaries while preserving supported legacy imports
+  through compatibility facades.
+- Moved vendor-backed AI providers, MCP interoperability, and OpenTelemetry
+  export behind `integrations/`; native AI semantics and observability remain
+  framework-owned.
+- Converged durable worker orchestration, dispatch, and handoff under Runtime
+  scheduling; distributed fabric/membership under Runtime distributed
+  ownership; telemetry state under `observability/`.
+- Reorganized tests and examples by semantic domain and added repository
+  architecture invariants to prevent regression toward flat ownership.
+- Established a zero-suppression source baseline: `# noqa` is no longer used
+  to bypass lint or complexity failures.
+- Refactored legacy complexity hotspots in CLI, auth, routing, MCP, security,
+  scaffolding, and agent streaming instead of suppressing C901 findings.
+- Added architecture governance and a completed migration map defining
+  dependency direction, compatibility policy, module placement, and release
+  rules.
+
+### Compatibility
+
+- Existing documented/public imports affected by physical moves remain
+  available through compatibility facades in the 2.x line.
+- No intentional public API removal is part of the repository architecture
+  convergence.
+
+### Validation
+
+The merged architecture passed Python 3.12 and 3.13 test suites, Ruff/format,
+Mypy, clean Store-first installation, architecture invariants, and CodeQL both
+before and after merge to `main`.
+
 ## [2.9.0] — 2026-09-17
 
 ### Added — UI Component Library Expansion
