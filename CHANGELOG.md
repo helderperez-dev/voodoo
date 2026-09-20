@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.10.0] — 2026-09-20
+
+### Changed — Repository architecture convergence
+
+Voodoo's physical repository layout now reflects semantic ownership while preserving the 2.x public compatibility surface.
+
+- Runtime implementation is grouped under canonical execution, reconciliation, scheduling, agency, distributed, and inspection boundaries.
+- Vendor AI providers, MCP interoperability, and OpenTelemetry export live under `voodoo.integrations`; legacy import paths remain compatibility facades.
+- Native observability is owned by `voodoo.observability`, while workers/dispatch/handoff converge on Runtime scheduling ownership.
+- Tests and examples are organized by architectural domain and learning path.
+- Architecture invariants prevent package-root sprawl, vendor coupling in semantic Core, unowned root tests, and source `# noqa` suppressions.
+- Legacy complexity suppressions were replaced with explicit helper boundaries; Ruff, Mypy, Python 3.12/3.13, Store-first clean install, and CodeQL all pass on the merged architecture.
+- Duplicate CLI project-creation flow discovered during the audit was removed.
+
+### Compatibility
+
+- Existing 2.x documented/public imports continue to resolve through compatibility facades.
+- This release does **not** perform the deliberate package-root contraction reserved for Voodoo 3.0.
+- No new required vendor SDK dependency is introduced by the architecture convergence.
+
 ## [2.9.0] — 2026-09-17
 
 ### Added — UI Component Library Expansion

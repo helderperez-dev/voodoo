@@ -93,8 +93,7 @@ The post-Sprint-28 repository now includes:
 - clean-install release gates proving the default Runtime lifecycle does not require
   optional SQL infrastructure.
 
-The latest published release is **v2.7.2**. `main` is ahead of that release with Design
-System 3 and its Theme-contract hardening. `SPRINT_PLAN.md` remains the implementation
+The current release line is **v2.10.0**, consolidating Design System 3, Runtime\ninfrastructure convergence, and the repository architecture refactor. `SPRINT_PLAN.md` remains the implementation
 source of truth; this document defines direction rather than claiming future work already
 exists.
 

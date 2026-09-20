@@ -140,7 +140,7 @@ from .ui.styles.palette import ThemePalette, color
 from .ui.styles.theme import Theme, ThemeColors, create_theme
 from .workers import task
 
-__version__ = "2.9.0"
+__version__ = "2.10.0"
 
 __all__ = [
     # Core runtime
