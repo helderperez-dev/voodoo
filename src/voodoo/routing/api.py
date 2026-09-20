@@ -146,82 +146,72 @@ class API:
         """
         return HTMLResponse(html)
 
-    def _add_route(self, path: str, method: str, func: Callable[..., Any]) -> None:
-        # Register in OpenAPI paths
-        if path not in self.paths:
-            self.paths[path] = {}
+    async def _model_argument(self, request: Request, model_cls: type[BaseModel]) -> BaseModel:
+        try:
+            body: Any = await request.json()
+        except Exception:
+            body = {}
+        if isinstance(body, dict):
+            return model_cls(**body)
+        if hasattr(model_cls, "model_validate"):
+            return model_cls.model_validate(body)
+        return model_cls(**body)
 
-        self.paths[path][method.lower()] = {
+    async def _argument_value(self, request: Request, name: str, param: inspect.Parameter) -> Any:
+        if param.annotation is Request or name == "request":
+            return request
+        if name == "user" or (
+            param.annotation is not inspect._empty
+            and getattr(param.annotation, "__name__", "") in ("AuthUser", "User")
+        ):
+            from voodoo.auth import get_current_user
+
+            return get_current_user(request)
+        if inspect.isclass(param.annotation) and issubclass(param.annotation, BaseModel):
+            return await self._model_argument(request, param.annotation)
+        value = request.path_params.get(name, request.query_params.get(name))
+        annotation: Any = param.annotation
+        if value is not None and annotation is not inspect._empty and callable(annotation):
+            try:
+                return annotation(value)
+            except (ValueError, TypeError):
+                pass
+        return value
+
+    async def _endpoint_kwargs(self, request: Request, func: Callable[..., Any]) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {}
+        for name, param in inspect.signature(func).parameters.items():
+            value = await self._argument_value(request, name, param)
+            if value is not None:
+                kwargs[name] = value
+        return kwargs
+
+    @staticmethod
+    def _serialize_result(result: Any) -> Response:
+        if isinstance(result, Response):
+            return result
+        if isinstance(result, BaseModel):
+            return JSONResponse(result.model_dump())
+        if isinstance(result, list) and result and isinstance(result[0], BaseModel):
+            return JSONResponse([item.model_dump() for item in result])
+        if hasattr(result, "__dict__"):
+            return JSONResponse(result.__dict__)
+        return JSONResponse(result)
+
+    def _register_openapi_route(self, path: str, method: str, func: Callable[..., Any]) -> None:
+        self.paths.setdefault(path, {})[method.lower()] = {
             "summary": func.__name__.replace("_", " ").title(),
             "responses": {"200": {"description": "Successful Response"}},
         }
 
+    def _add_route(self, path: str, method: str, func: Callable[..., Any]) -> None:
+        self._register_openapi_route(path, method, func)
+
         async def endpoint(request: Request) -> Response:
-            sig = inspect.signature(func)
-            kwargs: dict[str, Any] = {}
+            kwargs = await self._endpoint_kwargs(request, func)
+            result = await self._run_through_runtime(path, method, func, kwargs)
+            return self._serialize_result(result)
 
-            for name, param in sig.parameters.items():
-                if param.annotation is Request or name == "request":
-                    kwargs[name] = request
-                elif name == "user" or (
-                    param.annotation is not inspect._empty
-                    and getattr(param.annotation, "__name__", "")
-                    in ("AuthUser", "User")
-                ):
-                    from voodoo.auth import get_current_user
-
-                    kwargs[name] = get_current_user(request)
-                elif inspect.isclass(param.annotation) and issubclass(
-                    param.annotation, BaseModel
-                ):
-                    # Parse JSON body using Pydantic
-                    try:
-                        body: Any = await request.json()
-                    except Exception:
-                        body = {}
-
-                    model_cls: type[BaseModel] = param.annotation
-                    if isinstance(body, dict):
-                        kwargs[name] = model_cls(**body)
-                    elif hasattr(model_cls, "model_validate"):
-                        kwargs[name] = model_cls.model_validate(body)
-                    else:
-                        kwargs[name] = model_cls(**body)
-                else:
-                    # Path or Query param
-                    val: Any = None
-                    if name in request.path_params:
-                        val = request.path_params[name]
-                    elif name in request.query_params:
-                        val = request.query_params[name]
-
-                    if val is not None:
-                        ann: Any = param.annotation
-                        if ann is not inspect._empty and callable(ann):
-                            try:
-                                val = ann(val)
-                            except (ValueError, TypeError):
-                                pass
-                        kwargs[name] = val
-
-            res = await self._run_through_runtime(path, method, func, kwargs)
-
-            # Serialize response
-            if isinstance(res, Response):
-                return res
-            elif isinstance(res, BaseModel):
-                return JSONResponse(res.model_dump())
-            elif (
-                isinstance(res, list) and len(res) > 0 and isinstance(res[0], BaseModel)
-            ):
-                return JSONResponse([r.model_dump() for r in res])
-            elif hasattr(res, "__dict__"):  # simple object serialization fallback
-                return JSONResponse(res.__dict__)
-
-            return JSONResponse(res)
-
-        # Convert FastAPI/Starlette style path params {id} to Starlette path syntax
-        # Actually, Starlette uses {id} or {id:int}, so it's compatible.
         self.routes.append(Route(path, endpoint, methods=[method]))
 
     def get(self, path: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:

@@ -149,133 +149,60 @@ class MCPServer:
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+    async def _handle_tool_call(self, params: dict, msg_id: object, queue: asyncio.Queue) -> None:
+        tool_name = params.get("name")
+        args = params.get("arguments", {})
+        entry = self.tools.get(tool_name)
+        spec = entry.get("spec") if entry else self.registry.get(tool_name)
+        func = entry["func"] if entry else spec.func if spec else None
+        if func is None:
+            await queue.put({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": "Tool not found"}})
+            return
+        try:
+            result = await self._run_tool_call(tool_name, func, spec, args)
+            payload = {"result": {"content": [{"type": "text", "text": str(result)}]}}
+        except Exception as exc:
+            payload = {"error": {"code": -32603, "message": str(exc)}}
+        await queue.put({"jsonrpc": "2.0", "id": msg_id, **payload})
+
+    async def _handle_resource_read(self, params: dict, msg_id: object, queue: asyncio.Queue) -> None:
+        uri = params.get("uri")
+        resource = self.resources.get(uri)
+        if resource is None:
+            await queue.put({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32602, "message": "Resource not found"}})
+            return
+        func = resource["func"]
+        try:
+            content = await func() if inspect.iscoroutinefunction(func) else func()
+            payload = {"result": {"contents": [{"uri": uri, "text": str(content)}]}}
+        except Exception as exc:
+            payload = {"error": {"code": -32603, "message": str(exc)}}
+        await queue.put({"jsonrpc": "2.0", "id": msg_id, **payload})
+
     async def _handle_message(self, body: dict, queue: asyncio.Queue):
         method = body.get("method")
         params = body.get("params", {})
         msg_id = body.get("id")
-
         if method == "initialize":
-            await queue.put(
-                {
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "result": {
-                        "protocolVersion": params.get("protocolVersion", "2024-11-05"),
-                        "capabilities": {"tools": {}, "resources": {}},
-                        "serverInfo": {"name": self.name, "version": self.version},
-                    },
-                }
-            )
-
+            result = {
+                "protocolVersion": params.get("protocolVersion", "2024-11-05"),
+                "capabilities": {"tools": {}, "resources": {}},
+                "serverInfo": {"name": self.name, "version": self.version},
+            }
+            await queue.put({"jsonrpc": "2.0", "id": msg_id, "result": result})
         elif method == "notifications/initialized":
-            pass
-
+            return
         elif method == "tools/list":
-            await queue.put(
-                {
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "result": {"tools": self._list_tools()},
-                }
-            )
-
+            await queue.put({"jsonrpc": "2.0", "id": msg_id, "result": {"tools": self._list_tools()}})
         elif method == "tools/call":
-            tool_name = params.get("name")
-            args = params.get("arguments", {})
-
-            # Try self.tools first, then the registry.
-            func = None
-            spec = None
-            if tool_name in self.tools:
-                func = self.tools[tool_name]["func"]
-                spec = self.tools[tool_name].get("spec")
-            else:
-                spec = self.registry.get(tool_name)
-                if spec:
-                    func = spec.func
-
-            if func is not None:
-                try:
-                    result = await self._run_tool_call(tool_name, func, spec, args)
-                    await queue.put(
-                        {
-                            "jsonrpc": "2.0",
-                            "id": msg_id,
-                            "result": {
-                                "content": [{"type": "text", "text": str(result)}]
-                            },
-                        }
-                    )
-                except Exception as e:
-                    await queue.put(
-                        {
-                            "jsonrpc": "2.0",
-                            "id": msg_id,
-                            "error": {"code": -32603, "message": str(e)},
-                        }
-                    )
-            else:
-                await queue.put(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": msg_id,
-                        "error": {"code": -32601, "message": "Tool not found"},
-                    }
-                )
-
+            await self._handle_tool_call(params, msg_id, queue)
         elif method == "resources/list":
-            res_list = [
-                {"uri": uri, "name": r_data["name"]}
-                for uri, r_data in self.resources.items()
-            ]
-            await queue.put(
-                {"jsonrpc": "2.0", "id": msg_id, "result": {"resources": res_list}}
-            )
-
+            resources = [{"uri": uri, "name": data["name"]} for uri, data in self.resources.items()]
+            await queue.put({"jsonrpc": "2.0", "id": msg_id, "result": {"resources": resources}})
         elif method == "resources/read":
-            uri = params.get("uri")
-            if uri in self.resources:
-                func = self.resources[uri]["func"]
-                try:
-                    if inspect.iscoroutinefunction(func):
-                        content = await func()
-                    else:
-                        content = func()
-                    await queue.put(
-                        {
-                            "jsonrpc": "2.0",
-                            "id": msg_id,
-                            "result": {
-                                "contents": [{"uri": uri, "text": str(content)}]
-                            },
-                        }
-                    )
-                except Exception as e:
-                    await queue.put(
-                        {
-                            "jsonrpc": "2.0",
-                            "id": msg_id,
-                            "error": {"code": -32603, "message": str(e)},
-                        }
-                    )
-            else:
-                await queue.put(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": msg_id,
-                        "error": {"code": -32602, "message": "Resource not found"},
-                    }
-                )
-
-        else:
-            if msg_id is not None:
-                await queue.put(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": msg_id,
-                        "error": {"code": -32601, "message": "Method not found"},
-                    }
-                )
+            await self._handle_resource_read(params, msg_id, queue)
+        elif msg_id is not None:
+            await queue.put({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": "Method not found"}})
 
     async def _messages_endpoint(self, request: Request):
         try:
