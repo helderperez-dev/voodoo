@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
 __all__ = [
@@ -296,8 +296,7 @@ class InMemoryMemoryStore:
 # Protocol compliance check
 # ---------------------------------------------------------------------------
 
-# Placed at file bottom per spec: Protocol checks go under TYPE_CHECKING.
-from typing import TYPE_CHECKING
+# Protocol checks remain static-only.
 
 if TYPE_CHECKING:
     _memory_check: MemoryStore = InMemoryMemoryStore()  # type: ignore[assignment]

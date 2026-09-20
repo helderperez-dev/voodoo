@@ -14,6 +14,7 @@ Usage::
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 from typing import Any
@@ -29,11 +30,7 @@ _checked: bool = False
 
 def is_available() -> bool:
     """Return ``True`` if OTel SDK is importable and the env var is set."""
-    try:
-        import opentelemetry
-    except ImportError:
-        return False
-    return bool(os.environ.get("VOODOO_OTEL_EXPORTER"))
+    return importlib.util.find_spec("opentelemetry") is not None and bool(\n        os.environ.get("VOODOO_OTEL_EXPORTER")\n    )
 
 
 class OTLPExporter:

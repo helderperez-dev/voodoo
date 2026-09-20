@@ -20,6 +20,7 @@ this module without it raises a clear ImportError.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -111,14 +112,13 @@ class EdgeMQTTTransport:
         keepalive: int = 60,
         qos: int = 1,
     ) -> None:
-        try:
-            import paho.mqtt.client as mqtt
-        except ImportError as e:  # pragma: no cover
+        if importlib.util.find_spec("paho.mqtt.client") is None:  # pragma: no cover
             raise ImportError(
+
                 "MQTT transport requires the optional extra "
                 "'voodoo-framework[edge]' (paho-mqtt). Install it or use "
                 "the HTTP transport."
-            ) from e
+            )
 
         self._gateway = gateway
         self._broker_url = broker_url
