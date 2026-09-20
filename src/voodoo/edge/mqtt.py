@@ -114,7 +114,6 @@ class EdgeMQTTTransport:
     ) -> None:
         if importlib.util.find_spec("paho.mqtt.client") is None:  # pragma: no cover
             raise ImportError(
-
                 "MQTT transport requires the optional extra "
                 "'voodoo-framework[edge]' (paho-mqtt). Install it or use "
                 "the HTTP transport."

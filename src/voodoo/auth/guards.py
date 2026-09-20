@@ -21,7 +21,7 @@ def _request(args: tuple[Any, ...], kwargs: dict[str, Any]) -> Request | None:
 def _unauthenticated(req: Request | None, redirect_url: str | None = None) -> Any:
     if req and redirect_url and "text/html" in req.headers.get("accept", ""):
         return RedirectResponse(url=redirect_url, status_code=302)
-    return JSONResponse({"error": "Authentication required", "code": 401}, status_code=401)
+    return JSONResponse(\n        {"error": "Authentication required", "code": 401}, status_code=401\n    )
 
 
 def _inject_user(sig: inspect.Signature, kwargs: dict[str, Any], user: Any) -> None:
@@ -36,7 +36,7 @@ def _guard(
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         sig = inspect.signature(func)
 
-        def authorize(args: tuple[Any, ...], kwargs: dict[str, Any]) -> tuple[Any, Any | None]:
+        def authorize(\n            args: tuple[Any, ...], kwargs: dict[str, Any]\n        ) -> tuple[Any, Any | None]:
             req = _request(args, kwargs)
             user = get_current_user(req)
             if not user or not user.is_authenticated:

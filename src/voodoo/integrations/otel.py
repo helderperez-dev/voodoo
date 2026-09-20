@@ -30,7 +30,9 @@ _checked: bool = False
 
 def is_available() -> bool:
     """Return ``True`` if OTel SDK is importable and the env var is set."""
-    return importlib.util.find_spec("opentelemetry") is not None and bool(\n        os.environ.get("VOODOO_OTEL_EXPORTER")\n    )
+    return importlib.util.find_spec("opentelemetry") is not None and bool(
+        os.environ.get("VOODOO_OTEL_EXPORTER")
+    )
 
 
 class OTLPExporter:
