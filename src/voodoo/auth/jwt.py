@@ -87,11 +87,31 @@ def create_access_token(
     return f"{header_b64}.{payload_b64}.{sig_b64}"
 
 
+def _decode_json_payload(payload_b64: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(_b64decode_str(payload_b64).decode("utf-8"))
+    except Exception:
+        raise InvalidTokenError("Malformed token payload") from None
+    if not isinstance(payload, dict):
+        raise InvalidTokenError("Malformed token payload")
+    return payload
+
+
+def _validate_time_claim(payload: dict[str, Any], claim: str, now: int) -> None:
+    if claim not in payload:
+        return
+    try:
+        value = int(payload[claim])
+    except (TypeError, ValueError):
+        raise InvalidTokenError(f"Malformed token {claim} claim") from None
+    if claim == "exp" and now > value:
+        raise ExpiredTokenError("Token has expired")
+    if claim == "nbf" and now < value:
+        raise InvalidTokenError("Token not yet valid")
+
+
 def decode_access_token(token: str, secret_key: str | None = None) -> dict[str, Any]:
-    """
-    Decodes and validates an HMAC-SHA256 signed access token.
-    Raises ExpiredTokenError or InvalidTokenError if invalid.
-    """
+    """Decode and validate an HMAC-SHA256 signed access token."""
     if not token or not isinstance(token, str):
         raise InvalidTokenError("Missing or invalid token")
 
@@ -101,43 +121,17 @@ def decode_access_token(token: str, secret_key: str | None = None) -> dict[str, 
 
     header_b64, payload_b64, sig_b64 = parts
     secret = secret_key or config.auth.secret_key
-
     message = f"{header_b64}.{payload_b64}".encode()
     expected_sig = hmac.new(secret.encode("utf-8"), message, hashlib.sha256).digest()
-
     try:
         provided_sig = _b64decode_str(sig_b64)
     except Exception:
         raise InvalidTokenError("Corrupted token signature encoding") from None
-
     if not secrets.compare_digest(expected_sig, provided_sig):
         raise InvalidTokenError("Invalid token signature")
 
-    try:
-        payload_bytes = _b64decode_str(payload_b64)
-        payload = json.loads(payload_bytes.decode("utf-8"))
-    except Exception:
-        raise InvalidTokenError("Malformed token payload") from None
-
-    if not isinstance(payload, dict):
-        raise InvalidTokenError("Malformed token payload")
-
+    payload = _decode_json_payload(payload_b64)
     now = int(time.time())
-
-    if "exp" in payload:
-        try:
-            exp = int(payload["exp"])
-        except (TypeError, ValueError):
-            raise InvalidTokenError("Malformed token expiry") from None
-        if now > exp:
-            raise ExpiredTokenError("Token has expired")
-
-    if "nbf" in payload:
-        try:
-            nbf = int(payload["nbf"])
-        except (TypeError, ValueError):
-            raise InvalidTokenError("Malformed token nbf claim") from None
-        if now < nbf:
-            raise InvalidTokenError("Token not yet valid")
-
+    _validate_time_claim(payload, "exp", now)
+    _validate_time_claim(payload, "nbf", now)
     return payload
