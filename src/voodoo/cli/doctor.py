@@ -1,3 +1,4 @@
+import importlib
 from pathlib import Path
 
 from voodoo.cli import terminal
@@ -187,7 +188,6 @@ def doctor():
     """
     Run environment and configuration diagnostics.
     """
-    import importlib
     import os
 
     from voodoo import __version__ as ver
