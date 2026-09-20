@@ -322,60 +322,51 @@ def _fallback_ai_assets() -> dict[str, str]:
     }
 
 
-def _detect_ide() -> str | None:
-    """
-    Attempt to auto-detect the active AI IDE/Editor from environment variables,
-    workspace config directories, or running parent processes.
-    """
+def _ide_from_environment() -> str | None:
     env_keys = " ".join(os.environ.keys()).lower()
     term_program = os.getenv("TERM_PROGRAM", "").lower()
+    signatures = {
+        "trae": ("trae_pid", "trae_resources_path", "__trae_app_dir__"),
+        "cursor": ("cursor_trace", "cursor_port", "cursor_session_id"),
+        "windsurf": ("windsurf_port", "windsurf_initial_cwd"),
+        "vscode": ("vscode_pid", "vscode_injection"),
+    }
+    return next(
+        (
+            ide
+            for ide, keys in signatures.items()
+            if ide in term_program or any(key in env_keys for key in keys)
+        ),
+        None,
+    )
 
-    # 1. Environment variables (highest priority for current session)
-    if (
-        any(
-            k in env_keys
-            for k in ["trae_pid", "trae_resources_path", "__trae_app_dir__"]
-        )
-        or "trae" in term_program
-    ):
-        return "trae"
 
-    if (
-        any(k in env_keys for k in ["cursor_trace", "cursor_port", "cursor_session_id"])
-        or "cursor" in term_program
-    ):
-        return "cursor"
+def _ide_from_workspace() -> str | None:
+    markers = (
+        (".trae", "trae"),
+        (".cursor", "cursor"),
+        (".windsurfrules", "windsurf"),
+        (".vscode", "vscode"),
+    )
+    directories = [Path.cwd(), *Path.cwd().parents[:3]]
+    return next(
+        (
+            ide
+            for directory in directories
+            for marker, ide in markers
+            if (directory / marker).exists()
+        ),
+        None,
+    )
 
-    if (
-        any(k in env_keys for k in ["windsurf_port", "windsurf_initial_cwd"])
-        or "windsurf" in term_program
-    ):
-        return "windsurf"
 
-    if (
-        any(k in env_keys for k in ["vscode_pid", "vscode_injection"])
-        or "vscode" in term_program
-    ):
-        return "vscode"
-
-    # 2. Check directory markers in current workspace
-    curr = Path.cwd()
-    for directory in [curr, *curr.parents[:3]]:
-        if (directory / ".trae").exists():
-            return "trae"
-        if (directory / ".cursor").exists():
-            return "cursor"
-        if (directory / ".windsurfrules").exists():
-            return "windsurf"
-        if (directory / ".vscode").exists():
-            return "vscode"
-
-    # 3. Process inspection for specific IDEs
+def _ide_from_processes() -> str | None:
+    markers = (("trae", "trae"), ("cursor", "cursor"), ("windsurf", "windsurf"), ("vscode", "vscode"), ("code", "vscode"))
     try:
         curr_pid = os.getppid()
         for _ in range(4):
             if curr_pid <= 1:
-                break
+                return None
             res = subprocess.run(
                 ["ps", "-p", str(curr_pid), "-o", "comm="],
                 capture_output=True,
@@ -383,28 +374,27 @@ def _detect_ide() -> str | None:
                 timeout=1,
             )
             comm = res.stdout.strip().lower()
-            if "trae" in comm:
-                return "trae"
-            if "cursor" in comm:
-                return "cursor"
-            if "windsurf" in comm:
-                return "windsurf"
-            if "code" in comm or "vscode" in comm:
-                return "vscode"
+            match = next((ide for marker, ide in markers if marker in comm), None)
+            if match:
+                return match
             ppid_res = subprocess.run(
                 ["ps", "-p", str(curr_pid), "-o", "ppid="],
                 capture_output=True,
                 text=True,
                 timeout=1,
             )
-            ppid_str = ppid_res.stdout.strip()
-            if not ppid_str.isdigit():
-                break
-            curr_pid = int(ppid_str)
+            ppid = ppid_res.stdout.strip()
+            if not ppid.isdigit():
+                return None
+            curr_pid = int(ppid)
     except Exception:
-        pass
-
+        return None
     return None
+
+
+def _detect_ide() -> str | None:
+    """Auto-detect the active AI IDE/editor."""
+    return _ide_from_environment() or _ide_from_workspace() or _ide_from_processes()
 
 
 def _remote_ai_assets(ide: str) -> dict[str, str]:
