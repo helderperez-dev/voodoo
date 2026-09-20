@@ -409,8 +409,18 @@ def _detect_ide() -> str | None:
 
 def _remote_ai_assets(ide: str) -> dict[str, str]:
     names = [
-        "README", "RULES", "ARCHITECTURE", "ROUTING", "COMPONENTS", "STATE",
-        "DATABASE", "SKILLS", "MESH", "SEO", "AUTH", "SECURITY",
+        "README",
+        "RULES",
+        "ARCHITECTURE",
+        "ROUTING",
+        "COMPONENTS",
+        "STATE",
+        "DATABASE",
+        "SKILLS",
+        "MESH",
+        "SEO",
+        "AUTH",
+        "SECURITY",
     ]
     assets = {
         f".voodoo/ai/{name}.md": f"{AI_DOCS_BASE_URL}/{name}.md" for name in names
@@ -427,7 +437,9 @@ def _ide_rule_assets(ide: str) -> dict[str, str]:
         "cursor": (".cursor/rules/voodoo.mdc", _build_cursor_rules),
         "vscode": (".github/copilot-instructions.md", _build_workspace_rules),
     }
-    selected = builders if ide == "all" else {ide: builders[ide]} if ide in builders else {}
+    selected = (
+        builders if ide == "all" else {ide: builders[ide]} if ide in builders else {}
+    )
     return {path: builder() for path, builder in selected.values()}
 
 
