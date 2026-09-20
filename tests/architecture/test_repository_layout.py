@@ -29,40 +29,6 @@ ROOT_MODULES = {
 
 SEMANTIC_CORE = ("core", "runtime", "primitives", "protocol", "world")
 
-# Transitional debt baseline. This set may only shrink and is removed entirely
-# before Repository Architecture reaches 100%.
-LEGACY_NOQA_FILES = {
-    "ai/agent_legacy.py",
-    "ai/agent_runtime_truth.py",
-    "ai/providers/__init__.py",
-    "ai/tools/__init__.py",
-    "ai/tools/registry.py",
-    "auth/guards.py",
-    "auth/jwt.py",
-    "cli/doctor.py",
-    "cli/inspect.py",
-    "cli/new.py",
-    "cli/scaffolding.py",
-    "cli/theme.py",
-    "core/events.py",
-    "core/routing.py",
-    "data/base.py",
-    "data/store_facade.py",
-    "edge/gateway.py",
-    "edge/http.py",
-    "edge/mqtt.py",
-    "edge/protocol.py",
-    "mcp/__init__.py",
-    "memory/interfaces.py",
-    "mesh/__init__.py",
-    "protocol/schemas.py",
-    "routing/api.py",
-    "security/headers.py",
-    "security/secrets.py",
-    "storage/objects/s3.py",
-    "ui/styles/presets.py",
-    "workers/__init__.py",
-}
 VENDOR_ROOTS = {
     "anthropic",
     "boto3",
@@ -86,17 +52,19 @@ def test_package_root_is_curated() -> None:
     assert actual <= ROOT_MODULES
 
 
-def test_changed_source_does_not_add_noqa_suppressions() -> None:
-    """New architecture work must not introduce additional lint suppressions."""
-    # Legacy suppressions are tracked for removal during this refactor. Keeping
-    # this test scoped to the architectural center prevents new debt there
-    # while the remaining historical modules are cleaned incrementally.
-    protected = ("core", "runtime", "primitives", "protocol", "world")
+def test_source_has_no_noqa_suppressions() -> None:
+    """Architecture debt must not be hidden behind lint suppressions."""
     offenders = []
-    for domain in protected:
-        for path in _python_files(SRC / domain):
-            if "# noqa" in path.read_text(encoding="utf-8"):
-                offenders.append(str(path.relative_to(SRC)))
+    for path in _python_files(SRC):
+        if "# noqa" in path.read_text(encoding="utf-8"):
+            offenders.append(str(path.relative_to(SRC)))
+    assert offenders == []
+
+
+def test_tests_are_owned_by_a_test_domain() -> None:
+    """Tests must live under unit/integration/e2e/contracts/architecture."""
+    tests = Path(__file__).parents[1]
+    offenders = sorted(path.name for path in tests.glob("test_*.py"))
     assert offenders == []
 
 
