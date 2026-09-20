@@ -114,7 +114,6 @@ def _print_capability_matrix() -> None:
 
 
 def _doctor_modules() -> None:
-    import importlib
 
     terminal.heading("modules")
     modules = [
