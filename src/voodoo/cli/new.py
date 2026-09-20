@@ -201,7 +201,9 @@ def _clone_template(project_dir: Path, template: str, variant: str) -> bool:
                 if variant == "default" and not (Path(tmp_dir) / "default").exists():
                     variant_path = Path(tmp_dir)
                 else:
-                    terminal.error(f"Variant '{variant}' not found in template repository")
+                    terminal.error(
+                        f"Variant '${variant}' not found in template repository"
+                    )
                     raise typer.Exit(1)
             shutil.copytree(variant_path, project_dir, dirs_exist_ok=True)
     except subprocess.CalledProcessError:
@@ -217,7 +219,9 @@ def _install_project(project_dir: Path, progress: Progress) -> None:
     task = progress.add_task(description="setting up .venv...", total=None)
     try:
         if shutil.which("uv") is not None:
-            subprocess.run(["uv", "venv"], cwd=project_dir, check=True, capture_output=True)
+            subprocess.run(
+                ["uv", "venv"], cwd=project_dir, check=True, capture_output=True
+            )
             progress.update(task, description="installing dependencies...")
             command = ["uv", "pip", "install", "-e", "."]
         else:
@@ -228,7 +232,11 @@ def _install_project(project_dir: Path, progress: Progress) -> None:
                 capture_output=True,
             )
             progress.update(task, description="installing dependencies...")
-            pip_exe = ".venv/bin/pip" if sys.platform != "win32" else ".venv\\Scripts\\pip.exe"
+            pip_exe = (
+                ".venv/bin/pip"
+                if sys.platform != "win32"
+                else ".venv\\Scripts\\pip.exe"
+            )
             command = [str(project_dir / pip_exe), "install", "-e", "."]
         subprocess.run(command, cwd=project_dir, check=True, capture_output=True)
         for item in project_dir.glob("*.egg-info"):
