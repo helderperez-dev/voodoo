@@ -771,6 +771,17 @@ class Agent:
 
     # -- stream ------------------------------------------------------------
 
+    async def _stream_provider_events(
+        self, messages: list[Message]
+    ) -> AsyncIterator[tuple[str, Any]]:
+        try:
+            description = self.provider.describe()
+            tools = self._tools_for_provider() if description.tool_use else None
+        except Exception:
+            tools = self._tools_for_provider()
+        async for event in self.provider.stream(messages, tools=tools):
+            yield event.type, event.data
+
     async def stream(
         self,
         prompt: str,
@@ -813,27 +824,22 @@ class Agent:
                         "model": self.model,
                     },
                 )
-                try:
-                    desc = self.provider.describe()
-                    tools_arg = self._tools_for_provider() if desc.tool_use else None
-                except Exception:
-                    tools_arg = self._tools_for_provider()
-                async for event in self.provider.stream(messages, tools=tools_arg):
-                    if event.type == "text":
-                        accumulated_text += event.data.get("text", "")
-                        yield AgentEvent(type="text", data=event.data)
-                    elif event.type == "tool_call":
+                async for event_type, event_data in self._stream_provider_events(messages):
+                    if event_type == "text":
+                        accumulated_text += event_data.get("text", "")
+                        yield AgentEvent(type="text", data=event_data)
+                    elif event_type == "tool_call":
                         structured_tool_request = {
-                            "name": event.data.get("name", ""),
-                            "arguments": event.data.get("arguments", {}),
-                            "id": event.data.get("id"),
+                            "name": event_data.get("name", ""),
+                            "arguments": event_data.get("arguments", {}),
+                            "id": event_data.get("id"),
                         }
-                    elif event.type == "done":
-                        tokens_in += event.data.get("tokens_in", 0)
-                        tokens_out += event.data.get("tokens_out", 0)
-                        cost += event.data.get("cost", 0.0)
-                    elif event.type == "error":
-                        raise Exception(event.data.get("error", "Provider error"))
+                    elif event_type == "done":
+                        tokens_in += event_data.get("tokens_in", 0)
+                        tokens_out += event_data.get("tokens_out", 0)
+                        cost += event_data.get("cost", 0.0)
+                    elif event_type == "error":
+                        raise Exception(event_data.get("error", "Provider error"))
                 await self._broadcast(
                     "model.completed",
                     {
