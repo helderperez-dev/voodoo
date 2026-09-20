@@ -254,7 +254,7 @@ def new(
         "-v",
         help="Specific template variant inside the repository",
     ),
-)
+):
     """Scaffold a new Voodoo project or clone a community template."""
     project_dir = Path(project_name)
     if project_dir.exists():

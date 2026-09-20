@@ -236,6 +236,7 @@ class MCPServer:
                     "error": {"code": -32601, "message": "Method not found"},
                 }
             )
+
     async def _messages_endpoint(self, request: Request):
         try:
             session_id = request.query_params.get("sessionId")
