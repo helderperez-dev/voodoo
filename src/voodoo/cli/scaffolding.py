@@ -460,4 +460,3 @@ def _sync_ai_assets(project_dir: Path, progress: Progress, ide: str = "none") ->
     }
     _write_missing_assets(project_dir, fetched)
     _write_missing_assets(project_dir, _ide_rule_assets(ide))
-
