@@ -63,28 +63,19 @@ def _build_workspace_rules() -> str:
         If Trae skills are available, use `.trae/skills/voodoo-builder/SKILL.md`.
         """
         ).strip()
-        + "
-"
+        + "\n"
     )
 
 
 def _build_cursor_rules() -> str:
     return (
-        "---
-"
-        "description: Voodoo framework guidance for Cursor.
-"
-        "globs:
-"
-        '  - "**/*.py"
-'
-        '  - "**/*.md"
-'
-        "alwaysApply: true
-"
-        "---
-
-" + _build_workspace_rules()
+        "---\n"
+        "description: Voodoo framework guidance for Cursor.\n"
+        "globs:\n"
+        '  - "**/*.py"\n'
+        '  - "**/*.md"\n'
+        "alwaysApply: true\n"
+        "---\n\n" + _build_workspace_rules()
     )
 
 
@@ -113,8 +104,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Respect Voodoo navigation, websocket, and data conventions.
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".voodoo/ai/RULES.md": dedent(
             """
             # Voodoo Rules
@@ -133,8 +123,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Preserve `WEBSOCKETS_MAX_LINE_LENGTH="8388608"` and `http="h11"` when working with websocket-heavy apps.
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".voodoo/ai/ARCHITECTURE.md": dedent(
             """
             # Voodoo Architecture
@@ -148,8 +137,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Internal framework API routes remain mounted automatically.
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".voodoo/ai/ROUTING.md": dedent(
             """
             # Voodoo Routing
@@ -178,8 +166,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             ```
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".voodoo/ai/COMPONENTS.md": dedent(
             """
             # Voodoo Components
@@ -211,8 +198,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             small Python functions.
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".voodoo/ai/STATE.md": dedent(
             """
             # Voodoo State
@@ -226,8 +212,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             - WebSockets only when real-time behavior is truly needed
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".voodoo/ai/DATABASE.md": dedent(
             """
             # Voodoo Database
@@ -247,8 +232,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             ```
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".voodoo/ai/SKILLS.md": dedent(
             """
             # Voodoo AI Skills
@@ -277,8 +261,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Check `http="h11"`
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".voodoo/ai/MESH.md": dedent(
             """
             # Voodoo Mesh
@@ -290,8 +273,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Use `await mesh.broadcast(event, payload)` to push data to all connected clients.
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".voodoo/ai/SEO.md": dedent(
             """
             # Voodoo SEO & GEO
@@ -304,8 +286,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Supports JSON-LD structured data and OpenGraph / Twitter cards.
             """
         ).strip()
-        + "
-",
+        + "\n",
         ".trae/skills/voodoo-builder/SKILL.md": dedent(
             """
             ---
