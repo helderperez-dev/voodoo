@@ -14,12 +14,12 @@ import pytest
 from voodoo.data import Model
 from voodoo.data.store_backend import bind_runtime_store
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.execution.engine import ComputeResult, ExecutionEngine
 from voodoo.runtime.execution import ExecutionStatus
+from voodoo.runtime.execution.engine import ComputeResult, ExecutionEngine
 from voodoo.runtime.store import (
+    bind_active_runtime_store,
     RuntimeStore,
     StoreConfig,
-    bind_active_runtime_store,
 )
 from voodoo.storage.events.store import VoodooStoreEventBus
 from voodoo.storage.execution.store import VoodooStoreExecutionStore

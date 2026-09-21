@@ -1,11 +1,11 @@
 from typing import Any
 
-from voodoo.routing.api import api
 from voodoo.components import Card, Div, Heading
 from voodoo.data import get_db
 from voodoo.i18n import _
-from voodoo.storage import storage
+from voodoo.routing.api import api
 from voodoo.runtime.scheduling.workers import _queue, _worker_tasks
+from voodoo.storage import storage
 
 
 async def check_database() -> dict[str, Any]:

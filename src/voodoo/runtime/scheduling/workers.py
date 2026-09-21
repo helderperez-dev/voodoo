@@ -108,9 +108,9 @@ async def enqueue(
 
 async def _run_worker(name: str, worker_id: str) -> None:
     """Poll the durable queue for tasks of type *name* and execute one attempt."""
+    from voodoo.observability import trace_id_var
     from voodoo.primitives.intent import Intent
     from voodoo.runtime.execution.engine import engine as runtime_engine
-    from voodoo.observability import trace_id_var
 
     func = _workers[name]
     is_async = inspect.iscoroutinefunction(func)
