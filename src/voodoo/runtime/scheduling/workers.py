@@ -28,7 +28,7 @@ _worker_backoff: dict[str, float] = {}
 _worker_tasks: list[asyncio.Task] = []
 _queue: VoodooQueue | None = None
 
-logger = logging.getLogger("voodoo.queue")
+logger = logging.getLogger("voodoo.runtime.scheduling.workers")
 
 
 def registered_workers() -> tuple[tuple[str, Callable], ...]:
@@ -94,7 +94,7 @@ async def enqueue(
     idempotency_key: str | None = None,
 ) -> None:
     """Enqueue *payload* as a durable task of type *name*."""
-    from voodoo.telemetry import trace_id_var
+    from voodoo.observability import trace_id_var
 
     q = await _get_queue()
     await q.enqueue(
@@ -110,7 +110,7 @@ async def _run_worker(name: str, worker_id: str) -> None:
     """Poll the durable queue for tasks of type *name* and execute one attempt."""
     from voodoo.primitives.intent import Intent
     from voodoo.runtime.execution.engine import engine as runtime_engine
-    from voodoo.telemetry import trace_id_var
+    from voodoo.observability import trace_id_var
 
     func = _workers[name]
     is_async = inspect.iscoroutinefunction(func)

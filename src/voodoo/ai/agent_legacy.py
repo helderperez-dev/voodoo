@@ -6,7 +6,7 @@ The Agent turns a prompt into a final answer by iterating:
 
 The Agent is a *participant* in the runtime, not a parallel execution
 framework.  ``run()`` creates an :class:`~voodoo.runtime.execution.Execution`
-via the :class:`~voodoo.runtime.engine.ExecutionEngine` so that agent
+via the :class:`~voodoo.runtime.execution.engine.ExecutionEngine` so that agent
 runs share the same lifecycle, persistence, recovery, authorization and
 observability as every other execution path (HTTP, Worker, Task, MCP, …).
 
@@ -33,7 +33,7 @@ from enum import StrEnum
 from typing import Any
 
 from voodoo.ai.providers import LLMProvider, Message, default_model, get_provider
-from voodoo.tools.registry import ToolRegistry, default_registry
+from voodoo.ai.tools.registry import ToolRegistry, default_registry
 
 __all__ = ["Agent", "AgentRun", "AgentEvent"]
 
@@ -361,7 +361,7 @@ class Agent:
         Flow: Agent → Intent → capability check → Tool → Effect → Mesh.
 
         When running inside an
-        :class:`~voodoo.runtime.engine.ExecutionEngine` Execution, each
+        :class:`~voodoo.runtime.execution.engine.ExecutionEngine` Execution, each
         tool call creates a *child* Execution so the full agent activity
         is visible in the execution graph:
 
@@ -496,7 +496,7 @@ class Agent:
     ) -> AgentRun:
         """Execute prompt → provider → tool calls → final; return AgentRun.
 
-        When an :class:`~voodoo.runtime.engine.ExecutionEngine` is
+        When an :class:`~voodoo.runtime.execution.engine.ExecutionEngine` is
         available (either passed at construction or attached to the
         active :class:`~voodoo.runtime.context.ExecutionContext`), the
         run creates a first-class
@@ -537,7 +537,7 @@ class Agent:
         observability.  The agent's provider loop is the *compute*
         participant — it receives an
         :class:`~voodoo.runtime.context.ExecutionContext` and returns a
-        :class:`~voodoo.runtime.engine.ComputeResult`.
+        :class:`~voodoo.runtime.execution.engine.ComputeResult`.
         """
         from voodoo.primitives.intent import Intent
         from voodoo.runtime.context import ExecutionContext
