@@ -475,7 +475,7 @@ def test_link_renders(tailwind_adapter):
 
 
 def test_theme_has_semantic_tokens():
-    from voodoo.theme import ThemeColors
+    from voodoo.ui.styles.theme import ThemeColors
 
     colors = ThemeColors()
     assert colors.primary_hover == "#E4E4E7"
@@ -485,7 +485,7 @@ def test_theme_has_semantic_tokens():
 
 
 def test_theme_css_variables_include_vd_prefix():
-    from voodoo.theme import default_theme
+    from voodoo.ui.styles.theme import default_theme
 
     css = default_theme.to_css_variables()
     assert "--vd-color-primary:" in css
@@ -500,7 +500,7 @@ def test_theme_css_variables_include_vd_prefix():
 
 
 def test_theme_tailwind_config_has_semantic_names():
-    from voodoo.theme import default_theme
+    from voodoo.ui.styles.theme import default_theme
 
     config = default_theme.to_tailwind_config()
     assert '"primary-hover"' in config
@@ -509,7 +509,7 @@ def test_theme_tailwind_config_has_semantic_names():
 
 
 def test_create_theme_factory():
-    from voodoo.theme import create_theme
+    from voodoo.ui.styles.theme import create_theme
 
     theme = create_theme(primary="#635BFF", font="Inter")
     assert theme.colors.primary == "#635BFF"
@@ -517,7 +517,7 @@ def test_create_theme_factory():
 
 
 def test_theme_spacing_tokens():
-    from voodoo.theme import ThemeSpacing
+    from voodoo.ui.styles.theme import ThemeSpacing
 
     spacing = ThemeSpacing()
     assert spacing.xs == "0.25rem"
@@ -526,7 +526,7 @@ def test_theme_spacing_tokens():
 
 
 def test_theme_shadows_tokens():
-    from voodoo.theme import ThemeShadows
+    from voodoo.ui.styles.theme import ThemeShadows
 
     shadows = ThemeShadows()
     assert "0 1px 2px" in shadows.sm

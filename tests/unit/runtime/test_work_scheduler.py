@@ -52,7 +52,7 @@ def test_scheduler_orders_by_priority_then_deadline():
 
 
 def test_scheduler_preserves_placement_without_deciding_location():
-    from voodoo.runtime.fabric import PlacementRequirement
+    from voodoo.runtime.distributed.fabric import PlacementRequirement
 
     requirement = PlacementRequirement(capability="camera", location="edge")
     work = ScheduledWork(Intent(name="capture"), placement=requirement)
@@ -97,7 +97,7 @@ def test_scheduler_respects_backpressure_without_rejecting_work():
 
 
 def test_scheduler_explains_placement_without_selecting_node():
-    from voodoo.runtime.fabric import PlacementRequirement
+    from voodoo.runtime.distributed.fabric import PlacementRequirement
 
     work = ScheduledWork(
         Intent(name="capture"),
