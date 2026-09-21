@@ -13,8 +13,8 @@ import pytest
 import yaml
 
 from voodoo.adapters.capabilities import CapabilityError
-from voodoo.runtime.scheduling import workers as workers_queue
 from voodoo.config import get_config
+from voodoo.runtime.scheduling import workers as workers_queue
 
 
 @pytest.mark.asyncio
