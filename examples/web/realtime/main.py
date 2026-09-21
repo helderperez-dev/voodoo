@@ -3,7 +3,9 @@
 Run: python main.py  or  voodoo dev
 """
 
-from voodoo import App, Button, Div, Heading, Text, event, page, state
+from voodoo import App, page, state
+from voodoo.core import event
+from voodoo.ui import Button, Div, Heading, Text
 
 app = App()
 

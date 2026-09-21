@@ -3,7 +3,8 @@
 Run: python main.py  or  voodoo dev
 """
 
-from voodoo import App, Card, Container, Grid, Heading, Model, Text, page, state
+from voodoo import App, Model, page, state
+from voodoo.ui import Card, Container, Grid, Heading, Text
 
 app = App()
 
