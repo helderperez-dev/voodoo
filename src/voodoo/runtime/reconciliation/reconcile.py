@@ -22,7 +22,7 @@ from voodoo.runtime.application_graph import (
     ApplicationNodeKind,
     Invalidation,
 )
-from voodoo.runtime.goal import Goal
+from voodoo.runtime.agency.goal import Goal
 
 
 class ReconcileAction(StrEnum):

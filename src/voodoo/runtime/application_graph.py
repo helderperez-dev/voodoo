@@ -417,7 +417,7 @@ def _discover_routes(graph: ApplicationGraph, app: Any) -> None:
 
 def _discover_capabilities(graph: ApplicationGraph) -> None:
     try:
-        from voodoo.runtime.engine import engine
+        from voodoo.runtime.execution.engine import engine
 
         names = engine.capabilities.describe().get("capabilities", ())
     except Exception:
@@ -446,7 +446,7 @@ def _discover_models(graph: ApplicationGraph) -> None:
 
 def _discover_workers(graph: ApplicationGraph) -> None:
     try:
-        from voodoo.workers.queue import registered_workers
+        from voodoo.runtime.scheduling.workers import registered_workers
 
         workers = registered_workers()
     except Exception:

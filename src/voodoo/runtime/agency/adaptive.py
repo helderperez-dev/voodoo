@@ -16,8 +16,8 @@ from typing import Any
 from voodoo.primitives.intent import Intent
 from voodoo.primitives.resource import Resource
 from voodoo.runtime.constraint import ResourceAccountant
-from voodoo.runtime.engine import ComputeResult, ExecutionEngine
-from voodoo.runtime.engine import engine as default_engine
+from voodoo.runtime.execution.engine import ComputeResult, ExecutionEngine
+from voodoo.runtime.execution.engine import engine as default_engine
 from voodoo.runtime.errors import (
     ApprovalRequired,
     CapabilityDenied,
