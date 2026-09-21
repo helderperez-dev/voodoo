@@ -30,7 +30,7 @@ class LocalEventBus:
 
     def publish(self, event_type: str, payload: Any, **envelope: Any) -> dict[str, Any]:
         """Publish an event to subscribers. Returns the envelope."""
-        from voodoo.telemetry import trace_id_var
+        from voodoo.observability import trace_id_var
 
         ev = {
             "event_id": str(uuid.uuid4()),

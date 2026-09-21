@@ -3,19 +3,9 @@
 Run: python main.py  or  voodoo dev
 """
 
-from voodoo import (
-    Agent,
-    App,
-    Button,
-    Card,
-    Container,
-    Heading,
-    Text,
-    event,
-    page,
-    state,
-    tool,
-)
+from voodoo import Agent, App, page, state, tool
+from voodoo.core import event
+from voodoo.ui import Button, Card, Container, Heading, Text
 
 app = App()
 

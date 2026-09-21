@@ -46,7 +46,7 @@ def current_context() -> ExecutionContext | None:
 
 @asynccontextmanager
 async def use_context(ctx: ExecutionContext) -> AsyncIterator[ExecutionContext]:
-    from voodoo.telemetry import trace_id_var
+    from voodoo.observability import trace_id_var
 
     token = _context_var.set(ctx)
     prev_trace = trace_id_var.get()

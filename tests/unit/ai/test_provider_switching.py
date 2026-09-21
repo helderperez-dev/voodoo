@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-import voodoo.workers.queue as workers_queue
 from voodoo.adapters.capabilities import CapabilityError
 from voodoo.config import get_config
+from voodoo.runtime.scheduling import workers as workers_queue
 
 
 @pytest.mark.asyncio

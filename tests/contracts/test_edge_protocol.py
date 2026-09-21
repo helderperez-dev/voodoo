@@ -16,7 +16,7 @@ from voodoo.edge.gateway import DeviceGateway
 from voodoo.edge.models import TransportKind
 from voodoo.edge.protocol import EdgeMessageType, make_message
 from voodoo.edge.store import InMemoryDeviceStore
-from voodoo.runtime.engine import ExecutionEngine
+from voodoo.runtime.execution.engine import ExecutionEngine
 
 
 async def _make_gateway() -> DeviceGateway:

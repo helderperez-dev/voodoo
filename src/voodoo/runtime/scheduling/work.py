@@ -12,7 +12,7 @@ from enum import StrEnum
 from typing import Any
 
 from voodoo.primitives.intent import Intent, IntentStatus
-from voodoo.runtime.fabric import PlacementRequirement
+from voodoo.runtime.distributed.fabric import PlacementRequirement
 
 
 class WorkEligibility(StrEnum):

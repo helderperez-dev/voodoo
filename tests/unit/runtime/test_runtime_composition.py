@@ -18,7 +18,7 @@ from voodoo.runtime import (
     RuntimeStore,
     StoreConfig,
 )
-from voodoo.runtime.engine import ComputeResult
+from voodoo.runtime.execution.engine import ComputeResult
 from voodoo.world import Entity, WorldModel
 
 

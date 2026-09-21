@@ -5,10 +5,12 @@ from starlette.responses import RedirectResponse
 from starlette.testclient import TestClient
 
 import voodoo.data
-from voodoo import App, Card, Heading, Text, config, page
+from voodoo import App, page
+from voodoo.config import config
 from voodoo.core.errors import ConfigurationError, VoodooError
 from voodoo.core.routing import page_registry
 from voodoo.seo import SEO
+from voodoo.ui import Card, Heading, Text
 
 
 @pytest.fixture
@@ -143,15 +145,15 @@ def test_app_use_plugin(make_app):
 
 
 def test_app_theme_applied():
-    import voodoo.theme
+    from voodoo.ui.styles import theme as theme_module
 
-    original = voodoo.theme.default_theme
-    theme = voodoo.theme.Theme()
+    original = theme_module.default_theme
+    theme = theme_module.Theme()
     try:
         App(theme=theme)
-        assert voodoo.theme.default_theme is theme
+        assert theme_module.default_theme is theme
     finally:
-        voodoo.theme.set_theme(original)
+        theme_module.set_theme(original)
 
 
 def test_app_run_reload_requires_import_string(make_app):

@@ -66,7 +66,7 @@ class ScheduleService:
         """Enqueue one legacy-provider schedule occurrence."""
         import json
 
-        from voodoo.workers.queue import enqueue
+        from voodoo.runtime.scheduling.workers import enqueue
 
         payload = json.loads(schedule["payload"]) if schedule["payload"] else {}
         await enqueue(schedule["task_type"], payload)

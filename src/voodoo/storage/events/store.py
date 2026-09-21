@@ -80,7 +80,7 @@ class VoodooStoreEventBus:
 
     def publish(self, event_type: str, payload: Any, **envelope: Any) -> dict[str, Any]:
         """Persist an event atomically, then notify in-process subscribers."""
-        from voodoo.telemetry import trace_id_var
+        from voodoo.observability import trace_id_var
 
         store = self._native()
         sequence_key = self._sequence_key(event_type)

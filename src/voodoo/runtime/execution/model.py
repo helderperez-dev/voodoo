@@ -117,7 +117,7 @@ class Execution(BaseModel):
     """A single runtime execution.
 
     This is the canonical record produced and consumed by the
-    :class:`~voodoo.runtime.engine.ExecutionEngine`. It is serializable
+    :class:`~voodoo.runtime.execution.engine.ExecutionEngine`. It is serializable
     (Pydantic) so it can be checkpointed, inspected, and emitted as telemetry.
     """
 

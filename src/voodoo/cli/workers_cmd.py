@@ -18,7 +18,7 @@ __all__ = ["workers"]
 
 async def _gather_worker_info() -> dict[str, Any]:
     """Collect worker and queue state without side-effects."""
-    from voodoo.workers.queue import _get_queue, _worker_tasks, _workers
+    from voodoo.runtime.scheduling.workers import _get_queue, _worker_tasks, _workers
 
     info: dict[str, Any] = {
         "registered": list(_workers.keys()),

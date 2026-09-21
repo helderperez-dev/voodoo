@@ -274,7 +274,7 @@ class MCPServer:
         before the tool executes — same authority model as agents.
         """
         from voodoo.primitives.intent import Intent
-        from voodoo.runtime.engine import engine as default_engine
+        from voodoo.runtime.execution.engine import engine as default_engine
 
         eng = getattr(self, "engine", None) or default_engine
         permissions = list(spec.permissions) if spec else []

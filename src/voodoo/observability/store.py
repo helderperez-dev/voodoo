@@ -281,7 +281,7 @@ class TelemetryStore:
 
 telemetry_store = TelemetryStore()
 
-logger = logging.getLogger("voodoo.telemetry")
+logger = logging.getLogger("voodoo.observability")
 if not logger.handlers:
     handler = logging.StreamHandler()
     formatter = logging.Formatter(

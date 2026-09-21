@@ -188,7 +188,7 @@ def test_cli_doctor():
 
 
 def test_cli_doctor_checks_subsystems():
-    """Doctor should check runtime/db/auth/mesh/workers/telemetry subsystems."""
+    """Doctor should check runtime/db/auth/mesh/workers/observability subsystems."""
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
     assert "environment" in result.output.lower()
@@ -197,7 +197,7 @@ def test_cli_doctor_checks_subsystems():
     assert "auth" in result.output.lower()
     assert "mesh" in result.output.lower()
     assert "workers" in result.output.lower()
-    assert "telemetry" in result.output.lower()
+    assert "observability" in result.output.lower()
 
 
 def test_cli_version_shows_version():

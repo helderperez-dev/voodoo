@@ -3,19 +3,8 @@
 Run: python main.py  or  voodoo dev
 """
 
-from voodoo import (
-    App,
-    Badge,
-    Button,
-    Card,
-    Grid,
-    Heading,
-    Link,
-    Page,
-    Stack,
-    Text,
-    page,
-)
+from voodoo import App, page
+from voodoo.ui import Badge, Button, Card, Grid, Heading, Link, Page, Stack, Text
 
 app = App()
 

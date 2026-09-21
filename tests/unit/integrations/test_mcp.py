@@ -6,8 +6,8 @@ import asyncio
 
 import pytest
 
-from voodoo.mcp import MCPServer
-from voodoo.tools.registry import ToolRegistry, ToolSpec, build_spec
+from voodoo.ai.tools.registry import ToolRegistry, ToolSpec, build_spec
+from voodoo.integrations.mcp import MCPServer
 
 # ---------------------------------------------------------------------------
 # Fixtures

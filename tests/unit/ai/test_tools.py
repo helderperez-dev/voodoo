@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from voodoo import ToolRegistry, ToolSpec, tool
-from voodoo.tools import registry as tools_module
+from voodoo import tool
+from voodoo.ai.tools import ToolRegistry, ToolSpec
+from voodoo.ai.tools import registry as tools_module
 
 
 @pytest.fixture(autouse=True)

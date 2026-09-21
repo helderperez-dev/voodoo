@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from voodoo.queue import enqueue, queue, start_workers, stop_workers
+from voodoo.runtime.scheduling import enqueue, queue, start_workers, stop_workers
 
 processed_items = []
 

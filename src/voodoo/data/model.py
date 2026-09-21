@@ -67,7 +67,7 @@ class Model(BaseModel):
     @classmethod
     async def get(cls, id: int) -> Model | None:
         """Fetch a single row by primary key; ``None`` if not found."""
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
         db = await get_db()
@@ -141,7 +141,7 @@ class Model(BaseModel):
         row are removed before the row itself.
         """
         from voodoo.data.base import _cascade_delete_children
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
         db = await get_db()
@@ -223,7 +223,7 @@ class Query:
     # -- terminals (async) --------------------------------------------------
 
     def _execute_select(self) -> Any:
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
         table_name = _get_table_name(self._model)
@@ -246,7 +246,7 @@ class Query:
 
     async def count(self) -> int:
         """Return the number of rows matching the filters."""
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
         db = await get_db()
@@ -259,7 +259,7 @@ class Query:
 
     async def delete(self) -> int:
         """Delete matching rows; return the number of rows removed."""
-        from voodoo.telemetry import telemetry_store
+        from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
         db = await get_db()

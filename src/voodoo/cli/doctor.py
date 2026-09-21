@@ -119,10 +119,10 @@ def _doctor_modules() -> None:
     terminal.heading("modules")
     modules = [
         ("voodoo.mesh", "mesh"),
-        ("voodoo.mcp", "mcp"),
+        ("voodoo.integrations.mcp", "mcp"),
         ("voodoo.ai", "ai provider"),
-        ("voodoo.workers", "workers"),
-        ("voodoo.telemetry", "telemetry"),
+        ("voodoo.runtime.scheduling", "workers"),
+        ("voodoo.observability", "observability"),
     ]
     for name, label in modules:
         try:
@@ -138,7 +138,7 @@ def _doctor_queue() -> None:
     terminal.heading("queue")
 
     async def check() -> tuple[int, int]:
-        from voodoo.workers.queue import _get_queue, _workers
+        from voodoo.runtime.scheduling.workers import _get_queue, _workers
 
         depth = 0
         try:
@@ -169,7 +169,7 @@ def _doctor_optional_services(cfg: object) -> None:
 
     terminal.heading("otel")
     try:
-        from voodoo.telemetry.otlp import is_available
+        from voodoo.integrations.otel import is_available
 
         terminal.status("otlp exporter", "active" if is_available() else "off")
     except Exception:

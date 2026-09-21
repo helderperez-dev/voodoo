@@ -9,12 +9,12 @@ from typing import Any
 
 import pytest
 
-from voodoo import Agent, AgentRun
-from voodoo.ai.agent import AgentState
+from voodoo import Agent
+from voodoo.ai.agent import AgentRun, AgentState
 from voodoo.ai.providers import ProviderEvent, ProviderResponse, ToolCall
 from voodoo.ai.providers.mock import MockProvider
-from voodoo.tools import registry as tools_module
-from voodoo.tools.registry import ToolRegistry, build_spec
+from voodoo.ai.tools import registry as tools_module
+from voodoo.ai.tools.registry import ToolRegistry, build_spec
 
 
 class ToolThenTextProvider(MockProvider):
@@ -127,7 +127,7 @@ def _clean_mesh_handlers():
 @pytest.fixture(autouse=True)
 def _clean_telemetry():
     """Reset telemetry agent metrics between tests."""
-    from voodoo.telemetry import telemetry_store
+    from voodoo.observability import telemetry_store
 
     telemetry_store.metrics["agent_runs"].clear()
     telemetry_store.metrics["tool_calls"].clear()
@@ -478,7 +478,7 @@ async def test_agent_lifecycle_error_on_stream_failure():
 
 @pytest.mark.asyncio
 async def test_run_records_telemetry():
-    from voodoo.telemetry import telemetry_store
+    from voodoo.observability import telemetry_store
 
     agent = Agent(model="mock:test")
     await agent.run("hello")
@@ -488,7 +488,7 @@ async def test_run_records_telemetry():
 
 @pytest.mark.asyncio
 async def test_tool_call_records_telemetry():
-    from voodoo.telemetry import telemetry_store
+    from voodoo.observability import telemetry_store
 
     registry = ToolRegistry()
 
@@ -507,7 +507,7 @@ async def test_tool_call_records_telemetry():
 
 @pytest.mark.asyncio
 async def test_agent_run_correlates_with_trace_id():
-    from voodoo.telemetry import trace_id_var
+    from voodoo.observability import trace_id_var
 
     trace_id_var.set("test-trace-123")
     try:
@@ -591,13 +591,7 @@ def test_agent_exported_from_voodoo():
     assert ExportedAgent is Agent
 
 
-def test_agent_run_exported_from_voodoo():
-    from voodoo import AgentRun as ExportedAgentRun
+def test_agent_canonical_module_matches_root_happy_path():
+    from voodoo.ai.agent import Agent as CanonicalAgent
 
-    assert ExportedAgentRun is AgentRun
-
-
-def test_agent_reexport_from_voodoo_agent_module():
-    from voodoo.agent import Agent as ReExportedAgent
-
-    assert ReExportedAgent is Agent
+    assert CanonicalAgent is Agent

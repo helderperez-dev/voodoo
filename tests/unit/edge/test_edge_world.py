@@ -6,7 +6,7 @@ from voodoo.edge import WorldAwareDeviceGateway
 from voodoo.edge.models import AuthenticatedDeviceContext, Device, TransportKind
 from voodoo.edge.protocol import EdgeMessage, EdgeMessageType
 from voodoo.edge.store import InMemoryDeviceStore
-from voodoo.runtime.engine import ExecutionEngine
+from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.world import WorldModel
 
 

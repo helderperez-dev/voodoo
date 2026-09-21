@@ -12,7 +12,15 @@ from enum import StrEnum
 from typing import Any
 
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.adaptive import AdaptiveSupervisor, SupervisorConfig
+from voodoo.runtime.agency import (
+    AdaptiveSupervisor,
+    Goal,
+    GoalDecomposer,
+    GoalRun,
+    GoalRuntime,
+    GoalStore,
+    SupervisorConfig,
+)
 from voodoo.runtime.application_graph import (
     ApplicationGraph,
     ApplicationNodeKind,
@@ -22,16 +30,13 @@ from voodoo.runtime.application_graph import (
     contribute_goal,
 )
 from voodoo.runtime.dependency_graph import DependencyGraph
-from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
-from voodoo.runtime.engine import ComputeFn, ExecutionEngine
+from voodoo.runtime.distributed import RuntimeFabric
 from voodoo.runtime.execution import Execution
+from voodoo.runtime.execution.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.extension import RuntimeExtensionRegistry
-from voodoo.runtime.fabric import RuntimeFabric
-from voodoo.runtime.goal import Goal, GoalDecomposer, GoalRun, GoalRuntime, GoalStore
-from voodoo.runtime.handoff import ExecutionHandoff
-from voodoo.runtime.lineage import RuntimeLineage
+from voodoo.runtime.inspection import RuntimeLineage
 from voodoo.runtime.planner import ComputeParticipant, Planner
-from voodoo.runtime.reconcile import (
+from voodoo.runtime.reconciliation import (
     GoalIntentFactory,
     GoalPredicate,
     GoalReconciliation,
@@ -40,8 +45,10 @@ from voodoo.runtime.reconcile import (
     ReconcileHandler,
     Reconciler,
 )
+from voodoo.runtime.scheduling.dispatch import DispatchPlan, RuntimeDispatcher
+from voodoo.runtime.scheduling.handoff import ExecutionHandoff
+from voodoo.runtime.scheduling.work import RuntimeScheduler, WorkEligibility
 from voodoo.runtime.store import RuntimeStore, StoreConfig
-from voodoo.runtime.work_scheduler import RuntimeScheduler, WorkEligibility
 
 
 @dataclass(frozen=True, slots=True)

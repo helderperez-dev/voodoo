@@ -14,8 +14,8 @@ import pytest
 from voodoo.data import Model
 from voodoo.data.store_backend import bind_runtime_store
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.engine import ComputeResult, ExecutionEngine
 from voodoo.runtime.execution import ExecutionStatus
+from voodoo.runtime.execution.engine import ComputeResult, ExecutionEngine
 from voodoo.runtime.store import (
     RuntimeStore,
     StoreConfig,

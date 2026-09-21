@@ -14,18 +14,19 @@ import pytest_asyncio
 from starlette.testclient import TestClient
 
 import voodoo.data
-from voodoo import Agent, Div, Text, page, state
+from voodoo import Agent, page, state
 from voodoo.ai.providers import ProviderResponse
 from voodoo.ai.providers.mock import MockProvider
+from voodoo.ai.tools import registry as tools_module
+from voodoo.ai.tools.registry import ToolRegistry, build_spec
 from voodoo.auth import create_access_token
 from voodoo.core import create_app
 from voodoo.core.events import event, ws_manager
 from voodoo.core.state import StateRenderer, state_renderer
-from voodoo.mcp import MCPServer
+from voodoo.integrations.mcp import MCPServer
 from voodoo.mesh import mesh
-from voodoo.telemetry import telemetry_store, trace_id_var
-from voodoo.tools import registry as tools_module
-from voodoo.tools.registry import ToolRegistry, build_spec
+from voodoo.observability import telemetry_store, trace_id_var
+from voodoo.ui import Div, Text
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -347,7 +348,7 @@ async def test_mcp_tool_exposed_and_callable():
         return a + b
 
     # The tool should be in the default registry
-    from voodoo.tools.registry import default_registry
+    from voodoo.ai.tools.registry import default_registry
 
     spec = default_registry.get("calculate_sum")
     assert spec is not None
@@ -378,7 +379,7 @@ async def test_mesh_expose_bridges_to_mcp_and_registry():
     assert "lookup_order" in mesh.exposed_functions
 
     # Should be in the default tool registry (bridged via MCP)
-    from voodoo.tools.registry import default_registry
+    from voodoo.ai.tools.registry import default_registry
 
     spec = default_registry.get("lookup_order")
     assert spec is not None
@@ -538,10 +539,10 @@ async def test_correlation_id_propagates_to_tool_call_telemetry():
 async def test_correlation_id_propagates_to_queue():
     """Enqueue captures the current trace_id and stores it on the task record."""
 
-    from voodoo.queue import enqueue
+    from voodoo.runtime.scheduling import enqueue
 
     # Register a dummy worker so enqueue can find a handler
-    from voodoo.workers.queue import _get_queue, _workers
+    from voodoo.runtime.scheduling.workers import _get_queue, _workers
 
     async def _handler(payload):
         pass

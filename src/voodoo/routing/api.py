@@ -54,7 +54,7 @@ class API:
             return func(**kwargs)
 
         from voodoo.primitives.intent import Intent
-        from voodoo.runtime.engine import engine as runtime_engine
+        from voodoo.runtime.execution.engine import engine as runtime_engine
 
         actor = "anonymous"
         user = kwargs.get("user")

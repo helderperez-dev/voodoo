@@ -20,7 +20,6 @@ ROOT_MODULES = {
     "components.py",
     "config.py",
     "i18n.py",
-    "queue.py",
     "schedule.py",
     "seo.py",
     "status.py",
@@ -86,3 +85,49 @@ def test_semantic_core_has_no_vendor_imports() -> None:
                     ):
                         offenders.append(f"{path.relative_to(SRC)} imports {name}")
     assert offenders == []
+
+
+def test_removed_3x_worker_compatibility_paths_do_not_return() -> None:
+    """3.0 scheduling ownership must not regress to legacy worker facades."""
+    assert not (SRC / "queue.py").exists()
+    assert not (SRC / "workers").exists()
+
+
+def test_removed_3x_runtime_scheduling_facades_do_not_return() -> None:
+    """Scheduling concepts must live only in the canonical grouped owner."""
+    runtime = SRC / "runtime"
+    for name in ("dispatch.py", "handoff.py", "scheduler.py", "work_scheduler.py"):
+        assert not (runtime / name).exists()
+
+
+def test_removed_3x_mesh_semantic_facades_do_not_return() -> None:
+    """Mesh is transport/application surface; distributed semantics belong to Runtime."""
+    mesh = SRC / "mesh"
+    for name in ("auth.py", "remote.py", "replay.py"):
+        assert not (mesh / name).exists()
+
+
+def test_removed_3x_runtime_semantic_facades_do_not_return() -> None:
+    """3.0 Runtime concepts must resolve through grouped canonical owners only."""
+    runtime = SRC / "runtime"
+    for name in (
+        "adaptive.py",
+        "dashboard.py",
+        "engine.py",
+        "fabric.py",
+        "goal.py",
+        "goal_store.py",
+        "lineage.py",
+        "membership.py",
+        "reconcile.py",
+        "world_execution.py",
+    ):
+        assert not (runtime / name).exists()
+
+
+def test_removed_3x_compatibility_namespaces_do_not_return() -> None:
+    """3.0 keeps one canonical owner for observability, MCP, tools, API and theme."""
+    for directory in ("telemetry", "mcp", "tools"):
+        assert not (SRC / directory).exists()
+    for module in ("agent.py", "api.py", "theme.py"):
+        assert not (SRC / module).exists()

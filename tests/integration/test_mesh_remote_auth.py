@@ -5,12 +5,12 @@ from __future__ import annotations
 import pytest
 
 from voodoo.mesh import MeshNetwork, RemoteExecutionRequest
-from voodoo.mesh.auth import (
+from voodoo.primitives.capability import Capability
+from voodoo.runtime import ExecutionEngine, IdentityKind, PolicyDecision
+from voodoo.runtime.distributed.auth import (
     InMemoryParticipantResolver,
     ParticipantAuthenticationError,
 )
-from voodoo.primitives.capability import Capability
-from voodoo.runtime import ExecutionEngine, IdentityKind, PolicyDecision
 
 
 @pytest.mark.asyncio

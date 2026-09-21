@@ -176,7 +176,7 @@ def _decide(
     json_mode: bool,
 ) -> None:
     """Shared approve/deny path: recover waiting executions, then decide."""
-    from voodoo.runtime.engine import engine as runtime_engine
+    from voodoo.runtime.execution.engine import engine as runtime_engine
 
     store, resolved = _resolve_store(store_path)
     runtime_engine.use_store(store)

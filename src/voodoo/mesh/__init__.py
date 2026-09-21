@@ -10,21 +10,21 @@ from typing import Any
 
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from voodoo.mcp import mcp
-from voodoo.mesh.auth import (
+from voodoo.integrations.mcp import mcp
+from voodoo.mesh.client import MeshClient
+from voodoo.runtime.distributed.auth import (
     ParticipantAuthenticationError,
     ParticipantEvidence,
     ParticipantIdentity,
     ParticipantResolver,
 )
-from voodoo.mesh.client import MeshClient
-from voodoo.mesh.remote import (
+from voodoo.runtime.distributed.remote import (
     ExposedOperation,
     RemoteAuthorityRegistry,
     RemoteExecutionOutcome,
     RemoteExecutionRequest,
 )
-from voodoo.mesh.replay import (
+from voodoo.runtime.distributed.replay import (
     InMemoryRemoteReplayStore,
     RemoteReplayStore,
     request_fingerprint,
@@ -41,7 +41,7 @@ def _make_envelope(
 ) -> dict[str, Any]:
     """Build a standard event envelope with id, ts, source, correlation_id."""
     if correlation_id is None:
-        from voodoo.telemetry import trace_id_var
+        from voodoo.observability import trace_id_var
 
         correlation_id = trace_id_var.get()
     return {
@@ -152,7 +152,7 @@ class MeshNetwork:
     def _runtime_engine(self):
         if self.execution_engine is not None:
             return self.execution_engine
-        from voodoo.runtime.engine import engine as runtime_engine
+        from voodoo.runtime.execution.engine import engine as runtime_engine
 
         return runtime_engine
 

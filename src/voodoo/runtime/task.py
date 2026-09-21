@@ -27,10 +27,10 @@ from voodoo.primitives.constraint import Constraint
 from voodoo.primitives.intent import Intent
 from voodoo.primitives.resource import Resource
 from voodoo.runtime.context import ExecutionContext
-from voodoo.runtime.engine import ComputeFn, ComputeResult, ExecutionEngine
-from voodoo.runtime.engine import engine as default_engine
 from voodoo.runtime.errors import ExecutionError, ExecutionTimeout
 from voodoo.runtime.execution import Execution
+from voodoo.runtime.execution.engine import ComputeFn, ComputeResult, ExecutionEngine
+from voodoo.runtime.execution.engine import engine as default_engine
 
 __all__ = ["TaskStatus", "Task"]
 

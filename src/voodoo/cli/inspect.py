@@ -102,7 +102,7 @@ def inspect_why(
     ),
 ):
     """Explain the causal Runtime lineage for a subject."""
-    from voodoo.runtime.lineage import lineage
+    from voodoo.runtime.inspection import lineage
 
     data = lineage.describe(subject_id)
     _emit(None, json_mode)
@@ -235,7 +235,7 @@ def inspect_agent(
         return
 
     _load_app(app_str)  # import side effects populate telemetry
-    from voodoo.telemetry import telemetry_store
+    from voodoo.observability import telemetry_store
 
     runs = telemetry_store.metrics["agent_runs"][-limit:]
     _emit(None, json_mode)
@@ -321,7 +321,7 @@ def inspect_tool(
 ):
     """Recent tool calls: name, latency, error."""
     _load_app(app_str)
-    from voodoo.telemetry import telemetry_store
+    from voodoo.observability import telemetry_store
 
     calls = telemetry_store.metrics["tool_calls"][-limit:]
     _emit(None, json_mode)

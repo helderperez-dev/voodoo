@@ -5,7 +5,7 @@ traceable to an execution, with dependencies, events, results, errors,
 timing, resources and effects.
 
 This is not a separate execution system — it is a read view over the
-:class:`~voodoo.runtime.engine.ExecutionEngine`'s recorded executions.
+:class:`~voodoo.runtime.execution.engine.ExecutionEngine`'s recorded executions.
 """
 
 from __future__ import annotations

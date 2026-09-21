@@ -144,7 +144,7 @@ class App:
         **kwargs: Any,
     ) -> Any:
         """Register an explicit Goal or decorate a desired-state predicate."""
-        from voodoo.runtime.goal import Goal
+        from voodoo.runtime.agency import Goal
 
         observed_ids = tuple(
             item.resource_id if isinstance(item, ObservationHandle) else item
@@ -322,7 +322,7 @@ def _build_routes(
     if config.edge.enabled and config.edge.http_enabled:
         from voodoo.edge import DeviceGateway, InMemoryDeviceStore
         from voodoo.edge.http import build_edge_routes
-        from voodoo.runtime.engine import engine as runtime_engine
+        from voodoo.runtime.execution.engine import engine as runtime_engine
 
         gateway = DeviceGateway(InMemoryDeviceStore(), runtime_engine)
         edge_gateway.append(gateway)
@@ -376,7 +376,7 @@ async def _start_mqtt(
     try:
         from voodoo.edge import DeviceGateway, VoodooStoreDeviceStore
         from voodoo.edge.mqtt import EdgeMQTTTransport
-        from voodoo.runtime.engine import engine as runtime_engine
+        from voodoo.runtime.execution.engine import engine as runtime_engine
     except ImportError:
         return None
     gateway = (
@@ -413,14 +413,14 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
 
     from voodoo.auth import AuthMiddleware
     from voodoo.i18n import I18nMiddleware
+    from voodoo.observability import TelemetryMiddleware
+    from voodoo.runtime.scheduling.workers import start_workers, stop_workers
     from voodoo.security import (
         CORSMiddleware,
         CSRFMiddleware,
         RateLimitMiddleware,
         SecurityHeadersMiddleware,
     )
-    from voodoo.telemetry import TelemetryMiddleware
-    from voodoo.workers.queue import start_workers, stop_workers
 
     @asynccontextmanager
     async def lifespan(starlette: Starlette) -> AsyncIterator[None]:
@@ -435,7 +435,7 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
         from voodoo.data.store_backend import bind_runtime_store
 
         bind_runtime_store(application_store)
-        from voodoo.runtime.engine import engine as global_runtime_engine
+        from voodoo.runtime.execution.engine import engine as global_runtime_engine
 
         runtime_engine = (
             runtime.engine if runtime is not None else global_runtime_engine
@@ -447,13 +447,13 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
             from voodoo.edge import VoodooStoreDeviceStore
 
             edge_gateway[0]._store = VoodooStoreDeviceStore(application_store)
-        from voodoo.runtime.scheduler import ScheduleService
+        from voodoo.runtime.scheduling import ScheduleService
         from voodoo.storage.scheduler import create_schedule_store
 
         schedule_store = create_schedule_store(schedule_path)
         scheduler = ScheduleService(schedule_store)
         await scheduler.start()
-        from voodoo.workers.queue import _workers
+        from voodoo.runtime.scheduling.workers import _workers
 
         worker_task = asyncio.create_task(start_workers()) if _workers else None
         mqtt_transport = await _start_mqtt(config, edge_gateway, application_store)

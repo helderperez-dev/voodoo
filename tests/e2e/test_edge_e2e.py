@@ -17,7 +17,7 @@ from voodoo.edge.gateway import DeviceGateway
 from voodoo.edge.http import build_edge_routes
 from voodoo.edge.simulator import DeviceSimulator, HTTPSimulatorTransport
 from voodoo.edge.store import InMemoryDeviceStore
-from voodoo.runtime.engine import ExecutionEngine
+from voodoo.runtime.execution.engine import ExecutionEngine
 
 # ---------------------------------------------------------------------------
 # Fixtures

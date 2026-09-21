@@ -45,7 +45,7 @@ from voodoo.edge.protocol import (
 from voodoo.edge.store import DeviceStoreProtocol, EffectDelivery
 
 if TYPE_CHECKING:
-    from voodoo.runtime.engine import ExecutionEngine
+    from voodoo.runtime.execution.engine import ExecutionEngine
 
 logger = logging.getLogger("voodoo.edge")
 

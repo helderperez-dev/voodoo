@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from voodoo.telemetry import trace
-from voodoo.telemetry.store import (
+from voodoo.observability import trace
+from voodoo.observability.store import (
     Span,
     TelemetryStore,
     new_trace_id,
@@ -306,8 +306,8 @@ class TestTracePropagation:
 
     async def test_trace_id_propagates_to_queue_enqueue(self):
         """Enqueue captures the current trace_id."""
-        from voodoo.queue import enqueue
-        from voodoo.workers.queue import _get_queue, _workers
+        from voodoo.runtime.scheduling import enqueue
+        from voodoo.runtime.scheduling.workers import _get_queue, _workers
 
         async def _handler(payload):
             pass
@@ -330,7 +330,7 @@ class TestTracePropagation:
         from voodoo.ai.agent import Agent
         from voodoo.ai.providers import ProviderResponse
         from voodoo.ai.providers.mock import MockProvider
-        from voodoo.tools.registry import ToolRegistry, build_spec
+        from voodoo.ai.tools.registry import ToolRegistry, build_spec
 
         _clear_spans()
 
@@ -420,7 +420,7 @@ class TestOTLPExporter:
     """OTLP availability check and graceful degradation."""
 
     def test_is_available_false_without_env(self):
-        from voodoo.telemetry.otlp import is_available
+        from voodoo.integrations.otel import is_available
 
         old = os.environ.pop("VOODOO_OTEL_EXPORTER", None)
         try:
@@ -431,7 +431,7 @@ class TestOTLPExporter:
 
     def test_export_span_noop_without_env(self):
         """export_span should be a no-op when OTLP is not configured."""
-        from voodoo.telemetry.otlp import export_span
+        from voodoo.integrations.otel import export_span
 
         old = os.environ.pop("VOODOO_OTEL_EXPORTER", None)
         try:

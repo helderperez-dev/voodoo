@@ -6,12 +6,14 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from voodoo.runtime.fabric import (
+from voodoo.runtime.distributed import (
     FabricRoutingError,
     FabricWork,
+    NodeAdvertisement,
     NoEligibleNodeError,
     PlacementRequirement,
     RuntimeFabric,
+    VoodooStoreMembershipStore,
     WorkNotFailoverSafeError,
 )
 from voodoo.runtime.identity import (
@@ -20,7 +22,6 @@ from voodoo.runtime.identity import (
     IdentityKind,
     Principal,
 )
-from voodoo.runtime.membership import NodeAdvertisement, VoodooStoreMembershipStore
 from voodoo.runtime.store import RuntimeStore, StoreConfig, bind_active_runtime_store
 
 

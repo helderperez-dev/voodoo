@@ -1,6 +1,7 @@
 import pytest
 
-from voodoo.theme import (
+from voodoo.ui.styles.palette import color
+from voodoo.ui.styles.theme import (
     Theme,
     ThemeColors,
     ThemePalette,
@@ -10,7 +11,6 @@ from voodoo.theme import (
     default_theme,
     set_theme,
 )
-from voodoo.ui.styles.palette import color
 
 
 def test_default_theme():
@@ -81,9 +81,9 @@ def test_set_theme():
         new_theme = Theme(mode="light")
         set_theme(new_theme)
 
-        import voodoo.theme
+        from voodoo.ui.styles import theme as theme_module
 
-        assert voodoo.theme.default_theme.mode == "light"
+        assert theme_module.default_theme.mode == "light"
     finally:
         set_theme(original_theme)
 

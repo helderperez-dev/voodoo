@@ -13,22 +13,9 @@ Run: python examples/ai_saas/main.py  or  voodoo dev
 This demo uses the mock provider (no network/API keys required).
 """
 
-from voodoo import (
-    Agent,
-    App,
-    Button,
-    Card,
-    Container,
-    Div,
-    Heading,
-    Model,
-    Text,
-    page,
-    state,
-    tool,
-)
+from voodoo import Agent, App, Model, page, state, task, tool
 from voodoo.mesh import mesh
-from voodoo.workers import task
+from voodoo.ui import Button, Card, Container, Div, Heading, Text
 
 app = App()
 

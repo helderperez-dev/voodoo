@@ -699,7 +699,7 @@ class ExecutionEngine:
     def _record_telemetry(self, execution: Execution) -> None:
         """Record execution telemetry with redaction (Sprint 19)."""
         try:
-            from voodoo.telemetry import telemetry_store
+            from voodoo.observability import telemetry_store
 
             telemetry_store.record_trace(
                 f"execution.{execution.intent.name if execution.intent else 'anonymous'}",

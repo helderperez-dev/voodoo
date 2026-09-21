@@ -383,14 +383,16 @@ class TestRedactionInEngine:
     async def test_emit_redacts_payload(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Engine._emit applies redaction before broadcasting."""
         from voodoo.primitives.intent import Intent
-        from voodoo.runtime.engine import ExecutionEngine
+        from voodoo.runtime.execution.engine import ExecutionEngine
 
         captured: list[tuple[str, dict[str, Any]]] = []
 
         async def fake_broadcast(event: str, payload: dict[str, Any]) -> None:
             captured.append((event, payload))
 
-        monkeypatch.setattr("voodoo.mesh.broadcast", fake_broadcast)
+        from voodoo.mesh import mesh
+
+        monkeypatch.setattr(mesh, "broadcast", fake_broadcast)
 
         engine = ExecutionEngine()
         Intent(name="test", params={"api_key": "sk-secret123"})  # noqa: F841
@@ -405,7 +407,7 @@ class TestRedactionInEngine:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Engine._journal_approval_decision applies redaction."""
-        from voodoo.runtime.engine import ExecutionEngine
+        from voodoo.runtime.execution.engine import ExecutionEngine
 
         captured: list[dict[str, Any]] = []
 

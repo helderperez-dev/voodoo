@@ -124,7 +124,7 @@ class TestIdempotencyKeyOnEffects:
 
         async def compute(ctx):
             from voodoo.primitives.effect import Effect
-            from voodoo.runtime.engine import ComputeResult
+            from voodoo.runtime.execution.engine import ComputeResult
 
             return ComputeResult(effects=[Effect(name="send_email", idempotent=False)])
 

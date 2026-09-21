@@ -15,7 +15,7 @@ Usage::
 
 The decorated function remains callable as plain Python while carrying a
 ``__tool_spec__`` attribute (a :class:`ToolSpec`) and being registered in the
-default registry (``voodoo.tools.registry.default_registry``).
+default registry (``voodoo.ai.tools.registry.default_registry``).
 """
 
 from __future__ import annotations

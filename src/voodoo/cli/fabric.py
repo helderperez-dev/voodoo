@@ -8,13 +8,13 @@ from typing import Annotated
 
 import typer
 
+from voodoo.runtime.distributed import NodeAdvertisement, VoodooStoreMembershipStore
 from voodoo.runtime.identity import (
     AuthenticationEvidence,
     Identity,
     IdentityKind,
     Principal,
 )
-from voodoo.runtime.membership import NodeAdvertisement, VoodooStoreMembershipStore
 from voodoo.runtime.store import RuntimeStore, StoreConfig, VoodooStoreProvider
 
 fabric_app = typer.Typer(help="Inspect and operate the local Voodoo Runtime fabric.")

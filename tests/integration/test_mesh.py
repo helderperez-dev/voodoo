@@ -140,7 +140,7 @@ def test_make_envelope_with_explicit_correlation_id():
 
 
 def test_make_envelope_correlation_id_from_trace_var():
-    from voodoo.telemetry import trace_id_var
+    from voodoo.observability import trace_id_var
 
     trace_id_var.set("my-trace-id")
     try:
@@ -185,7 +185,7 @@ def test_expose_bridges_to_mcp():
         """A tool via mesh."""
         return "result"
 
-    from voodoo.mcp import mcp as mcp_instance
+    from voodoo.integrations.mcp import mcp as mcp_instance
 
     assert "exposed_tool" in mcp_instance.tools
 
@@ -233,8 +233,8 @@ async def test_isolated_mesh_does_not_leak_to_global():
 @pytest.mark.asyncio
 async def test_mesh_handler_produces_execution_record():
     """Every local handler runs through the engine (intent ``mesh:<event>``)."""
-    from voodoo.runtime.engine import engine as runtime_engine
     from voodoo.runtime.execution import ExecutionStatus
+    from voodoo.runtime.execution.engine import engine as runtime_engine
 
     received = []
 

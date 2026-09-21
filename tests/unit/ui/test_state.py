@@ -2,7 +2,8 @@
 
 import pytest
 
-from voodoo import State, state
+from voodoo import state
+from voodoo.ui.state import State
 
 
 def test_state_get_initial():

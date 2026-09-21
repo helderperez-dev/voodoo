@@ -45,7 +45,7 @@ class MeshClient:
                             )
                         )
                         continue
-                    from voodoo.mesh.remote import RemoteExecutionOutcome
+                    from voodoo.runtime.distributed.remote import RemoteExecutionOutcome
 
                     future.set_result(
                         RemoteExecutionOutcome.model_validate(outcome_payload)

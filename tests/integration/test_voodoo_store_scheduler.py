@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from voodoo.core.errors import ConfigurationError
-from voodoo.runtime.scheduler import ScheduleService
+from voodoo.runtime.scheduling import ScheduleService
 from voodoo.storage.scheduler import create_schedule_store
 from voodoo.storage.scheduler import store as scheduler_module
 from voodoo.storage.scheduler.store import VoodooStoreScheduleStore
