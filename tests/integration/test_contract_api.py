@@ -49,3 +49,4 @@ def test_catalog_symbols_are_not_root_exports() -> None:
 def test_version_is_string() -> None:
     assert isinstance(voodoo.__version__, str)
     assert voodoo.__version__.count(".") == 2
+    assert voodoo.__version__.split(".")[0] == "3"

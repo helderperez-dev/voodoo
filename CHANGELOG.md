@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [3.0.0] — 2026-09-21
+
 ### Breaking — 3.0 architecture cleanup
 
 - Consolidated task/worker orchestration under `voodoo.runtime.scheduling`.
