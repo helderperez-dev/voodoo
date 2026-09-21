@@ -15,6 +15,13 @@
 - Removed Mesh semantic facades for participant auth, remote execution, and
   replay; these now resolve directly from `voodoo.runtime.distributed` while
   `voodoo.mesh` remains the event/transport application surface.
+- Removed flat Runtime semantic facades for execution, agency, reconciliation,
+  distributed ownership, inspection, and world-aware execution.
+- Removed compatibility-only `voodoo.telemetry`, `voodoo.mcp`, and
+  `voodoo.tools` packages plus the top-level `voodoo.agent`, `voodoo.api`, and
+  `voodoo.theme` aliases.
+- Contracted the package root to the seven-symbol 3.0 happy path:
+  `Agent`, `App`, `Model`, `page`, `state`, `task`, and `tool`.
 
 
 ### Changed — Repository architecture convergence
@@ -23,8 +30,8 @@
   semantic ownership as the rule for physical source placement.
 - Grouped Runtime implementation under canonical `execution`,
   `reconciliation`, `scheduling`, `agency`, `distributed`, and
-  `inspection` ownership boundaries while preserving supported legacy imports
-  through compatibility facades.
+  `inspection` ownership boundaries and removed compatibility-only duplicate
+  owners as part of the 3.0 clean break.
 - Moved vendor-backed AI providers, MCP interoperability, and OpenTelemetry
   export behind `integrations/`; native AI semantics and observability remain
   framework-owned.
@@ -43,10 +50,10 @@
 
 ### Compatibility
 
-- Existing documented/public imports affected by physical moves remain
-  available through compatibility facades in the 2.x line.
-- No intentional public API removal is part of the repository architecture
-  convergence.
+- The 3.0 branch intentionally removes 2.x compatibility facades because there
+  are no external users to preserve at this stage.
+- Breaking import migrations are documented in `docs/public-api-3.md`; runtime
+  shims are not retained.
 
 ### Validation
 

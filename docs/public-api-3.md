@@ -1,13 +1,12 @@
 # Voodoo 3.0 public API law
 
-Sprint 27 defines the canonical import model for the next major release while
-preserving 2.x source compatibility.
+Voodoo 3.0 defines one canonical import model and intentionally removes
+compatibility-only paths from the 2.x line.
 
 ## Rule
 
-The package root is a **2.x compatibility facade**, not the long-term catalog of
-every Voodoo type. New subsystem APIs must live in the namespace that owns their
-semantics.
+The package root is the **small application happy path**, not a catalog of every
+Voodoo type. Subsystem APIs live in the namespace that owns their semantics.
 
 Canonical imports for 3.0 are:
 
@@ -37,17 +36,18 @@ from voodoo.edge import DeviceGateway, WorldAwareDeviceGateway
 from voodoo.protocol import Execution, WorldSnapshot, RemoteExecutionRequest
 ```
 
-## 2.x compatibility policy
+## 3.0 package-root contraction
 
-Existing imports from `voodoo` continue to resolve during the 2.x line. Sprint
-27 does not silently break applications merely to make `__all__` smaller.
-Catalog-style exports that already exist at the package root are compatibility
-surface; documentation and new examples should import them from their defining
-namespace.
+The 3.0 branch performs the major-version break deliberately. The package root
+exports exactly the common application vocabulary:
 
-The actual breaking contraction of the package-root namespace, if performed,
-is a 3.0 release operation and must include a migration table and a deliberate
-update to `tests/test_contract_api.py`.
+```python
+from voodoo import Agent, App, Model, page, state, task, tool
+```
+
+Catalog-style exports and deprecation shims are removed rather than carried
+forward. Import advanced APIs from their semantic owner. The exact root contract
+is pinned by `tests/integration/test_contract_api.py`.
 
 ## Laws for new public APIs
 
@@ -59,8 +59,8 @@ update to `tests/test_contract_api.py`.
 5. World concepts belong to `voodoo.world`.
 6. Device concepts belong to `voodoo.edge`.
 7. Wire schemas belong to `voodoo.protocol`.
-8. Existing compatibility imports must either keep working or fail only in a
-   documented major-version migration.
+8. Compatibility-only paths removed in 3.0 must not be reintroduced; migration
+   belongs in documentation, not runtime shims.
 
 ## Why this matters
 
@@ -152,3 +152,34 @@ remote execution authority, and replay/idempotency are owned by
 | `voodoo.mesh.auth` | `voodoo.runtime.distributed.auth` |
 | `voodoo.mesh.remote` | `voodoo.runtime.distributed.remote` |
 | `voodoo.mesh.replay` | `voodoo.runtime.distributed.replay` |
+
+
+### Runtime semantic module contraction
+
+| Removed Runtime module | Canonical owner |
+| --- | --- |
+| `voodoo.runtime.adaptive` | `voodoo.runtime.agency` |
+| `voodoo.runtime.dashboard` | `voodoo.runtime.inspection` |
+| `voodoo.runtime.engine` | `voodoo.runtime.execution.engine` |
+| `voodoo.runtime.fabric` | `voodoo.runtime.distributed` |
+| `voodoo.runtime.goal` | `voodoo.runtime.agency` |
+| `voodoo.runtime.goal_store` | `voodoo.runtime.agency` |
+| `voodoo.runtime.lineage` | `voodoo.runtime.inspection` |
+| `voodoo.runtime.membership` | `voodoo.runtime.distributed` |
+| `voodoo.runtime.reconcile` | `voodoo.runtime.reconciliation` |
+| `voodoo.runtime.world_execution` | `voodoo.runtime.execution.world` |
+
+### Removed compatibility namespaces
+
+| Removed 2.x path | 3.0 canonical path |
+| --- | --- |
+| `voodoo.telemetry` | `voodoo.observability` |
+| `voodoo.telemetry.otlp` | `voodoo.integrations.otel` |
+| `voodoo.mcp` | `voodoo.integrations.mcp` |
+| `voodoo.tools` | `voodoo.ai.tools` |
+| `voodoo.agent` | `voodoo.ai.agent` |
+| `voodoo.api` | `voodoo.routing.api` |
+| `voodoo.theme` | `voodoo.ui.styles.theme` |
+
+These paths are removed physically in 3.0. There are no import-time compatibility
+redirects, warning shims, or duplicate semantic owners.
