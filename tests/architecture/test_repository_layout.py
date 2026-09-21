@@ -98,3 +98,10 @@ def test_removed_3x_runtime_scheduling_facades_do_not_return() -> None:
     runtime = SRC / "runtime"
     for name in ("dispatch.py", "handoff.py", "scheduler.py", "work_scheduler.py"):
         assert not (runtime / name).exists()
+
+
+def test_removed_3x_mesh_semantic_facades_do_not_return() -> None:
+    """Mesh is transport/application surface; distributed semantics belong to Runtime."""
+    mesh = SRC / "mesh"
+    for name in ("auth.py", "remote.py", "replay.py"):
+        assert not (mesh / name).exists()

@@ -138,3 +138,17 @@ framework:
 | `voodoo.runtime.handoff` | `voodoo.runtime.scheduling.handoff` |
 | `voodoo.runtime.scheduler` | `voodoo.runtime.scheduling` |
 | `voodoo.runtime.work_scheduler` | `voodoo.runtime.scheduling.work` |
+
+
+### Mesh versus distributed Runtime ownership
+
+`voodoo.mesh` remains the event/transport-facing application surface. The 3.0
+branch removes semantic compatibility modules beneath it: participant identity,
+remote execution authority, and replay/idempotency are owned by
+`voodoo.runtime.distributed`.
+
+| Removed Mesh module | Canonical owner |
+| --- | --- |
+| `voodoo.mesh.auth` | `voodoo.runtime.distributed.auth` |
+| `voodoo.mesh.remote` | `voodoo.runtime.distributed.remote` |
+| `voodoo.mesh.replay` | `voodoo.runtime.distributed.replay` |

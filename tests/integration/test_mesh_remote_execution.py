@@ -8,8 +8,8 @@ import pytest
 from starlette.websockets import WebSocketDisconnect
 
 from voodoo.mesh import MeshNetwork
-from voodoo.mesh.remote import RemoteExecutionRequest
 from voodoo.runtime import ExecutionContext, ExecutionEngine
+from voodoo.runtime.distributed.remote import RemoteExecutionRequest
 from voodoo.runtime.execution import ExecutionStatus
 
 

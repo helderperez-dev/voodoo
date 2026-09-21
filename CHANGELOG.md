@@ -12,6 +12,9 @@
 - Removed flat Runtime scheduling facades (`runtime.dispatch`, `runtime.handoff`,
   `runtime.scheduler`, and `runtime.work_scheduler`) in favor of the grouped
   `runtime.scheduling` owner.
+- Removed Mesh semantic facades for participant auth, remote execution, and
+  replay; these now resolve directly from `voodoo.runtime.distributed` while
+  `voodoo.mesh` remains the event/transport application surface.
 
 
 ### Changed — Repository architecture convergence

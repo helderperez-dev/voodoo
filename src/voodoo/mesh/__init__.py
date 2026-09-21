@@ -11,20 +11,20 @@ from typing import Any
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from voodoo.mcp import mcp
-from voodoo.mesh.auth import (
+from voodoo.runtime.distributed.auth import (
     ParticipantAuthenticationError,
     ParticipantEvidence,
     ParticipantIdentity,
     ParticipantResolver,
 )
 from voodoo.mesh.client import MeshClient
-from voodoo.mesh.remote import (
+from voodoo.runtime.distributed.remote import (
     ExposedOperation,
     RemoteAuthorityRegistry,
     RemoteExecutionOutcome,
     RemoteExecutionRequest,
 )
-from voodoo.mesh.replay import (
+from voodoo.runtime.distributed.replay import (
     InMemoryRemoteReplayStore,
     RemoteReplayStore,
     request_fingerprint,

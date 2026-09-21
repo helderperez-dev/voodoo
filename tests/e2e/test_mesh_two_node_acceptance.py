@@ -5,9 +5,12 @@ from __future__ import annotations
 import pytest
 
 from voodoo.mesh import MeshNetwork, RemoteExecutionRequest
-from voodoo.mesh.auth import InMemoryParticipantResolver, ParticipantAuthenticationError
 from voodoo.primitives.capability import Capability
 from voodoo.runtime import ExecutionEngine
+from voodoo.runtime.distributed.auth import (
+    InMemoryParticipantResolver,
+    ParticipantAuthenticationError,
+)
 from voodoo.runtime.execution import ExecutionStatus
 from voodoo.runtime.policy import PolicyDecision, PolicyResult
 
