@@ -11,7 +11,9 @@ import pytest
 from starlette.testclient import TestClient
 
 import voodoo.data
-from voodoo import App, Button, Stack, Text, event, page, state
+from voodoo import App, page, state
+from voodoo.core.events import event
+from voodoo.ui import Button, Stack, Text
 from voodoo.core.events import event_handlers
 from voodoo.core.state import StateRenderer, state_renderer
 
@@ -226,7 +228,6 @@ async def test_page_render_auto_binds_state(make_app):
 
 def test_websocket_event_without_id_and_value(make_app):
     """Legacy ``vd.event('name')`` messages without id/value stay tolerated."""
-    from voodoo import Button
 
     marker = state("initial")
 

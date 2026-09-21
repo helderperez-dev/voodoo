@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from voodoo import LLMProvider
+from voodoo.ai import LLMProvider
 from voodoo.ai import describe_model, get_provider, register_provider, resolve_model
 from voodoo.ai.providers import (
     EmbeddingResponse,

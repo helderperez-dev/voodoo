@@ -9,7 +9,8 @@ from typing import Any
 
 import pytest
 
-from voodoo import Agent, AgentRun
+from voodoo import Agent
+from voodoo.ai.agent import AgentRun
 from voodoo.ai.agent import AgentState
 from voodoo.ai.providers import ProviderEvent, ProviderResponse, ToolCall
 from voodoo.ai.providers.mock import MockProvider
@@ -589,12 +590,6 @@ def test_agent_exported_from_voodoo():
     from voodoo import Agent as ExportedAgent
 
     assert ExportedAgent is Agent
-
-
-def test_agent_run_exported_from_voodoo():
-    from voodoo import AgentRun as ExportedAgentRun
-
-    assert ExportedAgentRun is AgentRun
 
 
 def test_agent_canonical_module_matches_root_happy_path():

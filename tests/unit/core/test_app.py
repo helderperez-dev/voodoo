@@ -5,7 +5,9 @@ from starlette.responses import RedirectResponse
 from starlette.testclient import TestClient
 
 import voodoo.data
-from voodoo import App, Card, Heading, Text, config, page
+from voodoo import App, page
+from voodoo.config import config
+from voodoo.ui import Card, Heading, Text
 from voodoo.core.errors import ConfigurationError, VoodooError
 from voodoo.core.routing import page_registry
 from voodoo.seo import SEO
