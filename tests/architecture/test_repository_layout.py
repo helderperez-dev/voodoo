@@ -107,7 +107,6 @@ def test_removed_3x_mesh_semantic_facades_do_not_return() -> None:
         assert not (mesh / name).exists()
 
 
-
 def test_removed_3x_runtime_semantic_facades_do_not_return() -> None:
     """3.0 Runtime concepts must resolve through grouped canonical owners only."""
     runtime = SRC / "runtime"

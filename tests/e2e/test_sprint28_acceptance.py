@@ -10,14 +10,21 @@ from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.runtime.execution import ExecutionStatus
-from voodoo.runtime.distributed.fabric import FabricWork, PlacementRequirement, RuntimeFabric
+from voodoo.runtime.distributed.fabric import (
+    FabricWork,
+    PlacementRequirement,
+    RuntimeFabric,
+)
 from voodoo.runtime.identity import (
     AuthenticationEvidence,
     Identity,
     IdentityKind,
     Principal,
 )
-from voodoo.runtime.distributed.membership import NodeAdvertisement, VoodooStoreMembershipStore
+from voodoo.runtime.distributed.membership import (
+    NodeAdvertisement,
+    VoodooStoreMembershipStore,
+)
 from voodoo.runtime.store import RuntimeStore, StoreConfig, bind_active_runtime_store
 from voodoo.runtime.transaction import OutboxMessage, dispatch_events, transaction
 from voodoo.storage.events.store import VoodooStoreEventBus

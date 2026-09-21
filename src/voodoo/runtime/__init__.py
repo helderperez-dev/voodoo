@@ -43,7 +43,12 @@ from voodoo.runtime.dependency_graph import (
     DependencyRevision,
     DirtyNode,
 )
-from voodoo.runtime.execution.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
+from voodoo.runtime.execution.engine import (
+    ComputeFn,
+    ComputeResult,
+    ExecutionEngine,
+    engine,
+)
 from voodoo.runtime.errors import (
     AgentExecutionError,
     ApprovalRequired,

@@ -16,22 +16,24 @@ def test_canonical_subsystem_namespace_imports() -> None:
     from voodoo.ui import Button, Card, DataTable
     from voodoo.world import Entity, Observation, WorldModel
 
-    assert all((
-        DeviceGateway,
-        WorldAwareDeviceGateway,
-        RemoteExecutionRequest,
-        WorldSnapshot,
-        ExecutionEngine,
-        Goal,
-        GoalRuntime,
-        Planner,
-        Button,
-        Card,
-        DataTable,
-        Entity,
-        Observation,
-        WorldModel,
-    ))
+    assert all(
+        (
+            DeviceGateway,
+            WorldAwareDeviceGateway,
+            RemoteExecutionRequest,
+            WorldSnapshot,
+            ExecutionEngine,
+            Goal,
+            GoalRuntime,
+            Planner,
+            Button,
+            Card,
+            DataTable,
+            Entity,
+            Observation,
+            WorldModel,
+        )
+    )
 
 
 def test_package_root_is_only_the_application_happy_path() -> None:
