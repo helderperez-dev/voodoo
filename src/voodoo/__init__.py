@@ -41,6 +41,7 @@ from .data import FK, BaseModel, Model
 from .memory import MemoryEntry, MemoryLayer, MemoryStore, SQLiteMemoryStore
 from .mesh import mesh
 from .routing.api import api
+from .runtime.scheduling.tasks import task
 from .telemetry import trace
 from .ui import (
     A,
@@ -138,7 +139,6 @@ from .ui.styles import (
 )
 from .ui.styles.palette import ThemePalette, color
 from .ui.styles.theme import Theme, ThemeColors, create_theme
-from .runtime.scheduling.tasks import task
 
 __version__ = "2.9.0"
 

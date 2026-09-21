@@ -25,10 +25,10 @@ from voodoo import (
     Text,
     page,
     state,
+    task,
     tool,
 )
 from voodoo.mesh import mesh
-from voodoo.workers import task
 
 app = App()
 

@@ -5,7 +5,6 @@ import pytest_asyncio
 from starlette.testclient import TestClient
 
 import voodoo.data
-import voodoo.queue
 from voodoo.core import create_app
 
 # Tests default to the in-memory queue provider for speed; durable-queue
@@ -31,7 +30,7 @@ def _reset_queue_state():
     at import time via ``@queue``/``@task`` and must persist. Only the
     provider (``_queue``) and asyncio tasks (``_worker_tasks``) are stateful.
     """
-    from voodoo.workers import queue as worker_mod
+    from voodoo.runtime.scheduling import workers as worker_mod
 
     worker_mod._queue = None
     for task in worker_mod._worker_tasks:

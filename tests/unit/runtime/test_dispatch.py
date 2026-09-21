@@ -1,6 +1,6 @@
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.scheduling.dispatch import RuntimeDispatcher
 from voodoo.runtime.reconcile import ReconcileAction, ReconcileDecision
+from voodoo.runtime.scheduling.dispatch import RuntimeDispatcher
 from voodoo.runtime.scheduling.work import WorkEligibility
 
 
