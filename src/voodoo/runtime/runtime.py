@@ -12,15 +12,22 @@ from enum import StrEnum
 from typing import Any
 
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.agency import AdaptiveSupervisor, SupervisorConfig
-from voodoo.runtime.agency import Goal, GoalDecomposer, GoalRun, GoalRuntime, GoalStore
+from voodoo.runtime.agency import (
+    AdaptiveSupervisor,
+    Goal,
+    GoalDecomposer,
+    GoalRun,
+    GoalRuntime,
+    GoalStore,
+    SupervisorConfig,
+)
 from voodoo.runtime.application_graph import (
     ApplicationGraph,
     ApplicationNodeKind,
     ChangeReason,
-    contribute_goal,
     Invalidation,
     InvalidationEngine,
+    contribute_goal,
 )
 from voodoo.runtime.dependency_graph import DependencyGraph
 from voodoo.runtime.distributed import RuntimeFabric

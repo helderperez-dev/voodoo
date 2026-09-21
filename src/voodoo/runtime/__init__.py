@@ -14,18 +14,18 @@ from voodoo.primitives.intent import Intent
 from voodoo.runtime.agency import (
     AdaptiveRun,
     AdaptiveSupervisor,
-    SupervisorConfig,
-    SupervisorDecision,
-)
-from voodoo.runtime.agency import (
     Goal,
     GoalDecomposer,
     GoalIntentRun,
     GoalRun,
     GoalRuntime,
     GoalStatus,
+    GoalStore,
+    SQLiteGoalStore,
+    SupervisorConfig,
+    SupervisorDecision,
+    VoodooStoreGoalStore,
 )
-from voodoo.runtime.agency import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
 from voodoo.runtime.application_graph import (
     ApplicationEdge,
     ApplicationGraph,
@@ -33,14 +33,14 @@ from voodoo.runtime.application_graph import (
     ApplicationGraphContributor,
     ApplicationNode,
     ApplicationNodeKind,
-    build_application_graph,
     ChangeReason,
-    contribute_goal,
-    diff_application_graph,
     Extension,
     ExtensionManifest,
     Invalidation,
     InvalidationEngine,
+    build_application_graph,
+    contribute_goal,
+    diff_application_graph,
 )
 from voodoo.runtime.capability import CapabilityResolver, Resolution
 from voodoo.runtime.constraint import ConstraintEnforcer, Decision, ResourceAccountant
@@ -55,17 +55,15 @@ from voodoo.runtime.distributed import (
     FabricLease,
     FabricRoutingError,
     FabricWork,
+    MemberStatus,
     NoEligibleNodeError,
+    NodeAdvertisement,
+    NodeMembership,
     PlacementDecision,
     PlacementRequirement,
     RuntimeFabric,
-    WorkNotFailoverSafeError,
-)
-from voodoo.runtime.distributed import (
-    MemberStatus,
-    NodeAdvertisement,
-    NodeMembership,
     VoodooStoreMembershipStore,
+    WorkNotFailoverSafeError,
 )
 from voodoo.runtime.errors import (
     AgentExecutionError,
@@ -84,8 +82,8 @@ from voodoo.runtime.execution import Execution, ExecutionStatus
 from voodoo.runtime.execution.engine import (
     ComputeFn,
     ComputeResult,
-    engine,
     ExecutionEngine,
+    engine,
 )
 from voodoo.runtime.execution.world import (
     bind_world,
@@ -102,8 +100,8 @@ from voodoo.runtime.human import (
     Approval,
     ApprovalRegistry,
     ApprovalStatus,
-    ask_human,
     Human,
+    ask_human,
 )
 from voodoo.runtime.identity import (
     AuthenticationEvidence,
@@ -113,8 +111,7 @@ from voodoo.runtime.identity import (
     Principal,
 )
 from voodoo.runtime.identity_store import IdentityStore, VoodooStoreIdentityStore
-from voodoo.runtime.inspection import LineageEvent, RuntimeLineage, lineage
-from voodoo.runtime.inspection import runtime_dashboard
+from voodoo.runtime.inspection import LineageEvent, RuntimeLineage, lineage, runtime_dashboard
 from voodoo.runtime.operations import OperationalRuntime
 from voodoo.runtime.persistence import (
     ExecutionStore,
@@ -150,32 +147,32 @@ from voodoo.runtime.scheduling.dispatch import DispatchPlan, RuntimeDispatcher
 from voodoo.runtime.scheduling.handoff import ExecutionHandoff, RemoteExecutionRequired
 from voodoo.runtime.scheduling.work import (
     RuntimeScheduler,
-    scheduled_work_from_intent,
     ScheduledWork,
     SchedulingDecision,
     WorkEligibility,
+    scheduled_work_from_intent,
 )
 from voodoo.runtime.store import (
-    bind_active_runtime_store,
-    create_store_provider,
     DEFAULT_STORE_PATH,
-    get_active_runtime_store,
     RuntimeStore,
-    store_registry,
     StoreConfig,
     StoreHealth,
     StoreProvider,
     StoreProviderError,
     StoreProviderRegistry,
     VoodooStoreProvider,
+    bind_active_runtime_store,
+    create_store_provider,
+    get_active_runtime_store,
+    store_registry,
 )
 from voodoo.runtime.task import Task, TaskStatus
 from voodoo.runtime.transaction import (
-    dispatch_events,
-    dispatch_outbox,
     OutboxDispatcher,
     OutboxMessage,
     RuntimeTransaction,
+    dispatch_events,
+    dispatch_outbox,
     transaction,
 )
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy

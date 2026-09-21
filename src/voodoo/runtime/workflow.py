@@ -23,8 +23,8 @@ from voodoo.primitives.intent import Intent
 from voodoo.runtime.context import ExecutionContext
 from voodoo.runtime.errors import WorkflowFailure
 from voodoo.runtime.execution import Execution
-from voodoo.runtime.execution.engine import engine as default_engine
 from voodoo.runtime.execution.engine import ExecutionEngine
+from voodoo.runtime.execution.engine import engine as default_engine
 from voodoo.runtime.task import Task, TaskStatus
 from voodoo.runtime.workflow_store import WorkflowStore
 
