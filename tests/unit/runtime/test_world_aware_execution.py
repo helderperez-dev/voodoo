@@ -4,7 +4,7 @@ from voodoo.primitives.capability import Capability
 from voodoo.primitives.effect import Effect
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import ExecutionEngine, bind_world, world_aware
-from voodoo.runtime.engine import ComputeResult
+from voodoo.runtime.execution.engine import ComputeResult
 from voodoo.world import Entity, WorldModel
 
 

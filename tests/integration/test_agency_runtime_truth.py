@@ -9,7 +9,7 @@ from voodoo.ai.agent import Agent
 from voodoo.ai.providers import ProviderResponse, ToolCall
 from voodoo.ai.providers.mock import MockProvider
 from voodoo.memory.interfaces import InMemoryMemoryStore, MemoryLayer
-from voodoo.runtime.engine import ExecutionEngine
+from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.runtime.errors import AgentExecutionError
 from voodoo.runtime.task import Task
 from voodoo.tools.registry import ToolRegistry, build_spec

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import ExecutionEngine
-from voodoo.runtime.adaptive import (
+from voodoo.runtime.agency import (
     AdaptiveSupervisor,
     SupervisorConfig,
     SupervisorDecision,
@@ -198,7 +198,7 @@ class TestAdaptiveSupervisor:
         configured budget is exceeded."""
         from voodoo.primitives.capability import Capability
         from voodoo.primitives.resource import Resource
-        from voodoo.runtime.engine import ComputeResult
+        from voodoo.runtime.execution.engine import ComputeResult
 
         engine = ExecutionEngine()
         engine.capabilities.register(Capability(name="cap.x"))

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from voodoo.runtime import AuthenticationEvidence, Identity, IdentityKind, Principal
-from voodoo.runtime.membership import (
+from voodoo.runtime.distributed import (
     MemberStatus,
     NodeAdvertisement,
     VoodooStoreMembershipStore,

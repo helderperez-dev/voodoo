@@ -105,3 +105,22 @@ def test_removed_3x_mesh_semantic_facades_do_not_return() -> None:
     mesh = SRC / "mesh"
     for name in ("auth.py", "remote.py", "replay.py"):
         assert not (mesh / name).exists()
+
+
+
+def test_removed_3x_runtime_semantic_facades_do_not_return() -> None:
+    """3.0 Runtime concepts must resolve through grouped canonical owners only."""
+    runtime = SRC / "runtime"
+    for name in (
+        "adaptive.py",
+        "dashboard.py",
+        "engine.py",
+        "fabric.py",
+        "goal.py",
+        "goal_store.py",
+        "lineage.py",
+        "membership.py",
+        "reconcile.py",
+        "world_execution.py",
+    ):
+        assert not (runtime / name).exists()

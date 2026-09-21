@@ -1,4 +1,4 @@
-from voodoo.runtime.lineage import LineageEvent, RuntimeLineage
+from voodoo.runtime.inspection import LineageEvent, RuntimeLineage
 
 
 def test_lineage_explains_causal_parent_chain():

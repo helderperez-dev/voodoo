@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.constraint import Constraint
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.adaptive import AdaptiveSupervisor, SupervisorConfig
-from voodoo.runtime.engine import ExecutionEngine
+from voodoo.runtime.agency import AdaptiveSupervisor, SupervisorConfig
+from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.runtime.errors import ExecutionError
 from voodoo.runtime.planner import ComputeParticipant, Planner
 
@@ -213,7 +213,7 @@ async def test_previous_step_outputs_reach_following_agent():
 
 
 def test_decision_records_are_structured():
-    from voodoo.runtime.adaptive import AdaptiveDecisionRecord, SupervisorDecision
+    from voodoo.runtime.agency import AdaptiveDecisionRecord, SupervisorDecision
 
     record = AdaptiveDecisionRecord(
         decision=SupervisorDecision.RETRY,
