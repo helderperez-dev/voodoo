@@ -124,3 +124,11 @@ def test_removed_3x_runtime_semantic_facades_do_not_return() -> None:
         "world_execution.py",
     ):
         assert not (runtime / name).exists()
+
+
+def test_removed_3x_compatibility_namespaces_do_not_return() -> None:
+    """3.0 keeps one canonical owner for observability, MCP, tools, API and theme."""
+    for directory in ("telemetry", "mcp", "tools"):
+        assert not (SRC / directory).exists()
+    for module in ("agent.py", "api.py", "theme.py"):
+        assert not (SRC / module).exists()

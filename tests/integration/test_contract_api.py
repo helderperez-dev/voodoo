@@ -1,242 +1,51 @@
-"""Public API contract tests.
-
-These pin `voodoo.__all__` exactly: CI fails if an export is added or removed
-without a deliberate update to EXPECTED_EXPORTS. Legacy names must keep
-resolving through the deprecation shims.
-
-Semver: 1.0 — no new exports without a version bump.
-"""
-
-import pytest
+"""Voodoo 3.0 package-root API contract."""
 
 import voodoo
 
 EXPECTED_EXPORTS = {
-    # Core runtime
-    "App",
-    "create_app",
-    "page",
-    "api",
-    "trace",
-    # Reactive state & events
-    "state",
-    "event",
-    "State",
-    # Realtime
-    "mesh",
-    "register_event",
-    "ws_manager",
-    # Workers
-    "task",
-    # AI
     "Agent",
-    "AgentRun",
-    "tool",
-    "ToolSpec",
-    "ToolRegistry",
-    "LLMProvider",
-    "VoodooModelProvider",
-    "ModelDescriptor",
-    # Memory (Sprint 16)
-    "MemoryEntry",
-    "MemoryLayer",
-    "MemoryStore",
-    "SQLiteMemoryStore",
-    # Agent registry (Sprint 17)
-    "AgentEntity",
-    "AgentRegistry",
-    "AgentRunRecord",
-    "SQLiteAgentRegistry",
-    # Data
-    "BaseModel",
+    "App",
     "Model",
-    "FK",
-    # Theming & configuration
-    "Theme",
-    "ThemeColors",
-    "ThemePalette",
-    "color",
-    "create_theme",
-    "config",
-    # Styling seam
-    "StyleAdapter",
-    "NoopAdapter",
-    "TailwindAdapter",
-    "VoodooCSSAdapter",
-    "set_style_adapter",
-    "current_adapter",
-    # UI — layout
-    "Component",
-    "Div",
-    "Alert",
-    "Progress",
-    "Spinner",
-    "Breadcrumb",
-    "BreadcrumbItem",
-    "ButtonGroup",
-    "Accordion",
-    "AccordionItem",
-    "Kbd",
-    "AspectRatio",
-    "Drawer",
-    "DropdownMenu",
-    "MenuItem",
-    "MenuSeparator",
-    "ModalTrigger",
-    "ModalClose",
-    "Tabs",
-    "Tab",
-    "ToastRegion",
-    "Toast",
-    "Snackbar",
-    "SidebarItem",
-    "SidebarToggle",
-    "AppShell",
-    "BottomNav",
-    "BottomNavItem",
-    "Flex",
-    "Stack",
-    "Grid",
-    "Box",
-    "Container",
-    "Page",
-    "A",
-    "Link",
-    # UI — core components
-    "Button",
-    "Card",
-    "Text",
-    "Heading",
-    "Badge",
-    "Avatar",
-    "Divider",
-    "Dialog",
-    "Modal",
-    # UI — icons & markdown
-    "Icon",
-    "Markdown",
-    "Html",
-    # UI — chat primitives
-    "MessageList",
-    "ChatMessage",
-    "StreamingText",
-    "Composer",
-    "Sidebar",
-    # UI — forms
-    "Form",
-    "Label",
-    "Input",
-    "Textarea",
-    "Select",
-    "Option",
-    "Checkbox",
-    "Radio",
-    # UI — collections
-    "Table",
-    "List",
-    "ListItem",
-    # UI — semantic structure
-    "Nav",
-    "Header",
-    "Footer",
-    "Main",
-    "Section",
-    "Article",
-    # UI — chrome
-    "Navbar",
-    "NavLink",
-    "Brand",
-    "ThemeToggle",
-    "Hero",
-    "PageHero",
-    "Eyebrow",
-    "Chip",
-    "CodeBlock",
-    "Stats",
-    "Stat",
-    "CTABand",
-    "BackLink",
-    "FeatureCard",
-    "LinkArrow",
+    "page",
+    "state",
+    "task",
+    "tool",
 }
 
 
-def test_public_api_pinned():
-    """__all__ must match the frozen contract exactly."""
+def test_public_api_pinned() -> None:
     assert set(voodoo.__all__) == EXPECTED_EXPORTS
-    assert len(voodoo.__all__) == len(EXPECTED_EXPORTS)  # no duplicates
+    assert len(voodoo.__all__) == len(EXPECTED_EXPORTS)
 
 
-def test_all_exports_resolve():
+def test_all_exports_resolve() -> None:
     for name in voodoo.__all__:
         assert getattr(voodoo, name, None) is not None, name
 
 
-def test_naming_law():
-    """Classes are PascalCase; functions/decorators/namespaces are snake_case."""
-    for name in voodoo.__all__:
-        obj = getattr(voodoo, name)
-        if isinstance(obj, type):
-            assert name[0].isupper(), f"class {name} must be PascalCase"
-        else:
-            assert name[0].islower() or name == "_", (
-                f"non-class {name} must be snake_case"
-            )
+def test_root_has_no_deprecation_registry() -> None:
+    assert not hasattr(voodoo, "_DEPRECATED_EXPORTS")
 
 
-def test_no_overlap_between_all_and_deprecated():
-    assert not set(voodoo.__all__) & set(voodoo._DEPRECATED_EXPORTS)
+def test_catalog_symbols_are_not_root_exports() -> None:
+    catalog_symbols = {
+        "AgentRun",
+        "Button",
+        "Card",
+        "LLMProvider",
+        "State",
+        "Theme",
+        "ToolRegistry",
+        "ToolSpec",
+        "api",
+        "config",
+        "event",
+        "mesh",
+        "trace",
+    }
+    assert not (set(voodoo.__all__) & catalog_symbols)
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "hash_password",
-        "AuthMiddleware",
-        "LoginForm",
-        "SEO",
-        "enqueue",
-        "telemetry_store",
-        "set_theme",
-        "GEO",
-        # Sprint 19 deprecated re-exports
-        "SecretStore",
-        "EnvSecretStore",
-        "LocalSecretStore",
-        "SecretsError",
-        "secrets",
-        "configure_secrets",
-        "RedactionGuard",
-        "redact",
-        "redact_string",
-        "SENSITIVE_CAPABILITIES",
-    ],
-)
-def test_deprecated_names_resolve_with_warning(name):
-    with pytest.warns(DeprecationWarning, match="deprecated"):
-        value = getattr(voodoo, name)
-    assert value is not None
-
-
-def test_deprecated_values_match_submodule():
-    from voodoo.auth import hash_password as real_hash_password
-
-    with pytest.warns(DeprecationWarning):
-        shimmed = voodoo.hash_password
-    assert shimmed is real_hash_password
-
-
-def test_unknown_attribute_raises():
-    with pytest.raises(AttributeError):
-        getattr(voodoo, "this_does_not_exist")  # noqa: B009
-
-
-def test_version_is_string():
+def test_version_is_string() -> None:
     assert isinstance(voodoo.__version__, str)
     assert voodoo.__version__.count(".") == 2
-
-
-def test_version_is_2_0():
-    """The public API is frozen at semver 2.0 (major bump at Sprint 17)."""
-    major = voodoo.__version__.split(".")[0]
-    assert major == "2", f"Expected major version 2, got {major}"

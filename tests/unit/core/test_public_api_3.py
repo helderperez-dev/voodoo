@@ -1,4 +1,4 @@
-"""Sprint 27 canonical 3.0 import-law tests."""
+"""Canonical Voodoo 3.0 import-law tests."""
 
 from __future__ import annotations
 
@@ -16,28 +16,33 @@ def test_canonical_subsystem_namespace_imports() -> None:
     from voodoo.ui import Button, Card, DataTable
     from voodoo.world import Entity, Observation, WorldModel
 
-    assert all(
-        (
-            DeviceGateway,
-            WorldAwareDeviceGateway,
-            RemoteExecutionRequest,
-            WorldSnapshot,
-            ExecutionEngine,
-            Goal,
-            GoalRuntime,
-            Planner,
-            Button,
-            Card,
-            DataTable,
-            Entity,
-            Observation,
-            WorldModel,
-        )
-    )
+    assert all((
+        DeviceGateway,
+        WorldAwareDeviceGateway,
+        RemoteExecutionRequest,
+        WorldSnapshot,
+        ExecutionEngine,
+        Goal,
+        GoalRuntime,
+        Planner,
+        Button,
+        Card,
+        DataTable,
+        Entity,
+        Observation,
+        WorldModel,
+    ))
 
 
-def test_2x_root_compatibility_surface_still_resolves() -> None:
+def test_package_root_is_only_the_application_happy_path() -> None:
     import voodoo
 
-    for name in ("Button", "Card", "Agent", "Model", "Theme", "MemoryEntry"):
-        assert getattr(voodoo, name) is not None
+    assert set(voodoo.__all__) == {
+        "Agent",
+        "App",
+        "Model",
+        "page",
+        "state",
+        "task",
+        "tool",
+    }
