@@ -12,7 +12,7 @@ from voodoo.memory.interfaces import InMemoryMemoryStore, MemoryLayer
 from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.runtime.errors import AgentExecutionError
 from voodoo.runtime.task import Task
-from voodoo.tools.registry import ToolRegistry, build_spec
+from voodoo.ai.tools.registry import ToolRegistry, build_spec
 
 
 class FailingProvider(MockProvider):

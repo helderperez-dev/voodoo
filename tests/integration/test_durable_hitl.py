@@ -10,7 +10,7 @@ import pytest
 
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.context import ExecutionContext
-from voodoo.runtime.engine import ExecutionEngine
+from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.runtime.errors import ApprovalRequired
 from voodoo.runtime.human import Approval, ApprovalRegistry, ApprovalStatus
 from voodoo.storage.execution import SQLiteExecutionStore
