@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import pytest
 
-from voodoo.mcp import MCPServer
+from voodoo.integrations.mcp import MCPServer
 from voodoo.primitives.capability import Capability
 from voodoo.runtime import ExecutionEngine
 from voodoo.runtime.errors import CapabilityDenied
 from voodoo.runtime.execution import ExecutionStatus
-from voodoo.tools.registry import ToolRegistry
+from voodoo.ai.tools.registry import ToolRegistry
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ class TestMCPRuntime:
         assert matches[0].intent.params == {"to": "a@b.c"}
 
     async def test_tool_denied_without_capability(self, fresh_mcp):
-        from voodoo.tools.registry import ToolSpec
+        from voodoo.ai.tools.registry import ToolSpec
 
         called = []
 
