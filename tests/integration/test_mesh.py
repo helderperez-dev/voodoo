@@ -233,8 +233,8 @@ async def test_isolated_mesh_does_not_leak_to_global():
 @pytest.mark.asyncio
 async def test_mesh_handler_produces_execution_record():
     """Every local handler runs through the engine (intent ``mesh:<event>``)."""
-    from voodoo.runtime.execution.engine import engine as runtime_engine
     from voodoo.runtime.execution import ExecutionStatus
+    from voodoo.runtime.execution.engine import engine as runtime_engine
 
     received = []
 

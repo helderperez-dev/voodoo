@@ -15,9 +15,10 @@ from starlette.testclient import TestClient
 
 import voodoo.data
 from voodoo import Agent, page, state
-from voodoo.ui import Div, Text
 from voodoo.ai.providers import ProviderResponse
 from voodoo.ai.providers.mock import MockProvider
+from voodoo.ai.tools import registry as tools_module
+from voodoo.ai.tools.registry import ToolRegistry, build_spec
 from voodoo.auth import create_access_token
 from voodoo.core import create_app
 from voodoo.core.events import event, ws_manager
@@ -25,8 +26,7 @@ from voodoo.core.state import StateRenderer, state_renderer
 from voodoo.integrations.mcp import MCPServer
 from voodoo.mesh import mesh
 from voodoo.observability import telemetry_store, trace_id_var
-from voodoo.ai.tools import registry as tools_module
-from voodoo.ai.tools.registry import ToolRegistry, build_spec
+from voodoo.ui import Div, Text
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import pytest
 
+from voodoo.ai.tools.registry import ToolRegistry
 from voodoo.integrations.mcp import MCPServer
 from voodoo.primitives.capability import Capability
 from voodoo.runtime import ExecutionEngine
 from voodoo.runtime.errors import CapabilityDenied
 from voodoo.runtime.execution import ExecutionStatus
-from voodoo.ai.tools.registry import ToolRegistry
 
 
 @pytest.fixture

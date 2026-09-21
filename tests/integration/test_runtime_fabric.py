@@ -14,13 +14,13 @@ from voodoo.runtime.distributed import (
     RuntimeFabric,
     WorkNotFailoverSafeError,
 )
+from voodoo.runtime.distributed import NodeAdvertisement, VoodooStoreMembershipStore
 from voodoo.runtime.identity import (
     AuthenticationEvidence,
     Identity,
     IdentityKind,
     Principal,
 )
-from voodoo.runtime.distributed import NodeAdvertisement, VoodooStoreMembershipStore
 from voodoo.runtime.store import RuntimeStore, StoreConfig, bind_active_runtime_store
 
 
