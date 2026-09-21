@@ -10,8 +10,7 @@ from typing import Any
 import pytest
 
 from voodoo import Agent
-from voodoo.ai.agent import AgentRun
-from voodoo.ai.agent import AgentState
+from voodoo.ai.agent import AgentRun, AgentState
 from voodoo.ai.providers import ProviderEvent, ProviderResponse, ToolCall
 from voodoo.ai.providers.mock import MockProvider
 from voodoo.ai.tools import registry as tools_module

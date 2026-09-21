@@ -7,16 +7,19 @@ import sys
 
 import pytest
 
-from voodoo.ai import describe_model, get_provider, register_provider, resolve_model
-from voodoo.ai import LLMProvider
+from voodoo.ai import (
+    LLMProvider,
+    describe_model,
+    get_provider,
+    register_provider,
+    resolve_model,
+)
 from voodoo.ai.providers import (
     EmbeddingResponse,
+    LLMProvider as LLMProviderBase,
     ModelDescriptor,
     ProviderEvent,
     ProviderResponse,
-)
-from voodoo.ai.providers import (
-    LLMProvider as LLMProviderBase,
 )
 from voodoo.ai.providers.mock import MockProvider
 from voodoo.core.errors import ConfigurationError

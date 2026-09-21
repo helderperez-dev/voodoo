@@ -2,14 +2,14 @@ import pytest
 
 from voodoo.ui.styles.palette import color
 from voodoo.ui.styles.theme import (
-    create_theme,
-    default_theme,
-    set_theme,
     Theme,
     ThemeColors,
     ThemePalette,
     ThemeShadows,
     ThemeSpacing,
+    create_theme,
+    default_theme,
+    set_theme,
 )
 
 
