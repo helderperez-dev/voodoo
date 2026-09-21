@@ -1,7 +1,7 @@
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.dispatch import RuntimeDispatcher
+from voodoo.runtime.scheduling.dispatch import RuntimeDispatcher
 from voodoo.runtime.reconcile import ReconcileAction, ReconcileDecision
-from voodoo.runtime.work_scheduler import WorkEligibility
+from voodoo.runtime.scheduling.work import WorkEligibility
 
 
 def test_dispatcher_ignores_non_proposal_decisions():
@@ -39,7 +39,7 @@ def test_dispatcher_preserves_waiting_scheduler_decision():
         intents=(intent,),
     )
 
-    from voodoo.runtime.work_scheduler import RuntimeScheduler, ScheduledWork
+    from voodoo.runtime.scheduling.work import RuntimeScheduler, ScheduledWork
 
     work = ScheduledWork(intent=intent, concurrency_key="sync")
     scheduler = RuntimeScheduler()

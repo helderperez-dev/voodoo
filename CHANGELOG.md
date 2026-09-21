@@ -9,6 +9,9 @@
   module from the 3.0 architecture branch.
 - Kept `from voodoo import task` as the intentional application happy path;
   worker lifecycle and `TaskError` now belong to `voodoo.runtime.scheduling`.
+- Removed flat Runtime scheduling facades (`runtime.dispatch`, `runtime.handoff`,
+  `runtime.scheduler`, and `runtime.work_scheduler`) in favor of the grouped
+  `runtime.scheduling` owner.
 
 
 ### Changed — Repository architecture convergence

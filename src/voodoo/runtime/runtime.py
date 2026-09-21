@@ -22,13 +22,13 @@ from voodoo.runtime.application_graph import (
     contribute_goal,
 )
 from voodoo.runtime.dependency_graph import DependencyGraph
-from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
+from voodoo.runtime.scheduling.dispatch import DispatchPlan, RuntimeDispatcher
 from voodoo.runtime.engine import ComputeFn, ExecutionEngine
 from voodoo.runtime.execution import Execution
 from voodoo.runtime.extension import RuntimeExtensionRegistry
 from voodoo.runtime.fabric import RuntimeFabric
 from voodoo.runtime.goal import Goal, GoalDecomposer, GoalRun, GoalRuntime, GoalStore
-from voodoo.runtime.handoff import ExecutionHandoff
+from voodoo.runtime.scheduling.handoff import ExecutionHandoff
 from voodoo.runtime.lineage import RuntimeLineage
 from voodoo.runtime.planner import ComputeParticipant, Planner
 from voodoo.runtime.reconcile import (
@@ -41,7 +41,7 @@ from voodoo.runtime.reconcile import (
     Reconciler,
 )
 from voodoo.runtime.store import RuntimeStore, StoreConfig
-from voodoo.runtime.work_scheduler import RuntimeScheduler, WorkEligibility
+from voodoo.runtime.scheduling.work import RuntimeScheduler, WorkEligibility
 
 
 @dataclass(frozen=True, slots=True)

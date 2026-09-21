@@ -91,3 +91,10 @@ def test_removed_3x_worker_compatibility_paths_do_not_return() -> None:
     """3.0 scheduling ownership must not regress to legacy worker facades."""
     assert not (SRC / "queue.py").exists()
     assert not (SRC / "workers").exists()
+
+
+def test_removed_3x_runtime_scheduling_facades_do_not_return() -> None:
+    """Scheduling concepts must live only in the canonical grouped owner."""
+    runtime = SRC / "runtime"
+    for name in ("dispatch.py", "handoff.py", "scheduler.py", "work_scheduler.py"):
+        assert not (runtime / name).exists()

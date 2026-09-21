@@ -43,7 +43,7 @@ from voodoo.runtime.dependency_graph import (
     DependencyRevision,
     DirtyNode,
 )
-from voodoo.runtime.dispatch import DispatchPlan, RuntimeDispatcher
+from voodoo.runtime.scheduling.dispatch import DispatchPlan, RuntimeDispatcher
 from voodoo.runtime.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
 from voodoo.runtime.errors import (
     AgentExecutionError,
@@ -84,7 +84,7 @@ from voodoo.runtime.goal import (
 )
 from voodoo.runtime.goal_store import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
 from voodoo.runtime.graph import ExecutionGraph, ExecutionNode
-from voodoo.runtime.handoff import ExecutionHandoff, RemoteExecutionRequired
+from voodoo.runtime.scheduling.handoff import ExecutionHandoff, RemoteExecutionRequired
 from voodoo.runtime.human import (
     Approval,
     ApprovalRegistry,
@@ -161,7 +161,7 @@ from voodoo.runtime.transaction import (
     dispatch_outbox,
     transaction,
 )
-from voodoo.runtime.work_scheduler import (
+from voodoo.runtime.scheduling.work import (
     RuntimeScheduler,
     ScheduledWork,
     SchedulingDecision,

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.work_scheduler import (
+from voodoo.runtime.scheduling.work import (
     RuntimeScheduler,
     ScheduledWork,
     WorkEligibility,
@@ -114,7 +114,7 @@ def test_scheduler_explains_placement_without_selecting_node():
 
 def test_scheduled_work_derives_intent_semantics():
     from voodoo.primitives.constraint import Constraint
-    from voodoo.runtime.work_scheduler import scheduled_work_from_intent
+    from voodoo.runtime.scheduling.work import scheduled_work_from_intent
 
     intent = Intent(
         name="capture",
@@ -160,7 +160,7 @@ def test_scheduler_waits_for_already_executing_intent():
 
 
 def test_scheduled_work_preserves_all_required_capabilities():
-    from voodoo.runtime.work_scheduler import scheduled_work_from_intent
+    from voodoo.runtime.scheduling.work import scheduled_work_from_intent
 
     intent = Intent(name="capture-and-store")
     intent.require("camera.capture")

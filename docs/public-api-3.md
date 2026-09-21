@@ -124,3 +124,17 @@ slice is Runtime scheduling:
 `task` remains in the package-root happy path intentionally. Worker orchestration
 is Runtime scheduling implementation and no longer owns a parallel top-level
 namespace.
+
+### Runtime scheduling module contraction
+
+The 3.0 branch also removes the flat Runtime scheduling modules. Import advanced
+scheduling types from `voodoo.runtime` when they are part of the supported
+Runtime API, or from their canonical implementation domain when extending the
+framework:
+
+| Removed module | Canonical owner |
+| --- | --- |
+| `voodoo.runtime.dispatch` | `voodoo.runtime.scheduling.dispatch` |
+| `voodoo.runtime.handoff` | `voodoo.runtime.scheduling.handoff` |
+| `voodoo.runtime.scheduler` | `voodoo.runtime.scheduling` |
+| `voodoo.runtime.work_scheduler` | `voodoo.runtime.scheduling.work` |
