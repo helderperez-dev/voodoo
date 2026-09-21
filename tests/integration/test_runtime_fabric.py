@@ -9,8 +9,8 @@ import pytest
 from voodoo.runtime.distributed import (
     FabricRoutingError,
     FabricWork,
-    NoEligibleNodeError,
     NodeAdvertisement,
+    NoEligibleNodeError,
     PlacementRequirement,
     RuntimeFabric,
     VoodooStoreMembershipStore,

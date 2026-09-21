@@ -16,10 +16,12 @@ from voodoo.ai import (
 )
 from voodoo.ai.providers import (
     EmbeddingResponse,
-    LLMProvider as LLMProviderBase,
     ModelDescriptor,
     ProviderEvent,
     ProviderResponse,
+)
+from voodoo.ai.providers import (
+    LLMProvider as LLMProviderBase,
 )
 from voodoo.ai.providers.mock import MockProvider
 from voodoo.core.errors import ConfigurationError
