@@ -15,7 +15,7 @@ tasks_app = typer.Typer(
 
 
 def _get_queue():
-    from voodoo.workers.queue import _get_queue
+    from voodoo.runtime.scheduling.workers import _get_queue
 
     return _get_queue()
 

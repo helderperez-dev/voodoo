@@ -153,7 +153,7 @@ def _print_runtime_banner() -> None:
 
     # Registered workers
     try:
-        from voodoo.workers.queue import _workers
+        from voodoo.runtime.scheduling.workers import _workers
 
         worker_names = list(_workers.keys())
         if worker_names:

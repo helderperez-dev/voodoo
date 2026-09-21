@@ -47,7 +47,7 @@ def recover(
     ),
 ):
     """Reload unfinished executions from the store into the engine."""
-    from voodoo.runtime.engine import engine as runtime_engine
+    from voodoo.runtime.execution.engine import engine as runtime_engine
 
     if app_str is not None:
         # Import the app first: it may attach its own store / register
