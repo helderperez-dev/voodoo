@@ -92,7 +92,7 @@ class SQLiteEventBus:
 
     def publish(self, event_type: str, payload: Any, **envelope: Any) -> dict[str, Any]:
         """Persist to log, then notify subscribers."""
-        from voodoo.telemetry import trace_id_var
+        from voodoo.observability import trace_id_var
 
         ev = {
             "event_id": str(uuid.uuid4()),
