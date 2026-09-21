@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
-from voodoo.runtime.adaptive import (
+from voodoo.runtime.agency import (
     AdaptiveRun,
     AdaptiveSupervisor,
     SupervisorConfig,
@@ -37,13 +37,13 @@ from voodoo.runtime.capability import CapabilityResolver, Resolution
 from voodoo.runtime.constraint import ConstraintEnforcer, Decision, ResourceAccountant
 from voodoo.runtime.context import ExecutionContext, current_context, use_context
 from voodoo.runtime.conventions import ApplicationLayout, discover_layout
-from voodoo.runtime.dashboard import runtime_dashboard
+from voodoo.runtime.inspection import runtime_dashboard
 from voodoo.runtime.dependency_graph import (
     DependencyGraph,
     DependencyRevision,
     DirtyNode,
 )
-from voodoo.runtime.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
+from voodoo.runtime.execution.engine import ComputeFn, ComputeResult, ExecutionEngine, engine
 from voodoo.runtime.errors import (
     AgentExecutionError,
     ApprovalRequired,
@@ -63,7 +63,7 @@ from voodoo.runtime.extension import (
     ExtensionStatus,
     RuntimeExtensionRegistry,
 )
-from voodoo.runtime.fabric import (
+from voodoo.runtime.distributed import (
     FabricLease,
     FabricRoutingError,
     FabricWork,
@@ -73,7 +73,7 @@ from voodoo.runtime.fabric import (
     RuntimeFabric,
     WorkNotFailoverSafeError,
 )
-from voodoo.runtime.goal import (
+from voodoo.runtime.agency import (
     Goal,
     GoalDecomposer,
     GoalIntentRun,
@@ -81,7 +81,7 @@ from voodoo.runtime.goal import (
     GoalRuntime,
     GoalStatus,
 )
-from voodoo.runtime.goal_store import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
+from voodoo.runtime.agency import GoalStore, SQLiteGoalStore, VoodooStoreGoalStore
 from voodoo.runtime.graph import ExecutionGraph, ExecutionNode
 from voodoo.runtime.human import (
     Approval,
@@ -98,8 +98,8 @@ from voodoo.runtime.identity import (
     Principal,
 )
 from voodoo.runtime.identity_store import IdentityStore, VoodooStoreIdentityStore
-from voodoo.runtime.lineage import LineageEvent, RuntimeLineage, lineage
-from voodoo.runtime.membership import (
+from voodoo.runtime.inspection import LineageEvent, RuntimeLineage, lineage
+from voodoo.runtime.distributed import (
     MemberStatus,
     NodeAdvertisement,
     NodeMembership,
@@ -119,7 +119,7 @@ from voodoo.runtime.policy import (
     PolicyResult,
     PolicyRule,
 )
-from voodoo.runtime.reconcile import (
+from voodoo.runtime.reconciliation import (
     GoalIntentFactory,
     GoalPredicate,
     GoalReconciliation,
@@ -170,7 +170,7 @@ from voodoo.runtime.transaction import (
 )
 from voodoo.runtime.workflow import Workflow, WorkflowRun, WorkflowStrategy
 from voodoo.runtime.workflow_store import VoodooStoreWorkflowStore, WorkflowStore
-from voodoo.runtime.world_execution import (
+from voodoo.runtime.execution.world import (
     bind_world,
     resolve_target_entity_id,
     world_aware,

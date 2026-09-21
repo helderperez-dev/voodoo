@@ -144,7 +144,7 @@ class App:
         **kwargs: Any,
     ) -> Any:
         """Register an explicit Goal or decorate a desired-state predicate."""
-        from voodoo.runtime.goal import Goal
+        from voodoo.runtime.agency import Goal
 
         observed_ids = tuple(
             item.resource_id if isinstance(item, ObservationHandle) else item
@@ -322,7 +322,7 @@ def _build_routes(
     if config.edge.enabled and config.edge.http_enabled:
         from voodoo.edge import DeviceGateway, InMemoryDeviceStore
         from voodoo.edge.http import build_edge_routes
-        from voodoo.runtime.engine import engine as runtime_engine
+        from voodoo.runtime.execution.engine import engine as runtime_engine
 
         gateway = DeviceGateway(InMemoryDeviceStore(), runtime_engine)
         edge_gateway.append(gateway)
@@ -376,7 +376,7 @@ async def _start_mqtt(
     try:
         from voodoo.edge import DeviceGateway, VoodooStoreDeviceStore
         from voodoo.edge.mqtt import EdgeMQTTTransport
-        from voodoo.runtime.engine import engine as runtime_engine
+        from voodoo.runtime.execution.engine import engine as runtime_engine
     except ImportError:
         return None
     gateway = (
@@ -435,7 +435,7 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
         from voodoo.data.store_backend import bind_runtime_store
 
         bind_runtime_store(application_store)
-        from voodoo.runtime.engine import engine as global_runtime_engine
+        from voodoo.runtime.execution.engine import engine as global_runtime_engine
 
         runtime_engine = (
             runtime.engine if runtime is not None else global_runtime_engine

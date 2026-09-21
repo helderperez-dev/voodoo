@@ -152,7 +152,7 @@ class MeshNetwork:
     def _runtime_engine(self):
         if self.execution_engine is not None:
             return self.execution_engine
-        from voodoo.runtime.engine import engine as runtime_engine
+        from voodoo.runtime.execution.engine import engine as runtime_engine
 
         return runtime_engine
 
