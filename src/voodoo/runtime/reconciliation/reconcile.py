@@ -16,13 +16,13 @@ from enum import StrEnum
 from typing import Any
 
 from voodoo.primitives.intent import Intent
+from voodoo.runtime.agency.goal import Goal
 from voodoo.runtime.application_graph import (
     ApplicationGraph,
     ApplicationNode,
     ApplicationNodeKind,
     Invalidation,
 )
-from voodoo.runtime.agency.goal import Goal
 
 
 class ReconcileAction(StrEnum):

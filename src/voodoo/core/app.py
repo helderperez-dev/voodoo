@@ -413,6 +413,7 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
 
     from voodoo.auth import AuthMiddleware
     from voodoo.i18n import I18nMiddleware
+    from voodoo.observability import TelemetryMiddleware
     from voodoo.runtime.scheduling.workers import start_workers, stop_workers
     from voodoo.security import (
         CORSMiddleware,
@@ -420,7 +421,6 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
         RateLimitMiddleware,
         SecurityHeadersMiddleware,
     )
-    from voodoo.observability import TelemetryMiddleware
 
     @asynccontextmanager
     async def lifespan(starlette: Starlette) -> AsyncIterator[None]:

@@ -13,20 +13,20 @@ from typing import Any
 
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.agency import AdaptiveSupervisor, SupervisorConfig
+from voodoo.runtime.agency import Goal, GoalDecomposer, GoalRun, GoalRuntime, GoalStore
 from voodoo.runtime.application_graph import (
     ApplicationGraph,
     ApplicationNodeKind,
     ChangeReason,
+    contribute_goal,
     Invalidation,
     InvalidationEngine,
-    contribute_goal,
 )
 from voodoo.runtime.dependency_graph import DependencyGraph
-from voodoo.runtime.execution.engine import ComputeFn, ExecutionEngine
-from voodoo.runtime.execution import Execution
-from voodoo.runtime.extension import RuntimeExtensionRegistry
 from voodoo.runtime.distributed import RuntimeFabric
-from voodoo.runtime.agency import Goal, GoalDecomposer, GoalRun, GoalRuntime, GoalStore
+from voodoo.runtime.execution import Execution
+from voodoo.runtime.execution.engine import ComputeFn, ExecutionEngine
+from voodoo.runtime.extension import RuntimeExtensionRegistry
 from voodoo.runtime.inspection import RuntimeLineage
 from voodoo.runtime.planner import ComputeParticipant, Planner
 from voodoo.runtime.reconciliation import (

@@ -14,8 +14,8 @@ This demo uses the mock provider (no network/API keys required).
 """
 
 from voodoo import Agent, App, Model, page, state, task, tool
-from voodoo.ui import Button, Card, Container, Div, Heading, Text
 from voodoo.mesh import mesh
+from voodoo.ui import Button, Card, Container, Div, Heading, Text
 
 app = App()
 
