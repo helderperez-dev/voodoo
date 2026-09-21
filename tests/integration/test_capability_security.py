@@ -390,7 +390,9 @@ class TestRedactionInEngine:
         async def fake_broadcast(event: str, payload: dict[str, Any]) -> None:
             captured.append((event, payload))
 
-        monkeypatch.setattr("voodoo.mesh.broadcast", fake_broadcast)
+        from voodoo.mesh import mesh
+
+        monkeypatch.setattr(mesh, "broadcast", fake_broadcast)
 
         engine = ExecutionEngine()
         Intent(name="test", params={"api_key": "sk-secret123"})  # noqa: F841

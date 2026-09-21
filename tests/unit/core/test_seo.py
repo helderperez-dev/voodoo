@@ -466,12 +466,12 @@ class TestAppSEOEndpoints:
         app_dir = tmp_path / "app"
         app_dir.mkdir()
         (app_dir / "page.py").write_text(
-            'from voodoo import Div, Heading\nfrom voodoo.seo import SEO\ndef page():\n    return SEO(title="Home Page"), Div(Heading("Home"))'
+            'from voodoo.ui import Div, Heading\nfrom voodoo.seo import SEO\ndef page():\n    return SEO(title="Home Page"), Div(Heading("Home"))'
         )
         about_dir = app_dir / "about"
         about_dir.mkdir()
         (about_dir / "page.py").write_text(
-            'from voodoo import Div\ndef page():\n    return Div("About Us")'
+            'from voodoo.ui import Div\ndef page():\n    return Div("About Us")'
         )
 
         async def mock_init_db(db_path=":memory:"):

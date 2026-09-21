@@ -145,10 +145,10 @@ def test_app_use_plugin(make_app):
 
 
 def test_app_theme_applied():
-    import voodoo.theme
+    from voodoo.ui.styles import theme as theme_module
 
-    original = voodoo.theme.default_theme
-    theme = voodoo.theme.Theme()
+    original = theme_module.default_theme
+    theme = theme_module.Theme()
     try:
         App(theme=theme)
         assert theme_module.default_theme is theme
