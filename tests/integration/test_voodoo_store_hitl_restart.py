@@ -8,7 +8,7 @@ import pytest
 
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.context import ExecutionContext
-from voodoo.runtime.engine import ExecutionEngine
+from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.runtime.errors import ApprovalRequired
 from voodoo.runtime.store import RuntimeStore, StoreConfig, bind_active_runtime_store
 from voodoo.storage.execution.store import VoodooStoreExecutionStore

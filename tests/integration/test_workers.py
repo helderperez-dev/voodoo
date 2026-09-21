@@ -5,7 +5,7 @@ import pytest
 from voodoo import task
 from voodoo.mesh import mesh
 from voodoo.runtime.scheduling import TaskError
-from voodoo.telemetry import telemetry_store
+from voodoo.observability import telemetry_store
 
 
 def _spans_for(name: str) -> list[dict]:
@@ -149,7 +149,7 @@ async def test_mesh_on_to_task_chain():
 @pytest.mark.asyncio
 async def test_worker_job_executes_through_runtime_engine():
     """Background queue jobs produce an Execution record (intent worker:<name>)."""
-    from voodoo.runtime.engine import engine as runtime_engine
+    from voodoo.runtime.execution.engine import engine as runtime_engine
     from voodoo.runtime.execution import ExecutionStatus
     from voodoo.runtime.scheduling import start_workers, stop_workers
 
@@ -180,7 +180,7 @@ async def test_worker_job_executes_through_runtime_engine():
 @pytest.mark.asyncio
 async def test_worker_failure_records_failed_execution_and_keeps_running():
     """A failing job marks the Execution failed but the worker stays alive."""
-    from voodoo.runtime.engine import engine as runtime_engine
+    from voodoo.runtime.execution.engine import engine as runtime_engine
     from voodoo.runtime.execution import ExecutionStatus
     from voodoo.runtime.scheduling import start_workers, stop_workers
 

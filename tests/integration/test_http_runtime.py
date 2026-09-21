@@ -14,7 +14,7 @@ from starlette.testclient import TestClient
 import voodoo.data
 from voodoo.core import create_app
 from voodoo.routing.api import api
-from voodoo.runtime.engine import engine as runtime_engine
+from voodoo.runtime.execution.engine import engine as runtime_engine
 from voodoo.runtime.execution import ExecutionStatus
 
 

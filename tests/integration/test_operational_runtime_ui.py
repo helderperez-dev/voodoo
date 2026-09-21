@@ -8,7 +8,7 @@ from starlette.testclient import TestClient
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
 from voodoo.runtime import ExecutionEngine
-from voodoo.runtime.dashboard import runtime_dashboard
+from voodoo.runtime.inspection import runtime_dashboard
 from voodoo.runtime.operations import OperationalRuntime
 from voodoo.world import Entity, WorldModel
 

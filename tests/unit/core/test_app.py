@@ -151,9 +151,9 @@ def test_app_theme_applied():
     theme = voodoo.theme.Theme()
     try:
         App(theme=theme)
-        assert voodoo.theme.default_theme is theme
+        assert theme_module.default_theme is theme
     finally:
-        voodoo.theme.set_theme(original)
+        theme_module.set_theme(original)
 
 
 def test_app_run_reload_requires_import_string(make_app):

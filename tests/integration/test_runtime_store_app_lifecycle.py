@@ -26,7 +26,7 @@ def test_app_opens_and_closes_voodoo_store_by_default(
         assert runtime_store.provider.path == store_path
         assert store_path.exists()
 
-        from voodoo.runtime.engine import engine
+        from voodoo.runtime.execution.engine import engine
 
         assert engine._execution_store is not None
         assert engine._execution_store.provider == "voodoo"

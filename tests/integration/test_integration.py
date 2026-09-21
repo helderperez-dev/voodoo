@@ -348,7 +348,7 @@ async def test_mcp_tool_exposed_and_callable():
         return a + b
 
     # The tool should be in the default registry
-    from voodoo.tools.registry import default_registry
+    from voodoo.ai.tools.registry import default_registry
 
     spec = default_registry.get("calculate_sum")
     assert spec is not None
@@ -379,7 +379,7 @@ async def test_mesh_expose_bridges_to_mcp_and_registry():
     assert "lookup_order" in mesh.exposed_functions
 
     # Should be in the default tool registry (bridged via MCP)
-    from voodoo.tools.registry import default_registry
+    from voodoo.ai.tools.registry import default_registry
 
     spec = default_registry.get("lookup_order")
     assert spec is not None
@@ -539,10 +539,10 @@ async def test_correlation_id_propagates_to_tool_call_telemetry():
 async def test_correlation_id_propagates_to_queue():
     """Enqueue captures the current trace_id and stores it on the task record."""
 
-    from voodoo.queue import enqueue
+    from voodoo.runtime.scheduling import enqueue
 
     # Register a dummy worker so enqueue can find a handler
-    from voodoo.workers.queue import _get_queue, _workers
+    from voodoo.runtime.scheduling.workers import _get_queue, _workers
 
     async def _handler(payload):
         pass
