@@ -10,7 +10,7 @@ from typing import Any
 
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from voodoo.mcp import mcp
+from voodoo.integrations.mcp import mcp
 from voodoo.runtime.distributed.auth import (
     ParticipantAuthenticationError,
     ParticipantEvidence,
@@ -41,7 +41,7 @@ def _make_envelope(
 ) -> dict[str, Any]:
     """Build a standard event envelope with id, ts, source, correlation_id."""
     if correlation_id is None:
-        from voodoo.telemetry import trace_id_var
+        from voodoo.observability import trace_id_var
 
         correlation_id = trace_id_var.get()
     return {

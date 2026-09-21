@@ -420,7 +420,7 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
         RateLimitMiddleware,
         SecurityHeadersMiddleware,
     )
-    from voodoo.telemetry import TelemetryMiddleware
+    from voodoo.observability import TelemetryMiddleware
 
     @asynccontextmanager
     async def lifespan(starlette: Starlette) -> AsyncIterator[None]:

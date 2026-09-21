@@ -21,8 +21,8 @@ from uuid import uuid4
 
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.context import ExecutionContext
-from voodoo.runtime.engine import ExecutionEngine
-from voodoo.runtime.engine import engine as default_engine
+from voodoo.runtime.execution.engine import ExecutionEngine
+from voodoo.runtime.execution.engine import engine as default_engine
 from voodoo.runtime.errors import WorkflowFailure
 from voodoo.runtime.execution import Execution
 from voodoo.runtime.task import Task, TaskStatus
@@ -471,7 +471,7 @@ class Workflow:
         await self._emit(
             "workflow.started", {"workflow_id": self.id, "strategy": "adaptive"}
         )
-        from voodoo.runtime.adaptive import AdaptiveSupervisor
+        from voodoo.runtime.agency.adaptive import AdaptiveSupervisor
         from voodoo.runtime.planner import ComputeParticipant, Planner
 
         planner = Planner(engine=engine)
