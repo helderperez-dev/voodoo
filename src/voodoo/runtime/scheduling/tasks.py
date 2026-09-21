@@ -1,4 +1,4 @@
-"""Voodoo worker runtime — the ``@task`` decorator.
+"""Task scheduling surface for the canonical Voodoo Runtime.
 
 ``@task`` turns a function into a retried, timeout-bounded unit of work with a
 telemetry span for every attempt. Tasks can be awaited directly or enqueued on
@@ -34,7 +34,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger("voodoo.workers")
+logger = logging.getLogger("voodoo.runtime.scheduling.tasks")
 
 __all__ = ["task", "TaskError"]
 
@@ -119,7 +119,7 @@ def _register_task_worker(
     backoff_base: float,
 ) -> None:
     """Register a one-attempt background worker for a durable task type."""
-    from voodoo.workers.queue import _worker_backoff, _workers
+    from voodoo.runtime.scheduling.workers import _worker_backoff, _workers
 
     async def worker(payload: Any) -> None:
         # Durable retries belong to VoodooQueue. A claim represents one attempt.
@@ -131,7 +131,7 @@ def _register_task_worker(
 
 async def _enqueue_task(task_name: str, payload: Any, max_attempts: int) -> None:
     """Enqueue *payload* with a durable attempt budget."""
-    from voodoo.workers.queue import enqueue
+    from voodoo.runtime.scheduling.workers import enqueue
 
     await enqueue(task_name, payload, max_attempts=max_attempts)
 

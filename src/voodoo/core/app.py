@@ -420,7 +420,7 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
         SecurityHeadersMiddleware,
     )
     from voodoo.telemetry import TelemetryMiddleware
-    from voodoo.workers.queue import start_workers, stop_workers
+    from voodoo.runtime.scheduling.workers import start_workers, stop_workers
 
     @asynccontextmanager
     async def lifespan(starlette: Starlette) -> AsyncIterator[None]:
@@ -447,13 +447,13 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
             from voodoo.edge import VoodooStoreDeviceStore
 
             edge_gateway[0]._store = VoodooStoreDeviceStore(application_store)
-        from voodoo.runtime.scheduler import ScheduleService
+        from voodoo.runtime.scheduling import ScheduleService
         from voodoo.storage.scheduler import create_schedule_store
 
         schedule_store = create_schedule_store(schedule_path)
         scheduler = ScheduleService(schedule_store)
         await scheduler.start()
-        from voodoo.workers.queue import _workers
+        from voodoo.runtime.scheduling.workers import _workers
 
         worker_task = asyncio.create_task(start_workers()) if _workers else None
         mqtt_transport = await _start_mqtt(config, edge_gateway, application_store)

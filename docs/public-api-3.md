@@ -105,3 +105,22 @@ Public API laws for adaptive applications:
 5. Observation handles may be passed directly to `observes`; application code does not need Application Graph resource IDs.
 6. An Observation may trigger a bounded cycle. Effects do not become Observations implicitly, and a cycle never recursively runs forever.
 7. Advanced runtime primitives remain under `voodoo.runtime`; they are not promoted to the package root merely because they are useful.
+
+
+## 3.0 clean-break migration status
+
+The 3.0 architecture branch removes compatibility-only namespaces as their
+implementation is absorbed by the canonical semantic owner. The first closed
+slice is Runtime scheduling:
+
+| Removed 2.x path | 3.0 canonical path |
+| --- | --- |
+| `voodoo.workers.task` | `from voodoo import task` |
+| `voodoo.workers.TaskError` | `voodoo.runtime.scheduling.TaskError` |
+| `voodoo.queue.enqueue` | `voodoo.runtime.scheduling.enqueue` |
+| `voodoo.queue.start_workers` | `voodoo.runtime.scheduling.start_workers` |
+| `voodoo.queue.stop_workers` | `voodoo.runtime.scheduling.stop_workers` |
+
+`task` remains in the package-root happy path intentionally. Worker orchestration
+is Runtime scheduling implementation and no longer owns a parallel top-level
+namespace.

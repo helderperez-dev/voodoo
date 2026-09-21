@@ -138,7 +138,7 @@ from .ui.styles import (
 )
 from .ui.styles.palette import ThemePalette, color
 from .ui.styles.theme import Theme, ThemeColors, create_theme
-from .workers import task
+from .runtime.scheduling.tasks import task
 
 __version__ = "2.9.0"
 

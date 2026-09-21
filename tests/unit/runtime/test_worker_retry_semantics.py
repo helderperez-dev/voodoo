@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from voodoo.workers import TaskError, task
-from voodoo.workers import queue as worker_queue
+from voodoo.runtime.scheduling import TaskError, task
+from voodoo.runtime.scheduling import workers as worker_queue
 
 
 @pytest.mark.asyncio

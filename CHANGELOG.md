@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Breaking — 3.0 architecture cleanup
+
+- Consolidated task/worker orchestration under `voodoo.runtime.scheduling`.
+- Removed the compatibility-only `voodoo.workers` package and `voodoo.queue`
+  module from the 3.0 architecture branch.
+- Kept `from voodoo import task` as the intentional application happy path;
+  worker lifecycle and `TaskError` now belong to `voodoo.runtime.scheduling`.
+
+
 ### Changed — Repository architecture convergence
 
 - Completed the RA1–RA6 repository architecture program and established

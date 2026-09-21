@@ -20,7 +20,6 @@ ROOT_MODULES = {
     "components.py",
     "config.py",
     "i18n.py",
-    "queue.py",
     "schedule.py",
     "seo.py",
     "status.py",
@@ -86,3 +85,9 @@ def test_semantic_core_has_no_vendor_imports() -> None:
                     ):
                         offenders.append(f"{path.relative_to(SRC)} imports {name}")
     assert offenders == []
+
+
+def test_removed_3x_worker_compatibility_paths_do_not_return() -> None:
+    """3.0 scheduling ownership must not regress to legacy worker facades."""
+    assert not (SRC / "queue.py").exists()
+    assert not (SRC / "workers").exists()
