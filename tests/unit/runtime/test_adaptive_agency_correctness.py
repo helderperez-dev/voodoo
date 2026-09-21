@@ -6,8 +6,8 @@ from voodoo.primitives.capability import Capability
 from voodoo.primitives.constraint import Constraint
 from voodoo.primitives.intent import Intent
 from voodoo.runtime.agency import AdaptiveSupervisor, SupervisorConfig
-from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.runtime.errors import ExecutionError
+from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.runtime.planner import ComputeParticipant, Planner
 
 

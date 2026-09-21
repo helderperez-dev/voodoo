@@ -192,8 +192,8 @@ def test_extension_contract_has_no_vendor_dependency():
 
 
 def test_canonical_goal_contributes_requirements_to_graph():
-    from voodoo.runtime.application_graph import contribute_goal
     from voodoo.runtime.agency.goal import Goal
+    from voodoo.runtime.application_graph import contribute_goal
 
     goal = Goal(
         id="goal_growth",

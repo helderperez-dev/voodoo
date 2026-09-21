@@ -13,9 +13,9 @@ from starlette.testclient import TestClient
 import voodoo.data
 from voodoo import App, page, state
 from voodoo.core.events import event
-from voodoo.ui import Button, Stack, Text
 from voodoo.core.events import event_handlers
 from voodoo.core.state import StateRenderer, state_renderer
+from voodoo.ui import Button, Stack, Text
 
 
 @pytest.fixture(autouse=True)
@@ -270,8 +270,8 @@ def test_client_js_exposes_vd_facade():
 @pytest.mark.asyncio
 async def test_state_set_triggers_bound_rerender(monkeypatch):
     """State.set schedules a patch without explicit rerender calls."""
-    from voodoo.ui.state import StateRenderer
     from voodoo.ui.state import state as ui_state
+    from voodoo.ui.state import StateRenderer
 
     count = ui_state(0)
 
@@ -304,8 +304,8 @@ async def test_state_set_triggers_bound_rerender(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_state_unbind_stops_rerender(monkeypatch):
-    from voodoo.ui.state import StateRenderer
     from voodoo.ui.state import state as ui_state
+    from voodoo.ui.state import StateRenderer
 
     count = ui_state(0)
 
