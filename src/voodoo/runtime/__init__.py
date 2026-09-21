@@ -111,7 +111,12 @@ from voodoo.runtime.identity import (
     Principal,
 )
 from voodoo.runtime.identity_store import IdentityStore, VoodooStoreIdentityStore
-from voodoo.runtime.inspection import LineageEvent, RuntimeLineage, lineage, runtime_dashboard
+from voodoo.runtime.inspection import (
+    LineageEvent,
+    RuntimeLineage,
+    lineage,
+    runtime_dashboard,
+)
 from voodoo.runtime.operations import OperationalRuntime
 from voodoo.runtime.persistence import (
     ExecutionStore,
