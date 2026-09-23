@@ -32,21 +32,24 @@ The `main` branch is protected. The following rules are enforced:
 
 ## Code Owners (`.github/CODEOWNERS`)
 
-Code Owners are automatically requested for review on PRs touching their paths:
+Code Owners are automatically requested for review on PRs touching their paths.
+The 3.x ownership map follows canonical semantic domains:
 
-| Path | Owner |
+| Area | Canonical paths |
 |---|---|
-| `src/voodoo/__init__.py`, `core/`, `api.py`, `config.py`, `components.py`, `routing/` | `@helderperez-dev` |
-| `src/voodoo/primitives/` | `@helderperez-dev` |
-| `src/voodoo/data/`, `storage/`, `adapters/` | `@helderperez-dev` |
-| `src/voodoo/ai/`, `agent.py`, `tools/`, `mcp/` | `@helderperez-dev` |
-| `src/voodoo/mesh/`, `workers/`, `queue.py`, `schedule.py` | `@helderperez-dev` |
-| `src/voodoo/auth/`, `security/`, `telemetry/` | `@helderperez-dev` |
-| `src/voodoo/ui/`, `theme.py`, `i18n.py`, `seo.py` | `@helderperez-dev` |
-| `src/voodoo/cli/` | `@helderperez-dev` |
-| `tests/` | `@helderperez-dev` |
+| Public/core | `src/voodoo/__init__.py`, `core/`, `routing/`, root application modules |
+| Runtime semantics | `primitives/`, `runtime/`, `world/`, `edge/`, `protocol/` |
+| AI/integration/observability | `ai/`, `integrations/`, `observability/` |
+| Infrastructure | `data/`, `storage/`, `adapters/` |
+| Application surfaces | `ui/`, `mesh/`, `auth/`, `security/` |
+| CLI | `cli/` |
+| Tests/docs/CI | `tests/`, `docs/`, `.github/`, root governance docs |
 
-When adding new top-level directories under `src/voodoo/`, add them to `.github/CODEOWNERS`.
+Removed 2.x ownership paths such as `voodoo.workers`, `voodoo.queue`,
+`voodoo.telemetry`, `voodoo.mcp`, `voodoo.tools`, `voodoo.agent`,
+`voodoo.api` and `voodoo.theme` must not be added back to CODEOWNERS.
+When adding a genuinely new top-level directory under `src/voodoo/`, add it
+to `.github/CODEOWNERS` and justify its semantic ownership.
 
 ---
 
@@ -109,7 +112,7 @@ Closes #issue"
 | `perf` | Performance improvement |
 | `style` | Formatting, no code change |
 
-**Common scopes:** `core`, `runtime`, `ai`, `ui`, `data`, `mesh`, `mcp`, `workers`, `auth`, `security`, `telemetry`, `cli`, `config`, `ci`, `docs`.
+**Common scopes:** `core`, `runtime`, `scheduling`, `world`, `edge`, `protocol`, `ai`, `integrations`, `observability`, `ui`, `data`, `mesh`, `auth`, `security`, `cli`, `config`, `ci`, `docs`.
 
 ### Step 5: Push and Create PR
 
@@ -281,15 +284,19 @@ Use these templates when opening issues. Link issues in PRs with `Closes #N`.
 
 ### Release Workflow
 
-`.github/workflows/release.yml` triggers on tag push (`v*`). It:
-1. Builds the package.
-2. Publishes to PyPI.
-3. Creates a GitHub Release with notes from `CHANGELOG.md`.
+`.github/workflows/release.yml` is explicitly dispatched with a semantic
+version. It runs the test suite and clean Store-first distribution gate, bumps
+the source version when needed, creates/pushes the tag, builds the distributions,
+publishes to PyPI, updates Homebrew when configured, and creates the GitHub
+Release.
 
 Trigger with:
 ```bash
 just release X.Y.Z
 ```
+
+A merged PR is not a release. Trackers must call a version "published" only
+after this workflow completes successfully.
 
 ---
 
@@ -317,34 +324,38 @@ Legend: ✅ = required, ⚠️ = conditional, ❌ = not needed.
 
 | Source path changed | Doc to update |
 |---|---|
-| `src/voodoo/__init__.py` | `docs/architecture.md`, `README.md` (public API), `test_contract_api.py` |
-| `src/voodoo/core/` | `docs/architecture.md`, `docs/routing.md` |
-| `src/voodoo/primitives/` | `docs/primitives.md`, `docs/architecture.md` |
-| `src/voodoo/runtime/` | `docs/runtime.md`, `docs/adaptive.md`, `docs/hitl.md` |
+| `src/voodoo/__init__.py` | `README.md`, `docs/public-api-3.md`, contract API test |
+| `src/voodoo/core/` | architecture/routing docs as applicable |
+| `src/voodoo/primitives/` | `docs/primitives.md`, architecture docs |
+| `src/voodoo/runtime/execution/` | execution/runtime/HITL docs |
+| `src/voodoo/runtime/scheduling/` | workers/scheduling/runtime docs |
+| `src/voodoo/runtime/agency/` | adaptive/goal/runtime docs |
+| `src/voodoo/runtime/distributed/` | protocol/deployment/runtime docs |
+| `src/voodoo/runtime/reconciliation/` | runtime/adaptive docs |
+| `src/voodoo/runtime/inspection/` | runtime/observability docs |
+| `src/voodoo/world/` | World/ontology/runtime docs |
+| `src/voodoo/edge/` | Edge/protocol/deployment docs |
+| `src/voodoo/protocol/` | `docs/protocol.md` |
 | `src/voodoo/ai/` | `docs/agents.md`, `docs/tools.md` |
-| `src/voodoo/agent.py` | `docs/agents.md` |
-| `src/voodoo/tools/` | `docs/tools.md` |
-| `src/voodoo/mcp/` | `docs/mcp.md` |
-| `src/voodoo/mesh/` | `docs/mesh.md`, `docs/events.md` |
-| `src/voodoo/workers/` | `docs/workers.md` |
-| `src/voodoo/queue.py` | `docs/workers.md` |
-| `src/voodoo/schedule.py` | `docs/workers.md` |
+| `src/voodoo/integrations/mcp/` | `docs/mcp.md` |
+| `src/voodoo/integrations/ai/` | agent/provider installation docs |
+| `src/voodoo/integrations/otel.py` | observability/deployment docs |
+| `src/voodoo/observability/` | telemetry/observability docs |
+| `src/voodoo/mesh/` | mesh/events docs |
 | `src/voodoo/data/` | `docs/data.md` |
-| `src/voodoo/storage/` | `docs/data.md`, `docs/deployment.md` |
-| `src/voodoo/adapters/` | `docs/deployment.md` |
-| `src/voodoo/ui/` | `docs/components.md`, `docs/design_system.md` |
-| `src/voodoo/components.py` | `docs/components.md` |
-| `src/voodoo/theme.py` | `docs/design_system.md` |
-| `src/voodoo/routing/` | `docs/routing.md` |
-| `src/voodoo/auth/` | `docs/auth.md` |
-| `src/voodoo/security/` | `docs/deployment.md` |
-| `src/voodoo/telemetry/` | `docs/telemetry.md` |
-| `src/voodoo/cli/` | `README.md` (CLI commands) |
-| `src/voodoo/config.py` | `docs/installation.md`, `docs/deployment.md` |
-| `src/voodoo/i18n.py` | `docs/components.md` |
-| `src/voodoo/seo.py` | `docs/components.md` |
-| `src/voodoo/status.py` | `docs/deployment.md` |
-| `tests/contracts/` | `docs/deployment.md` (provider matrix) |
+| `src/voodoo/storage/`, `adapters/` | data/deployment docs |
+| `src/voodoo/ui/` | component/design-system docs |
+| `src/voodoo/routing/` | routing docs |
+| `src/voodoo/auth/` | auth docs |
+| `src/voodoo/security/` | deployment/security docs |
+| `src/voodoo/cli/` | README/CLI docs when user-facing |
+| `src/voodoo/config.py` | installation/deployment docs |
+| `tests/contracts/` | provider/deployment matrix when behavior changes |
+
+The removed 2.x paths are not documentation mapping targets. If a change would
+require updating documentation for `voodoo.workers`, `voodoo.mcp`,
+`voodoo.telemetry` or another removed compatibility namespace, reconsider the
+source placement first.
 
 ### CHANGELOG.md Format
 
