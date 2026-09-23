@@ -1,6 +1,6 @@
 # AI Agents & Tools Instructions
 
-> **Read this before:** touching `src/voodoo/ai/`, `src/voodoo/tools/`, `src/voodoo/mcp/`, or anything related to agents, LLM providers, or tool registration.
+> **Read this before:** touching `src/voodoo/ai/`, `src/voodoo/integrations/mcp/`, or anything related to agents, LLM providers, tool registration, or MCP interoperability.
 
 ---
 
@@ -178,82 +178,70 @@ except ImportError:
 
 ---
 
-## Tool Registry (`voodoo.ai.tools.registry`)
+## Tool Registry (`voodoo.ai.tools`)
 
 ### The `@tool` decorator
 
+Use the package-root happy path in application code:
+
 ```python
-from voodoo.ai.tools.registry import tool
+from voodoo import tool
 
 
 @tool
 async def search_web(query: str, max_results: int = 10) -> dict:
-    """Search the web for a query.
-
-    Parameters:
-        query: The search query string.
-        max_results: Maximum number of results to return.
-    """
-    # implementation
-    return {"results": [...]}
+    """Search the web."""
+    return {"results": []}
 ```
 
-The decorator:
-1. Extracts the function name, docstring, and type hints.
-2. Builds a `ToolSpec` with JSON schema for parameters.
-3. Registers in `default_registry` (the singleton `ToolRegistry`).
+`@tool` builds a `ToolSpec`, attaches it to the function as
+`__tool_spec__`, and registers it in the selected `ToolRegistry`.
 
 ### ToolSpec
+
+The canonical registry contract lives in `voodoo.ai.tools.registry`:
 
 ```python
 @dataclass
 class ToolSpec:
     name: str
     description: str
-    parameters: dict[str, Any]  # JSON schema
-    func: Callable[..., Awaitable[Any]]
+    input_schema: dict[str, Any]
+    output_schema: dict[str, Any]
+    permissions: list[str]
+    source: str
+    version: str
+    func: Callable[..., Any] | None
 ```
 
 ### Registry API
 
 ```python
-from voodoo.ai.tools.registry import default_registry
+from voodoo.ai.tools import ToolRegistry, default_registry
 
-# Register
-default_registry.register(my_tool_func)
-
-# Look up
 spec = default_registry.get("search_web")
-
-# List all
-specs = default_registry.list_all()
-
-# Execute
-result = await default_registry.execute("search_web", query="python", max_results=5)
+specs = default_registry.all()
+names = default_registry.names()
+result = await default_registry.call("search_web", query="python")
 ```
 
-### Compatibility shim
+`ToolRegistry.register()` accepts a `ToolSpec`, not a bare function. Prefer
+`@tool` or `build_spec()` when registering callables.
 
-`voodoo/tools/registry.py` replaces itself in `sys.modules` with `voodoo.ai.tools.registry`:
+### Voodoo 3 ownership rule
 
-```python
-# voodoo/tools/registry.py
-import sys
-from voodoo.ai.tools.registry import *  # noqa: F401,F403
-
-sys.modules[__name__] = sys.modules["voodoo.ai.tools.registry"]
-```
-
-This ensures `voodoo.tools.registry` and `voodoo.ai.tools.registry` share the same `default_registry` singleton.
+There is no `voodoo.tools` compatibility package in 3.x. Do not recreate
+`voodoo.tools.registry`, `sys.modules` aliases, star-import shims, or duplicate
+registry singletons. Native tool semantics belong to `voodoo.ai.tools`.
 
 ---
 
-## MCP Integration (`voodoo.mcp`)
+## MCP Integration (`voodoo.integrations.mcp`)
 
-### MCPServer
+MCP is an interoperability integration, not a second tool/runtime owner.
 
 ```python
-from voodoo.mcp import mcp
+from voodoo.integrations.mcp import mcp
 
 
 @mcp.tool()
@@ -267,22 +255,17 @@ async def get_status() -> str:
     return "healthy"
 ```
 
-The `@mcp.tool()` decorator registers in both `MCPServer.tools` and `ToolRegistry`, so tools are available to both MCP clients and AI agents.
+The `@mcp.tool()` decorator registers with the MCP server and the same
+`ToolRegistry`, so agent and MCP consumers share one tool definition.
 
-### SSE endpoints
+Endpoints remain `/mcp/sse` and `/mcp/messages`; supported protocol methods
+include `initialize`, `tools/list`, `tools/call`, `resources/list`, and
+`resources/read`.
 
-- `/mcp/sse` — SSE stream for MCP events
-- `/mcp/messages` — POST endpoint for MCP requests
+`voodoo.mcp` was removed in 3.0. The canonical import is
+`voodoo.integrations.mcp`.
 
-### Protocol methods
-
-- `initialize` — handshake
-- `tools/list` — list available tools
-- `tools/call` — execute a tool
-- `resources/list` — list resources
-- `resources/read` — read a resource
-
-### Auto-bridge from mesh
+### Mesh auto-bridge
 
 ```python
 from voodoo.mesh import mesh
@@ -292,7 +275,8 @@ from voodoo.mesh import mesh
 async def search_web(query: str) -> dict: ...
 ```
 
-`mesh.expose()` auto-bridges the function to MCP, making it available as an MCP tool without double-registration.
+`mesh.expose()` registers the exposed operation and bridges the callable into
+the canonical MCP registry; it does not create a second semantic owner.
 
 ---
 
@@ -394,7 +378,8 @@ async def test_tool_registration():
         """
         return x * 2
 
-    registry.register(my_tool)
+    spec = my_tool.__tool_spec__
+    registry.register(spec)
     spec = registry.get("my_tool")
     assert spec.name == "my_tool"
     assert "Double a number" in spec.description
