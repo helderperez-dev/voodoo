@@ -188,7 +188,8 @@ had not caught. The 2.7.x line therefore hardened the Store-first contract:
 - release CI builds a clean wheel without extras, scaffolds an app, boots its full
   Runtime lifecycle and verifies `application.vstore` durability.
 
-Published baseline: **v2.7.2**.
+Historical hardening baseline at that point: **v2.7.2**. This is superseded by
+the published **v3.0.0** architecture baseline.
 
 ---
 
