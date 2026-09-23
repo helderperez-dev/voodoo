@@ -201,8 +201,9 @@ boundary.
 
 ## Canonical import model
 
-The 2.x package root remains a compatibility facade. New code should use the
-namespace that owns the concept:
+Voodoo 3.0 keeps the package root intentionally small. Common application
+vocabulary lives at `voodoo`; subsystem catalogs live in the namespace that
+owns their semantics:
 
 ```python
 from voodoo import App, Agent, Model, page, state, task, tool
@@ -213,7 +214,7 @@ from voodoo.edge import DeviceGateway, WorldAwareDeviceGateway
 from voodoo.protocol import WorldSnapshot, RemoteExecutionRequest
 ```
 
-See `docs/public-api-3.md` for the 3.0 import law and 2.x compatibility policy.
+See `docs/public-api-3.md` for the 3.0 import law and clean-break migration map.
 
 ## Major capabilities
 
@@ -337,19 +338,20 @@ Start here:
 
 | Example | Purpose |
 |---|---|
-| `examples/hello_world/` | smallest page |
-| `examples/dashboard/` | reactive UI/state |
-| `examples/realtime/` | realtime communication |
-| `examples/ai_agent/` | agent/tool application |
-| `examples/ai_saas/` | UI + Agent + Tool + Mesh + Worker + Model |
-| `examples/ui_magic/` | current callable UI / Design System acceptance app |
-| `examples/operational_closed_loop/` | Edge → World → Goal → Execution → Effect → evidence canary |
+| `examples/basics/hello_world/` | smallest page |
+| `examples/web/dashboard/` | reactive UI/state |
+| `examples/web/realtime/` | realtime communication |
+| `examples/ai/agent/` | agent/tool application |
+| `examples/ai/saas/` | UI + Agent + Tool + Mesh + Task + Model |
+| `examples/web/ui_magic/` | current callable UI / Design System acceptance app |
+| `examples/adaptive/operational_closed_loop/` | Edge → World → Goal → Execution → Effect → evidence canary |
 
 ## Project status
 
-Voodoo is beta software. Sprint completion and a published package release are
-intentionally separate operations. The repository branch may contain completed
-work that has not yet been released to PyPI.
+Voodoo is beta software. **v3.0.0** is the current architecture baseline and
+published package release. Sprint completion and package release remain
+separate operations, so future `main` changes must not be described as released
+until the release workflow completes.
 
 ## Contributing and security
 

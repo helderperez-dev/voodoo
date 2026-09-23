@@ -42,41 +42,45 @@
   - changed-files:
       - any-glob-to-any-file:
           - "src/voodoo/core/**"
+          - "src/voodoo/primitives/**"
+          - "src/voodoo/runtime/**"
+          - "src/voodoo/world/**"
+          - "src/voodoo/edge/**"
+          - "src/voodoo/protocol/**"
+          - "src/voodoo/routing/**"
           - "src/voodoo/__init__.py"
           - "src/voodoo/config.py"
-          - "src/voodoo/api.py"
 
 "area: ui":
   - changed-files:
       - any-glob-to-any-file:
           - "src/voodoo/ui/**"
           - "src/voodoo/components.py"
-          - "src/voodoo/theme.py"
 
 "area: data":
   - changed-files:
       - any-glob-to-any-file:
           - "src/voodoo/data/**"
           - "src/voodoo/storage/**"
+          - "src/voodoo/adapters/**"
 
 "area: ai":
   - changed-files:
       - any-glob-to-any-file:
           - "src/voodoo/ai/**"
-          - "src/voodoo/agent.py"
-          - "src/voodoo/tools/**"
-          - "src/voodoo/mcp/**"
+          - "src/voodoo/integrations/ai/**"
+          - "src/voodoo/integrations/mcp/**"
 
 "area: mesh":
   - changed-files:
       - any-glob-to-any-file:
           - "src/voodoo/mesh/**"
 
+# Legacy label name retained for repository-label compatibility; ownership is Runtime scheduling.
 "area: workers":
   - changed-files:
       - any-glob-to-any-file:
-          - "src/voodoo/workers/**"
-          - "src/voodoo/queue.py"
+          - "src/voodoo/runtime/scheduling/**"
           - "src/voodoo/schedule.py"
 
 "area: auth":
@@ -85,10 +89,12 @@
           - "src/voodoo/auth/**"
           - "src/voodoo/security/**"
 
+# Legacy label name retained for repository-label compatibility; canonical owner is observability.
 "area: telemetry":
   - changed-files:
       - any-glob-to-any-file:
-          - "src/voodoo/telemetry/**"
+          - "src/voodoo/observability/**"
+          - "src/voodoo/integrations/otel.py"
 
 "area: cli":
   - changed-files:

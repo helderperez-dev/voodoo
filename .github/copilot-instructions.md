@@ -58,7 +58,8 @@ silent defaults just to make a test pass.
 9. **Remote work remains governed.** Routing/discovery never bypass Capability + Policy + Execution.
 10. **No false guarantees.** Do not claim distributed consensus, global serializable transactions or global exactly-once execution.
 11. **Effect != Observation.** A sent command is not proof that the World changed.
-12. **Stable Framework contracts may use compatibility layers.** Store 0.2.x does not yet expose every richer native subsystem through Python.
+12. **Stable Framework contracts may use implementation compatibility layers.** Store 0.2.x does not yet expose every richer native subsystem through Python.
+13. **Voodoo 3.x has one semantic owner per concept.** Removed 2.x import facades must not be recreated.
 
 ## Store ownership rules
 
@@ -143,11 +144,13 @@ Legacy SQL-string `rls_policy()` is not valid Store semantics; the Store path
 must fail clearly rather than silently bypassing it. Use an explicit SQL adapter
 for applications that still depend on SQL-predicate RLS.
 
-## Queue / workers
+## Runtime scheduling
 
-The default durable queue is `VoodooStoreQueue`, backed by Store Jobs. Leases,
-heartbeat, retry and idempotency belong to the queue; application attempts enter
-canonical Execution. External effects are not globally exactly-once.
+The default durable queue is `VoodooStoreQueue`, backed by Store Jobs.
+Task/queue/scheduler orchestration belongs to `voodoo.runtime.scheduling`.
+Leases, heartbeat, retry and idempotency belong to the queue; application
+attempts enter canonical Execution. External effects are not globally exactly-once.
+Do not recreate the removed `voodoo.workers` or `voodoo.queue` namespaces.
 
 ## Transactions / outbox
 
@@ -192,8 +195,8 @@ and shares the Runtime Store. `SQLiteDeviceStore` is an explicit adapter only.
 - Keep provider SDKs lazy and optional (`ai`, `postgres`, `redis`, `s3`, `otel`, `edge`, `sqlite`).
 - Voodoo Store is a base dependency because it is the default durable substrate.
 - Primitives must not depend on higher Runtime/UI/AI layers.
-- Preserve compatibility import paths during the 2.x line.
-- Public concepts should live in the namespace that owns them; the package root is a compatibility facade.
+- Voodoo 3.x intentionally removed compatibility-only 2.x import paths; do not restore them.
+- Public concepts live in the namespace that owns them; the package root is the small application happy path defined in `docs/public-api-3.md`.
 
 ## Code style
 
@@ -201,7 +204,7 @@ and shares the Runtime Store. `SQLiteDeviceStore` is an explicit adapter only.
 - Type hints on public/new code.
 - Prefer `str | None`, `list[T]`, `dict[K, V]`.
 - Double quotes; Ruff formatting; 88-character target.
-- Broad exception catches require a reason and `# noqa: BLE001` when appropriate.
+- Broad exception catches require a reason and explicit handling; do not use `# noqa` suppressions in source.
 - Raise structured Voodoo errors instead of silently swallowing configuration failures.
 - Use Conventional Commits (`feat(scope): ...`, `fix(scope): ...`, etc.).
 

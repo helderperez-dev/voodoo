@@ -12,9 +12,10 @@ Guide the structured implementation of a sprint's scope, ensuring all items are 
 
 ## Prerequisites
 
-1. Read `SPRINT_PLAN.md` — identify the first sprint with status `TODO` or `IN_PROGRESS`.
-2. Read `.github/copilot-instructions.md` — Sprint Protocol section.
-3. Read the relevant instruction files for the sprint's scope.
+1. Read `SPRINT_PLAN.md`.
+2. Continue only if the tracker explicitly declares a sprint `TODO` or `IN_PROGRESS`.
+   If the tracker is at a selection gate, stop: do not invent the next sprint number.
+3. Read `.github/copilot-instructions.md` and the relevant instruction files for the declared scope.
 
 ---
 
@@ -23,10 +24,10 @@ Guide the structured implementation of a sprint's scope, ensuring all items are 
 ### Step 1: Identify Sprint Scope
 
 1. Open `SPRINT_PLAN.md`.
-2. Find the first sprint with status `TODO` or `IN_PROGRESS`.
-3. Read the sprint's scope items (checked items = in scope).
-4. Read the sprint's goals and deliverables.
-5. Note any dependencies on previous sprints.
+2. Find the explicitly declared sprint with status `TODO` or `IN_PROGRESS`.
+3. If none exists, return to the product/architecture selection gate instead of creating one.
+4. Read the sprint's scope items, goals, deliverables and acceptance criteria.
+5. Note dependencies on previous sprints and the current published architecture baseline.
 
 ### Step 2: Create Branch
 
@@ -89,21 +90,20 @@ All three must pass. If any fail:
    - If sprint is complete, mark status `DONE`.
 3. Update `ROADMAP.md` if milestones changed.
 4. Update `README.md` if user-facing features changed (features list, quick start, CLI commands).
-5. Update relevant `docs/*.md` if behavior changed — use the source-path-to-doc mapping:
-   - `src/voodoo/runtime/` → `docs/runtime.md`, `docs/adaptive.md`, `docs/hitl.md`
+5. Update relevant `docs/*.md` if behavior changed. Canonical examples:
+   - `src/voodoo/runtime/scheduling/` → workers/scheduling/runtime docs
+   - `src/voodoo/runtime/agency/` → adaptive/goal/runtime docs
+   - `src/voodoo/runtime/distributed/` → protocol/deployment/runtime docs
+   - `src/voodoo/world/` → World/ontology docs
+   - `src/voodoo/edge/` → Edge/protocol/deployment docs
    - `src/voodoo/ai/` → `docs/agents.md`, `docs/tools.md`
-   - `src/voodoo/mcp/` → `docs/mcp.md`
-   - `src/voodoo/mesh/` → `docs/mesh.md`, `docs/events.md`
-   - `src/voodoo/workers/` → `docs/workers.md`
-   - `src/voodoo/data/` → `docs/data.md`
-   - `src/voodoo/storage/` → `docs/data.md`, `docs/deployment.md`
-   - `src/voodoo/ui/` → `docs/components.md`, `docs/design_system.md`
-   - `src/voodoo/auth/` → `docs/auth.md`
-   - `src/voodoo/telemetry/` → `docs/telemetry.md`
-   - `src/voodoo/primitives/` → `docs/primitives.md`, `docs/architecture.md`
+   - `src/voodoo/integrations/mcp/` → `docs/mcp.md`
+   - `src/voodoo/observability/` → observability/telemetry docs
+   - `src/voodoo/data/`, `storage/`, `adapters/` → data/deployment docs
+   - `src/voodoo/ui/` → component/design-system docs
    - (Full table in `.github/instructions/pull-request.instructions.md`)
 6. Update `ARCHITECTURE.md` if a new architectural layer or primitive was added.
-7. Update `test_contract_api.py` if the public API changed.
+7. Update `tests/integration/test_contract_api.py` and `docs/public-api-3.md` if the public API changed.
 
 ### Step 7: Commit
 
@@ -119,7 +119,7 @@ git commit -m "feat(scope): implement sprint N scope item
 Closes #issue"
 ```
 
-Common scopes: `core`, `runtime`, `ai`, `ui`, `data`, `mesh`, `mcp`, `workers`, `auth`, `security`, `telemetry`, `cli`, `config`, `ci`, `docs`.
+Common scopes: `core`, `runtime`, `scheduling`, `world`, `edge`, `protocol`, `ai`, `integrations`, `observability`, `ui`, `data`, `mesh`, `auth`, `security`, `cli`, `config`, `ci`, `docs`.
 
 ### Step 8: Push and PR
 
@@ -145,8 +145,9 @@ gh pr create --title "feat(scope): Sprint N — <sprint name>" --body "$(cat .gi
 - Required status check: `CI` (lint + test on Python 3.12 + 3.13).
 - Linear history required (squash merge only).
 - Conversation resolution required (all comments resolved).
-- `enforce_admins` is **false** (sole-owner repo): the owner merges their own
-  PR with `gh pr merge N --squash --delete-branch --admin` once CI is green.
+- Follow the protection policy documented in
+  `.github/instructions/pull-request.instructions.md`; do not assume an admin
+  bypass is available or appropriate.
 
 **CI jobs:**
 | Job | What | Timeout |
@@ -165,14 +166,13 @@ gh pr create --title "feat(scope): Sprint N — <sprint name>" --body "$(cat .gi
 
 ```bash
 # After PR approved, CI green, all conversations resolved
-gh pr merge N --squash --delete-branch --admin
+gh pr merge N --squash --delete-branch
 
 # Release (if sprint is complete) — release.yml auto-bumps __version__,
 # tags vX.Y.Z, pushes, builds, and publishes PyPI + Homebrew + GitHub Release.
 just release X.Y.Z
-# Minor bump per sprint (e.g., 1.16.0 → 1.17.0)
-# Patch for fixes (e.g., 1.16.0 → 1.16.1)
-# Major only at Sprint 18 (1.19.0 → 2.0.0)
+# Choose the version from the actual compatibility/feature impact.
+# Sprint completion does not automatically imply a release or a fixed bump type.
 ```
 
 **Merge strategy:** Squash merge only (linear history required). The `--delete-branch` flag cleans up the remote branch automatically.
@@ -181,8 +181,8 @@ just release X.Y.Z
 
 1. Check GitHub Actions release workflow succeeded.
 2. Verify the new version is on PyPI: `pip index versions voodoo-framework`.
-3. Update `SPRINT_PLAN.md` sprint status to `DONE`.
-4. Commit the status update: `git commit -m "docs(sprint): mark sprint N as DONE"`.
+3. Reconcile `SPRINT_PLAN.md` and `ROADMAP.md` with the published release checkpoint.
+4. Do not describe a version as published until the release workflow succeeds.
 
 ---
 
@@ -198,7 +198,7 @@ Before marking a sprint `DONE`, verify:
 - [ ] `ROADMAP.md` updated if milestones changed.
 - [ ] `README.md` updated if user-facing features changed.
 - [ ] `docs/*.md` updated if behavior changed.
-- [ ] `test_contract_api.py` updated if public API changed.
+- [ ] `tests/integration/test_contract_api.py` and `docs/public-api-3.md` updated if public API changed.
 - [ ] PR merged to `main`.
 - [ ] Release published (`just release X.Y.Z`).
 - [ ] Release workflow succeeded.

@@ -23,10 +23,12 @@ Ensure all tests follow Voodoo's testing standards: proper structure, isolation,
 
 | Type | Location | Pattern |
 |---|---|---|
-| Unit test | `tests/test_<module>.py` | Test class with fresh instances |
+| Unit test | `tests/unit/<domain>/test_<module>.py` | Mirror the semantic source owner |
 | Contract test | `tests/contracts/test_<category>_<provider>.py` | Subclass mixin, add provider tests |
-| Integration test | `tests/test_integration.py` | End-to-end through the stack |
-| API contract | `tests/test_contract_api.py` | Public exports are importable |
+| Integration test | `tests/integration/test_<flow>.py` | Cross-domain Runtime behavior |
+| End-to-end | `tests/e2e/test_<journey>.py` | User/runtime acceptance journey |
+| Architecture | `tests/architecture/test_<invariant>.py` | Repository/dependency ownership |
+| API contract | `tests/integration/test_contract_api.py` | Public exports are importable |
 
 ### Step 2: Write the Test
 
@@ -132,11 +134,11 @@ Autouse fixtures in `tests/conftest.py` handle cleanup:
 | Fixture | What it cleans |
 |---|---|
 | `_clean_page_registry` | `@page` registry |
-| `_reset_queue_state` | Queue provider + worker tasks (NOT handler registry) |
-| `_close_db_after_test` | aiosqlite connections |
-| `_isolated_registry` | Fresh `ToolRegistry` per test |
-| `_clean_mesh_handlers` | Mesh event handlers |
-| `_clean_telemetry` | Telemetry metrics |
+| `_reset_queue_state` | `voodoo.runtime.scheduling` provider + running worker tasks |
+| `_close_db_after_test` | optional SQLite resources, Runtime Store and Model state |
+| `model_store` | fresh Store-native Model substrate when explicitly requested |
+| `app` / `client` | isolated application/TestClient lifecycle |
+| `test_db` | explicit SQLite adapter fixture |
 
 **Rules:**
 - Never disable autouse fixtures.
@@ -169,14 +171,14 @@ class TestRedisQueue(QueueContractTests):
 # Full suite
 just test
 
-# Specific file
-uv run pytest tests/test_runtime.py
+# Specific runtime unit file
+uv run pytest tests/unit/runtime/test_runtime.py
 
-# Specific test class
-uv run pytest tests/test_runtime.py::TestExecutionEngine
+# Public API contract
+uv run pytest tests/integration/test_contract_api.py
 
-# Verbose
-uv run pytest -v tests/test_runtime.py
+# Architecture invariants
+uv run pytest -v tests/architecture/test_repository_layout.py
 
 # With coverage
 uv run pytest --cov=voodoo --cov-report=term-missing
@@ -205,7 +207,7 @@ All three must pass before committing.
 
 ## Test Naming Conventions
 
-- **Test files:** `test_<module_name>.py`
+- **Test files:** `tests/<domain>/.../test_<module_name>.py`; do not add new `test_*.py` files directly under `tests/`
 - **Test classes:** `Test<FeatureName>` (PascalCase)
 - **Test methods:** `test_<scenario>_<expected>` (snake_case)
   - `test_execute_with_valid_intent_returns_result`

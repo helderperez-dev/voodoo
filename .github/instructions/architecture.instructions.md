@@ -40,17 +40,19 @@ explicit adapters, never hidden fallbacks.
 ## Dependency/layer rules
 
 - `primitives/`: foundational data/lifecycle concepts; no Runtime/UI/AI I/O dependencies.
-- `runtime/`: Execution, context, Identity/Principal, Goals, workflows, policy integration, Store boundary, fabric.
+- `runtime/`: canonical Execution, scheduling, agency, reconciliation, distributed ownership, Identity/Principal, workflows, policy and Store boundary.
+- `runtime/scheduling/`: task semantics, durable queue orchestration, scheduler, dispatch and handoff.
 - `storage/`: infrastructure contracts and adapters; mechanics, not application authority.
 - `data/`: Store-first `Model` facade + explicit SQL compatibility.
-- `workers/`: task semantics and durable queue runtime.
 - `world/`: entities, relationships, observations and operational truth.
 - `edge/`: device/physical participant boundary; no second execution authority.
 - `protocol/`: transport/language-neutral contracts.
-- `ai/`: agents/providers/tools as Compute participants.
+- `ai/`: native agents/providers/tools as Compute participants.
+- `integrations/`: vendor/interoperability boundaries such as MCP, provider SDK integrations and OpenTelemetry export.
+- `observability/`: framework-owned trace, metric and inspection semantics.
 - `ui/`: components/reactive state/browser events; UI state is not durable business state.
 - `routing/`: HTTP/page/API dispatch.
-- `mesh/`: communication/realtime transport surfaces.
+- `mesh/`: communication/realtime transport surface; distributed authority belongs to Runtime.
 - `auth/`: credential/session compatibility; Runtime Identity/Principal remains the semantic identity layer.
 
 Lower/foundational layers must not casually import higher presentation/provider layers.
@@ -70,6 +72,7 @@ Use function-level imports where needed to avoid cycles and keep optional SDKs l
 10. Remote work re-enters canonical Execution at the destination.
 11. Discovery/advertisement does not grant authority.
 12. Do not claim consensus, global transactions or global exactly-once without an implemented protocol.
+13. Voodoo 3.x has one semantic owner per concept; removed 2.x compatibility paths must not be recreated as facades or duplicate modules.
 
 ## Computational concepts
 
@@ -128,10 +131,12 @@ model contract exists.
 Store KV/Collection mutation + durable Outbox in one Store transaction. Delivery
 is at-least-once and external/node effects are outside that transaction.
 
-## Workers / scheduler
+## Runtime scheduling
 
-Store Jobs are the default durable queue. Queue ownership uses leases and retry
-semantics; each attempt enters canonical Execution.
+Store Jobs are the default durable queue. Task/queue/scheduler ownership lives
+under `voodoo.runtime.scheduling`. Queue ownership uses leases and retry
+semantics; each attempt enters canonical Execution. The removed
+`voodoo.workers` and `voodoo.queue` compatibility paths must not return.
 
 Scheduler/Cron/Triggers are Store-backed. Store 0.2.2 cannot arbitrarily
 reposition a schedule cursor; preserve the explicit failure instead of silently

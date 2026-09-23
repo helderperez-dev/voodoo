@@ -11,19 +11,16 @@ from pathlib import Path
 
 SRC = Path(__file__).parents[2] / "src" / "voodoo"
 
-# Existing package-root modules are compatibility/application facades. New
-# root modules require an explicit public-API decision.
+# The package root is intentionally curated in Voodoo 3.x. New root modules
+# require an explicit public-API/ownership decision.
 ROOT_MODULES = {
     "__init__.py",
-    "agent.py",
-    "api.py",
     "components.py",
     "config.py",
     "i18n.py",
     "schedule.py",
     "seo.py",
     "status.py",
-    "theme.py",
 }
 
 SEMANTIC_CORE = ("core", "runtime", "primitives", "protocol", "world")

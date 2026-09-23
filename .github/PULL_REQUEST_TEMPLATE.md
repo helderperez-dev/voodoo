@@ -42,11 +42,11 @@ Closes #
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
 - [ ] No new required runtime dependencies (optional extras only)
 - [ ] `__all__` updated if public exports changed
-- [ ] `CHANGELOG.md` updated under `[Unreleased]`
+- [ ] `CHANGELOG.md` updated under `[Unreleased]` when the change is material/release-notable
 - [ ] `docs/*.md` updated for changed behavior (see `.github/instructions/pull-request.instructions.md` → "Documentation Sync" for the source-path-to-doc mapping)
 - [ ] `README.md` updated if user-facing feature added
 - [ ] `SPRINT_PLAN.md` updated if sprint scope changed
 - [ ] `ROADMAP.md` updated if milestones changed
 - [ ] `ARCHITECTURE.md` updated if architectural layer or primitive changed
-- [ ] `test_contract_api.py` updated if public API changed
+- [ ] `tests/integration/test_contract_api.py` and `docs/public-api-3.md` updated if public API changed
 - [ ] Local zero-infra experience still works (fresh project, no external services)

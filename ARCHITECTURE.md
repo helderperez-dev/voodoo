@@ -253,24 +253,35 @@ a second execution model.
 
 ```text
 src/voodoo/
-├── core/        # App lifecycle/facade and errors
-├── primitives/  # ontology and execution dimensions
-├── runtime/     # Execution, identity, workflow, goals, fabric, Store boundary
-├── storage/     # infrastructure contracts/adapters
-├── data/        # Store-first Model + SQL compatibility
-├── workers/     # task and durable queue runtime
-├── ai/          # agents/providers/tools
-├── world/       # entities/relationships/observations/world model
-├── edge/        # physical/external participant boundary
-├── protocol/    # transport/language-neutral contracts
-├── ui/          # components/reactive state/design system
-├── routing/     # page/API routing
-├── mesh/        # realtime/remote communication surfaces
-├── auth/        # credential/session compatibility APIs
-├── security/    # HTTP security and redaction
-├── telemetry/   # traces/metrics/observability
-└── cli/         # create/dev/fabric/inspection operations
+├── core/          # App lifecycle/facade, state, events and errors
+├── primitives/    # ontology and execution dimensions
+├── runtime/       # canonical Runtime semantics
+│   ├── execution/       # Execution engine and world-aware execution
+│   ├── scheduling/      # tasks, durable queue, scheduler, dispatch
+│   ├── agency/          # goals and adaptive supervision
+│   ├── distributed/     # remote execution, membership and fabric
+│   ├── reconciliation/  # desired/observed convergence
+│   └── inspection/      # lineage and runtime inspection
+├── world/         # entities/relationships/observations/world model
+├── edge/          # physical/external participant boundary
+├── protocol/      # transport/language-neutral contracts
+├── ai/            # native Agent/provider/tool semantics
+├── integrations/  # MCP, provider SDK and OpenTelemetry integrations
+├── observability/ # framework-owned traces/metrics/telemetry state
+├── storage/       # infrastructure contracts/adapters
+├── data/          # Store-first Model + SQL compatibility
+├── ui/            # components/reactive state/design system
+├── routing/       # page/API routing
+├── mesh/          # realtime/event transport surface
+├── auth/          # credential/session compatibility APIs
+├── security/      # HTTP security and redaction
+└── cli/           # create/dev/fabric/inspection operations
 ```
+
+Voodoo 3.0 intentionally removed compatibility-only duplicate owners such as
+`voodoo.workers`, `voodoo.queue`, `voodoo.telemetry`, `voodoo.mcp`,
+`voodoo.tools`, `voodoo.agent`, `voodoo.api` and `voodoo.theme`.
+Those paths must not be recreated as parallel semantic owners.
 
 ## Honest boundaries
 

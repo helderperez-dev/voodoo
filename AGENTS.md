@@ -22,7 +22,7 @@
 
 ## Project Identity
 
-Voodoo is a **programmable runtime for adaptive applications and operational systems** — not merely a web framework. Web applications, APIs, agents, background workers, realtime systems, MCP tools, human workflows, distributed systems, and physical systems are different manifestations of one runtime that converge on **Execution**. It is built on Starlette, Uvicorn, Pydantic, aiosqlite, and standard Python `asyncio`. The runtime is **zero-config by default** (SQLite + local filesystem) and **production-ready by configuration** (PostgreSQL, Redis, S3, OpenAI/Anthropic).
+Voodoo is a **programmable runtime for adaptive applications and operational systems** — not merely a web framework. Web applications, APIs, agents, background tasks, realtime systems, MCP integrations, human workflows, distributed systems, and physical systems are different manifestations of one runtime that converge on **Execution**. It is built on Starlette, Uvicorn, Pydantic, Voodoo Store, and standard Python `asyncio`. The runtime is **zero-config by default** with one local `.voodoo/application.vstore`; PostgreSQL, SQLite, Redis, S3 and provider SDKs remain explicit/optional adapters.
 
 **Current version:** See `src/voodoo/__init__.py` → `__version__`.
 
@@ -45,15 +45,15 @@ Voodoo is a **programmable runtime for adaptive applications and operational sys
 
 ## Architectural Invariants (Never Violate)
 
-1. **Zero-infra local dev** — The default install must never require external services. SQLite, local filesystem, and in-memory queues are the defaults.
+1. **Zero-infra local dev** — The default install must never require external services. Voodoo Store is the default durable substrate for data, jobs, scheduling, events, objects and Runtime state.
 2. **No new required dependencies** — Provider SDKs live in optional extras (`[ai]`, `[postgres]`, `[s3]`, `[redis]`). The base install stays minimal.
 3. **Capability-based adapters** — Every infrastructure adapter implements a Protocol and declares boolean capability flags. Never use enums for capabilities.
 4. **Contract tests are immutable** — The mixin contract suites in `tests/contracts/` must pass unchanged against every adapter implementation.
-5. **Compatibility shims** — When refactoring, preserve old import paths via `sys.modules` replacement or PEP 562 `__getattr__`.
+5. **Canonical 3.x ownership** — Do not reintroduce compatibility-only 2.x paths or duplicate semantic owners. Breaking migrations belong in documentation unless a future compatibility policy explicitly says otherwise.
 6. **Lazy imports** — Provider SDKs and circular-dependency-prone modules must be imported at function level, not module level.
 7. **Correlation IDs** — Every execution carries a `trace_id` that propagates through the entire stack via `trace_id_var` ContextVar.
 8. **Events are namespaced** — All mesh/MCP events use dotted namespaces (e.g., `"agent.started"`, `"tool.completed"`).
-9. **Sprint discipline** — Work sprints in order. Find the first non-DONE sprint in `SPRINT_PLAN.md`, implement only its scope, pass the quality gate, release, then continue.
+9. **Sprint discipline** — Implement a numbered sprint only when `SPRINT_PLAN.md` explicitly declares it active. When the tracker is at a selection gate, do not invent Sprint 29 or add unrelated features; perform the product/architecture selection first.
 10. **Conventional Commits** — All commits must use `type(scope): description` format.
 
 ---
@@ -74,14 +74,15 @@ Voodoo is a **programmable runtime for adaptive applications and operational sys
 ### Error Handling
 
 - Use the structured error hierarchy in `voodoo.core.errors` (`VoodooError` base → specific subclasses).
-- Broad excepts must use `# noqa: BLE001` and log context.
+- Broad exception handling must be explicit, scoped, and logged when appropriate. Do not add source `# noqa` suppressions to bypass lint failures.
 - Never swallow exceptions silently.
 
-### Compatibility Patterns
+### Import and compatibility patterns
 
-- **`sys.modules` replacement** — For module aliases (see `voodoo/queue.py`, `voodoo/tools/registry.py`).
-- **PEP 562 `__getattr__`** — For forwarded globals and deprecation shims (see `voodoo/__init__.py`).
-- **Function-level imports** — For provider SDKs and circular dependency avoidance.
+- **Canonical semantic imports** — Import advanced APIs from the namespace that owns them.
+- **No removed 2.x aliases** — Do not recreate `sys.modules` redirects, PEP 562 forwarding shims, or duplicate facade modules for paths removed by 3.0.
+- **Implementation compatibility stays internal** — Stable Framework contracts may adapt limited Store/provider capabilities without exposing duplicate public owners.
+- **Function-level imports** — Use for optional provider SDKs and carefully justified circular-dependency avoidance.
 
 ---
 
@@ -114,7 +115,7 @@ Voodoo is a **programmable runtime for adaptive applications and operational sys
    - `SPRINT_PLAN.md` if sprint scope changed.
    - `ROADMAP.md` if milestones changed.
    - `ARCHITECTURE.md` if layer/primitive changed.
-   - `test_contract_api.py` if public API changed.
+   - `tests/integration/test_contract_api.py` and `docs/public-api-3.md` if public API changed.
 6. Commit with Conventional Commits.
 7. Push and create a PR (fill the PR template — `.github/PULL_REQUEST_TEMPLATE.md`).
 8. Wait for CI to pass (Python 3.12 + 3.13, lint, test).
@@ -190,29 +191,42 @@ Structured prompts for common tasks:
 
 ```
 src/voodoo/
-├── __init__.py          # Public API, __version__, deprecation shims
-├── core/               # App facade, routing, errors, events, state
-├── primitives/         # 8 architectural primitives (State, Capability, Intent, ...)
-├── runtime/            # ExecutionEngine, context, planner, adaptive, human, persistence
-├── ai/                 # Agent, LLM providers, tool registry
-├── adapters/           # Provider registry, capability system, style adapters
-├── storage/            # Database, queue, events, execution, objects, cache adapters
-├── ui/                 # Component system, reactive state, styles, theme
-├── routing/            # Page registry, API routing
-├── mesh/               # Realtime event bus
-├── mcp/                # Model Context Protocol server/client
-├── workers/            # @task decorator, queue runtime
-├── data/               # Async ORM (BaseModel, Model)
-├── auth/               # JWT, passwords, users, guards, middleware
-├── security/           # CORS, CSRF, rate limit, security headers
-├── telemetry/          # Trace store, middleware, metrics
-├── cli/                # Typer CLI (new, dev, generate, inspect, recover, ...)
-├── config.py           # Config loading, env interpolation
-├── i18n.py             # Internationalization
-├── schedule.py         # Durable scheduler
-├── seo.py              # SEO/OpenGraph metadata
-└── status.py           # Health check endpoint
+├── __init__.py          # Small 3.x application happy path + __version__
+├── core/                # App facade, lifecycle, events, state, errors
+├── primitives/          # Foundational runtime concepts
+├── runtime/             # Canonical execution and operational semantics
+│   ├── execution/       # Execution engine and world-aware execution
+│   ├── scheduling/      # tasks, queue orchestration, scheduler, dispatch
+│   ├── agency/          # goals and adaptive supervision
+│   ├── distributed/     # remote execution, membership, fabric
+│   ├── reconciliation/  # desired/observed convergence
+│   └── inspection/      # runtime lineage and inspection
+├── world/               # entities, relationships, observations, WorldModel
+├── edge/                # physical/external participant boundary
+├── protocol/            # language-neutral semantic contracts
+├── ai/                  # native Agent/provider/tool semantics
+├── integrations/        # vendor-backed AI, MCP and OpenTelemetry integration
+├── observability/       # framework-owned traces, metrics and telemetry state
+├── adapters/            # provider registry and infrastructure adapters
+├── storage/             # database, queue, events, objects, cache contracts
+├── data/                # Store-first Model facade + SQL compatibility
+├── ui/                  # components, reactive state, design system
+├── routing/             # page and API routing
+├── mesh/                # realtime/event transport application surface
+├── auth/                # credential/session compatibility APIs
+├── security/            # HTTP security and redaction
+├── cli/                 # Typer CLI
+├── config.py            # config loading and env interpolation
+├── schedule.py          # public scheduler compatibility/application surface
+├── i18n.py              # internationalization
+├── seo.py               # SEO/OpenGraph metadata
+└── status.py            # health endpoint
 ```
+
+Removed 2.x namespaces such as `voodoo.workers`, `voodoo.queue`,
+`voodoo.telemetry`, `voodoo.mcp`, `voodoo.tools`, `voodoo.agent`,
+`voodoo.api` and `voodoo.theme` must not be recreated. See
+`docs/public-api-3.md`.
 
 ---
 
@@ -222,7 +236,7 @@ src/voodoo/
 2. **PostgreSQL dict rows** — psycopg returns dict-like rows, so use `row["col"]` not `row[0]`.
 3. **Test env vars** — `os.environ["VAR"]` at module level runs BEFORE skip markers. Always use `os.environ.get(...)`.
 4. **`_protocol_check`** — Place Protocol compliance checks at file BOTTOM under `if TYPE_CHECKING:`.
-5. **Queue handler registry** — Handlers register at import time. The `_reset_queue_state` fixture resets provider + worker tasks but NOT the handler registry.
+5. **Queue handler registry** — Handlers register at import time. Queue/task orchestration is owned by `voodoo.runtime.scheduling`; test resets must clear runtime state without recreating removed `voodoo.workers` ownership.
 6. **mypy is NOT in `just lint`** — Ruff is the lint gate. Run `uv run mypy src/voodoo` separately for type checking.
 7. **WAL mode** — `SQLiteExecutionStore` uses WAL mode with `busy_timeout=5000` for concurrent access.
 8. **`voodoo.toml`/`voodoo.yaml`** — Config precedence: explicit file > `VOODOO_*` env vars > local defaults.
