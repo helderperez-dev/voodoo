@@ -25,13 +25,13 @@ uv run pytest
 uv run pytest --tb=short
 
 # Specific test file
-uv run pytest tests/test_runtime.py
+uv run pytest tests/unit/runtime/test_runtime.py
 
-# Specific test class
-uv run pytest tests/test_runtime.py::TestExecutionEngine
+# Public API contract
+uv run pytest tests/integration/test_contract_api.py
 
-# Specific test method
-uv run pytest tests/test_runtime.py::TestExecutionEngine::test_basic_execute
+# Architecture invariants
+uv run pytest tests/architecture/test_repository_layout.py
 
 # With markers
 uv run pytest -m "not slow"
@@ -73,16 +73,16 @@ These run before every test automatically:
 
 | Fixture | Purpose |
 |---|---|
-| `_clean_page_registry` | Clears `@page` registry between tests |
-| `_reset_queue_state` | Resets queue provider + worker tasks (NOT handler registry) |
-| `_close_db_after_test` | Closes aiosqlite connections (non-daemon threads keep process alive) |
-| `_isolated_registry` | Monkeypatches fresh `ToolRegistry` per test |
-| `_clean_mesh_handlers` | Clears mesh event handlers |
-| `_clean_telemetry` | Resets telemetry metrics |
+| `_clean_page_registry` | Clears the `@page` registry between tests |
+| `_reset_queue_state` | Resets `voodoo.runtime.scheduling` queue provider and running worker tasks |
+| `_close_db_after_test` | Closes optional SQLite resources and resets Runtime Store/model state |
+| `model_store` | Binds a fresh `application.vstore` for Store-native Model tests |
+| `app` / `client` | Creates an isolated application/TestClient lifecycle |
+| `test_db` | Explicit SQLite fixture for adapter-compatibility tests only |
 
 ### Important: `_reset_queue_state` does NOT reset the handler registry
 
-Handlers register at import time. The fixture resets the provider and worker tasks but not the handler registry. If a test registers a new handler, it will persist across tests unless manually cleaned.
+Handlers register at import time. The fixture resets the provider and running task set under `voodoo.runtime.scheduling`, but not the handler registry. If a test registers a new handler, clean it explicitly or use a fresh registry where the test contract supports one.
 
 ---
 
@@ -269,68 +269,38 @@ provider = ToolThenTextProvider(
 
 ## Test File Organization
 
-```
+The 3.x suite mirrors semantic ownership instead of placing feature tests at
+`tests/` root:
+
+```text
 tests/
-├── conftest.py                    # Autouse fixtures, shared fixtures
-├── test_contract_api.py            # Public API contract (exports)
-├── test_primitives.py              # Core ontology + execution dimensions
-├── test_runtime.py                 # ExecutionEngine, context, etc.
-├── test_agent.py                   # Agent class
-├── test_agent_runtime.py           # Agent through ExecutionEngine
-├── test_app.py                     # App facade
-├── test_components.py              # UI components
-├── test_config.py                  # Config loading
-├── test_data.py                    # Async ORM
-├── test_events.py                  # Event system
-├── test_mesh.py                    # Mesh network
-├── test_mesh_event_bus.py          # Mesh through event bus
-├── test_mcp.py                     # MCP server
-├── test_mcp_runtime.py             # MCP through runtime
-├── test_tools.py                   # Tool registry
-├── test_workers.py                 # @task decorator
-├── test_queue.py                   # Queue system
-├── test_state.py                   # State primitive
-├── test_reactive.py                # Reactive state
-├── test_websocket.py               # WebSocket transport
-├── test_persistence.py             # ExecutionStore
-├── test_checkpoint_resume.py       # Checkpoint/recovery
-├── test_execution_sqlite_store.py  # SQLiteExecutionStore
-├── test_human.py                   # Human-in-the-loop
-├── test_planner_adaptive.py        # Planner + AdaptiveSupervisor
-├── test_provider_switching.py      # Provider switching
-├── test_providers.py               # LLM providers
-├── test_object_store.py            # Object storage
-├── test_http_runtime.py            # HTTP through runtime
-├── test_integration.py             # End-to-end
-├── test_cli.py                     # CLI commands
-├── test_cli_inspect.py             # CLI inspect command
-├── test_auth.py                    # Auth system
-├── test_security.py               # Security middleware
-├── test_i18n.py                    # Internationalization
-├── test_seo.py                     # SEO metadata
-├── test_theme.py                  # Theme system
-├── test_ui.py                      # UI rendering
-├── test_scheduler.py               # Durable scheduler
-├── test_model.py                   # Model CRUD
-└── contracts/
-    ├── test_database.py            # DatabaseContractTests mixin
-    ├── test_database_postgres.py    # PostgreSQL provider tests
-    ├── test_queue.py               # QueueContractTests mixin
-    ├── test_queue_postgres.py      # PostgreSQL queue
-    ├── test_queue_redis.py         # Redis queue
-    ├── test_cache.py               # CacheContractTests mixin
-    ├── test_cache_redis.py         # Redis cache
-    ├── test_eventbus.py            # EventBusContractTests mixin
-    ├── test_eventbus_postgres.py   # PostgreSQL events
-    ├── test_execution_postgres.py  # PostgreSQL execution store
-    ├── test_objectstore_s3.py      # S3/MinIO objects
-    ├── test_capabilities.py        # Capability system
-    └── test_sql_to_postgres.py     # SQL translation
+├── conftest.py
+├── architecture/   # repository/dependency invariants
+├── contracts/      # portable adapter/protocol contracts
+├── e2e/            # user/runtime acceptance journeys
+├── integration/    # cross-domain behavior and durable Runtime flows
+└── unit/
+    ├── ai/
+    ├── auth/
+    ├── cli/
+    ├── core/
+    ├── data/
+    ├── edge/
+    ├── integrations/
+    ├── primitives/
+    ├── protocol/
+    ├── runtime/
+    ├── storage/
+    ├── ui/
+    └── world/
 ```
+
+Do not add new `test_*.py` files directly under `tests/`; the architecture
+suite enforces this rule.
 
 ---
 
-## Public API Contract (`test_contract_api.py`)
+## Public API Contract (`tests/integration/test_contract_api.py`)
 
 This test verifies that all public exports in `voodoo.__all__` are importable and have the expected types. If you change the public API (add/remove/rename exports), update this test.
 
