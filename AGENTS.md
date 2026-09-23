@@ -74,14 +74,15 @@ Voodoo is a **programmable runtime for adaptive applications and operational sys
 ### Error Handling
 
 - Use the structured error hierarchy in `voodoo.core.errors` (`VoodooError` base → specific subclasses).
-- Broad excepts must use `# noqa: BLE001` and log context.
+- Broad exception handling must be explicit, scoped, and logged when appropriate. Do not add source `# noqa` suppressions to bypass lint failures.
 - Never swallow exceptions silently.
 
-### Compatibility Patterns
+### Import and compatibility patterns
 
-- **`sys.modules` replacement** — For module aliases (see `voodoo/queue.py`, `voodoo/tools/registry.py`).
-- **PEP 562 `__getattr__`** — For forwarded globals and deprecation shims (see `voodoo/__init__.py`).
-- **Function-level imports** — For provider SDKs and circular dependency avoidance.
+- **Canonical semantic imports** — Import advanced APIs from the namespace that owns them.
+- **No removed 2.x aliases** — Do not recreate `sys.modules` redirects, PEP 562 forwarding shims, or duplicate facade modules for paths removed by 3.0.
+- **Implementation compatibility stays internal** — Stable Framework contracts may adapt limited Store/provider capabilities without exposing duplicate public owners.
+- **Function-level imports** — Use for optional provider SDKs and carefully justified circular-dependency avoidance.
 
 ---
 
@@ -114,7 +115,7 @@ Voodoo is a **programmable runtime for adaptive applications and operational sys
    - `SPRINT_PLAN.md` if sprint scope changed.
    - `ROADMAP.md` if milestones changed.
    - `ARCHITECTURE.md` if layer/primitive changed.
-   - `test_contract_api.py` if public API changed.
+   - `tests/integration/test_contract_api.py` and `docs/public-api-3.md` if public API changed.
 6. Commit with Conventional Commits.
 7. Push and create a PR (fill the PR template — `.github/PULL_REQUEST_TEMPLATE.md`).
 8. Wait for CI to pass (Python 3.12 + 3.13, lint, test).
