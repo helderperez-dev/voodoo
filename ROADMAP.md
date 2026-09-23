@@ -93,8 +93,10 @@ The post-Sprint-28 repository now includes:
 - clean-install release gates proving the default Runtime lifecycle does not require
   optional SQL infrastructure.
 
-The latest published release is **v2.7.2**. `main` is ahead of that release with Design
-System 3 and its Theme-contract hardening. `SPRINT_PLAN.md` remains the implementation
+The latest published release is **v3.0.0** (2026-09-21), and the current
+`main` architecture baseline is the same 3.0 release commit. The 3.0 clean break
+removed compatibility-only 2.x facades, contracted the package-root API, and completed
+repository semantic-ownership convergence. `SPRINT_PLAN.md` remains the implementation
 source of truth; this document defines direction rather than claiming future work already
 exists.
 
@@ -174,9 +176,11 @@ PostgreSQL/SQLite/Redis/S3 infrastructure is an explicit adapter choice, not a h
 fallback.
 
 The 3.0 import law lives in [`docs/public-api-3.md`](docs/public-api-3.md).
-Package-root imports are a compatibility/happy-path facade; subsystem catalogs
-belong to their semantic namespaces such as `voodoo.ui`, `voodoo.runtime`,
-`voodoo.world`, `voodoo.edge` and `voodoo.protocol`.
+The package root is the intentionally small application happy path; it is not a
+compatibility catalog. Subsystem APIs belong to their semantic namespaces such as
+`voodoo.ui`, `voodoo.runtime`, `voodoo.world`, `voodoo.edge` and
+`voodoo.protocol`. Compatibility-only 2.x paths removed by 3.0 must not be
+reintroduced as duplicate owners.
 
 ## UI and Design System
 
@@ -334,8 +338,8 @@ Candidate directions, roughly by dependency and validation value, are:
    Executions, devices and nodes without inventing parallel semantics.
 5. **Managed Runtime / cloud control plane** — deployment/fleet/operator services above
    the existing Runtime contracts.
-6. **3.0 public API consolidation** — remove compatibility debt only when the product
-   surface and contracts justify the break.
+6. **3.x reference product validation** — build a real application that pressure-tests
+   the public Runtime model end to end and exposes the smallest next capability gap.
 
 A candidate wins only if it validates existing primitives, has recurring product value,
 creates a strong end-to-end acceptance target and makes later work simpler.
