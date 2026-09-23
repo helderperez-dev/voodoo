@@ -238,8 +238,8 @@ Implementation/release evidence: PRs #68, #69, #70, #72 and #73; commit
 ## Next selection gate
 
 No Sprint 29 is declared by this tracker yet. Before assigning the number, evaluate the
-post-Sprint-28 architecture against real product pressure and choose a coherent next
-phase rather than accumulating unrelated features.
+published Voodoo 3.0 architecture against real product pressure and choose a coherent
+next phase rather than accumulating unrelated features.
 
 Candidate directions already supported by the architecture:
 
