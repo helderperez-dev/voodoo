@@ -150,15 +150,21 @@ Do not introduce vendor imports into `core`, `runtime`, `primitives`,
 
 ## Public API and compatibility
 
-`voodoo.__init__` is a curated application/compatibility facade, not a catalog.
+`voodoo.__init__` is the intentionally small Voodoo 3.x application happy
+path, not a catalog or compatibility facade. Advanced APIs belong to their
+semantic owners.
 
 Before moving or removing a public symbol:
 
 1. search documented and tested imports;
-2. preserve the old path with a compatibility facade during the 2.x line when
-   practical;
-3. add compatibility coverage;
-4. reserve intentional removals for an explicitly documented breaking release.
+2. decide whether the change is additive, a documented migration, or a future
+   major-version break;
+3. update `docs/public-api-3.md` and contract coverage for intentional API changes;
+4. do not recreate compatibility-only 2.x namespaces that 3.0 deliberately removed.
+
+Compatibility inside an implementation boundary (for example adapting a
+limited Store binding behind a stable Framework contract) is different from
+restoring duplicate public import paths.
 
 ## Pull request checklist
 
