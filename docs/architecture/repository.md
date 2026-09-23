@@ -20,25 +20,29 @@ history.
 
 ```text
 src/voodoo/
-├── core/             application facade and framework kernel
-├── runtime/          execution, reconciliation, scheduling and agency
-├── primitives/       shared semantic value objects/contracts
+├── core/             application facade, lifecycle, state and events
+├── primitives/       foundational semantic value objects/contracts
+├── runtime/          canonical execution and operational semantics
 ├── world/            entities, observations and operational world
+├── edge/             physical/external participant boundary
 ├── protocol/         language-neutral/wire contracts
+├── ai/               native AI compute, agents and tools
+├── integrations/     MCP, provider SDK and OpenTelemetry integrations
+├── observability/    framework-owned traces, metrics and telemetry state
+├── storage/          infrastructure contracts and adapters
+├── adapters/         provider registry and adapter plumbing
+├── data/             Store-first application persistence/model API
 ├── ui/               application UI and reactive presentation
-├── data/             application persistence/model API
-├── auth/             application authentication
-├── ai/               AI compute, agents and tools
-├── edge/             physical/external participants
-├── integrations/     optional external-system adapters
-├── observability/    telemetry and runtime inspection surfaces
-├── cli/              developer tooling
-└── _internal/        implementation details with no compatibility promise
+├── routing/          page/API routing
+├── mesh/             realtime/event transport application surface
+├── auth/             application credential/session APIs
+├── security/         HTTP security and redaction
+└── cli/              developer tooling
 ```
 
-This is a semantic target, not permission to move code blindly. Existing
-public imports remain compatibility surface until a deliberate major-version
-migration removes them.
+This is the Voodoo 3.x ownership model. Compatibility-only 2.x namespaces were
+removed deliberately in 3.0 and must not be recreated as parallel semantic
+owners. New top-level source domains require an explicit architecture decision.
 
 ## Dependency direction
 
@@ -74,13 +78,14 @@ runtime/
 └── inspection/
 ```
 
-Moves into these groups require an import/dependency audit first. Compatibility
-re-exports are preferred to breaking import paths during the current release
-line.
+Moves into these groups require an import/dependency audit first. Voodoo 3.x
+uses the grouped owners as canonical paths; removed 2.x compatibility re-exports
+must not be restored unless a future version adopts an explicit compatibility
+policy.
 
 ## Tests
 
-Target structure:
+Current ownership structure:
 
 ```text
 tests/
@@ -88,12 +93,12 @@ tests/
 ├── integration/      interactions across two or more domains
 ├── e2e/              developer/user journeys
 ├── contracts/        provider/protocol behavioral contracts
-├── compatibility/    intentionally preserved public/legacy behavior
-└── fixtures/
+└── architecture/     repository and dependency invariants
 ```
 
-A test belongs at repository root only when it is genuinely repository-wide.
-New unit tests should not be added directly under `tests/`.
+Shared fixtures live in `tests/conftest.py`. A test belongs at repository root
+only when it is genuinely repository-wide; new `test_*.py` files must not be
+added directly under `tests/`.
 
 ## Documentation
 
@@ -132,17 +137,19 @@ application concepts to operational/adaptive systems.
 
 ## Package-root law
 
-`voodoo.__init__` is a curated compatibility/application facade, not a catalog.
-A module at `src/voodoo/<name>.py` must be either a deliberate public facade or
-moved under its semantic owner. Historical facades may remain temporarily to
-preserve compatibility, but new ones require an explicit API decision.
+`voodoo.__init__` is the intentionally small 3.x application happy path, not a
+catalog or compatibility facade. It exports only the common application
+vocabulary defined by `docs/public-api-3.md`. A module at
+`src/voodoo/<name>.py` must be a deliberate root-level application surface or
+be moved under its semantic owner. Removed 2.x facades are forbidden by
+architecture tests.
 
 ## Repository rules
 
 - No vendor-specific SDK dependency in Core/Runtime/World/Primitives/Protocol.
 - No `# noqa` suppressions to bypass architecture or lint failures.
 - No duplicate execution authority.
-- No filesystem move that silently changes a documented public import.
+- No public-import change without an explicit versioned API decision and documentation.
 - Prefer small mechanical moves with green CI over a repository-wide big bang.
 - Every new source domain must define its semantic owner and dependency
   direction.
