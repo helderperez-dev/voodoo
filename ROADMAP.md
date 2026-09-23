@@ -321,10 +321,10 @@ optional.
 
 ## Next-phase selection gate
 
-No Sprint 29 is declared merely because Sprint 28 is finished. The next numbered sprint
-should be chosen after a product/architecture review that applies real pressure to the
-Runtime and identifies the smallest coherent capability set that unlocks the next class
-of products.
+No Sprint 29 is declared merely because Voodoo 3.0 is published. The next numbered
+sprint should be chosen after a product/architecture review that applies real pressure
+to the 3.0 Runtime and identifies the smallest coherent capability set that unlocks the
+next class of products.
 
 Candidate directions, roughly by dependency and validation value, are:
 
