@@ -57,7 +57,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://voodoo.build"
+Homepage = "https://github.com/helderperez-dev/voodoo"
 Documentation = "https://github.com/helderperez-dev/voodoo#documentation"
 Repository = "https://github.com/helderperez-dev/voodoo"
 Changelog = "https://github.com/helderperez-dev/voodoo/blob/main/CHANGELOG.md"
