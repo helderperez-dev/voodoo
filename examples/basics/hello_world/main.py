@@ -22,7 +22,7 @@ def home():
             Stack(
                 Button("Get started", variant="primary"),
                 Button("Learn more", variant="secondary"),
-                Link("Read the docs", href="https://voodoo.dev"),
+                Link("Visit voodoo.build", href="https://voodoo.build"),
                 gap="md",
             ),
             Grid(
