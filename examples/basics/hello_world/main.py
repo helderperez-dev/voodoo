@@ -22,7 +22,10 @@ def home():
             Stack(
                 Button("Get started", variant="primary"),
                 Button("Learn more", variant="secondary"),
-                Link("View Voodoo on GitHub", href="https://github.com/helderperez-dev/voodoo"),
+                Link(
+                    "View Voodoo on GitHub",
+                    href="https://github.com/helderperez-dev/voodoo",
+                ),
                 gap="md",
             ),
             Grid(
