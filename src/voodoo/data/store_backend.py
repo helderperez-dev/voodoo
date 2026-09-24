@@ -1,8 +1,8 @@
 """Voodoo Store-backed record persistence for the public Model facade.
 
-Voodoo Store 0.2+ provides the native Collections contract used here. The
-public data path has no SQL fallback and therefore no optional SQL dependency in
-its import graph.
+Voodoo Store 0.3+ provides the native Collections/index query contract used
+here. The public data path has no SQL fallback and therefore no optional SQL
+dependency in its import graph.
 """
 
 from __future__ import annotations
@@ -96,8 +96,26 @@ def _primary_key(record_id: int) -> bytes:
 def _ensure_collection(store: Any, collection: str) -> None:
     collection_key = _collection_key(collection)
     store.create_collection(collection_key, schema_version=1, codec=b"json")
+    created_index = False
     for index in _collection_indexes.get(collection, ()):
-        store.define_index(collection_key, index.encode("utf-8"))
+        created_index = (
+            store.define_index(collection_key, index.encode("utf-8"))
+            or created_index
+        )
+
+    if created_index:
+        # Store intentionally keeps schema/index evolution explicit. When a
+        # model adds an index after records already exist, rebuild those
+        # records once so the new native index is complete immediately.
+        existing = list(store.scan_collection(collection_key))
+        for primary_key, value, _indexes in existing:
+            record = _decode(bytes(value))
+            store.upsert_record(
+                collection_key,
+                bytes(primary_key),
+                bytes(value),
+                indexes=_record_indexes(collection, record),
+            )
 
 
 def _sequence_key(collection: str) -> bytes:
@@ -140,8 +158,7 @@ def insert_record(collection: str, values: dict[str, Any]) -> int:
     tx = store.transaction()
     if not hasattr(tx, "upsert_record"):
         raise ConfigurationError(
-            "Voodoo Store 0.2+ transactional Collections support is required. "
-            "Upgrade with `pip install -U 'voodoo-store>=0.2.2,<0.3'`."
+            "Voodoo Store 0.3+ transactional Collections support is required."
         )
 
     sequence_key = _sequence_key(collection)
