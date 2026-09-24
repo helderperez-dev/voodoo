@@ -241,7 +241,7 @@ def query_records(
             _encode_index_value(filters[indexed_filter]),
         )
         rows = [_decode(bytes(record[1])) for record in native]
-    elif order_by:
+    elif len(order_by) == 1:
         first = order_by[0]
         field = first[1:] if first.startswith("-") else first
         if field in declared:
