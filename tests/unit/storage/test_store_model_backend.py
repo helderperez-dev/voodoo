@@ -367,3 +367,33 @@ def test_new_index_backfills_existing_collection_records(monkeypatch):
         native.records[(b"backfill_lead", b"00000000000000000001")][1]
     )
     assert indexes[b"email"].startswith(b"s:")
+
+
+def test_multi_column_order_falls_back_without_corrupting_order(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+    store_backend.register_indexes("multi_order_lead", ("score",))
+
+    for name, score in [("B", 10), ("A", 10), ("C", 5)]:
+        store_backend.insert_record(
+            "multi_order_lead",
+            {"name": name, "score": score},
+        )
+    native.scan_calls = 0
+    native.range_query_calls.clear()
+
+    rows = store_backend.query_records(
+        "multi_order_lead",
+        filters={},
+        order_by=["-score", "name"],
+        limit=None,
+        offset=None,
+    )
+
+    assert [(row["score"], row["name"]) for row in rows] == [
+        (10, "A"),
+        (10, "B"),
+        (5, "C"),
+    ]
+    assert native.range_query_calls == []
+    assert native.scan_calls == 1
