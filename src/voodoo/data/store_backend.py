@@ -17,13 +17,17 @@ if TYPE_CHECKING:
     from voodoo.runtime.store import RuntimeStore
 
 _runtime_store: RuntimeStore | None = None
+_collection_indexes: dict[str, tuple[str, ...]] = {}
 
 _REQUIRED_COLLECTION_API = (
     "create_collection",
+    "define_index",
     "upsert_record",
     "get_record",
     "delete_record",
     "scan_collection",
+    "query_index_exact",
+    "query_index_range",
 )
 
 
@@ -34,6 +38,13 @@ def bind_runtime_store(runtime_store: RuntimeStore | None) -> None:
 
     _runtime_store = runtime_store
     bind_active_runtime_store(runtime_store)
+
+
+def register_indexes(collection: str, indexes: tuple[str, ...]) -> None:
+    """Register model-declared native secondary indexes for one collection."""
+    _collection_indexes[collection] = tuple(
+        dict.fromkeys(str(index) for index in indexes if str(index))
+    )
 
 
 def _get_runtime_store() -> RuntimeStore:
@@ -68,9 +79,8 @@ def _native() -> Any:
     missing = [name for name in _REQUIRED_COLLECTION_API if not hasattr(native, name)]
     if missing:
         raise ConfigurationError(
-            "Voodoo Store 0.2+ is required for native Model persistence. "
-            f"Missing Store capabilities: {', '.join(missing)}. "
-            "Upgrade with `pip install -U 'voodoo-store>=0.2.2,<0.3'`."
+            "Voodoo Store 0.3+ is required for native Model persistence. "
+            f"Missing Store capabilities: {', '.join(missing)}."
         )
     return native
 
@@ -84,9 +94,10 @@ def _primary_key(record_id: int) -> bytes:
 
 
 def _ensure_collection(store: Any, collection: str) -> None:
-    store.create_collection(
-        _collection_key(collection), schema_version=1, codec=b"json"
-    )
+    collection_key = _collection_key(collection)
+    store.create_collection(collection_key, schema_version=1, codec=b"json")
+    for index in _collection_indexes.get(collection, ()):
+        store.define_index(collection_key, index.encode("utf-8"))
 
 
 def _sequence_key(collection: str) -> bytes:
@@ -99,6 +110,27 @@ def _encode(record: dict[str, Any]) -> bytes:
 
 def _decode(value: bytes) -> dict[str, Any]:
     return json.loads(value.decode("utf-8"))
+
+
+def _encode_index_value(value: Any) -> bytes:
+    if isinstance(value, bool):
+        return b"b:" + (b"1" if value else b"0")
+    if isinstance(value, int):
+        if value < -(1 << 63) or value >= (1 << 63):
+            raise ValueError("indexed integers must fit in signed 64-bit range")
+        sortable = value + (1 << 63)
+        return b"i:" + sortable.to_bytes(8, "big", signed=False)
+    if isinstance(value, str):
+        return b"s:" + value.encode("utf-8")
+    raise TypeError("Store indexes currently support str, int, and bool values")
+
+
+def _record_indexes(collection: str, record: dict[str, Any]) -> list[tuple[bytes, bytes]]:
+    indexes: list[tuple[bytes, bytes]] = []
+    for field in _collection_indexes.get(collection, ()):
+        if field in record:
+            indexes.append((field.encode("utf-8"), _encode_index_value(record[field])))
+    return indexes
 
 
 def insert_record(collection: str, values: dict[str, Any]) -> int:
@@ -119,7 +151,12 @@ def insert_record(collection: str, values: dict[str, Any]) -> int:
     record["id"] = next_id
     encoded = _encode(record)
     tx.put(sequence_key, str(next_id + 1).encode())
-    tx.upsert_record(_collection_key(collection), _primary_key(next_id), encoded)
+    tx.upsert_record(
+        _collection_key(collection),
+        _primary_key(next_id),
+        encoded,
+        indexes=_record_indexes(collection, record),
+    )
     tx.commit()
     return next_id
 
@@ -144,6 +181,7 @@ def put_record(collection: str, record_id: int, values: dict[str, Any]) -> None:
         _collection_key(collection),
         _primary_key(record_id),
         _encode(record),
+        indexes=_record_indexes(collection, record),
     )
 
 
@@ -161,6 +199,62 @@ def scan_records(collection: str) -> list[dict[str, Any]]:
         records.append(_decode(bytes(value)))
     records.sort(key=lambda record: int(record["id"]))
     return records
+
+
+def query_records(
+    collection: str,
+    *,
+    filters: dict[str, Any],
+    order_by: list[str],
+    limit: int | None,
+    offset: int | None,
+) -> list[dict[str, Any]]:
+    """Use native Store indexes when declared; preserve scan fallback semantics."""
+    store = _native()
+    _ensure_collection(store, collection)
+    declared = set(_collection_indexes.get(collection, ()))
+    rows: list[dict[str, Any]]
+    native_order_field: str | None = None
+
+    indexed_filter = next((field for field in filters if field in declared), None)
+    if indexed_filter is not None:
+        native = store.query_index_exact(
+            _collection_key(collection),
+            indexed_filter.encode("utf-8"),
+            _encode_index_value(filters[indexed_filter]),
+        )
+        rows = [_decode(bytes(record[1])) for record in native]
+    elif order_by:
+        first = order_by[0]
+        field = first[1:] if first.startswith("-") else first
+        if field in declared:
+            native = store.query_index_range(
+                _collection_key(collection),
+                field.encode("utf-8"),
+                descending=first.startswith("-"),
+            )
+            rows = [_decode(bytes(indexed_record[1][1])) for indexed_record in native]
+            native_order_field = field
+        else:
+            rows = scan_records(collection)
+    else:
+        rows = scan_records(collection)
+
+    for key, expected in filters.items():
+        rows = [row for row in rows if row.get(key) == expected]
+
+    for column in reversed(order_by):
+        descending = column.startswith("-")
+        name = column[1:] if descending else column
+        if name == native_order_field and column == order_by[0]:
+            continue
+        rows.sort(key=lambda row: row.get(name), reverse=descending)
+
+    if offset is not None:
+        rows = rows[offset:]
+    if limit is not None:
+        rows = rows[:limit]
+    return rows
 
 
 def store_path() -> Path:
