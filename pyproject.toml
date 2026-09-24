@@ -46,7 +46,7 @@ dependencies = [
     "starlette",
     "uvicorn",
     "pydantic",
-    "voodoo-store>=0.2.2,<0.3",
+    "voodoo-store @ git+https://github.com/helderperez-dev/voodoo-store.git@56620a7d6bc3a541e50fdb91274f520931e048be",
     "websockets",
     "httpx",
     "python-dotenv",
