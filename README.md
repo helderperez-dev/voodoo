@@ -243,10 +243,7 @@ conversion = app.observation("business", "conversion")
     propose=lambda goal, world: Intent(name="conversion.adjust"),
 )
 def growth(world):
-    return (
-        world is not None
-        and world.entity.properties.get("conversion", 0) >= 0.10
-    )
+    return world is not None and world.entity.properties.get("conversion", 0) >= 0.10
 
 
 @app.capability("conversion.adjust")
