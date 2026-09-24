@@ -48,7 +48,9 @@ class VoodooStoreObjectStore:
             "list_object_refs",
             "transaction",
         )
-        missing = [name for name in required if native is None or not hasattr(native, name)]
+        missing = [
+            name for name in required if native is None or not hasattr(native, name)
+        ]
         if missing:
             raise ConfigurationError(
                 "Voodoo Store 0.3+ native Objects are required for object storage. "
