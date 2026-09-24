@@ -2,7 +2,7 @@
 
 **The programmable runtime for adaptive applications and operational systems.**
 
-[Website](https://voodoo.build) · [Documentation](#documentation) · [Architecture](ARCHITECTURE.md) · [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md)
+[GitHub](https://github.com/helderperez-dev/voodoo) · [Documentation](#documentation) · [Architecture](ARCHITECTURE.md) · [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md)
 
 [![CI](https://github.com/helderperez-dev/voodoo/actions/workflows/ci.yml/badge.svg)](https://github.com/helderperez-dev/voodoo/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/voodoo-framework)](https://pypi.org/project/voodoo-framework/)
