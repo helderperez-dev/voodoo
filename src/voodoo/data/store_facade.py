@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import Any, get_type_hints
+from typing import Any, ClassVar, get_type_hints
 
 from voodoo.data.store_backend import (
     delete_record,
     get_record,
     insert_record,
     put_record,
+    query_records,
+    register_indexes,
     scan_records,
 )
 
@@ -85,6 +87,10 @@ class ModelMeta(type):
         if name not in ("BaseModel", "Model"):
             _models.append(cls)
             _register_foreign_keys(cls)
+            register_indexes(
+                _get_table_name(cls),
+                tuple(getattr(cls, "__indexes__", ())),
+            )
 
 
 def on_insert(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -171,6 +177,7 @@ class BaseModel(metaclass=ModelMeta):
 
     id: int
     __tablename__: str | None = None
+    __indexes__: ClassVar[tuple[str, ...]] = ()
 
     @classmethod
     async def _create_table(cls) -> None:
@@ -308,18 +315,13 @@ class StoreQuery:
         return query
 
     def _rows(self) -> list[dict[str, Any]]:
-        rows = scan_records(_get_table_name(self._model))
-        for key, expected in self._filters.items():
-            rows = [row for row in rows if row.get(key) == expected]
-        for column in reversed(self._order_by):
-            descending = column.startswith("-")
-            name = column[1:] if descending else column
-            rows.sort(key=lambda row: row.get(name), reverse=descending)
-        if self._offset is not None:
-            rows = rows[self._offset :]
-        if self._limit is not None:
-            rows = rows[: self._limit]
-        return rows
+        return query_records(
+            _get_table_name(self._model),
+            filters=self._filters,
+            order_by=self._order_by,
+            limit=self._limit,
+            offset=self._offset,
+        )
 
     async def first(self) -> Model | None:
         rows = self.limit(1)._rows()
