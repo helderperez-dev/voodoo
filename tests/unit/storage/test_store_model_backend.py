@@ -10,6 +10,8 @@ from voodoo.runtime.store import RuntimeStore, StoreConfig
 
 
 class StoreLead(Model):
+    __indexes__ = ("email", "score", "active")
+
     name: str
     email: str
     score: int
@@ -113,10 +115,20 @@ class _FakeNativeCollections:
         self.kv: dict[bytes, bytes] = {}
         self.records: dict[tuple[bytes, bytes], tuple[bytes, list]] = {}
         self.collections: set[bytes] = set()
+        self.indexes: dict[bytes, set[bytes]] = {}
+        self.scan_calls = 0
+        self.exact_query_calls: list[tuple[bytes, bytes, bytes]] = []
+        self.range_query_calls: list[tuple[bytes, bytes, bool]] = []
 
     def create_collection(self, name: bytes, **_kwargs) -> bool:
         created = name not in self.collections
         self.collections.add(bytes(name))
+        return created
+
+    def define_index(self, collection: bytes, name: bytes, **_kwargs) -> bool:
+        indexes = self.indexes.setdefault(bytes(collection), set())
+        created = bytes(name) not in indexes
+        indexes.add(bytes(name))
         return created
 
     def transaction(self) -> _FakeNativeTransaction:
@@ -162,12 +174,59 @@ class _FakeNativeCollections:
         )
 
     def scan_collection(self, collection: bytes):
+        self.scan_calls += 1
         rows = []
         for (record_collection, primary_key), (value, indexes) in sorted(
             self.records.items()
         ):
             if record_collection == collection:
                 rows.append((primary_key, value, indexes))
+        return rows
+
+    def query_index_exact(self, collection: bytes, index: bytes, value: bytes):
+        self.exact_query_calls.append((bytes(collection), bytes(index), bytes(value)))
+        rows = []
+        for (record_collection, primary_key), (payload, indexes) in sorted(
+            self.records.items()
+        ):
+            if record_collection != collection:
+                continue
+            if (bytes(index), bytes(value)) in indexes:
+                rows.append((primary_key, payload, indexes))
+        return rows
+
+    def query_index_range(
+        self,
+        collection: bytes,
+        index: bytes,
+        *,
+        start=None,
+        end=None,
+        start_inclusive=True,
+        end_inclusive=True,
+        descending=False,
+        limit=None,
+    ):
+        del start, end, start_inclusive, end_inclusive
+        self.range_query_calls.append(
+            (bytes(collection), bytes(index), bool(descending))
+        )
+        rows = []
+        for (record_collection, primary_key), (payload, indexes) in self.records.items():
+            if record_collection != collection:
+                continue
+            for index_name, index_value in indexes:
+                if bytes(index_name) == bytes(index):
+                    rows.append(
+                        (
+                            bytes(index_value),
+                            (primary_key, payload, indexes),
+                        )
+                    )
+                    break
+        rows.sort(key=lambda item: (item[0], item[1][0]), reverse=descending)
+        if limit is not None:
+            rows = rows[:limit]
         return rows
 
 
@@ -207,3 +266,74 @@ def test_native_scan_and_update_use_collection_records_only(monkeypatch):
 
     store_backend.put_record("lead", 1, {"name": "Updated"})
     assert store_backend.get_record("lead", 1) == {"id": 1, "name": "Updated"}
+
+
+def test_backend_maintains_declared_native_indexes(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+    store_backend.register_indexes("lead", ("email", "score", "active"))
+
+    record_id = store_backend.insert_record(
+        "lead",
+        {"name": "Ada", "email": "ada@x.io", "score": 42, "active": True},
+    )
+
+    record = native.records[(b"lead", b"00000000000000000001")]
+    indexes = dict(record[1])
+    assert record_id == 1
+    assert set(native.indexes[b"lead"]) == {b"email", b"score", b"active"}
+    assert indexes[b"email"].startswith(b"s:")
+    assert indexes[b"score"].startswith(b"i:")
+    assert indexes[b"active"] == b"b:1"
+
+
+def test_query_records_uses_exact_index_without_collection_scan(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+    store_backend.register_indexes("lead", ("email", "score"))
+
+    store_backend.insert_record(
+        "lead", {"name": "A", "email": "a@x.io", "score": 5}
+    )
+    store_backend.insert_record(
+        "lead", {"name": "B", "email": "b@x.io", "score": 15}
+    )
+    store_backend.insert_record(
+        "lead", {"name": "C", "email": "a@x.io", "score": 10}
+    )
+    native.scan_calls = 0
+
+    rows = store_backend.query_records(
+        "lead",
+        filters={"email": "a@x.io"},
+        order_by=["-score"],
+        limit=1,
+        offset=None,
+    )
+
+    assert [row["name"] for row in rows] == ["C"]
+    assert len(native.exact_query_calls) == 1
+    assert native.exact_query_calls[0][:2] == (b"lead", b"email")
+    assert native.scan_calls == 0
+
+
+def test_query_records_uses_range_index_for_native_order(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+    store_backend.register_indexes("lead", ("score",))
+
+    for name, score in [("A", 5), ("B", 15), ("C", 10)]:
+        store_backend.insert_record("lead", {"name": name, "score": score})
+    native.scan_calls = 0
+
+    rows = store_backend.query_records(
+        "lead",
+        filters={},
+        order_by=["-score"],
+        limit=2,
+        offset=None,
+    )
+
+    assert [row["score"] for row in rows] == [15, 10]
+    assert native.range_query_calls == [(b"lead", b"score", True)]
+    assert native.scan_calls == 0
