@@ -337,3 +337,33 @@ def test_query_records_uses_range_index_for_native_order(monkeypatch):
     assert [row["score"] for row in rows] == [15, 10]
     assert native.range_query_calls == [(b"lead", b"score", True)]
     assert native.scan_calls == 0
+
+
+def test_new_index_backfills_existing_collection_records(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+    store_backend.register_indexes("backfill_lead", ())
+
+    store_backend.insert_record(
+        "backfill_lead",
+        {"name": "Ada", "email": "ada@x.io"},
+    )
+    assert native.records[
+        (b"backfill_lead", b"00000000000000000001")
+    ][1] == []
+
+    store_backend.register_indexes("backfill_lead", ("email",))
+    rows = store_backend.query_records(
+        "backfill_lead",
+        filters={"email": "ada@x.io"},
+        order_by=[],
+        limit=None,
+        offset=None,
+    )
+
+    assert [row["name"] for row in rows] == ["Ada"]
+    assert native.exact_query_calls[-1][:2] == (b"backfill_lead", b"email")
+    indexes = dict(
+        native.records[(b"backfill_lead", b"00000000000000000001")][1]
+    )
+    assert indexes[b"email"].startswith(b"s:")
