@@ -99,8 +99,7 @@ def _ensure_collection(store: Any, collection: str) -> None:
     created_index = False
     for index in _collection_indexes.get(collection, ()):
         created_index = (
-            store.define_index(collection_key, index.encode("utf-8"))
-            or created_index
+            store.define_index(collection_key, index.encode("utf-8")) or created_index
         )
 
     if created_index:
@@ -143,7 +142,9 @@ def _encode_index_value(value: Any) -> bytes:
     raise TypeError("Store indexes currently support str, int, and bool values")
 
 
-def _record_indexes(collection: str, record: dict[str, Any]) -> list[tuple[bytes, bytes]]:
+def _record_indexes(
+    collection: str, record: dict[str, Any]
+) -> list[tuple[bytes, bytes]]:
     indexes: list[tuple[bytes, bytes]] = []
     for field in _collection_indexes.get(collection, ()):
         if field in record:
