@@ -8,7 +8,7 @@ Capability → Execution → Effect delivery → ACK/evidence → Observation �
 
 Run with::
 
-    python examples/operational_closed_loop/main.py
+    python examples/adaptive/operational_closed_loop/main.py
 """
 
 from __future__ import annotations
