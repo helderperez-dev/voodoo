@@ -46,7 +46,9 @@ class VoodooStoreEventBus:
             raise ConfigurationError("Voodoo Store is disabled for event persistence")
         native = getattr(provider, "native", None)
         required = ("publish_topic", "read_topic")
-        missing = [name for name in required if native is None or not hasattr(native, name)]
+        missing = [
+            name for name in required if native is None or not hasattr(native, name)
+        ]
         if missing:
             raise ConfigurationError(
                 "Voodoo Store 0.3+ native messaging is required for event persistence. "
