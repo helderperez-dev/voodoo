@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import Any, ClassVar, get_type_hints
+from typing import Any, get_type_hints
 
 from voodoo.data.store_backend import (
     delete_record,
@@ -40,6 +40,42 @@ _models: list[type] = []
 _triggers: dict[str, dict[str, list[Callable[..., Any]]]] = {}
 _rls_policies: dict[str, Callable[..., Any]] = {}
 _cascades: dict[str, list[tuple[str, str]]] = {}
+
+
+class _FieldSpec:
+    """Runtime metadata for one Store-backed model field."""
+
+    __slots__ = ("index", "unique", "name")
+
+    def __init__(self, *, index: bool = False, unique: bool = False) -> None:
+        self.index = bool(index or unique)
+        self.unique = bool(unique)
+        self.name: str | None = None
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        del owner
+        self.name = name
+
+    def __get__(self, instance: Any, owner: type | None = None) -> Any:
+        if instance is None:
+            return self
+        if self.name is None or self.name not in instance.__dict__:
+            raise AttributeError(self.name or "unbound field")
+        return instance.__dict__[self.name]
+
+    def __set__(self, instance: Any, value: Any) -> None:
+        if self.name is None:
+            raise AttributeError("field is not bound to a model")
+        instance.__dict__[self.name] = value
+
+
+def field(*, index: bool = False, unique: bool = False) -> Any:
+    """Declare native Store index metadata for a model field.
+
+    ``index=True`` creates a secondary index. ``unique=True`` creates a unique
+    index and implies ``index=True``. Plain annotated fields remain unindexed.
+    """
+    return _FieldSpec(index=index, unique=unique)
 
 
 class _FKRef:
@@ -87,10 +123,12 @@ class ModelMeta(type):
         if name not in ("BaseModel", "Model"):
             _models.append(cls)
             _register_foreign_keys(cls)
-            register_indexes(
-                _get_table_name(cls),
-                tuple(getattr(cls, "__indexes__", ())),
-            )
+            indexes = {
+                field_name: spec.unique
+                for field_name, spec in vars(cls).items()
+                if isinstance(spec, _FieldSpec) and spec.index
+            }
+            register_indexes(_get_table_name(cls), indexes)
 
 
 def on_insert(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -177,7 +215,6 @@ class BaseModel(metaclass=ModelMeta):
 
     id: int
     __tablename__: str | None = None
-    __indexes__: ClassVar[tuple[str, ...]] = ()
 
     @classmethod
     async def _create_table(cls) -> None:
