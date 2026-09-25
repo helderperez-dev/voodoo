@@ -8,7 +8,10 @@ dependency in its import graph.
 from __future__ import annotations
 
 import json
+import secrets
+import time
 from pathlib import Path
+from uuid import UUID
 from typing import TYPE_CHECKING, Any
 
 from voodoo.core.errors import ConfigurationError
@@ -91,8 +94,26 @@ def _collection_key(collection: str) -> bytes:
     return collection.encode("utf-8")
 
 
-def _primary_key(record_id: int) -> bytes:
-    return f"{record_id:020d}".encode("ascii")
+def _primary_key(record_id: UUID | str) -> bytes:
+    value = record_id if isinstance(record_id, UUID) else UUID(str(record_id))
+    return value.bytes
+
+
+def uuid7() -> UUID:
+    """Generate an RFC 9562 UUIDv7 without requiring Python 3.14+."""
+    unix_ms = time.time_ns() // 1_000_000
+    if unix_ms >= (1 << 48):
+        raise OverflowError("UUIDv7 timestamp exceeds 48 bits")
+    rand_a = secrets.randbits(12)
+    rand_b = secrets.randbits(62)
+    value = (
+        (unix_ms << 80)
+        | (0x7 << 76)
+        | (rand_a << 64)
+        | (0b10 << 62)
+        | rand_b
+    )
+    return UUID(int=value)
 
 
 def _ensure_collection(store: Any, collection: str) -> None:
@@ -124,12 +145,19 @@ def _ensure_collection(store: Any, collection: str) -> None:
             )
 
 
-def _sequence_key(collection: str) -> bytes:
-    return f"data:{collection}:meta:next_id".encode()
+def _json_default(value: Any) -> Any:
+    if isinstance(value, UUID):
+        return str(value)
+    raise TypeError(f"{type(value).__name__} is not JSON serializable")
 
 
 def _encode(record: dict[str, Any]) -> bytes:
-    return json.dumps(record, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return json.dumps(
+        record,
+        separators=(",", ":"),
+        sort_keys=True,
+        default=_json_default,
+    ).encode("utf-8")
 
 
 def _decode(value: bytes) -> dict[str, Any]:
@@ -159,8 +187,13 @@ def _record_indexes(
     return indexes
 
 
-def insert_record(collection: str, values: dict[str, Any]) -> int:
-    """Atomically allocate an integer id and persist one native Store record."""
+def insert_record(
+    collection: str,
+    values: dict[str, Any],
+    *,
+    record_id: UUID | None = None,
+) -> UUID:
+    """Persist one native Store record with a Runtime-generated UUIDv7 identity."""
     store = _native()
     _ensure_collection(store, collection)
     tx = store.transaction()
@@ -169,24 +202,22 @@ def insert_record(collection: str, values: dict[str, Any]) -> int:
             "Voodoo Store 0.3+ transactional Collections support is required."
         )
 
-    sequence_key = _sequence_key(collection)
-    raw = tx.get(sequence_key)
-    next_id = int(bytes(raw).decode()) if raw is not None else 1
+    identity = record_id or uuid7()
     record = dict(values)
-    record["id"] = next_id
-    encoded = _encode(record)
-    tx.put(sequence_key, str(next_id + 1).encode())
+    record["id"] = identity
     tx.upsert_record(
         _collection_key(collection),
-        _primary_key(next_id),
-        encoded,
+        _primary_key(identity),
+        _encode(record),
         indexes=_record_indexes(collection, record),
     )
     tx.commit()
-    return next_id
+    return identity
 
 
-def get_record(collection: str, record_id: int) -> dict[str, Any] | None:
+def get_record(
+    collection: str, record_id: UUID | str
+) -> dict[str, Any] | None:
     store = _native()
     _ensure_collection(store, collection)
     native_record = store.get_record(
@@ -197,24 +228,28 @@ def get_record(collection: str, record_id: int) -> dict[str, Any] | None:
     return _decode(bytes(native_record[1]))
 
 
-def put_record(collection: str, record_id: int, values: dict[str, Any]) -> None:
+def put_record(
+    collection: str,
+    record_id: UUID | str,
+    values: dict[str, Any],
+) -> None:
     store = _native()
     _ensure_collection(store, collection)
+    identity = record_id if isinstance(record_id, UUID) else UUID(str(record_id))
     record = dict(values)
-    record["id"] = record_id
+    record["id"] = identity
     store.upsert_record(
         _collection_key(collection),
-        _primary_key(record_id),
+        _primary_key(identity),
         _encode(record),
         indexes=_record_indexes(collection, record),
     )
 
 
-def delete_record(collection: str, record_id: int) -> None:
+def delete_record(collection: str, record_id: UUID | str) -> None:
     store = _native()
     _ensure_collection(store, collection)
     store.delete_record(_collection_key(collection), _primary_key(record_id))
-
 
 def scan_records(collection: str) -> list[dict[str, Any]]:
     store = _native()
