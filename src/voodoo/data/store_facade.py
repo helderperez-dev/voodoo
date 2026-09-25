@@ -8,6 +8,7 @@ not part of this module's import graph. Optional SQL adapters live under
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import Callable
 from datetime import date, datetime
 from enum import Enum
@@ -285,6 +286,12 @@ def _register_relations(cls: type) -> None:
                     f"relation field {cls.__name__}.{name} requires a model annotation "
                     "or an explicit target"
                 )
+            if spec.on_delete is Delete.SET_NULL and not _allows_none(
+                hints.get(name)
+            ):
+                raise TypeError(
+                    f"{cls.__name__}.{name} uses Delete.SET_NULL but is not optional"
+                )
             spec.target = target
             parent = _get_table_name(target)
             _relations.setdefault(parent, []).append(
@@ -370,7 +377,7 @@ def _prepare_instance(obj: Any) -> None:
             setattr(obj, name, value)
 
 
-def _run_validators(obj: Any) -> None:
+async def _run_validators(obj: Any) -> None:
     hints = get_type_hints(obj.__class__)
     for name, annotation in hints.items():
         if name.startswith("__") or name == "id":
@@ -394,12 +401,24 @@ def _run_validators(obj: Any) -> None:
             for field_name in fields:
                 value = getattr(obj, field_name)
                 result = bound(value)
+                if inspect.isawaitable(result):
+                    result = await result
                 if result is not None:
                     setattr(obj, field_name, result)
         if getattr(member, "__voodoo_validate_model__", False):
             result = getattr(obj, name)()
+            if inspect.isawaitable(result):
+                result = await result
             if result is False:
                 raise ValueError(f"Model validation failed: {name}")
+
+
+
+def _model_for_table(table: str) -> type | None:
+    for model in reversed(_models):
+        if _get_table_name(model) == table:
+            return model
+    return None
 
 
 class ModelMeta(type):
@@ -558,7 +577,7 @@ class BaseModel(metaclass=ModelMeta):
         if not getattr(self, "id", None):
             self.id = uuid7()
         _prepare_instance(self)
-        _run_validators(self)
+        await _run_validators(self)
         self.id = insert_record(table, _model_values(self), record_id=self.id)
         _fire_hooks(table, "insert", self)
         return self
@@ -568,7 +587,7 @@ class BaseModel(metaclass=ModelMeta):
             raise ValueError("Cannot update a model without an id")
         table = _get_table_name(self)
         _prepare_instance(self)
-        _run_validators(self)
+        await _run_validators(self)
         put_record(table, self.id, _model_values(self))
         _fire_hooks(table, "update", self)
         return self
@@ -631,7 +650,12 @@ class Model(BaseModel):
                         f"Cannot delete {table}: related {child_table}.{relation_name} exists"
                     )
                 if action is Delete.CASCADE:
-                    delete_record(child_table, child_id)
+                    child_model = _model_for_table(child_table)
+                    if child_model is None:
+                        delete_record(child_table, child_id)
+                    else:
+                        child_obj = _hydrate(child_model, child)
+                        await child_obj.delete()
                 elif action is Delete.SET_NULL:
                     child[relation_name] = None
                     put_record(
