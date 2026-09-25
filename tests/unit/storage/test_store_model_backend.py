@@ -4,18 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from voodoo.data import Model, close_db, store_backend
+from voodoo.data import Model, close_db, field, store_backend
 from voodoo.data.store_backend import bind_runtime_store
 from voodoo.runtime.store import RuntimeStore, StoreConfig
 
 
 class StoreLead(Model):
-    __indexes__ = ("email", "score", "active")
-
     name: str
-    email: str
-    score: int
-    active: bool
+    email: str = field(index=True)
+    score: int = field(index=True)
+    active: bool = field(index=True)
 
 
 @pytest.fixture
@@ -271,7 +269,7 @@ def test_native_scan_and_update_use_collection_records_only(monkeypatch):
 def test_backend_maintains_declared_native_indexes(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
-    store_backend.register_indexes("lead", ("email", "score", "active"))
+    store_backend.register_indexes("lead", {"email": false, "score": false, "active": false})
 
     record_id = store_backend.insert_record(
         "lead",
@@ -290,7 +288,7 @@ def test_backend_maintains_declared_native_indexes(monkeypatch):
 def test_query_records_uses_exact_index_without_collection_scan(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
-    store_backend.register_indexes("lead", ("email", "score"))
+    store_backend.register_indexes("lead", {"email": false, "score": false})
 
     store_backend.insert_record(
         "lead", {"name": "A", "email": "a@x.io", "score": 5}
@@ -320,7 +318,7 @@ def test_query_records_uses_exact_index_without_collection_scan(monkeypatch):
 def test_query_records_uses_range_index_for_native_order(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
-    store_backend.register_indexes("lead", ("score",))
+    store_backend.register_indexes("lead", {"score": false})
 
     for name, score in [("A", 5), ("B", 15), ("C", 10)]:
         store_backend.insert_record("lead", {"name": name, "score": score})
@@ -342,7 +340,7 @@ def test_query_records_uses_range_index_for_native_order(monkeypatch):
 def test_new_index_backfills_existing_collection_records(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
-    store_backend.register_indexes("backfill_lead", ())
+    store_backend.register_indexes("backfill_lead", {})
 
     store_backend.insert_record(
         "backfill_lead",
@@ -352,7 +350,7 @@ def test_new_index_backfills_existing_collection_records(monkeypatch):
         (b"backfill_lead", b"00000000000000000001")
     ][1] == []
 
-    store_backend.register_indexes("backfill_lead", ("email",))
+    store_backend.register_indexes("backfill_lead", {"email": false})
     rows = store_backend.query_records(
         "backfill_lead",
         filters={"email": "ada@x.io"},
@@ -372,7 +370,7 @@ def test_new_index_backfills_existing_collection_records(monkeypatch):
 def test_multi_column_order_falls_back_without_corrupting_order(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
-    store_backend.register_indexes("multi_order_lead", ("score",))
+    store_backend.register_indexes("multi_order_lead", {"score": false})
 
     for name, score in [("B", 10), ("A", 10), ("C", 5)]:
         store_backend.insert_record(
@@ -397,3 +395,16 @@ def test_multi_column_order_falls_back_without_corrupting_order(monkeypatch):
     ]
     assert native.range_query_calls == []
     assert native.scan_calls == 1
+
+
+def test_field_unique_implies_native_unique_index(monkeypatch):
+    class UniqueLead(Model):
+        email: str = field(unique=True)
+
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+
+    # ModelMeta has already registered the field metadata; creating the
+    # collection must carry the unique flag into Store.define_index.
+    store_backend.insert_record("uniquelead", {"email": "ada@x.io"})
+    assert b"email" in native.indexes[b"uniquelead"]
