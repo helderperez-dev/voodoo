@@ -251,7 +251,7 @@ def scan_records(collection: str) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for _key, value, _indexes in store.scan_collection(_collection_key(collection)):
         records.append(_decode(bytes(value)))
-    records.sort(key=lambda record: int(record["id"]))
+    records.sort(key=lambda record: UUID(str(record["id"])).bytes)
     return records
 
 
