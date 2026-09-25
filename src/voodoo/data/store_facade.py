@@ -199,10 +199,8 @@ class _RelationSpec:
     def __set__(self, instance: Any, value: Any) -> None:
         if self.name is None:
             raise AttributeError("relation is not bound to a model")
-        if isinstance(value, BaseModel):
-            if not getattr(value, "id", None):
-                raise ValueError("related model must be persisted before assignment")
-            value = value.id
+        if isinstance(value, BaseModel) and not getattr(value, "id", None):
+            raise ValueError("related model must be persisted before assignment")
         instance.__dict__[self.name] = value
 
 
@@ -280,17 +278,27 @@ def _register_relations(cls: type) -> None:
     except Exception:
         hints = getattr(cls, "__annotations__", {})
     for name, spec in vars(cls).items():
-        if not isinstance(spec, _RelationSpec):
-            continue
-        target = spec.target or _relation_target(hints.get(name))
-        if target is None:
-            raise TypeError(
-                f"relation field {cls.__name__}.{name} requires a model annotation "
-                "or an explicit target"
+        if isinstance(spec, _RelationSpec):
+            target = spec.target or _relation_target(hints.get(name))
+            if target is None:
+                raise TypeError(
+                    f"relation field {cls.__name__}.{name} requires a model annotation "
+                    "or an explicit target"
+                )
+            spec.target = target
+            parent = _get_table_name(target)
+            _relations.setdefault(parent, []).append(
+                (child, name, spec.on_delete)
             )
-        spec.target = target
-        parent = _get_table_name(target)
-        _relations.setdefault(parent, []).append((child, name, spec.on_delete))
+
+    # Compatibility for the pre-3.x FK annotation while relation() becomes the
+    # canonical public relationship API.
+    for name, annotation in hints.items():
+        if isinstance(annotation, _FKRef):
+            parent = _get_table_name(annotation.target)
+            _relations.setdefault(parent, []).append(
+                (child, name, Delete.CASCADE)
+            )
 
 
 def _clear_cascades() -> None:
