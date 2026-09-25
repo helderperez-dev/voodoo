@@ -8,20 +8,33 @@ not part of this module's import graph. Optional SQL adapters live under
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import Callable
-from typing import Any, get_type_hints
+from datetime import date, datetime
+from enum import StrEnum
+from types import UnionType
+from typing import Annotated, Any, get_args, get_origin, get_type_hints
+from uuid import UUID
 
 from voodoo.data.store_backend import (
     delete_record,
     get_record,
     insert_record,
     put_record,
+    query_records,
+    register_indexes,
     scan_records,
+    uuid7,
 )
 
 __all__ = [
     "BaseModel",
+    "Delete",
     "FK",
+    "Max",
+    "MaxLength",
+    "Min",
+    "MinLength",
     "Model",
     "ModelMeta",
     "StoreQuery",
@@ -29,6 +42,10 @@ __all__ = [
     "_models",
     "_rls_policies",
     "_triggers",
+    "field",
+    "relation",
+    "validate",
+    "validate_model",
     "on_insert",
     "on_update",
     "rls_policy",
@@ -37,7 +54,186 @@ __all__ = [
 _models: list[type] = []
 _triggers: dict[str, dict[str, list[Callable[..., Any]]]] = {}
 _rls_policies: dict[str, Callable[..., Any]] = {}
-_cascades: dict[str, list[tuple[str, str]]] = {}
+_relations: dict[str, list[tuple[str, str, Delete]]] = {}
+
+
+_MISSING = object()
+
+
+class _FieldSpec:
+    """Persistence metadata for one Store-backed model field."""
+
+    __slots__ = ("index", "unique", "default", "default_factory", "name")
+
+    def __init__(
+        self,
+        *,
+        index: bool = False,
+        unique: bool = False,
+        default: Any = _MISSING,
+        default_factory: Callable[[], Any] | None = None,
+    ) -> None:
+        if default is not _MISSING and default_factory is not None:
+            raise TypeError("field() cannot define both default and default_factory")
+        self.index = bool(index or unique)
+        self.unique = bool(unique)
+        self.default = default
+        self.default_factory = default_factory
+        self.name: str | None = None
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        del owner
+        self.name = name
+
+    def __get__(self, instance: Any, owner: type | None = None) -> Any:
+        if instance is None:
+            return self
+        if self.name is None or self.name not in instance.__dict__:
+            raise AttributeError(self.name or "unbound field")
+        return instance.__dict__[self.name]
+
+    def __set__(self, instance: Any, value: Any) -> None:
+        if self.name is None:
+            raise AttributeError("field is not bound to a model")
+        instance.__dict__[self.name] = value
+
+
+def field(
+    *,
+    index: bool = False,
+    unique: bool = False,
+    default: Any = _MISSING,
+    default_factory: Callable[[], Any] | None = None,
+) -> Any:
+    """Declare Store persistence metadata without redefining Python typing."""
+    return _FieldSpec(
+        index=index,
+        unique=unique,
+        default=default,
+        default_factory=default_factory,
+    )
+
+
+class _Constraint:
+    def validate(self, value: Any, *, field_name: str) -> None:
+        raise NotImplementedError
+
+
+class Min(_Constraint):
+    __slots__ = ("value",)
+
+    def __init__(self, value: int | float) -> None:
+        self.value = value
+
+    def validate(self, value: Any, *, field_name: str) -> None:
+        if value < self.value:
+            raise ValueError(f"{field_name} must be >= {self.value}")
+
+
+class Max(_Constraint):
+    __slots__ = ("value",)
+
+    def __init__(self, value: int | float) -> None:
+        self.value = value
+
+    def validate(self, value: Any, *, field_name: str) -> None:
+        if value > self.value:
+            raise ValueError(f"{field_name} must be <= {self.value}")
+
+
+class MinLength(_Constraint):
+    __slots__ = ("value",)
+
+    def __init__(self, value: int) -> None:
+        if value < 0:
+            raise ValueError("MinLength cannot be negative")
+        self.value = value
+
+    def validate(self, value: Any, *, field_name: str) -> None:
+        if len(value) < self.value:
+            raise ValueError(f"{field_name} length must be >= {self.value}")
+
+
+class MaxLength(_Constraint):
+    __slots__ = ("value",)
+
+    def __init__(self, value: int) -> None:
+        if value < 0:
+            raise ValueError("MaxLength cannot be negative")
+        self.value = value
+
+    def validate(self, value: Any, *, field_name: str) -> None:
+        if len(value) > self.value:
+            raise ValueError(f"{field_name} length must be <= {self.value}")
+
+
+class Delete(StrEnum):
+    RESTRICT = "restrict"
+    CASCADE = "cascade"
+    SET_NULL = "set_null"
+
+
+class _RelationSpec:
+    __slots__ = ("target", "on_delete", "name")
+
+    def __init__(
+        self,
+        target: type | None = None,
+        *,
+        on_delete: Delete = Delete.RESTRICT,
+    ) -> None:
+        self.target = target
+        self.on_delete = Delete(on_delete)
+        self.name: str | None = None
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        del owner
+        self.name = name
+
+    def __get__(self, instance: Any, owner: type | None = None) -> Any:
+        if instance is None:
+            return self
+        if self.name is None or self.name not in instance.__dict__:
+            raise AttributeError(self.name or "unbound relation")
+        return instance.__dict__[self.name]
+
+    def __set__(self, instance: Any, value: Any) -> None:
+        if self.name is None:
+            raise AttributeError("relation is not bound to a model")
+        if isinstance(value, BaseModel) and not getattr(value, "id", None):
+            raise ValueError("related model must be persisted before assignment")
+        instance.__dict__[self.name] = value
+
+
+def relation(
+    target: type | None = None,
+    *,
+    on_delete: Delete = Delete.RESTRICT,
+) -> Any:
+    """Declare an explicit model relationship.
+
+    The stored value is the target model UUID. Referential actions are enforced
+    by the Runtime Model layer rather than encoded as generic field metadata.
+    """
+    return _RelationSpec(target, on_delete=on_delete)
+
+
+def validate(*fields: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Mark a method as a field validator for one or more fields."""
+    if not fields:
+        raise TypeError("validate() requires at least one field name")
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        func.__voodoo_validate_fields__ = tuple(fields)  # type: ignore[attr-defined]
+        return func
+
+    return decorator
+
+
+def validate_model(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Mark a method as a whole-model invariant validator."""
+    func.__voodoo_validate_model__ = True  # type: ignore[attr-defined]
+    return func
 
 
 class _FKRef:
@@ -62,19 +258,170 @@ def _get_table_name(cls_or_obj: Any) -> str:
     return str(name) if name else cls.__name__.lower()
 
 
-def _register_foreign_keys(cls: type) -> None:
+def _relation_target(annotation: Any) -> type | None:
+    if isinstance(annotation, type):
+        return annotation
+    origin = get_origin(annotation)
+    if origin is UnionType or str(origin) == "typing.Union":
+        candidates = [
+            item
+            for item in get_args(annotation)
+            if item is not type(None) and isinstance(item, type)
+        ]
+        if len(candidates) == 1:
+            return candidates[0]
+    return None
+
+
+def _register_relations(cls: type) -> None:
+    child = _get_table_name(cls)
     try:
-        hints = get_type_hints(cls)
+        hints = get_type_hints(cls, include_extras=True)
     except Exception:
         hints = getattr(cls, "__annotations__", {})
-    for col_name, col_type in hints.items():
-        if isinstance(col_type, _FKRef):
-            parent = _get_table_name(col_type.target)
-            _cascades.setdefault(parent, []).append((_get_table_name(cls), col_name))
+    for name, spec in vars(cls).items():
+        if isinstance(spec, _RelationSpec):
+            target = spec.target or _relation_target(hints.get(name))
+            if target is None:
+                raise TypeError(
+                    f"relation field {cls.__name__}.{name} requires a model annotation "
+                    "or an explicit target"
+                )
+            if spec.on_delete is Delete.SET_NULL and not _allows_none(hints.get(name)):
+                raise TypeError(
+                    f"{cls.__name__}.{name} uses Delete.SET_NULL but is not optional"
+                )
+            spec.target = target
+            parent = _get_table_name(target)
+            _relations.setdefault(parent, []).append((child, name, spec.on_delete))
+
+    # Compatibility for the pre-3.x FK annotation while relation() becomes the
+    # canonical public relationship API.
+    for name, annotation in hints.items():
+        if isinstance(annotation, _FKRef):
+            parent = _get_table_name(annotation.target)
+            _relations.setdefault(parent, []).append((child, name, Delete.CASCADE))
 
 
 def _clear_cascades() -> None:
-    _cascades.clear()
+    _relations.clear()
+
+
+def _unwrap_annotated(annotation: Any) -> Any:
+    if get_origin(annotation) is Annotated:
+        return get_args(annotation)[0]
+    return annotation
+
+
+def _constraints(annotation: Any) -> tuple[_Constraint, ...]:
+    if get_origin(annotation) is not Annotated:
+        return ()
+    return tuple(
+        item for item in get_args(annotation)[1:] if isinstance(item, _Constraint)
+    )
+
+
+def _allows_none(annotation: Any) -> bool:
+    annotation = _unwrap_annotated(annotation)
+    origin = get_origin(annotation)
+    if origin is UnionType or str(origin) == "typing.Union":
+        return type(None) in get_args(annotation)
+    return False
+
+
+def _field_specs(model: type) -> dict[str, _FieldSpec]:
+    return {
+        name: value
+        for name, value in vars(model).items()
+        if isinstance(value, _FieldSpec)
+    }
+
+
+def _apply_defaults(model: type, values: dict[str, Any]) -> dict[str, Any]:
+    resolved = dict(values)
+    hints = get_type_hints(model, include_extras=True)
+    specs = _field_specs(model)
+    for name, annotation in hints.items():
+        if name.startswith("__") or name == "id" or name in resolved:
+            continue
+        spec = specs.get(name)
+        if spec is not None:
+            if spec.default_factory is not None:
+                resolved[name] = spec.default_factory()
+                continue
+            if spec.default is not _MISSING:
+                resolved[name] = spec.default
+                continue
+        class_value = getattr(model, name, _MISSING)
+        if class_value is not _MISSING and not isinstance(
+            class_value, (_FieldSpec, _RelationSpec)
+        ):
+            resolved[name] = class_value
+            continue
+        if _allows_none(annotation):
+            resolved[name] = None
+            continue
+        raise TypeError(f"Missing required field: {name}")
+    return resolved
+
+
+def _prepare_instance(obj: Any) -> None:
+    values = _apply_defaults(obj.__class__, _model_values(obj))
+    for name, value in values.items():
+        if not hasattr(obj, name):
+            setattr(obj, name, value)
+
+
+def _validate_schema(obj: Any) -> None:
+    hints = get_type_hints(obj.__class__, include_extras=True)
+    for name, annotation in hints.items():
+        if name.startswith("__") or name == "id":
+            continue
+        if not hasattr(obj, name):
+            if _allows_none(annotation):
+                continue
+            raise TypeError(f"Missing required field: {name}")
+        value = getattr(obj, name)
+        if value is None:
+            if not _allows_none(annotation):
+                raise TypeError(f"{name} cannot be None")
+            continue
+        for constraint in _constraints(annotation):
+            constraint.validate(value, field_name=name)
+
+
+async def _run_declared_validators(obj: Any) -> None:
+    for name in dir(obj.__class__):
+        member = getattr(obj.__class__, name, None)
+        fields = getattr(member, "__voodoo_validate_fields__", ())
+        if fields:
+            bound = getattr(obj, name)
+            for field_name in fields:
+                value = getattr(obj, field_name)
+                result = bound(value)
+                if inspect.isawaitable(result):
+                    result = await result
+                if result is not None:
+                    setattr(obj, field_name, result)
+        if getattr(member, "__voodoo_validate_model__", False):
+            result = getattr(obj, name)()
+            if inspect.isawaitable(result):
+                result = await result
+            if result is False:
+                raise ValueError(f"Model validation failed: {name}")
+
+
+async def _run_validators(obj: Any) -> None:
+    _validate_schema(obj)
+    await _run_declared_validators(obj)
+    _validate_schema(obj)
+
+
+def _model_for_table(table: str) -> type | None:
+    for model in reversed(_models):
+        if _get_table_name(model) == table:
+            return model
+    return None
 
 
 class ModelMeta(type):
@@ -84,7 +431,13 @@ class ModelMeta(type):
         super().__init__(name, bases, attrs)
         if name not in ("BaseModel", "Model"):
             _models.append(cls)
-            _register_foreign_keys(cls)
+            _register_relations(cls)
+            indexes = {
+                field_name: spec.unique
+                for field_name, spec in vars(cls).items()
+                if isinstance(spec, _FieldSpec) and spec.index
+            }
+            register_indexes(_get_table_name(cls), indexes)
 
 
 def on_insert(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -118,26 +471,51 @@ def rls_policy(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., 
 def _model_values(obj: Any, *, include_id: bool = False) -> dict[str, Any]:
     values: dict[str, Any] = {}
     try:
-        hints = get_type_hints(obj.__class__)
+        hints = get_type_hints(obj.__class__, include_extras=True)
     except Exception:
         hints = getattr(obj.__class__, "__annotations__", {})
     for name in hints:
         if name.startswith("__") or (name == "id" and not include_id):
             continue
-        if hasattr(obj, name):
-            values[name] = getattr(obj, name)
+        if not hasattr(obj, name):
+            continue
+        value = getattr(obj, name)
+        spec = vars(obj.__class__).get(name)
+        if isinstance(spec, _RelationSpec) and isinstance(value, BaseModel):
+            value = value.id
+        values[name] = value
     return values
 
 
 def _hydrate(model: type[Any], row: dict[str, Any]) -> Any:
     obj = model()
     try:
-        hints = get_type_hints(model)
+        hints = get_type_hints(model, include_extras=True)
     except Exception:
         hints = getattr(model, "__annotations__", {})
     for key, value in row.items():
-        if hints.get(key) is bool:
+        annotation = _unwrap_annotated(hints.get(key))
+        if annotation is bool:
             value = bool(value)
+        elif annotation is UUID and value is not None and not isinstance(value, UUID):
+            value = UUID(str(value))
+        elif (
+            annotation is datetime
+            and value is not None
+            and not isinstance(value, datetime)
+        ):
+            value = datetime.fromisoformat(str(value))
+        elif annotation is date and value is not None and not isinstance(value, date):
+            value = date.fromisoformat(str(value))
+        relation_spec = vars(model).get(key)
+        if isinstance(relation_spec, _RelationSpec) and value is not None:
+            target = relation_spec.target
+            if target is None:
+                raise TypeError(
+                    f"Unresolved relation target for {model.__name__}.{key}"
+                )
+            related_row = get_record(_get_table_name(target), UUID(str(value)))
+            value = None if related_row is None else _hydrate(target, related_row)
         setattr(obj, key, value)
     return obj
 
@@ -169,7 +547,7 @@ class BaseModel(metaclass=ModelMeta):
     implies SQL. New code should prefer ``Model``.
     """
 
-    id: int
+    id: UUID
     __tablename__: str | None = None
 
     @classmethod
@@ -205,7 +583,11 @@ class BaseModel(metaclass=ModelMeta):
 
     async def insert(self) -> BaseModel:
         table = _get_table_name(self)
-        self.id = insert_record(table, _model_values(self))
+        if not getattr(self, "id", None):
+            self.id = uuid7()
+        _prepare_instance(self)
+        await _run_validators(self)
+        self.id = insert_record(table, _model_values(self), record_id=self.id)
         _fire_hooks(table, "insert", self)
         return self
 
@@ -213,6 +595,8 @@ class BaseModel(metaclass=ModelMeta):
         if not getattr(self, "id", None):
             raise ValueError("Cannot update a model without an id")
         table = _get_table_name(self)
+        _prepare_instance(self)
+        await _run_validators(self)
         put_record(table, self.id, _model_values(self))
         _fire_hooks(table, "update", self)
         return self
@@ -224,13 +608,14 @@ class Model(BaseModel):
     @classmethod
     async def create(cls, **kwargs: Any) -> Model:
         obj = cls()
-        for key, value in kwargs.items():
+        values = _apply_defaults(cls, kwargs)
+        for key, value in values.items():
             setattr(obj, key, value)
         await obj.insert()
         return obj
 
     @classmethod
-    async def get(cls, id: int) -> Model | None:
+    async def get(cls, id: UUID | str) -> Model | None:
         row = get_record(_get_table_name(cls), id)
         return None if row is None else _hydrate(cls, row)
 
@@ -263,10 +648,30 @@ class Model(BaseModel):
 
     async def delete(self) -> None:
         table = _get_table_name(self)
-        for child_table, fk_col in _cascades.get(table, []):
+        for child_table, relation_name, action in _relations.get(table, []):
             for child in scan_records(child_table):
-                if child.get(fk_col) == self.id:
-                    delete_record(child_table, int(child["id"]))
+                child_value = child.get(relation_name)
+                if child_value is None or UUID(str(child_value)) != self.id:
+                    continue
+                child_id = UUID(str(child["id"]))
+                if action is Delete.RESTRICT:
+                    raise ValueError(
+                        f"Cannot delete {table}: related {child_table}.{relation_name} exists"
+                    )
+                if action is Delete.CASCADE:
+                    child_model = _model_for_table(child_table)
+                    if child_model is None:
+                        delete_record(child_table, child_id)
+                    else:
+                        child_obj = _hydrate(child_model, child)
+                        await child_obj.delete()
+                elif action is Delete.SET_NULL:
+                    child[relation_name] = None
+                    put_record(
+                        child_table,
+                        child_id,
+                        {k: v for k, v in child.items() if k != "id"},
+                    )
         delete_record(table, self.id)
 
 
@@ -308,18 +713,13 @@ class StoreQuery:
         return query
 
     def _rows(self) -> list[dict[str, Any]]:
-        rows = scan_records(_get_table_name(self._model))
-        for key, expected in self._filters.items():
-            rows = [row for row in rows if row.get(key) == expected]
-        for column in reversed(self._order_by):
-            descending = column.startswith("-")
-            name = column[1:] if descending else column
-            rows.sort(key=lambda row: row.get(name), reverse=descending)
-        if self._offset is not None:
-            rows = rows[self._offset :]
-        if self._limit is not None:
-            rows = rows[: self._limit]
-        return rows
+        return query_records(
+            _get_table_name(self._model),
+            filters=self._filters,
+            order_by=self._order_by,
+            limit=self._limit,
+            offset=self._offset,
+        )
 
     async def first(self) -> Model | None:
         rows = self.limit(1)._rows()
@@ -336,7 +736,7 @@ class StoreQuery:
         rows = self._rows()
         collection = _get_table_name(self._model)
         for row in rows:
-            delete_record(collection, int(row["id"]))
+            delete_record(collection, UUID(str(row["id"])))
         return len(rows)
 
     async def _execute(self) -> list[Model]:

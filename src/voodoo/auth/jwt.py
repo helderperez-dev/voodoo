@@ -5,6 +5,7 @@ import json
 import secrets
 import time
 from typing import Any
+from uuid import UUID
 
 from voodoo.config import config
 from voodoo.core.errors import AuthError as _VoodooAuthError
@@ -50,6 +51,12 @@ def _b64decode_str(data: str) -> bytes:
     return base64.urlsafe_b64decode((data + padding).encode("utf-8"))
 
 
+def _json_default(value: Any) -> Any:
+    if isinstance(value, UUID):
+        return str(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def create_access_token(
     data: dict[str, Any],
     expires_delta_seconds: int | None = None,
@@ -77,7 +84,9 @@ def create_access_token(
         json.dumps(header, separators=(",", ":")).encode("utf-8")
     )
     payload_b64 = _b64encode_str(
-        json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        json.dumps(payload, separators=(",", ":"), default=_json_default).encode(
+            "utf-8"
+        )
     )
 
     message = f"{header_b64}.{payload_b64}".encode()

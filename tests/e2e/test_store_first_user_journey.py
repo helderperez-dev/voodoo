@@ -8,6 +8,7 @@ share one application.vstore and survive a full Store close/reopen cycle.
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -49,9 +50,12 @@ async def test_store_first_application_domains_survive_restart(tmp_path: Path) -
     runtime.start()
     _bind(runtime)
     execution_id = ""
+    record_id = None
     try:
         record = await JourneyRecord.create(name="counter", value=41)
-        assert record.id == 1
+        assert isinstance(record.id, UUID)
+        assert record.id.version == 7
+        record_id = record.id
 
         queue = VoodooStoreQueue()
         await queue.setup()
@@ -92,6 +96,8 @@ async def test_store_first_application_domains_survive_restart(tmp_path: Path) -
     try:
         persisted = await JourneyRecord.first(name="counter")
         assert persisted is not None
+        assert record_id is not None
+        assert persisted.id == record_id
         assert persisted.value == 41
 
         queue = VoodooStoreQueue()
@@ -99,18 +105,18 @@ async def test_store_first_application_domains_survive_restart(tmp_path: Path) -
         jobs = await queue.list(task_type="recalculate")
         assert len(jobs) == 1
         assert jobs[0].idempotency_key == "journey-job-1"
-        assert jobs[0].payload == {"record_id": 1}
+        assert jobs[0].payload == {"record_id": str(record_id)}
 
         replayed: list[dict] = []
         bus = VoodooStoreEventBus()
         assert bus.replay("journey.created", replayed.append) == 1
-        assert replayed[0]["payload"] == {"record_id": 1}
+        assert replayed[0]["payload"] == {"record_id": str(record_id)}
 
         execution_store = VoodooStoreExecutionStore()
         executions = execution_store.load_all()
         restored = next(item for item in executions if item.id == execution_id)
         assert restored.status is ExecutionStatus.COMPLETED
-        assert restored.result == {"record_id": 1, "ok": True}
+        assert restored.result == {"record_id": str(record_id), "ok": True}
     finally:
         _unbind()
         reopened.stop()

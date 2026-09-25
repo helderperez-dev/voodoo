@@ -295,9 +295,11 @@ Current architecture deliberately does **not** promise:
 - production PKI/OIDC/mTLS infrastructure;
 - managed cloud/fleet control plane.
 
-Store 0.2.2 also lacks arbitrary schedule-cursor repositioning and richer native
-Python bindings for Topics/Streams and Objects. The Framework fails clearly or
-uses stable compatibility boundaries instead of inventing unsupported behavior.
+Store 0.3 still lacks arbitrary schedule-cursor repositioning. Richer native
+Python bindings for Topics/Streams, Objects and index/range queries exist since
+Store 0.3 and the Framework adapters use them behind Voodoo-owned contracts.
+The Framework fails clearly or uses stable compatibility boundaries instead of
+inventing unsupported behavior.
 
 ## Further reading
 

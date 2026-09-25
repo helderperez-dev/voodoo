@@ -181,16 +181,16 @@ Queued jobs are durable Store Jobs. Claims use explicit leases; workers
 heartbeat ownership, complete/fail/release jobs and reclaim expired leases.
 Each application attempt executes through the canonical `ExecutionEngine`.
 
-Schedules/Cron/Triggers are Store-backed on the default path. Store 0.2.2 can
+Schedules/Cron/Triggers are Store-backed on the default path. Store 0.3 can
 enable/disable existing schedules but cannot arbitrarily reposition a schedule
 cursor; Voodoo fails clearly for that unsupported operation.
 
 ## Events and objects
 
-Events and objects use Store-backed compatibility boundaries behind stable
-Framework APIs. Voodoo Store 0.2.2 does not yet expose the richer native
-Topics/Streams and Object subsystems through its Python binding, so the
-Framework does not pretend those bindings exist.
+Events and objects use the native Store messaging (Topics) and content-addressed
+Objects subsystems through Voodoo-owned adapters behind stable Framework APIs.
+The adapters share the active RuntimeStore lifecycle and keep native binding
+types out of application code.
 
 ## Workflow, Goals and HITL
 

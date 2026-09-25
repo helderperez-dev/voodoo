@@ -1864,22 +1864,22 @@ requires-dist = [
     { name = "starlette" },
     { name = "typer" },
     { name = "uvicorn" },
-    { name = "voodoo-store", specifier = ">=0.2.2,<0.3" },
+    { name = "voodoo-store", specifier = ">=0.3.0,<0.4" },
     { name = "websockets" },
 ]
 provides-extras = ["ai", "mcp", "dev", "sqlite", "postgres", "s3", "redis", "edge", "otel"]
 
 [[package]]
 name = "voodoo-store"
-version = "0.2.2"
+version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8d/70/3076dd7a94b2c99ea6640e381c18e0ffedb3a058562e7bd6a0f77d85ab89/voodoo_store-0.2.2.tar.gz", hash = "sha256:60613d4cb6988d6f8d1aaf1ab626fe81b2356c619d9c4c387f4c807fe9438185", size = 87959, upload_time = "2026-09-14T02:44:52.565Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/06/59/87ff7237dfe48ad727f347ee5e8f30cf24076edb579e158df3c315f3ab16/voodoo_store-0.3.0.tar.gz", hash = "sha256:d73a2f86a752ed13ea2d15782a75ff7eb87cf93b814424a3a7ba0951b6de6353", size = 96788, upload_time = "2026-09-25T02:29:18.78Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8c/90/c955d91d1431bddabf61575f52e7d52ab3e362f31bc5937b0497dd5b046b/voodoo_store-0.2.2-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:773c66835b9af62fe66141bc951bd08338b5ca9294938ce3e593ebce52070630", size = 500170, upload_time = "2026-09-14T02:44:45.021Z" },
-    { url = "https://files.pythonhosted.org/packages/16/43/acdb7b91ae9681e09bf1dc5ded6c31350ca7a26e886f0fabc597daf484d3/voodoo_store-0.2.2-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:40e6de01f42c72e4cd7be6368ecc1be35391feb91d7a7e0cc81006c485d55206", size = 485497, upload_time = "2026-09-14T02:44:46.751Z" },
-    { url = "https://files.pythonhosted.org/packages/56/fb/c615628f8aec93856bd31b0d2baa3b249a4825740b64fa442982062aaeb2/voodoo_store-0.2.2-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:318fdd972015bdfb22e068ae42d99fdf04c3841f3fec504e1f50a2f14ec6606d", size = 538540, upload_time = "2026-09-14T02:44:48.149Z" },
-    { url = "https://files.pythonhosted.org/packages/68/ca/1a33203e55d0b63dd9ed6a5e8d8abc3f84e210f3b20187c3865317df8647/voodoo_store-0.2.2-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:041b5223625d7ba01904a7f13fe39098665439e4b7e8a2110dc0f5b79650622d", size = 546086, upload_time = "2026-09-14T02:44:49.616Z" },
-    { url = "https://files.pythonhosted.org/packages/0b/64/4360977e6489244ffa3461bb2473b8e9843d1cfeded8ad09d3a47dedc641/voodoo_store-0.2.2-cp39-abi3-win_amd64.whl", hash = "sha256:103e21b86776f44afa35e9cdf1e7fec837d3bfccc39c9b9c0cd686dcda43feb8", size = 380425, upload_time = "2026-09-14T02:44:51.303Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/ee/5763bfad156ff643cba254156af058fe46e0d9fc6375f0cc6d271329f2cd/voodoo_store-0.3.0-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:a0d69bb5129d81c76e79d63a3f6b7c58711d0773c24c817931e0346ee779a296", size = 687733, upload_time = "2026-09-25T02:29:11.727Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/2f/e8dd48fa9fc30fdef2deffcfcc4abbedd601e94053124923590b764d33bc/voodoo_store-0.3.0-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:e6c7c498edc5839c4516657208d79b8aca91bc0045f091cc8cf5d9e749eb969a", size = 657743, upload_time = "2026-09-25T02:29:13.388Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/e5/cb99b64b6388159601622ebd61360d4c1eee9550347b08d1a053e6be5b4d/voodoo_store-0.3.0-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8aadeac26842cb55d7a57415d3bdab40cf2f405843d419ab5582ac99fd6c113c", size = 724397, upload_time = "2026-09-25T02:29:14.78Z" },
+    { url = "https://files.pythonhosted.org/packages/53/4c/6f4f2685409eb479d4274801f6a9c39ac1a997ad34deccd08fee752b1ddb/voodoo_store-0.3.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:db4949a36c27fee1fc7db3fa6536a648b63a5b5b5328e49348acb571e65220af", size = 734647, upload_time = "2026-09-25T02:29:16.183Z" },
+    { url = "https://files.pythonhosted.org/packages/21/ad/e7c78b7e3f2c8e41467d8245fd82e222ada920689ffa00e018b5bf5f27f3/voodoo_store-0.3.0-cp39-abi3-win_amd64.whl", hash = "sha256:585460dfec5b3d5673a23e33e32d39802bcc8c9da1c1172584199a1273f73962", size = 570030, upload_time = "2026-09-25T02:29:17.523Z" },
 ]
 
 [[package]]

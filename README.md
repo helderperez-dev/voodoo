@@ -118,6 +118,7 @@ Goals, AI or distributed execution to build a normal application.
 |---|---|
 | UI-local mutable value | `state()` |
 | Persistent business data | `Model` |
+| Indexed business queries | `field(index=True)` + `where/order_by` |
 | Page / browser interaction | Voodoo UI + Python-callable events |
 | HTTP/API surface | routing / API primitives |
 | Retryable background work | `@task` |
@@ -168,6 +169,39 @@ or integrations for workloads that need them; they are not silent defaults.
 
 Store owns durable mechanics. Runtime owns semantics, authority and
 intelligence.
+
+Models may declare native secondary indexes without changing the query API:
+
+```python
+from voodoo import Model
+from voodoo.data import field
+
+
+class Customer(Model):
+    email: str = field(index=True)
+    score: int = field(index=True)
+
+
+customers = await Customer.where(email="ada@example.com")
+top = await Customer.where().order_by("-score").limit(10)
+```
+
+Indexed equality and single-column ordering are pushed into Voodoo Store;
+queries without a matching declared index preserve the same API and fall back
+to collection scans.
+
+Models receive a Runtime-generated UUIDv7 identity by default. The UUID is
+generated before persistence, stored as the 16-byte Collection primary key and
+exposed as `uuid.UUID` in Python. Sequential business identifiers remain
+ordinary explicit fields rather than the default technical identity.
+
+Model typing carries schema semantics without duplicating them in storage
+configuration: `T | None` expresses optionality, normal assignment or
+`field(default=...)` expresses defaults, `field(default_factory=...)` handles
+dynamic defaults, and `typing.Annotated` constraints express domain limits.
+Relationships use `relation(...)` with explicit `Delete.RESTRICT`,
+`Delete.CASCADE` or `Delete.SET_NULL` policies. Backend-specific `db_type`
+metadata is deliberately not part of the default Model API.
 
 ## The Voodoo 3.0 architecture
 
@@ -478,10 +512,11 @@ Current Voodoo 3.0 does **not** claim:
 - production PKI/OIDC/mTLS infrastructure;
 - a managed Voodoo Cloud control plane.
 
-Current Voodoo Store 0.2.x also has explicit Python-binding boundaries around
-some richer native Topics/Streams, Object and schedule-cursor capabilities.
-The Framework fails clearly or preserves a stable internal contract rather than
-pretending unsupported guarantees exist.
+The Voodoo Store 0.3 integration line exposes native Collections/index
+queries, Queues, Topics/Streams, Consumer Groups, Objects, RPC, CDC,
+Workflow/HITL state, lifecycle operations and heterogeneous transactions to the
+Runtime. Those primitives remain single-node/local Store semantics; they do not
+imply replication, consensus or global exactly-once behavior.
 
 ## What Voodoo is trying to preserve
 

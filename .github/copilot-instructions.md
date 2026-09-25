@@ -58,7 +58,7 @@ silent defaults just to make a test pass.
 9. **Remote work remains governed.** Routing/discovery never bypass Capability + Policy + Execution.
 10. **No false guarantees.** Do not claim distributed consensus, global serializable transactions or global exactly-once execution.
 11. **Effect != Observation.** A sent command is not proof that the World changed.
-12. **Stable Framework contracts may use implementation compatibility layers.** Store 0.2.x does not yet expose every richer native subsystem through Python.
+12. **Stable Framework contracts may use implementation compatibility layers.** Where the installed Store binding still lacks a native surface (for example schedule-cursor repositioning), preserve the explicit failure instead of faking support.
 13. **Voodoo 3.x has one semantic owner per concept.** Removed 2.x import facades must not be recreated.
 
 ## Store ownership rules
@@ -161,9 +161,9 @@ node or arbitrary external systems.
 
 ## Scheduler / Events / Objects limitations
 
-- Store 0.2.2 cannot arbitrarily reposition an existing schedule cursor.
-- Events currently use a Store-backed compatibility boundary; richer native Topics/Streams Python APIs are not exposed yet.
-- Objects currently use a Store-backed compatibility boundary; richer native Object Python APIs are not exposed yet.
+- Store 0.3 cannot arbitrarily reposition an existing schedule cursor.
+- Events use the native Store messaging (Topics) surface through a Voodoo-owned adapter.
+- Objects use the native content-addressed Objects + named refs surface through a Voodoo-owned adapter.
 
 Preserve public contracts and document these limitations honestly.
 

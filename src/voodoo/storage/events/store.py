@@ -1,14 +1,8 @@
 """Voodoo Store-backed durable event bus.
 
-Events are persisted inside the Runtime-owned ``application.vstore`` and
-replayed from the same durable substrate used by the rest of the Runtime. The
-adapter consumes the central Runtime Store boundary and never opens a competing
-writer.
-
-Store 0.2.x does not yet expose the richer messaging subsystem through the
-Python binding, so this adapter uses the durable KV/transaction contract as the
-compatibility boundary. The public event API remains unchanged and can later be
-moved to native Store Streams/Topics without application changes.
+Events are persisted as native Voodoo Store Topics inside the Runtime-owned
+``application.vstore``. The adapter consumes the central Runtime Store boundary
+and never opens a competing writer.
 """
 
 from __future__ import annotations
@@ -24,12 +18,12 @@ from voodoo.core.errors import ConfigurationError
 from voodoo.runtime.store import acquire_runtime_store
 from voodoo.storage.events.interfaces import EventBusCapabilities
 
-_SEQUENCE_PREFIX = b"runtime:events:sequence:"
-_EVENT_PREFIX = b"runtime:events:event:"
+_TOPIC_PREFIX = b"runtime.events:"
+_REPLAY_BATCH_SIZE = 1024
 
 
 class VoodooStoreEventBus:
-    """Durable event bus backed by the process-shared Runtime Store."""
+    """Durable event bus backed by native Voodoo Store Topics."""
 
     provider = "voodoo"
 
@@ -51,41 +45,25 @@ class VoodooStoreEventBus:
         if provider is None:
             raise ConfigurationError("Voodoo Store is disabled for event persistence")
         native = getattr(provider, "native", None)
-        if native is None:
+        required = ("publish_topic", "read_topic")
+        missing = [
+            name for name in required if native is None or not hasattr(native, name)
+        ]
+        if missing:
             raise ConfigurationError(
-                "The active Voodoo Store provider does not expose durable KV storage"
+                "Voodoo Store 0.3+ native messaging is required for event persistence. "
+                f"Missing Store capabilities: {', '.join(missing)}."
             )
         return native
 
     @staticmethod
-    def _event_type_key(event_type: str) -> bytes:
-        return event_type.encode("utf-8").hex().encode("ascii")
-
-    @classmethod
-    def _sequence_key(cls, event_type: str) -> bytes:
-        return _SEQUENCE_PREFIX + cls._event_type_key(event_type)
-
-    @classmethod
-    def _event_key(cls, event_type: str, sequence: int) -> bytes:
-        return (
-            _EVENT_PREFIX
-            + cls._event_type_key(event_type)
-            + b":"
-            + f"{sequence:020d}".encode("ascii")
-        )
-
-    @classmethod
-    def _event_scan_prefix(cls, event_type: str) -> bytes:
-        return _EVENT_PREFIX + cls._event_type_key(event_type) + b":"
+    def _topic(event_type: str) -> bytes:
+        encoded = event_type.encode("utf-8")
+        return _TOPIC_PREFIX + encoded.hex().encode("ascii")
 
     def publish(self, event_type: str, payload: Any, **envelope: Any) -> dict[str, Any]:
-        """Persist an event atomically, then notify in-process subscribers."""
+        """Persist an event to a native Topic, then notify in-process subscribers."""
         from voodoo.observability import trace_id_var
-
-        store = self._native()
-        sequence_key = self._sequence_key(event_type)
-        raw_sequence = store.get(sequence_key)
-        sequence = int(bytes(raw_sequence).decode("ascii")) + 1 if raw_sequence else 1
 
         ev = {
             "event_id": str(uuid.uuid4()),
@@ -105,11 +83,7 @@ class VoodooStoreEventBus:
             separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
-
-        tx = store.transaction()
-        tx.put(sequence_key, str(sequence).encode("ascii"))
-        tx.put(self._event_key(event_type, sequence), encoded)
-        tx.commit()
+        self._native().publish_topic(self._topic(event_type), encoded)
 
         for handler in self._handlers.get(event_type, []):
             try:
@@ -124,17 +98,29 @@ class VoodooStoreEventBus:
         self._handlers.setdefault(event_type, []).append(handler)
 
     def replay(self, event_type: str, handler: Callable) -> int:
-        """Replay persisted events in deterministic publication order."""
+        """Replay persisted events in deterministic Topic-offset order."""
+        store = self._native()
+        topic = self._topic(event_type)
+        offset = 0
         count = 0
-        for _raw_key, raw_value in self._native().scan_prefix(
-            self._event_scan_prefix(event_type)
-        ):
-            try:
-                ev = json.loads(bytes(raw_value).decode("utf-8"))
-                handler(ev)
-                count += 1
-            except Exception:
-                pass
+
+        while True:
+            entries = store.read_topic(topic, offset, _REPLAY_BATCH_SIZE)
+            if not entries:
+                break
+
+            for entry_offset, raw_value in entries:
+                try:
+                    ev = json.loads(bytes(raw_value).decode("utf-8"))
+                    handler(ev)
+                    count += 1
+                except Exception:
+                    pass
+                offset = int(entry_offset) + 1
+
+            if len(entries) < _REPLAY_BATCH_SIZE:
+                break
+
         return count
 
     def close(self) -> None:
