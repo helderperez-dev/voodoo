@@ -276,7 +276,7 @@ def _relation_target(annotation: Any) -> type | None:
 def _register_relations(cls: type) -> None:
     child = _get_table_name(cls)
     try:
-        hints = get_type_hints(cls)
+        hints = get_type_hints(cls, include_extras=True)
     except Exception:
         hints = getattr(cls, "__annotations__", {})
     for name, spec in vars(cls).items():
@@ -339,7 +339,7 @@ def _field_specs(model: type) -> dict[str, _FieldSpec]:
 
 def _apply_defaults(model: type, values: dict[str, Any]) -> dict[str, Any]:
     resolved = dict(values)
-    hints = get_type_hints(model)
+    hints = get_type_hints(model, include_extras=True)
     specs = _field_specs(model)
     for name, annotation in hints.items():
         if name.startswith("__") or name == "id" or name in resolved:
@@ -373,7 +373,7 @@ def _prepare_instance(obj: Any) -> None:
 
 
 def _validate_schema(obj: Any) -> None:
-    hints = get_type_hints(obj.__class__)
+    hints = get_type_hints(obj.__class__, include_extras=True)
     for name, annotation in hints.items():
         if name.startswith("__") or name == "id":
             continue
@@ -471,7 +471,7 @@ def rls_policy(model_cls: type) -> Callable[[Callable[..., Any]], Callable[..., 
 def _model_values(obj: Any, *, include_id: bool = False) -> dict[str, Any]:
     values: dict[str, Any] = {}
     try:
-        hints = get_type_hints(obj.__class__)
+        hints = get_type_hints(obj.__class__, include_extras=True)
     except Exception:
         hints = getattr(obj.__class__, "__annotations__", {})
     for name in hints:
@@ -490,7 +490,7 @@ def _model_values(obj: Any, *, include_id: bool = False) -> dict[str, Any]:
 def _hydrate(model: type[Any], row: dict[str, Any]) -> Any:
     obj = model()
     try:
-        hints = get_type_hints(model)
+        hints = get_type_hints(model, include_extras=True)
     except Exception:
         hints = getattr(model, "__annotations__", {})
     for key, value in row.items():
