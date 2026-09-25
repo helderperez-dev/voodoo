@@ -57,7 +57,7 @@ RuntimeStore
 .voodoo/application.vstore
 ```
 
-The framework depends on `voodoo-store>=0.2.2,<0.3` on this branch. Application
+The framework depends on `voodoo-store>=0.3.0,<0.4`. Application
 code should not import native `voodoo_store` objects for normal Runtime use;
 Store implementation details remain behind Voodoo-owned contracts.
 
@@ -249,10 +249,11 @@ Voodoo does not currently claim:
 - production PKI/OIDC/mTLS identity infrastructure;
 - a managed cloud/fleet control plane.
 
-Store 0.2.2 also does not expose arbitrary schedule cursor repositioning or the
-richer native Topics/Streams and Objects subsystems through the Python binding.
-Framework adapters preserve stable contracts without pretending those native
-bindings already exist.
+Store 0.3 exposes the richer native Topics/Streams and Objects subsystems
+through its Python binding; the Events and ObjectStore adapters use those native
+surfaces behind stable Framework APIs. Store 0.3 still does not expose arbitrary
+schedule cursor repositioning, and the Framework fails clearly for that
+unsupported operation instead of pretending the binding supports it.
 
 ## See also
 

@@ -85,7 +85,7 @@ Runtime authority belongs to Capability + Policy.
 The framework currently targets:
 
 ```text
-voodoo-store>=0.2.2,<0.3
+voodoo-store>=0.3.0,<0.4
 ```
 
 When integrating a native Store capability:
@@ -99,9 +99,9 @@ When integrating a native Store capability:
 
 Current intentional compatibility boundaries:
 
-- Events use Store KV/transaction persistence until richer Topics/Streams Python bindings exist.
-- Objects use Store KV/transaction persistence until richer native Object bindings exist.
-- Store 0.2.2 supports schedule enable/disable but not arbitrary cursor repositioning.
+- Events use the native Store Topics/messaging surface through a Voodoo-owned adapter.
+- Objects use the native content-addressed Objects + named refs surface through a Voodoo-owned adapter.
+- Store 0.3 supports schedule enable/disable but not arbitrary cursor repositioning.
 
 ## Adding an external infrastructure provider
 

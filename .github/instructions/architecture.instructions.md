@@ -138,16 +138,16 @@ under `voodoo.runtime.scheduling`. Queue ownership uses leases and retry
 semantics; each attempt enters canonical Execution. The removed
 `voodoo.workers` and `voodoo.queue` compatibility paths must not return.
 
-Scheduler/Cron/Triggers are Store-backed. Store 0.2.2 cannot arbitrarily
+Scheduler/Cron/Triggers are Store-backed. Store 0.3 cannot arbitrarily
 reposition a schedule cursor; preserve the explicit failure instead of silently
 changing semantics.
 
 ## Events / Objects
 
-Current Store 0.2.x Python binding does not expose richer native Topics/Streams
-or Object APIs. Store-backed compatibility implementations are valid architectural
-boundaries. Do not replace them with old defaults or claim native binding support
-that does not exist.
+The Store 0.3 Python binding exposes native Topics/Streams and Object APIs.
+Events and ObjectStore use those native surfaces through Voodoo-owned adapters
+that share the active RuntimeStore lifecycle. Do not replace them with old
+defaults or claim native binding support that does not exist.
 
 ## Identity / authority
 

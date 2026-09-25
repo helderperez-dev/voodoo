@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Changed — Voodoo Store 0.3 native convergence
+
+- Depend on the published `voodoo-store>=0.3.0,<0.4` package; the temporary Git
+  dependency is gone and clean installs resolve the PyPI wheel.
+- Migrated the Events adapter from KV compatibility storage to native Store
+  Topics/messaging.
+- Migrated the ObjectStore adapter from KV compatibility storage to native
+  content-addressed Objects with named references.
+- Migrated the Model query path to native index exact lookups and index range
+  queries where declared, with scan fallback preserved for non-indexed and
+  multi-column shapes.
+- Declared Model indexes are maintained on writes and backfilled for existing
+  records.
+
+### Added — Modern Model contract
+
+- Field-local metadata via `field(index=True)` and `field(unique=True)` replaces
+  the provisional `__indexes__` surface; fields are unindexed by default.
+- Required/nullability inferred from Python typing (`T` vs `T | None`), with
+  `field(default=...)` and `field(default_factory=...)`.
+- Domain validation via `@validate(...)`, `@validate_model` and
+  `typing.Annotated` constraints (`Min`, `Max`, `MinLength`, `MaxLength`).
+- Typed `relation()` with explicit `Delete.RESTRICT`, `Delete.CASCADE` and
+  `Delete.SET_NULL` policies, hydrating relations back into typed Model objects.
+- Runtime-generated UUIDv7 is the default Model identity, exposed as `uuid.UUID`
+  in domain code and serialized as canonical strings at durable/wire boundaries.
+
 ## [3.0.0] — 2026-09-21
 
 ### Breaking — 3.0 architecture cleanup
