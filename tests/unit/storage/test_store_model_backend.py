@@ -607,3 +607,16 @@ async def test_annotated_constraints_express_domain_rules(monkeypatch):
 
     with pytest.raises(ValueError, match="score must be <= 100"):
         await Product.create(name="valid", score=101)
+
+
+
+def test_uuid7_is_monotonic_within_same_millisecond(monkeypatch):
+    monkeypatch.setattr(store_backend.time, "time_ns", lambda: 1_800_000_000_000_000_000)
+    monkeypatch.setattr(store_backend, "_uuid7_last_ms", -1)
+    monkeypatch.setattr(store_backend, "_uuid7_last_random", -1)
+
+    ids = [store_backend.uuid7() for _ in range(4)]
+
+    assert all(value.version == 7 for value in ids)
+    assert ids == sorted(ids)
+    assert len(set(ids)) == len(ids)
