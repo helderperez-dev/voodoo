@@ -47,9 +47,7 @@ def bind_runtime_store(runtime_store: RuntimeStore | None) -> None:
 def register_indexes(collection: str, indexes: dict[str, bool]) -> None:
     """Register model-declared native indexes for one collection."""
     _collection_indexes[collection] = {
-        str(name): bool(unique)
-        for name, unique in indexes.items()
-        if str(name)
+        str(name): bool(unique) for name, unique in indexes.items() if str(name)
     }
 
 
@@ -107,13 +105,7 @@ def uuid7() -> UUID:
         raise OverflowError("UUIDv7 timestamp exceeds 48 bits")
     rand_a = secrets.randbits(12)
     rand_b = secrets.randbits(62)
-    value = (
-        (unix_ms << 80)
-        | (0x7 << 76)
-        | (rand_a << 64)
-        | (0b10 << 62)
-        | rand_b
-    )
+    value = (unix_ms << 80) | (0x7 << 76) | (rand_a << 64) | (0b10 << 62) | rand_b
     return UUID(int=value)
 
 
@@ -218,9 +210,7 @@ def insert_record(
     return identity
 
 
-def get_record(
-    collection: str, record_id: UUID | str
-) -> dict[str, Any] | None:
+def get_record(collection: str, record_id: UUID | str) -> dict[str, Any] | None:
     store = _native()
     _ensure_collection(store, collection)
     native_record = store.get_record(
@@ -253,6 +243,7 @@ def delete_record(collection: str, record_id: UUID | str) -> None:
     store = _native()
     _ensure_collection(store, collection)
     store.delete_record(_collection_key(collection), _primary_key(record_id))
+
 
 def scan_records(collection: str) -> list[dict[str, Any]]:
     store = _native()
