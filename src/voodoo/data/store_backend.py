@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from voodoo.runtime.store import RuntimeStore
 
 _runtime_store: RuntimeStore | None = None
-_collection_indexes: dict[str, tuple[str, ...]] = {}
+_collection_indexes: dict[str, dict[str, bool]] = {}
 
 _REQUIRED_COLLECTION_API = (
     "create_collection",
@@ -40,11 +40,13 @@ def bind_runtime_store(runtime_store: RuntimeStore | None) -> None:
     bind_active_runtime_store(runtime_store)
 
 
-def register_indexes(collection: str, indexes: tuple[str, ...]) -> None:
-    """Register model-declared native secondary indexes for one collection."""
-    _collection_indexes[collection] = tuple(
-        dict.fromkeys(str(index) for index in indexes if str(index))
-    )
+def register_indexes(collection: str, indexes: dict[str, bool]) -> None:
+    """Register model-declared native indexes for one collection."""
+    _collection_indexes[collection] = {
+        str(name): bool(unique)
+        for name, unique in indexes.items()
+        if str(name)
+    }
 
 
 def _get_runtime_store() -> RuntimeStore:
@@ -97,9 +99,14 @@ def _ensure_collection(store: Any, collection: str) -> None:
     collection_key = _collection_key(collection)
     store.create_collection(collection_key, schema_version=1, codec=b"json")
     created_index = False
-    for index in _collection_indexes.get(collection, ()):
+    for index, unique in _collection_indexes.get(collection, {}).items():
         created_index = (
-            store.define_index(collection_key, index.encode("utf-8")) or created_index
+            store.define_index(
+                collection_key,
+                index.encode("utf-8"),
+                unique=unique,
+            )
+            or created_index
         )
 
     if created_index:
@@ -146,7 +153,7 @@ def _record_indexes(
     collection: str, record: dict[str, Any]
 ) -> list[tuple[bytes, bytes]]:
     indexes: list[tuple[bytes, bytes]] = []
-    for field in _collection_indexes.get(collection, ()):
+    for field in _collection_indexes.get(collection, {}):
         if field in record:
             indexes.append((field.encode("utf-8"), _encode_index_value(record[field])))
     return indexes
@@ -230,7 +237,7 @@ def query_records(
     """Use native Store indexes when declared; preserve scan fallback semantics."""
     store = _native()
     _ensure_collection(store, collection)
-    declared = set(_collection_indexes.get(collection, ()))
+    declared = set(_collection_indexes.get(collection, {}))
     rows: list[dict[str, Any]]
     native_order_field: str | None = None
 
