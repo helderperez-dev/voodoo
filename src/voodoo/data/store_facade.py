@@ -12,7 +12,7 @@ from collections.abc import Callable
 from datetime import date, datetime
 from enum import Enum
 from types import UnionType
-from typing import Any, get_args, get_origin, get_type_hints
+from typing import Annotated, Any, get_args, get_origin, get_type_hints
 from uuid import UUID
 
 from voodoo.data.store_backend import (
@@ -30,6 +30,10 @@ __all__ = [
     "BaseModel",
     "Delete",
     "FK",
+    "Max",
+    "MaxLength",
+    "Min",
+    "MinLength",
     "Model",
     "ModelMeta",
     "StoreQuery",
@@ -107,6 +111,59 @@ def field(
         default=default,
         default_factory=default_factory,
     )
+
+
+class _Constraint:
+    def validate(self, value: Any, *, field_name: str) -> None:
+        raise NotImplementedError
+
+
+class Min(_Constraint):
+    __slots__ = ("value",)
+
+    def __init__(self, value: int | float) -> None:
+        self.value = value
+
+    def validate(self, value: Any, *, field_name: str) -> None:
+        if value < self.value:
+            raise ValueError(f"{field_name} must be >= {self.value}")
+
+
+class Max(_Constraint):
+    __slots__ = ("value",)
+
+    def __init__(self, value: int | float) -> None:
+        self.value = value
+
+    def validate(self, value: Any, *, field_name: str) -> None:
+        if value > self.value:
+            raise ValueError(f"{field_name} must be <= {self.value}")
+
+
+class MinLength(_Constraint):
+    __slots__ = ("value",)
+
+    def __init__(self, value: int) -> None:
+        if value < 0:
+            raise ValueError("MinLength cannot be negative")
+        self.value = value
+
+    def validate(self, value: Any, *, field_name: str) -> None:
+        if len(value) < self.value:
+            raise ValueError(f"{field_name} length must be >= {self.value}")
+
+
+class MaxLength(_Constraint):
+    __slots__ = ("value",)
+
+    def __init__(self, value: int) -> None:
+        if value < 0:
+            raise ValueError("MaxLength cannot be negative")
+        self.value = value
+
+    def validate(self, value: Any, *, field_name: str) -> None:
+        if len(value) > self.value:
+            raise ValueError(f"{field_name} length must be <= {self.value}")
 
 
 class Delete(str, Enum):
@@ -240,7 +297,22 @@ def _clear_cascades() -> None:
     _relations.clear()
 
 
+def _unwrap_annotated(annotation: Any) -> Any:
+    if get_origin(annotation) is Annotated:
+        return get_args(annotation)[0]
+    return annotation
+
+
+def _constraints(annotation: Any) -> tuple[_Constraint, ...]:
+    if get_origin(annotation) is not Annotated:
+        return ()
+    return tuple(
+        item for item in get_args(annotation)[1:] if isinstance(item, _Constraint)
+    )
+
+
 def _allows_none(annotation: Any) -> bool:
+    annotation = _unwrap_annotated(annotation)
     origin = get_origin(annotation)
     if origin is UnionType or str(origin) == "typing.Union":
         return type(None) in get_args(annotation)
@@ -302,6 +374,9 @@ def _run_validators(obj: Any) -> None:
         value = getattr(obj, name)
         if value is None and not _allows_none(annotation):
             raise TypeError(f"{name} cannot be None")
+        if value is not None:
+            for constraint in _constraints(annotation):
+                constraint.validate(value, field_name=name)
 
     for name in dir(obj.__class__):
         member = getattr(obj.__class__, name, None)
@@ -389,7 +464,7 @@ def _hydrate(model: type[Any], row: dict[str, Any]) -> Any:
     except Exception:
         hints = getattr(model, "__annotations__", {})
     for key, value in row.items():
-        annotation = hints.get(key)
+        annotation = _unwrap_annotated(hints.get(key))
         if annotation is bool:
             value = bool(value)
         elif annotation is UUID and value is not None and not isinstance(value, UUID):
