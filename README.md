@@ -190,6 +190,19 @@ Indexed equality and single-column ordering are pushed into Voodoo Store;
 queries without a matching declared index preserve the same API and fall back
 to collection scans.
 
+Models receive a Runtime-generated UUIDv7 identity by default. The UUID is
+generated before persistence, stored as the 16-byte Collection primary key and
+exposed as `uuid.UUID` in Python. Sequential business identifiers remain
+ordinary explicit fields rather than the default technical identity.
+
+Model typing carries schema semantics without duplicating them in storage
+configuration: `T | None` expresses optionality, normal assignment or
+`field(default=...)` expresses defaults, `field(default_factory=...)` handles
+dynamic defaults, and `typing.Annotated` constraints express domain limits.
+Relationships use `relation(...)` with explicit `Delete.RESTRICT`,
+`Delete.CASCADE` or `Delete.SET_NULL` policies. Backend-specific `db_type`
+metadata is deliberately not part of the default Model API.
+
 ## The Voodoo 3.0 architecture
 
 Voodoo 3.0 deliberately converges concepts under one semantic owner instead of
