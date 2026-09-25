@@ -8,6 +8,7 @@ share one application.vstore and survive a full Store close/reopen cycle.
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -51,7 +52,8 @@ async def test_store_first_application_domains_survive_restart(tmp_path: Path) -
     execution_id = ""
     try:
         record = await JourneyRecord.create(name="counter", value=41)
-        assert record.id == 1
+        assert isinstance(record.id, UUID)
+        assert record.id.version == 7
 
         queue = VoodooStoreQueue()
         await queue.setup()
