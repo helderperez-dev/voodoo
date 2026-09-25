@@ -12,6 +12,7 @@ import secrets
 import time
 from datetime import date, datetime
 from pathlib import Path
+from threading import Lock
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
 
 _runtime_store: RuntimeStore | None = None
 _collection_indexes: dict[str, dict[str, bool]] = {}
+_uuid7_lock = Lock()
+_uuid7_last_ms = -1
+_uuid7_last_random = -1
 
 _REQUIRED_COLLECTION_API = (
     "create_collection",
@@ -99,12 +103,28 @@ def _primary_key(record_id: UUID | str) -> bytes:
 
 
 def uuid7() -> UUID:
-    """Generate an RFC 9562 UUIDv7 without requiring Python 3.14+."""
-    unix_ms = time.time_ns() // 1_000_000
-    if unix_ms >= (1 << 48):
-        raise OverflowError("UUIDv7 timestamp exceeds 48 bits")
-    rand_a = secrets.randbits(12)
-    rand_b = secrets.randbits(62)
+    """Generate a process-monotonic RFC 9562 UUIDv7 on Python 3.12+."""
+    global _uuid7_last_ms, _uuid7_last_random
+
+    with _uuid7_lock:
+        unix_ms = time.time_ns() // 1_000_000
+        if unix_ms > _uuid7_last_ms:
+            random_bits = secrets.randbits(74)
+        else:
+            unix_ms = _uuid7_last_ms
+            random_bits = _uuid7_last_random + 1
+            if random_bits >= (1 << 74):
+                unix_ms += 1
+                random_bits = 0
+
+        if unix_ms >= (1 << 48):
+            raise OverflowError("UUIDv7 timestamp exceeds 48 bits")
+
+        _uuid7_last_ms = unix_ms
+        _uuid7_last_random = random_bits
+
+    rand_a = random_bits >> 62
+    rand_b = random_bits & ((1 << 62) - 1)
     value = (unix_ms << 80) | (0x7 << 76) | (rand_a << 64) | (0b10 << 62) | rand_b
     return UUID(int=value)
 
