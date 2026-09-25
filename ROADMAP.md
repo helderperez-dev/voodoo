@@ -93,8 +93,11 @@ The post-Sprint-28 repository now includes:
 - clean-install release gates proving the default Runtime lifecycle does not require
   optional SQL infrastructure.
 
-The latest published release is **v3.0.0** (2026-09-21), and the current
-`main` architecture baseline is the same 3.0 release commit. The 3.0 clean break
+The latest published release is **v3.1.0** (2026-09-25), and the current
+`main` architecture baseline is the same 3.1 release commit. The 3.1 release
+converges Runtime adapters on the published Voodoo Store 0.3 native surface
+(Topics messaging, content-addressed Objects, native index exact/range queries)
+and publishes the modern Model contract with UUIDv7 identity. The 3.0 clean break
 removed compatibility-only 2.x facades, contracted the package-root API, and completed
 repository semantic-ownership convergence. `SPRINT_PLAN.md` remains the implementation
 source of truth; this document defines direction rather than claiming future work already

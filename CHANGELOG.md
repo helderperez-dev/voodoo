@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-09-25
+
 ### Changed — Voodoo Store 0.3 native convergence
 
 - Depend on the published `voodoo-store>=0.3.0,<0.4` package; the temporary Git

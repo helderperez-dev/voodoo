@@ -5,8 +5,8 @@ Source architecture: [`ROADMAP.md`](ROADMAP.md).
 This file is the **current source of truth for implementation progress**.
 Detailed historical plans live in Git history and under `docs/sprints/`.
 
-> Updated 2026-09-23 after the Voodoo 3.0 clean architecture release and
-> repository truth reconciliation.
+> Updated 2026-09-25 after the v3.1.0 release converging Runtime adapters on
+> the published Voodoo Store 0.3 native surface.
 
 ## North Star
 
@@ -35,8 +35,8 @@ Core laws:
 
 | Item | State |
 |---|---|
-| Latest published release | **v3.0.0** — 2026-09-21 |
-| Package version on `main` | **3.0.0** |
+| Latest published release | **v3.1.0** — 2026-09-25 |
+| Package version on `main` | **3.1.0** |
 | Sprints through 23 | **DONE** |
 | Sprint 24 — Agency Foundation | **DONE** |
 | Sprint 25 — UI Magic | **DONE** |
@@ -45,12 +45,14 @@ Core laws:
 | Sprint 28 — Runtime Infrastructure Convergence | **DONE** |
 | Post-Sprint 28 | **Design System 3 + Application Graph + repository convergence DONE** |
 | 3.0 clean architecture | **DONE and released** |
+| Store 0.3 native convergence + modern Model contract | **DONE and released (v3.1.0)** |
 | Next numbered sprint | **Not selected yet — product validation/architecture review first** |
-| Release checkpoint | **v3.0.0 published; future merges do not imply a release** |
+| Release checkpoint | **v3.1.0 published; future merges do not imply a release** |
 
-Release evidence: tag `v3.0.0` points at the current 3.0 architecture baseline.
-The release workflow passed the test suite, clean Store-first distribution gate,
-package build, PyPI publication, Homebrew update and GitHub Release creation.
+Release evidence: tag `v3.1.0` points at the Store 0.3 native convergence
+release. The release workflow passed the test suite, clean Store-first
+distribution gate, package build, PyPI publication, Homebrew update and GitHub
+Release creation.
 
 ---
 
@@ -187,7 +189,7 @@ had not caught. The 2.7.x line therefore hardened the Store-first contract:
 - default Runtime startup/shutdown does not import `aiosqlite`;
 - release CI builds a clean wheel without extras, scaffolds an app, boots its full
   Runtime lifecycle and verifies `application.vstore` durability.
-
+1
 Historical hardening baseline at that point: **v2.7.2**. This is superseded by
 the published **v3.0.0** architecture baseline.
 

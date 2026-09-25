@@ -536,7 +536,9 @@ As the project grows, these properties are architectural constraints:
 
 Voodoo is **beta software**.
 
-**v3.0.0** is the current published architecture baseline. The `main` branch may
+**v3.1.0** is the current published architecture baseline: Runtime adapters
+converged on the published Voodoo Store 0.3 native surface, with the modern
+Model contract and UUIDv7 identity. The `main` branch may
 contain post-release documentation or implementation work, so a merge to
 `main` is not itself a package release.
 
