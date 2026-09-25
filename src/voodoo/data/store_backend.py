@@ -185,7 +185,7 @@ def _record_indexes(
 ) -> list[tuple[bytes, bytes]]:
     indexes: list[tuple[bytes, bytes]] = []
     for field in _collection_indexes.get(collection, {}):
-        if field in record:
+        if field in record and record[field] is not None:
             indexes.append((field.encode("utf-8"), _encode_index_value(record[field])))
     return indexes
 
