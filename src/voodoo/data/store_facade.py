@@ -360,8 +360,13 @@ def _model_values(obj: Any, *, include_id: bool = False) -> dict[str, Any]:
     for name in hints:
         if name.startswith("__") or (name == "id" and not include_id):
             continue
-        if hasattr(obj, name):
-            values[name] = getattr(obj, name)
+        if not hasattr(obj, name):
+            continue
+        value = getattr(obj, name)
+        spec = vars(obj.__class__).get(name)
+        if isinstance(spec, _RelationSpec) and isinstance(value, BaseModel):
+            value = value.id
+        values[name] = value
     return values
 
 
@@ -379,7 +384,11 @@ def _hydrate(model: type[Any], row: dict[str, Any]) -> Any:
             value = UUID(str(value))
         relation_spec = vars(model).get(key)
         if isinstance(relation_spec, _RelationSpec) and value is not None:
-            value = UUID(str(value))
+            target = relation_spec.target
+            if target is None:
+                raise TypeError(f"Unresolved relation target for {model.__name__}.{key}")
+            related_row = get_record(_get_table_name(target), UUID(str(value)))
+            value = None if related_row is None else _hydrate(target, related_row)
         setattr(obj, key, value)
     return obj
 
