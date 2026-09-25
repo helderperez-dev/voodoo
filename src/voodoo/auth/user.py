@@ -1,6 +1,7 @@
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any, Optional
+from uuid import UUID
 
 from starlette.requests import Request
 
@@ -142,6 +143,11 @@ def _uses_store() -> bool:
 def _from_record(record: dict[str, Any]) -> "User":
     user = User()
     for key, value in record.items():
+        if key == "id" and isinstance(value, str):
+            try:
+                value = UUID(value)
+            except ValueError:
+                pass
         setattr(user, key, value)
     return user
 
@@ -154,7 +160,7 @@ class User(BaseModel):
     """
 
     __tablename__ = "voodoo_users"
-    id: int
+    id: UUID | int
     email: str
     username: str
     hashed_password: str
@@ -274,8 +280,9 @@ class User(BaseModel):
             return user
 
     def to_auth_user(self, auth_type: str = "session") -> AuthUser:
+        public_id = str(self.id)
         return AuthUser(
-            id=self.id,
+            id=public_id,
             email=self.email,
             username=self.username,
             role=self.role,
@@ -284,7 +291,7 @@ class User(BaseModel):
             auth_type=auth_type,
             is_authenticated=True,
             raw_data={
-                "id": self.id,
+                "id": public_id,
                 "email": self.email,
                 "username": self.username,
                 "role": self.role,
