@@ -10,10 +10,14 @@ from __future__ import annotations
 from typing import Any
 
 from voodoo.data.store_facade import (
+    Delete,
     FK,
     BaseModel,
     Model,
     field,
+    relation,
+    validate,
+    validate_model,
     ModelMeta,
     _get_table_name,
     _models,
@@ -28,8 +32,12 @@ __all__ = [
     "BaseModel",
     "Model",
     "ModelMeta",
+    "Delete",
     "FK",
     "field",
+    "relation",
+    "validate",
+    "validate_model",
     "on_insert",
     "on_update",
     "rls_policy",
