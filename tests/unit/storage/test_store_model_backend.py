@@ -2,12 +2,17 @@
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Annotated
 from uuid import UUID
 
 import pytest
 
 from voodoo.data import (
     Delete,
+    Max,
+    MaxLength,
+    Min,
+    MinLength,
     Model,
     close_db,
     field,
@@ -576,3 +581,29 @@ async def test_relation_delete_policies_are_explicit(monkeypatch):
     loaded_child = await ChildOptional.get(optional_child.id)
     assert loaded_child is not None
     assert loaded_child.parent is None
+
+
+
+@pytest.mark.asyncio
+async def test_annotated_constraints_express_domain_rules(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+
+    class Product(Model):
+        name: Annotated[str, MinLength(2), MaxLength(10)]
+        score: Annotated[int, Min(0), Max(100)]
+
+    product = await Product.create(name="Voodoo", score=100)
+    assert product.name == "Voodoo"
+
+    with pytest.raises(ValueError, match="name length must be >= 2"):
+        await Product.create(name="x", score=10)
+
+    with pytest.raises(ValueError, match="name length must be <= 10"):
+        await Product.create(name="this-name-is-too-long", score=10)
+
+    with pytest.raises(ValueError, match="score must be >= 0"):
+        await Product.create(name="valid", score=-1)
+
+    with pytest.raises(ValueError, match="score must be <= 100"):
+        await Product.create(name="valid", score=101)
