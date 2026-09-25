@@ -1,11 +1,21 @@
 """Sprint 28.3 acceptance for Store-first Model persistence."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
 import pytest
 
-from voodoo.data import Model, close_db, field, store_backend
+from voodoo.data import (
+    Delete,
+    Model,
+    close_db,
+    field,
+    relation,
+    store_backend,
+    validate,
+    validate_model,
+)
 from voodoo.data.store_backend import bind_runtime_store
 from voodoo.runtime.store import RuntimeStore, StoreConfig
 
@@ -422,3 +432,147 @@ def test_field_unique_implies_native_unique_index(monkeypatch):
     store_backend.insert_record("uniquelead", {"email": "ada@x.io"})
     assert b"email" in native.indexes[b"uniquelead"]
     assert native.index_uniqueness[(b"uniquelead", b"email")] is True
+
+
+
+@pytest.mark.asyncio
+async def test_model_defaults_optional_fields_and_default_factory(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+
+    class Profile(Model):
+        name: str
+        nickname: str | None
+        active: bool = True
+        created_at: datetime = field(
+            default_factory=lambda: datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
+        )
+
+    profile = await Profile.create(name="Ada")
+    assert profile.nickname is None
+    assert profile.active is True
+    assert profile.created_at == datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
+
+    loaded = await Profile.get(profile.id)
+    assert loaded is not None
+    assert loaded.nickname is None
+    assert loaded.active is True
+    assert loaded.created_at == profile.created_at
+
+
+@pytest.mark.asyncio
+async def test_model_rejects_missing_required_and_non_nullable_none(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+
+    class RequiredProfile(Model):
+        name: str
+        nickname: str | None
+
+    with pytest.raises(TypeError, match="Missing required field: name"):
+        await RequiredProfile.create()
+
+    with pytest.raises(TypeError, match="name cannot be None"):
+        await RequiredProfile.create(name=None)
+
+
+@pytest.mark.asyncio
+async def test_field_and_model_validators_are_separate_from_storage_metadata(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+
+    class Account(Model):
+        email: str
+        start: int
+        end: int
+
+        @validate("email")
+        def normalize_email(self, value):
+            if "@" not in value:
+                raise ValueError("invalid email")
+            return value.strip().lower()
+
+        @validate_model
+        def interval_is_valid(self):
+            if self.end <= self.start:
+                raise ValueError("end must be after start")
+
+    account = await Account.create(
+        email=" ADA@EXAMPLE.COM ",
+        start=1,
+        end=2,
+    )
+    assert account.email == "ada@example.com"
+
+    with pytest.raises(ValueError, match="invalid email"):
+        await Account.create(email="invalid", start=1, end=2)
+
+    with pytest.raises(ValueError, match="end must be after start"):
+        await Account.create(email="a@x.io", start=2, end=1)
+
+
+@pytest.mark.asyncio
+async def test_relation_hydrates_target_model_and_persists_only_uuid(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+
+    class RelationCustomer(Model):
+        name: str
+
+    class RelationOrder(Model):
+        customer: RelationCustomer = relation()
+        total: int
+
+    customer = await RelationCustomer.create(name="Ada")
+    order = await RelationOrder.create(customer=customer, total=42)
+
+    stored = store_backend.get_record("relationorder", order.id)
+    assert stored is not None
+    assert stored["customer"] == str(customer.id)
+
+    loaded = await RelationOrder.get(order.id)
+    assert loaded is not None
+    assert isinstance(loaded.customer, RelationCustomer)
+    assert loaded.customer.id == customer.id
+    assert loaded.customer.name == "Ada"
+
+
+@pytest.mark.asyncio
+async def test_relation_delete_policies_are_explicit(monkeypatch):
+    native = _FakeNativeCollections()
+    monkeypatch.setattr(store_backend, "_native", lambda: native)
+
+    class ParentRestrict(Model):
+        name: str
+
+    class ChildRestrict(Model):
+        parent: ParentRestrict = relation(on_delete=Delete.RESTRICT)
+
+    parent = await ParentRestrict.create(name="p")
+    await ChildRestrict.create(parent=parent)
+    with pytest.raises(ValueError, match="Cannot delete"):
+        await parent.delete()
+
+    class ParentCascade(Model):
+        name: str
+
+    class ChildCascade(Model):
+        parent: ParentCascade = relation(on_delete=Delete.CASCADE)
+
+    cascade_parent = await ParentCascade.create(name="p")
+    cascade_child = await ChildCascade.create(parent=cascade_parent)
+    await cascade_parent.delete()
+    assert await ChildCascade.get(cascade_child.id) is None
+
+    class ParentOptional(Model):
+        name: str
+
+    class ChildOptional(Model):
+        parent: ParentOptional | None = relation(on_delete=Delete.SET_NULL)
+
+    optional_parent = await ParentOptional.create(name="p")
+    optional_child = await ChildOptional.create(parent=optional_parent)
+    await optional_parent.delete()
+    loaded_child = await ChildOptional.get(optional_child.id)
+    assert loaded_child is not None
+    assert loaded_child.parent is None
