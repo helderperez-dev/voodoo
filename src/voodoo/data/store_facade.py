@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from datetime import date, datetime
 from enum import Enum
 from types import UnionType
 from typing import Any, get_args, get_origin, get_type_hints
@@ -282,11 +283,22 @@ def _apply_defaults(model: type, values: dict[str, Any]) -> dict[str, Any]:
     return resolved
 
 
+def _prepare_instance(obj: Any) -> None:
+    values = _apply_defaults(obj.__class__, _model_values(obj))
+    for name, value in values.items():
+        if not hasattr(obj, name):
+            setattr(obj, name, value)
+
+
 def _run_validators(obj: Any) -> None:
     hints = get_type_hints(obj.__class__)
     for name, annotation in hints.items():
-        if name.startswith("__") or name == "id" or not hasattr(obj, name):
+        if name.startswith("__") or name == "id":
             continue
+        if not hasattr(obj, name):
+            if _allows_none(annotation):
+                continue
+            raise TypeError(f"Missing required field: {name}")
         value = getattr(obj, name)
         if value is None and not _allows_none(annotation):
             raise TypeError(f"{name} cannot be None")
@@ -382,6 +394,10 @@ def _hydrate(model: type[Any], row: dict[str, Any]) -> Any:
             value = bool(value)
         elif annotation is UUID and value is not None and not isinstance(value, UUID):
             value = UUID(str(value))
+        elif annotation is datetime and value is not None and not isinstance(value, datetime):
+            value = datetime.fromisoformat(str(value))
+        elif annotation is date and value is not None and not isinstance(value, date):
+            value = date.fromisoformat(str(value))
         relation_spec = vars(model).get(key)
         if isinstance(relation_spec, _RelationSpec) and value is not None:
             target = relation_spec.target
@@ -458,6 +474,7 @@ class BaseModel(metaclass=ModelMeta):
         table = _get_table_name(self)
         if not getattr(self, "id", None):
             self.id = uuid7()
+        _prepare_instance(self)
         _run_validators(self)
         self.id = insert_record(table, _model_values(self), record_id=self.id)
         _fire_hooks(table, "insert", self)
@@ -467,6 +484,7 @@ class BaseModel(metaclass=ModelMeta):
         if not getattr(self, "id", None):
             raise ValueError("Cannot update a model without an id")
         table = _get_table_name(self)
+        _prepare_instance(self)
         _run_validators(self)
         put_record(table, self.id, _model_values(self))
         _fire_hooks(table, "update", self)
