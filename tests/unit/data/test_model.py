@@ -1,5 +1,7 @@
 import asyncio
 
+from uuid import UUID
+
 import pytest
 import pytest_asyncio
 
@@ -40,7 +42,8 @@ async def test_create_and_get(model_store):
 
 @pytest.mark.asyncio
 async def test_get_missing_returns_none(model_store):
-    assert await Lead.get(99999) is None
+    missing = UUID("018f0000-0000-7000-8000-ffffffffffff")
+    assert await Lead.get(missing) is None
 
 
 @pytest.mark.asyncio
