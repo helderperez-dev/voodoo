@@ -114,6 +114,7 @@ class _FakeNativeCollections:
         self.records: dict[tuple[bytes, bytes], tuple[bytes, list]] = {}
         self.collections: set[bytes] = set()
         self.indexes: dict[bytes, set[bytes]] = {}
+        self.index_uniqueness: dict[tuple[bytes, bytes], bool] = {}
         self.scan_calls = 0
         self.exact_query_calls: list[tuple[bytes, bytes, bytes]] = []
         self.range_query_calls: list[tuple[bytes, bytes, bool]] = []
@@ -123,10 +124,15 @@ class _FakeNativeCollections:
         self.collections.add(bytes(name))
         return created
 
-    def define_index(self, collection: bytes, name: bytes, **_kwargs) -> bool:
-        indexes = self.indexes.setdefault(bytes(collection), set())
-        created = bytes(name) not in indexes
-        indexes.add(bytes(name))
+    def define_index(
+        self, collection: bytes, name: bytes, *, unique: bool = False, **_kwargs
+    ) -> bool:
+        collection_key = bytes(collection)
+        name_key = bytes(name)
+        indexes = self.indexes.setdefault(collection_key, set())
+        created = name_key not in indexes
+        indexes.add(name_key)
+        self.index_uniqueness[(collection_key, name_key)] = bool(unique)
         return created
 
     def transaction(self) -> _FakeNativeTransaction:
@@ -408,3 +414,4 @@ def test_field_unique_implies_native_unique_index(monkeypatch):
     # collection must carry the unique flag into Store.define_index.
     store_backend.insert_record("uniquelead", {"email": "ada@x.io"})
     assert b"email" in native.indexes[b"uniquelead"]
+    assert native.index_uniqueness[(b"uniquelead", b"email")] is True
