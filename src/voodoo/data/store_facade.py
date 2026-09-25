@@ -119,7 +119,7 @@ class _RelationSpec:
 
     def __init__(
         self,
-        target: type,
+        target: type | None = None,
         *,
         on_delete: Delete = Delete.RESTRICT,
     ) -> None:
@@ -145,12 +145,11 @@ class _RelationSpec:
             if not getattr(value, "id", None):
                 raise ValueError("related model must be persisted before assignment")
             value = value.id
-        self.__dict__ if False else None
         instance.__dict__[self.name] = value
 
 
 def relation(
-    target: type,
+    target: type | None = None,
     *,
     on_delete: Delete = Delete.RESTRICT,
 ) -> Any:
@@ -202,12 +201,37 @@ def _get_table_name(cls_or_obj: Any) -> str:
     return str(name) if name else cls.__name__.lower()
 
 
+def _relation_target(annotation: Any) -> type | None:
+    if isinstance(annotation, type):
+        return annotation
+    origin = get_origin(annotation)
+    if origin is UnionType or str(origin) == "typing.Union":
+        candidates = [
+            item for item in get_args(annotation)
+            if item is not type(None) and isinstance(item, type)
+        ]
+        if len(candidates) == 1:
+            return candidates[0]
+    return None
+
+
 def _register_relations(cls: type) -> None:
     child = _get_table_name(cls)
+    try:
+        hints = get_type_hints(cls)
+    except Exception:
+        hints = getattr(cls, "__annotations__", {})
     for name, spec in vars(cls).items():
         if not isinstance(spec, _RelationSpec):
             continue
-        parent = _get_table_name(spec.target)
+        target = spec.target or _relation_target(hints.get(name))
+        if target is None:
+            raise TypeError(
+                f"relation field {cls.__name__}.{name} requires a model annotation "
+                "or an explicit target"
+            )
+        spec.target = target
+        parent = _get_table_name(target)
         _relations.setdefault(parent, []).append((child, name, spec.on_delete))
 
 
