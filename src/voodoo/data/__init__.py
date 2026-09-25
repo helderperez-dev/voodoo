@@ -10,26 +10,26 @@ from __future__ import annotations
 from typing import Any
 
 from voodoo.data.store_facade import (
-    Delete,
     FK,
+    BaseModel,
+    Delete,
     Max,
     MaxLength,
     Min,
     MinLength,
-    BaseModel,
     Model,
-    field,
-    relation,
-    validate,
-    validate_model,
     ModelMeta,
     _get_table_name,
     _models,
     _rls_policies,
     _triggers,
+    field,
     on_insert,
     on_update,
+    relation,
     rls_policy,
+    validate,
+    validate_model,
 )
 
 __all__ = [
