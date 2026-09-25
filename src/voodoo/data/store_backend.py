@@ -12,8 +12,8 @@ import secrets
 import time
 from datetime import date, datetime
 from pathlib import Path
-from uuid import UUID
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from voodoo.core.errors import ConfigurationError
 
