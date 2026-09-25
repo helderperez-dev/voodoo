@@ -118,7 +118,7 @@ Goals, AI or distributed execution to build a normal application.
 |---|---|
 | UI-local mutable value | `state()` |
 | Persistent business data | `Model` |
-| Indexed business queries | `Model.__indexes__` + `where/order_by` |
+| Indexed business queries | `field(index=True)` + `where/order_by` |
 | Page / browser interaction | Voodoo UI + Python-callable events |
 | HTTP/API surface | routing / API primitives |
 | Retryable background work | `@task` |
@@ -174,13 +174,12 @@ Models may declare native secondary indexes without changing the query API:
 
 ```python
 from voodoo import Model
+from voodoo.data import field
 
 
 class Customer(Model):
-    __indexes__ = ("email", "score")
-
-    email: str
-    score: int
+    email: str = field(index=True)
+    score: int = field(index=True)
 
 
 customers = await Customer.where(email="ada@example.com")
