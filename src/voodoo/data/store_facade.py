@@ -11,7 +11,7 @@ import asyncio
 import inspect
 from collections.abc import Callable
 from datetime import date, datetime
-from enum import Enum
+from enum import StrEnum
 from types import UnionType
 from typing import Annotated, Any, get_args, get_origin, get_type_hints
 from uuid import UUID
@@ -167,7 +167,7 @@ class MaxLength(_Constraint):
             raise ValueError(f"{field_name} length must be <= {self.value}")
 
 
-class Delete(str, Enum):
+class Delete(StrEnum):
     RESTRICT = "restrict"
     CASCADE = "cascade"
     SET_NULL = "set_null"
@@ -224,7 +224,7 @@ def validate(*fields: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]
         raise TypeError("validate() requires at least one field name")
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        setattr(func, "__voodoo_validate_fields__", tuple(fields))
+        func.__voodoo_validate_fields__ = tuple(fields)  # type: ignore[attr-defined]
         return func
 
     return decorator
@@ -232,7 +232,7 @@ def validate(*fields: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]
 
 def validate_model(func: Callable[..., Any]) -> Callable[..., Any]:
     """Mark a method as a whole-model invariant validator."""
-    setattr(func, "__voodoo_validate_model__", True)
+    func.__voodoo_validate_model__ = True  # type: ignore[attr-defined]
     return func
 
 
@@ -372,7 +372,7 @@ def _prepare_instance(obj: Any) -> None:
             setattr(obj, name, value)
 
 
-async def _run_validators(obj: Any) -> None:
+def _validate_schema(obj: Any) -> None:
     hints = get_type_hints(obj.__class__)
     for name, annotation in hints.items():
         if name.startswith("__") or name == "id":
@@ -382,12 +382,15 @@ async def _run_validators(obj: Any) -> None:
                 continue
             raise TypeError(f"Missing required field: {name}")
         value = getattr(obj, name)
-        if value is None and not _allows_none(annotation):
-            raise TypeError(f"{name} cannot be None")
-        if value is not None:
-            for constraint in _constraints(annotation):
-                constraint.validate(value, field_name=name)
+        if value is None:
+            if not _allows_none(annotation):
+                raise TypeError(f"{name} cannot be None")
+            continue
+        for constraint in _constraints(annotation):
+            constraint.validate(value, field_name=name)
 
+
+async def _run_declared_validators(obj: Any) -> None:
     for name in dir(obj.__class__):
         member = getattr(obj.__class__, name, None)
         fields = getattr(member, "__voodoo_validate_fields__", ())
@@ -406,6 +409,12 @@ async def _run_validators(obj: Any) -> None:
                 result = await result
             if result is False:
                 raise ValueError(f"Model validation failed: {name}")
+
+
+async def _run_validators(obj: Any) -> None:
+    _validate_schema(obj)
+    await _run_declared_validators(obj)
+    _validate_schema(obj)
 
 
 def _model_for_table(table: str) -> type | None:
