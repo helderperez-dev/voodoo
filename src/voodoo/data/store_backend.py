@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import secrets
 import time
+from datetime import date, datetime
 from pathlib import Path
 from uuid import UUID
 from typing import TYPE_CHECKING, Any
@@ -148,6 +149,8 @@ def _ensure_collection(store: Any, collection: str) -> None:
 def _json_default(value: Any) -> Any:
     if isinstance(value, UUID):
         return str(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
     raise TypeError(f"{type(value).__name__} is not JSON serializable")
 
 
