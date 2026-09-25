@@ -264,7 +264,8 @@ def _relation_target(annotation: Any) -> type | None:
     origin = get_origin(annotation)
     if origin is UnionType or str(origin) == "typing.Union":
         candidates = [
-            item for item in get_args(annotation)
+            item
+            for item in get_args(annotation)
             if item is not type(None) and isinstance(item, type)
         ]
         if len(candidates) == 1:
@@ -286,26 +287,20 @@ def _register_relations(cls: type) -> None:
                     f"relation field {cls.__name__}.{name} requires a model annotation "
                     "or an explicit target"
                 )
-            if spec.on_delete is Delete.SET_NULL and not _allows_none(
-                hints.get(name)
-            ):
+            if spec.on_delete is Delete.SET_NULL and not _allows_none(hints.get(name)):
                 raise TypeError(
                     f"{cls.__name__}.{name} uses Delete.SET_NULL but is not optional"
                 )
             spec.target = target
             parent = _get_table_name(target)
-            _relations.setdefault(parent, []).append(
-                (child, name, spec.on_delete)
-            )
+            _relations.setdefault(parent, []).append((child, name, spec.on_delete))
 
     # Compatibility for the pre-3.x FK annotation while relation() becomes the
     # canonical public relationship API.
     for name, annotation in hints.items():
         if isinstance(annotation, _FKRef):
             parent = _get_table_name(annotation.target)
-            _relations.setdefault(parent, []).append(
-                (child, name, Delete.CASCADE)
-            )
+            _relations.setdefault(parent, []).append((child, name, Delete.CASCADE))
 
 
 def _clear_cascades() -> None:
@@ -413,7 +408,6 @@ async def _run_validators(obj: Any) -> None:
                 raise ValueError(f"Model validation failed: {name}")
 
 
-
 def _model_for_table(table: str) -> type | None:
     for model in reversed(_models):
         if _get_table_name(model) == table:
@@ -496,7 +490,11 @@ def _hydrate(model: type[Any], row: dict[str, Any]) -> Any:
             value = bool(value)
         elif annotation is UUID and value is not None and not isinstance(value, UUID):
             value = UUID(str(value))
-        elif annotation is datetime and value is not None and not isinstance(value, datetime):
+        elif (
+            annotation is datetime
+            and value is not None
+            and not isinstance(value, datetime)
+        ):
             value = datetime.fromisoformat(str(value))
         elif annotation is date and value is not None and not isinstance(value, date):
             value = date.fromisoformat(str(value))
@@ -504,7 +502,9 @@ def _hydrate(model: type[Any], row: dict[str, Any]) -> Any:
         if isinstance(relation_spec, _RelationSpec) and value is not None:
             target = relation_spec.target
             if target is None:
-                raise TypeError(f"Unresolved relation target for {model.__name__}.{key}")
+                raise TypeError(
+                    f"Unresolved relation target for {model.__name__}.{key}"
+                )
             related_row = get_record(_get_table_name(target), UUID(str(value)))
             value = None if related_row is None else _hydrate(target, related_row)
         setattr(obj, key, value)
