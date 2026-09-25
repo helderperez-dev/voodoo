@@ -116,7 +116,7 @@ async def test_store_first_application_domains_survive_restart(tmp_path: Path) -
         executions = execution_store.load_all()
         restored = next(item for item in executions if item.id == execution_id)
         assert restored.status is ExecutionStatus.COMPLETED
-        assert restored.result == {"record_id": 1, "ok": True}
+        assert restored.result == {"record_id": str(record_id), "ok": True}
     finally:
         _unbind()
         reopened.stop()
