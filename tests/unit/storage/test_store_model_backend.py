@@ -1,6 +1,7 @@
 """Sprint 28.3 acceptance for Store-first Model persistence."""
 
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -37,7 +38,8 @@ async def test_model_crud_uses_application_store_without_sqlite(store_runtime):
     lead = await StoreLead.create(
         name="Ada", email="ada@voodoo.build", score=42, active=True
     )
-    assert lead.id == 1
+    assert isinstance(lead.id, UUID)
+    assert lead.id.version == 7
 
     fetched = await StoreLead.get(lead.id)
     assert fetched is not None
@@ -240,51 +242,58 @@ def test_backend_uses_native_collections(monkeypatch):
 
     record_id = store_backend.insert_record("lead", {"name": "Ada"})
 
-    assert record_id == 1
-    assert native.kv[b"data:lead:meta:next_id"] == b"2"
-    record = native.get_record(b"lead", b"00000000000000000001")
+    assert isinstance(record_id, UUID)
+    assert record_id.version == 7
+    assert native.kv == {}
+    record = native.get_record(b"lead", record_id.bytes)
     assert record is not None
-    assert store_backend.get_record("lead", 1) == {"id": 1, "name": "Ada"}
+    loaded = store_backend.get_record("lead", record_id)
+    assert loaded == {"id": str(record_id), "name": "Ada"}
 
 
 def test_native_scan_and_update_use_collection_records_only(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
+    first_id = UUID("018f0000-0000-7000-8000-000000000001")
+    second_id = UUID("018f0000-0000-7000-8000-000000000002")
 
     native.create_collection(b"lead", codec=b"json")
     native.upsert_record(
         b"lead",
-        b"00000000000000000001",
-        b'{"id":1,"name":"Ada"}',
+        first_id.bytes,
+        ('{"id":"' + str(first_id) + '","name":"Ada"}').encode(),
     )
     native.upsert_record(
         b"lead",
-        b"00000000000000000002",
-        b'{"id":2,"name":"Grace"}',
+        second_id.bytes,
+        ('{"id":"' + str(second_id) + '","name":"Grace"}').encode(),
     )
 
     assert store_backend.scan_records("lead") == [
-        {"id": 1, "name": "Ada"},
-        {"id": 2, "name": "Grace"},
+        {"id": str(first_id), "name": "Ada"},
+        {"id": str(second_id), "name": "Grace"},
     ]
 
-    store_backend.put_record("lead", 1, {"name": "Updated"})
-    assert store_backend.get_record("lead", 1) == {"id": 1, "name": "Updated"}
+    store_backend.put_record("lead", first_id, {"name": "Updated"})
+    assert store_backend.get_record("lead", first_id) == {
+        "id": str(first_id),
+        "name": "Updated",
+    }
 
 
 def test_backend_maintains_declared_native_indexes(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
-    store_backend.register_indexes("lead", {"email": false, "score": false, "active": false})
+    store_backend.register_indexes("lead", {"email": False, "score": False, "active": False})
 
     record_id = store_backend.insert_record(
         "lead",
         {"name": "Ada", "email": "ada@x.io", "score": 42, "active": True},
     )
 
-    record = native.records[(b"lead", b"00000000000000000001")]
+    record = native.records[(b"lead", record_id.bytes)]
     indexes = dict(record[1])
-    assert record_id == 1
+    assert isinstance(record_id, UUID)
     assert set(native.indexes[b"lead"]) == {b"email", b"score", b"active"}
     assert indexes[b"email"].startswith(b"s:")
     assert indexes[b"score"].startswith(b"i:")
@@ -294,7 +303,7 @@ def test_backend_maintains_declared_native_indexes(monkeypatch):
 def test_query_records_uses_exact_index_without_collection_scan(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
-    store_backend.register_indexes("lead", {"email": false, "score": false})
+    store_backend.register_indexes("lead", {"email": False, "score": False})
 
     store_backend.insert_record(
         "lead", {"name": "A", "email": "a@x.io", "score": 5}
@@ -324,7 +333,7 @@ def test_query_records_uses_exact_index_without_collection_scan(monkeypatch):
 def test_query_records_uses_range_index_for_native_order(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
-    store_backend.register_indexes("lead", {"score": false})
+    store_backend.register_indexes("lead", {"score": False})
 
     for name, score in [("A", 5), ("B", 15), ("C", 10)]:
         store_backend.insert_record("lead", {"name": name, "score": score})
@@ -348,15 +357,13 @@ def test_new_index_backfills_existing_collection_records(monkeypatch):
     monkeypatch.setattr(store_backend, "_native", lambda: native)
     store_backend.register_indexes("backfill_lead", {})
 
-    store_backend.insert_record(
+    record_id = store_backend.insert_record(
         "backfill_lead",
         {"name": "Ada", "email": "ada@x.io"},
     )
-    assert native.records[
-        (b"backfill_lead", b"00000000000000000001")
-    ][1] == []
+    assert native.records[(b"backfill_lead", record_id.bytes)][1] == []
 
-    store_backend.register_indexes("backfill_lead", {"email": false})
+    store_backend.register_indexes("backfill_lead", {"email": False})
     rows = store_backend.query_records(
         "backfill_lead",
         filters={"email": "ada@x.io"},
@@ -368,7 +375,7 @@ def test_new_index_backfills_existing_collection_records(monkeypatch):
     assert [row["name"] for row in rows] == ["Ada"]
     assert native.exact_query_calls[-1][:2] == (b"backfill_lead", b"email")
     indexes = dict(
-        native.records[(b"backfill_lead", b"00000000000000000001")][1]
+        native.records[(b"backfill_lead", record_id.bytes)][1]
     )
     assert indexes[b"email"].startswith(b"s:")
 
@@ -376,7 +383,7 @@ def test_new_index_backfills_existing_collection_records(monkeypatch):
 def test_multi_column_order_falls_back_without_corrupting_order(monkeypatch):
     native = _FakeNativeCollections()
     monkeypatch.setattr(store_backend, "_native", lambda: native)
-    store_backend.register_indexes("multi_order_lead", {"score": false})
+    store_backend.register_indexes("multi_order_lead", {"score": False})
 
     for name, score in [("B", 10), ("A", 10), ("C", 5)]:
         store_backend.insert_record(
