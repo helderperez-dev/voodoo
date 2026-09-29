@@ -95,7 +95,37 @@ def test_full_page_includes_design_system_layer() -> None:
         )
     )
 
-    assert "Voodoo Design System 3" in html
+    assert "Voodoo Design System 4" in html
     assert "--vd-brand: #7c3aed" in html
     assert "vd-button--primary" in html
     assert "vd-card" in html
+
+
+def test_design_system_is_the_final_framework_visual_layer() -> None:
+    html = render_page(Page(Button("Action", variant="primary")))
+
+    product = html.index("/* Reusable product patterns */")
+    extended = html.index("/* Extended UI components */")
+    system = html.index("/* Canonical Voodoo runtime/system concepts */")
+    convergence = html.index("/* Voodoo Design System 4 — final convergence layer */")
+    project = html.index("/* Project theme customization — always wins */")
+
+    assert product < extended < system < convergence < project
+
+
+def test_design_system_converges_extended_component_families() -> None:
+    css = generate_design_system_css(default_theme)
+
+    for selector in (
+        ".vd-command-panel",
+        ".vd-context-menu-panel",
+        ".vd-search-input",
+        ".vd-drop-zone",
+        ".vd-enhanced-data-table-container",
+        ".vd-toolbar",
+        ".vd-pagination",
+        ".vd-step-indicator",
+        ".vd-form-validation-summary",
+        ".vd-world-entity-inspector",
+    ):
+        assert selector in css
