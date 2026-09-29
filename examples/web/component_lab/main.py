@@ -376,6 +376,248 @@ def overview():
     )
 
 
+@page("/foundations")
+def foundations():
+    return Page(
+        Stack(
+            _header("/foundations"),
+            Hero(
+                Stack(
+                    Eyebrow("Native Voodoo UI"),
+                    Heading("Quiet, precise, product-grade.", size="display"),
+                    Text(
+                        "Typography, surfaces and primitives establish the visual rhythm "
+                        "every higher-level component inherits.",
+                        tone="muted",
+                    ),
+                    Flex(
+                        Button("Primary action", variant="primary"),
+                        LinkArrow("Explore components", href="/forms"),
+                        gap="md",
+                        items="center",
+                        wrap="wrap",
+                    ),
+                    gap="lg",
+                )
+            ),
+            PageHero(
+                Stack(
+                    BackLink("Back to overview", href="/"),
+                    Heading("Foundation hierarchy", level=2, size="lg"),
+                    Text("Interior-page chrome should be compact and calm.", tone="muted"),
+                    gap="sm",
+                )
+            ),
+            _section(
+                "Identity and metadata",
+                "Small primitives carry hierarchy without visual clutter.",
+                Flex(
+                    Avatar(fallback="VD"),
+                    Badge("Beta", variant="secondary"),
+                    Chip("Python"),
+                    Chip("Store-first"),
+                    Icon("sparkles", label="Sparkles"),
+                    Kbd("⌘K"),
+                    gap="sm",
+                    items="center",
+                    wrap="wrap",
+                ),
+                Stats(
+                    Stat("99.99%", "Uptime"),
+                    Stat("42 ms", "Latency"),
+                    Stat("0", "External services"),
+                    cols=3,
+                ),
+            ),
+            _section(
+                "Editorial content",
+                "Code and rich text should be readable enough for documentation products.",
+                Grid(
+                    Card(
+                        Markdown(
+                            "### Build with Python\n\nCompose **semantic UI** without "
+                            "shipping a second application framework."
+                        )
+                    ),
+                    CodeBlock(
+                        'from voodoo import App, page\nfrom voodoo.ui import Button\n\napp = App()',
+                        language="python",
+                    ),
+                    cols="2",
+                    gap="lg",
+                ),
+            ),
+            _section(
+                "Marketing surfaces",
+                "Higher-level surfaces remain minimal instead of becoming template-like.",
+                Grid(
+                    FeatureCard(
+                        Stack(
+                            Badge("Runtime", variant="outline"),
+                            Heading("One lifecycle", level=3),
+                            Text("UI, work and durable state under one Runtime.", tone="muted"),
+                            gap="sm",
+                        )
+                    ),
+                    FeatureCard(
+                        Stack(
+                            Badge("Store", variant="outline"),
+                            Heading("Local-first", level=3),
+                            Text("No database service required for the default path.", tone="muted"),
+                            gap="sm",
+                        )
+                    ),
+                    cols="2",
+                    gap="lg",
+                ),
+                CTABand(
+                    Flex(
+                        Stack(
+                            Heading("Build the real thing.", level=3),
+                            Text("Start with the canonical Voodoo scaffold.", tone="muted"),
+                            gap="xs",
+                        ),
+                        Button("voodoo new", variant="primary"),
+                        justify="between",
+                        items="center",
+                        gap="lg",
+                        wrap="wrap",
+                    )
+                ),
+            ),
+            gap="xxxl",
+        ),
+        size="xl",
+    )
+
+
+@page("/shell")
+def shell():
+    sidebar = Sidebar(
+        SidebarItem("Overview", href="/", icon=Icon("home"), active=True),
+        SidebarItem("Components", href="/foundations", icon=Icon("sparkles")),
+        SidebarItem("Settings", href="/forms", icon=Icon("settings")),
+        id="lab-sidebar",
+        brand="Component Lab",
+        logo="V.",
+    )
+    bottom_nav = BottomNav(
+        BottomNavItem("Home", "/", icon=Icon("home"), active=True),
+        BottomNavItem("Search", "/data", icon=Icon("search")),
+        BottomNavItem("Settings", "/forms", icon=Icon("settings")),
+    )
+    return AppShell(
+        Stack(
+            TopBar(title="Workspace shell"),
+            Container(
+                Stack(
+                    Heading("Application chrome", level=1, size="lg"),
+                    Text(
+                        "Sidebar, responsive bottom navigation and content geometry "
+                        "share the same interaction and spacing contract.",
+                        tone="muted",
+                    ),
+                    Grid(
+                        Card(Heading("Primary content", level=3), Text("A calm working surface.")),
+                        Card(Heading("Secondary content", level=3), Text("Responsive by default.")),
+                        cols="2",
+                        gap="lg",
+                    ),
+                    gap="lg",
+                )
+            ),
+            gap="lg",
+        ),
+        sidebar=sidebar,
+        bottom_nav=bottom_nav,
+        content_padding="lg",
+    )
+
+
+@page("/chat")
+def chat():
+    return Page(
+        Stack(
+            _header("/chat"),
+            _section(
+                "Conversation",
+                "AI surfaces are ordinary Voodoo UI: readable, streamable and consistent.",
+                ChatBox(
+                    MessageList(
+                        ChatMessage("Can Voodoo persist this locally?", role="user"),
+                        ChatMessage(
+                            Markdown(
+                                "Yes. The default Runtime persists durable application "
+                                "state in **application.vstore**."
+                            ),
+                            role="assistant",
+                        ),
+                        ChatMessage(
+                            StreamingText("Checking runtime health…", done=False),
+                            role="assistant",
+                        ),
+                        ChatMessage("Tool execution completed.", role="tool"),
+                    ),
+                    Composer(on_send=_noop, placeholder="Ask Voodoo…"),
+                ),
+            ),
+            gap="xxxl",
+        ),
+        size="lg",
+    )
+
+
+@page("/auth")
+def auth():
+    user = SimpleNamespace(
+        is_authenticated=True,
+        username="helder",
+        email="helder@example.com",
+        role="admin",
+        roles=["admin"],
+    )
+    return Page(
+        Stack(
+            _header("/auth"),
+            _section(
+                "Identity",
+                "Authentication components now use semantic Voodoo styles in every adapter.",
+                Flex(
+                    UserBadge(user=user),
+                    UserBadge(user=None),
+                    gap="md",
+                    items="center",
+                    wrap="wrap",
+                ),
+                Grid(
+                    LoginForm(action="/api/auth/login"),
+                    RegisterForm(action="/api/auth/register"),
+                    cols="2",
+                    gap="lg",
+                ),
+            ),
+            _section(
+                "Authorization",
+                "Guard states should look intentional, not like raw framework messages.",
+                Grid(
+                    Card(
+                        AuthGuard(
+                            Text("Administrator content"),
+                            user=user,
+                            required_roles=["admin"],
+                        )
+                    ),
+                    Card(AuthGuard(Text("Private content"), user=None)),
+                    cols="2",
+                    gap="lg",
+                ),
+            ),
+            gap="xxxl",
+        ),
+        size="xl",
+    )
+
+
 @page("/forms")
 def forms():
     return Page(
@@ -392,6 +634,38 @@ def forms():
                         Field("Seats", NumberInput(name="seats", value=3, minimum=1, maximum=20)),
                         Field("Volume", Slider(name="volume", value=62)),
                         Field("Notes", Textarea(name="notes", placeholder="A short note…")),
+                        cols="2",
+                        gap="lg",
+                    )
+                ),
+            ),
+            _section(
+                "Native controls",
+                "Platform-backed controls retain consistent height, focus and spacing.",
+                Card(
+                    Grid(
+                        Field(
+                            "Environment",
+                            Select(
+                                Option("Development", value="dev"),
+                                Option("Staging", value="staging"),
+                                Option("Production", value="prod"),
+                                name="environment",
+                            ),
+                        ),
+                        Field(
+                            "Domain",
+                            InputGroup(
+                                Input(name="domain", placeholder="example.com"),
+                                leading="https://",
+                            ),
+                        ),
+                        Calendar(year=2026, month=9, label="September 2026"),
+                        Stack(
+                            Checkbox(name="terms", checked=True),
+                            Radio(name="mode", value="safe", checked=True),
+                            gap="md",
+                        ),
                         cols="2",
                         gap="lg",
                     )
@@ -543,6 +817,37 @@ def navigation():
                 ),
             ),
             _section(
+                "Application navigation",
+                "Top-level menus and in-page navigation use the same quiet active-state language.",
+                TopBar(title="Project Atlas", sticky=False),
+                NavigationMenu(
+                    NavTrigger(
+                        "Products",
+                        NavContent(
+                            NavColumn(
+                                NavLinkItem("Analytics", href="#analytics"),
+                                NavLinkItem("Automation", href="#automation"),
+                            )
+                        ),
+                    ),
+                    NavTrigger(
+                        "Company",
+                        NavContent(
+                            NavColumn(
+                                NavLinkItem("About", href="#about"),
+                                NavLinkItem("Careers", href="#careers"),
+                            )
+                        ),
+                    ),
+                ),
+                AnchorNavigation(
+                    AnchorLink("Overview", href="#overview"),
+                    AnchorLink("Architecture", href="#architecture"),
+                    AnchorLink("API", href="#api"),
+                    label="On this page",
+                ),
+            ),
+            _section(
                 "Tabs",
                 "Tabs need strong keyboard semantics and restrained active styling.",
                 Tabs(
@@ -609,6 +914,31 @@ def feedback():
                     Alert("Something needs attention.", title="Error", tone="danger"),
                     gap="md",
                 ),
+            ),
+            _section(
+                "Transient feedback",
+                "Toasts, snackbars, drawers and dialogs use a shared elevation and dismissal model.",
+                ToastRegion(
+                    Toast("Profile updated", title="Saved", tone="success", duration=None),
+                    Snackbar("Connection restored", duration=None),
+                    position="bottom-right",
+                ),
+                Drawer(
+                    Button("Open drawer", variant="outline"),
+                    Text("Drawer content follows the same spacing and focus rules."),
+                    title="Details",
+                    side="right",
+                ),
+                Modal(
+                    Stack(
+                        Heading("Modal title", level=3),
+                        Text("Modal body content.", tone="muted"),
+                        ModalClose("Done"),
+                        gap="md",
+                    ),
+                    id="lab-modal",
+                ),
+                ModalTrigger("Open modal", target="lab-modal", variant="secondary"),
             ),
             _section(
                 "Progress",
