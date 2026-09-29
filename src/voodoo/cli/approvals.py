@@ -74,7 +74,9 @@ def list_approvals(
         False, "--pending", help="Only show pending approvals"
     ),
     store_path: str = typer.Option(
-        None, "--store", help="Legacy execution-store path; default uses application.vstore"
+        None,
+        "--store",
+        help="Legacy execution-store path; default uses application.vstore",
     ),
     app_str: str = typer.Option(
         None, "--app", help="App instance (e.g. main:app) to import first"
@@ -118,7 +120,9 @@ def list_approvals(
 def show_approval(
     execution_id: str = typer.Argument(..., help="Execution id of the approval"),
     store_path: str = typer.Option(
-        None, "--store", help="Legacy execution-store path; default uses application.vstore"
+        None,
+        "--store",
+        help="Legacy execution-store path; default uses application.vstore",
     ),
     json_mode: bool = typer.Option(
         False, "--json", help="Machine-readable JSON output"
@@ -233,7 +237,9 @@ def approve_cmd(
     by: str = typer.Option("human", "--by", help="Who is approving"),
     note: str = typer.Option(None, "--note", help="Optional note"),
     store_path: str = typer.Option(
-        None, "--store", help="Legacy execution-store path; default uses application.vstore"
+        None,
+        "--store",
+        help="Legacy execution-store path; default uses application.vstore",
     ),
     app_str: str = typer.Option(
         None, "--app", help="App instance (e.g. main:app) to import first"
@@ -260,7 +266,9 @@ def deny_cmd(
     by: str = typer.Option("human", "--by", help="Who is denying"),
     reason: str = typer.Option(None, "--reason", help="Denial reason"),
     store_path: str = typer.Option(
-        None, "--store", help="Legacy execution-store path; default uses application.vstore"
+        None,
+        "--store",
+        help="Legacy execution-store path; default uses application.vstore",
     ),
     app_str: str = typer.Option(
         None, "--app", help="App instance (e.g. main:app) to import first"
