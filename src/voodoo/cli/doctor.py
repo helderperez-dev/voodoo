@@ -162,10 +162,17 @@ def _doctor_queue() -> None:
 def _doctor_optional_services(cfg: object) -> None:
     terminal.heading("schedules")
     try:
-        sched_db = Path(cfg.db_path).parent / "schedules.db"
-        terminal.status("scheduler db", "present" if sched_db.exists() else "not found")
+        from voodoo.cli.context import acquire_schedule_store
+
+        schedule_store, store_path = acquire_schedule_store()
+        try:
+            schedule_store.list_all()
+            terminal.status("scheduler", "ready")
+            terminal.muted(f"  {store_path}")
+        finally:
+            schedule_store.close()
     except Exception:
-        terminal.status("schedules", "unavailable")
+        terminal.status("scheduler", "unavailable")
 
     terminal.heading("otel")
     try:
@@ -214,13 +221,23 @@ def doctor():
     # ── Runtime ─────────────────────────────────────
     terminal.heading("runtime")
 
-    # Database resolution
-    db_path = cfg.db_path
-    if db_path == ":memory:" or Path(db_path).exists():
-        terminal.status("database", "ready")
-        terminal.muted(f"  {cfg.database.provider} ({db_path})")
-    else:
-        terminal.status("database", "not found")
+    # Canonical application Store
+    try:
+        from voodoo.runtime.store import VoodooStoreProvider
+
+        report = VoodooStoreProvider(cfg.store.path).health()
+        terminal.status("store", "ready" if report.verified else "not found")
+        terminal.muted(f"  {cfg.store.provider} ({cfg.store.path})")
+    except Exception:
+        terminal.status("store", "unavailable")
+
+    # External SQL is reported only when explicitly selected.
+    if cfg.database.provider.lower() != "voodoo":
+        db_path = cfg.database.path or cfg.database.url or cfg.db_path
+        ready = db_path == ":memory:" or bool(db_path and Path(db_path).exists())
+        if cfg.database.provider.lower() in {"postgres", "postgresql"}:
+            ready = bool(db_path)
+        terminal.status("database", "ready" if ready else "not found")
         terminal.muted(f"  {cfg.database.provider} ({db_path})")
 
     # Resolved providers (Sprint 9)
