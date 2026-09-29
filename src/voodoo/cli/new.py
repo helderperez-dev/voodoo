@@ -262,6 +262,11 @@ def new(
         "-v",
         help="Specific template variant inside the repository",
     ),
+    install: bool = typer.Option(
+        True,
+        "--install/--no-install",
+        help="Create a local environment and install project dependencies.",
+    ),
 ):
     """Scaffold a new Voodoo project or clone a community template."""
     project_dir = Path(project_name)
@@ -292,7 +297,8 @@ def new(
         if not cloned:
             progress.add_task(description="scaffolding Voodoo app...", total=None)
             _scaffold_offline(project_dir, project_dir.name)
-        _install_project(project_dir, progress)
+        if install:
+            _install_project(project_dir, progress)
 
     terminal.blank()
     terminal.success("ready")
