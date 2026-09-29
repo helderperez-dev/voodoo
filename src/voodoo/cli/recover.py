@@ -32,7 +32,9 @@ def _resolve_store(store_path: str | None):
 def recover(
     app_str: str = typer.Option(None, "--app", help="App instance (e.g. main:app)"),
     store_path: str = typer.Option(
-        None, "--store", help="Legacy execution-store path; default uses application.vstore"
+        None,
+        "--store",
+        help="Legacy execution-store path; default uses application.vstore",
     ),
     json_mode: bool = typer.Option(
         False, "--json", help="Output machine-readable JSON"
