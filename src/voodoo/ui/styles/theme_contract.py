@@ -1,8 +1,8 @@
-"""Resolve Design System 3 visual tokens from the public Theme contract.
+"""Resolve Design System 4 visual tokens from the public Theme contract.
 
-Design System 3 introduced a stronger Voodoo visual identity with its own
+Design System 4 introduced a stronger Voodoo visual identity with its own
 premium surface palette. The public ``Theme`` API predates those visual tokens,
-so this bridge keeps the approved DS3 defaults while making explicit Theme
+so this bridge keeps the approved DS4 defaults while making explicit Theme
 customizations authoritative again.
 """
 
@@ -14,7 +14,7 @@ _DEFAULTS = ThemeColors()
 
 
 def _dark_value(current: str, legacy_default: str, premium_default: str) -> str:
-    """Use the DS3 default unless the Theme explicitly changed the value."""
+    """Use the DS4 default unless the Theme explicitly changed the value."""
     return premium_default if current == legacy_default else current
 
 
@@ -25,7 +25,7 @@ def _light_value(
     shared_default: str,
     premium_default: str,
 ) -> str:
-    """Prefer an explicit light override, then a shared override, then DS3."""
+    """Prefer an explicit light override, then a shared override, then DS4."""
     if light_value != light_default:
         return light_value
     if shared_value != shared_default:
@@ -144,10 +144,10 @@ def _render_scope(selector: str, tokens: dict[str, str]) -> str:
 
 
 def generate_design_system_theme_css(theme: Theme) -> str:
-    """Return the Theme-authoritative DS3 token bridge for light and dark."""
+    """Return the Theme-authoritative DS4 token bridge for light and dark."""
     light = _render_scope(":root", _mode_tokens(theme, light=True))
     dark = _render_scope(".dark", _mode_tokens(theme, light=False))
-    return f"""/* Voodoo Design System 3 — Theme contract */
+    return f"""/* Voodoo Design System 4 — Theme contract */
 {light}
 
 {dark}"""
