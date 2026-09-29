@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Any, Iterator
 
 from voodoo.config import VoodooConfig, get_config
 from voodoo.data.store_backend import bind_runtime_store
@@ -129,4 +129,66 @@ def open_application_context() -> Iterator[CLIApplicationContext]:
         runtime_store.stop()
 
 
-__all__ = ["CLIApplicationContext", "open_application_context"]
+class ManagedCLIResource:
+    """Proxy that keeps the canonical CLI application context alive."""
+
+    def __init__(self, resource: Any, context_manager: Any) -> None:
+        self._resource = resource
+        self._context_manager = context_manager
+        self._closed = False
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._resource, name)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            close = getattr(self._resource, "close", None)
+            if close is not None:
+                close()
+        finally:
+            self._context_manager.__exit__(None, None, None)
+
+
+def _acquire_resource(factory: str) -> tuple[ManagedCLIResource, str]:
+    manager = open_application_context()
+    context = manager.__enter__()
+    try:
+        resource = getattr(context, factory)()
+    except Exception as exc:
+        manager.__exit__(type(exc), exc, exc.__traceback__)
+        raise
+    return ManagedCLIResource(resource, manager), context.store_path
+
+
+def acquire_execution_store() -> tuple[ManagedCLIResource, str]:
+    """Open execution persistence through the canonical application context."""
+    return _acquire_resource("execution_store")
+
+
+def acquire_schedule_store() -> tuple[ManagedCLIResource, str]:
+    """Open scheduler persistence through the canonical application context."""
+    return _acquire_resource("schedule_store")
+
+
+def acquire_object_store() -> tuple[ManagedCLIResource, str]:
+    """Open object persistence through the canonical application context."""
+    return _acquire_resource("object_store")
+
+
+def acquire_agent_registry() -> tuple[ManagedCLIResource, str]:
+    """Open the agent registry through the canonical application context."""
+    return _acquire_resource("agent_registry")
+
+
+__all__ = [
+    "CLIApplicationContext",
+    "ManagedCLIResource",
+    "open_application_context",
+    "acquire_execution_store",
+    "acquire_schedule_store",
+    "acquire_object_store",
+    "acquire_agent_registry",
+]
