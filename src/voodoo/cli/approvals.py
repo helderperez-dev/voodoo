@@ -2,7 +2,7 @@
 
 Sprint 18: human approval is an execution state that survives process
 death. This CLI reads and decides approvals directly from the durable
-execution store (SQLite by default), so a decision can be made on any
+canonical execution store (Voodoo Store by default), so a decision can be made on any
 machine — the waiting execution resumes on whichever worker picks it up.
 
     voodoo approvals list [--pending] [--json]
@@ -34,19 +34,17 @@ approvals_app = typer.Typer(
 
 
 def _resolve_store(store_path: str | None):
-    """Return the configured execution store (SQLite by default)."""
-    from voodoo.config import config
+    """Return canonical execution storage unless a legacy path is explicit."""
+    from voodoo.cli.context import acquire_execution_store
     from voodoo.runtime.persistence import JSONFileExecutionStore
     from voodoo.storage.execution import SQLiteExecutionStore
 
-    if store_path is None:
-        store_path = os.environ.get("VOODOO_EXECUTION_STORE", config.db_path).replace(
-            ":memory:", ".voodoo/state/data.db"
-        )
-
-    if Path(store_path).suffix == ".jsonl":
-        return JSONFileExecutionStore(store_path), store_path
-    return SQLiteExecutionStore(store_path), store_path
+    explicit = store_path or os.environ.get("VOODOO_EXECUTION_STORE")
+    if explicit is None:
+        return acquire_execution_store()
+    if Path(explicit).suffix == ".jsonl":
+        return JSONFileExecutionStore(explicit), explicit
+    return SQLiteExecutionStore(explicit), explicit
 
 
 def _load_app(app_str: str | None) -> None:
@@ -76,7 +74,7 @@ def list_approvals(
         False, "--pending", help="Only show pending approvals"
     ),
     store_path: str = typer.Option(
-        None, "--store", help="Path to the execution store (SQLite by default)"
+        None, "--store", help="Legacy execution-store path; default uses application.vstore"
     ),
     app_str: str = typer.Option(
         None, "--app", help="App instance (e.g. main:app) to import first"
@@ -120,7 +118,7 @@ def list_approvals(
 def show_approval(
     execution_id: str = typer.Argument(..., help="Execution id of the approval"),
     store_path: str = typer.Option(
-        None, "--store", help="Path to the execution store (SQLite by default)"
+        None, "--store", help="Legacy execution-store path; default uses application.vstore"
     ),
     json_mode: bool = typer.Option(
         False, "--json", help="Machine-readable JSON output"
@@ -235,7 +233,7 @@ def approve_cmd(
     by: str = typer.Option("human", "--by", help="Who is approving"),
     note: str = typer.Option(None, "--note", help="Optional note"),
     store_path: str = typer.Option(
-        None, "--store", help="Path to the execution store (SQLite by default)"
+        None, "--store", help="Legacy execution-store path; default uses application.vstore"
     ),
     app_str: str = typer.Option(
         None, "--app", help="App instance (e.g. main:app) to import first"
@@ -262,7 +260,7 @@ def deny_cmd(
     by: str = typer.Option("human", "--by", help="Who is denying"),
     reason: str = typer.Option(None, "--reason", help="Denial reason"),
     store_path: str = typer.Option(
-        None, "--store", help="Path to the execution store (SQLite by default)"
+        None, "--store", help="Legacy execution-store path; default uses application.vstore"
     ),
     app_str: str = typer.Option(
         None, "--app", help="App instance (e.g. main:app) to import first"
