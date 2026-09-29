@@ -169,22 +169,22 @@ def render_page(component: Any, seo: Any = None) -> str:
             /* Brand asset switching */
             {BRAND_CSS}
 
-            /* Voodoo Design System 3 */
-            {design_system_css}
-
-            /* Theme-authoritative DS3 visual tokens */
-            {design_system_theme_css}
-
             /* Reusable product patterns */
             {product_css}
 
-            /* Extended UI components (all priorities) */
+            /* Extended UI components */
             {extended_css}
 
             /* Canonical Voodoo runtime/system concepts */
             {voodoo_system_css}
 
-            /* Project theme customization */
+            /* Voodoo Design System 4 — final convergence layer */
+            {design_system_css}
+
+            /* Theme-authoritative Design System visual tokens */
+            {design_system_theme_css}
+
+            /* Project theme customization — always wins */
             {project_styles}
         </style>
     </head>
