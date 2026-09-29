@@ -15,14 +15,15 @@ schedules_app = typer.Typer(
 
 
 def _get_store():
-    from voodoo.config import config
-    from voodoo.storage.scheduler import SQLiteScheduleStore
+    """Return the canonical Store-backed scheduler."""
+    from voodoo.cli.context import acquire_schedule_store
 
-    store_path = config.db_path.replace("data.db", "schedules.db")
     try:
-        return SQLiteScheduleStore(store_path), store_path
+        return acquire_schedule_store()
     except Exception:
-        return None, store_path
+        from voodoo.config import get_config
+
+        return None, str(get_config().store.path)
 
 
 @schedules_app.command("list")
