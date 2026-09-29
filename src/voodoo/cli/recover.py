@@ -1,14 +1,8 @@
-"""voodoo recover — reload unfinished executions from the persistence store.
+"""voodoo recover — reload unfinished executions from durable application state.
 
-After a restart, the runtime engine is empty. ``voodoo recover`` attaches
-the durable execution store (default: the SQLite ``.voodoo/state/data.db``)
-to the engine and reloads unfinished executions — ``created`` / ``planned`` /
-``authorized`` / ``running`` / ``waiting`` — so they stay inspectable and
-resumable (e.g. pending human approvals survive the restart).
-
-``--store`` overrides the location. A path ending in ``.jsonl`` uses the
-legacy :class:`JSONFileExecutionStore` reader; anything else is treated as a
-SQLite database file (Sprint 3).
+The default recovery source is the canonical Voodoo Store configured for the
+application. ``--store`` is retained only for explicit legacy JSONL/SQLite
+migration and compatibility workflows.
 """
 
 from __future__ import annotations
@@ -22,25 +16,23 @@ from voodoo.cli import terminal
 
 
 def _resolve_store(store_path: str | None):
-    """Return the configured execution store (SQLite by default)."""
-    from voodoo.config import config
+    """Return canonical execution storage unless a legacy path is explicit."""
+    from voodoo.cli.context import acquire_execution_store
     from voodoo.runtime.persistence import JSONFileExecutionStore
     from voodoo.storage.execution import SQLiteExecutionStore
 
-    if store_path is None:
-        store_path = os.environ.get("VOODOO_EXECUTION_STORE", config.db_path).replace(
-            ":memory:", ".voodoo/state/data.db"
-        )
-
-    if Path(store_path).suffix == ".jsonl":
-        return JSONFileExecutionStore(store_path), store_path
-    return SQLiteExecutionStore(store_path), store_path
+    explicit = store_path or os.environ.get("VOODOO_EXECUTION_STORE")
+    if explicit is None:
+        return acquire_execution_store()
+    if Path(explicit).suffix == ".jsonl":
+        return JSONFileExecutionStore(explicit), explicit
+    return SQLiteExecutionStore(explicit), explicit
 
 
 def recover(
     app_str: str = typer.Option(None, "--app", help="App instance (e.g. main:app)"),
     store_path: str = typer.Option(
-        None, "--store", help="Path to the execution store (SQLite by default)"
+        None, "--store", help="Legacy execution-store path; default uses application.vstore"
     ),
     json_mode: bool = typer.Option(
         False, "--json", help="Output machine-readable JSON"
