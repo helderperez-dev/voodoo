@@ -14,7 +14,20 @@ def test_component_lab_renders_all_primary_surfaces() -> None:
     )
 
     with TestClient(namespace["app"]) as client:
-        for path in ("/", "/forms", "/navigation", "/advanced", "/data", "/workspace", "/system", "/feedback"):
+        for path in (
+            "/",
+            "/foundations",
+            "/shell",
+            "/chat",
+            "/auth",
+            "/forms",
+            "/navigation",
+            "/advanced",
+            "/data",
+            "/workspace",
+            "/system",
+            "/feedback",
+        ):
             response = client.get(path)
             assert response.status_code == 200, response.text
             assert "Component Lab" in response.text
@@ -25,6 +38,30 @@ def test_component_lab_renders_all_primary_surfaces() -> None:
         assert "vd-card" in overview
         assert "vd-progress" in overview
         assert "vd-empty-state" in overview
+
+        foundations = client.get("/foundations").text
+        assert "vd-hero" in foundations
+        assert "vd-feature-card" in foundations
+        assert "vd-code-block" in foundations
+        assert "vd-stats" in foundations
+
+        shell = client.get("/shell").text
+        assert "vd-app-shell" in shell
+        assert "vd-sidebar" in shell
+        assert "vd-bottom-nav" in shell
+        assert "vd-top-bar" in shell
+
+        chat = client.get("/chat").text
+        assert "vd-chatbox" in chat
+        assert "vd-message-list" in chat
+        assert "vd-chat-message--assistant" in chat
+        assert "vd-composer" in chat
+
+        auth = client.get("/auth").text
+        assert "vd-user-badge" in auth
+        assert "vd-auth-guard" in auth
+        assert "Welcome Back" in auth
+        assert "Create an Account" in auth
 
         forms = client.get("/forms").text
         assert "vd-search-input" in forms
