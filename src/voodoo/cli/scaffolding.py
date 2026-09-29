@@ -53,7 +53,7 @@ def _build_workspace_rules() -> str:
         10. `.voodoo/ai/SEO.md`
 
         Core rules:
-        - Use `voodoo.components` instead of raw HTML templates.
+        - Use public components from `voodoo.ui` instead of raw HTML templates.
         - Prefer `async def` for handlers and I/O.
         - Use Voodoo's `A` component plus `voodoo.navigate()` for internal links.
         - Keep app code in `app/`; durable application data belongs in Voodoo Store.
@@ -109,7 +109,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             """
             # Voodoo Rules
 
-            - Build UI with `voodoo.components`.
+            - Build UI with public components from `voodoo.ui`.
             - Prefer `async def` for handlers and I/O.
             - Voodoo CSS is the default style adapter: components emit semantic
               `vd-*` classes driven by theme tokens. Prefer semantic props
@@ -246,7 +246,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             ## Scaffold a Route
             - Create the correct `app/.../page.py` file
             - Export `page(request, ...)`
-            - Return `voodoo.components`
+            - Return public `voodoo.ui` components
 
             ## Create a Component
             - Build a reusable Python function
@@ -254,9 +254,9 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Style through `className`
 
             ## Add Data
-            - Use `aiosqlite`
-            - Store the database in `.voodoo/state/data.db`
-            - Keep queries async
+            - Define durable data with `voodoo.Model`
+            - Use the application Store at `.voodoo/application.vstore`
+            - Add SQL adapters only when explicitly required
 
             ## Debug Navigation
             - Check file-based route placement
@@ -317,11 +317,11 @@ def _fallback_ai_assets() -> dict[str, str]:
             10. `.voodoo/ai/SEO.md`
 
             Follow these Voodoo rules:
-            - Build UI with `voodoo.components`
-            - Prefer `async def`
-            - Use `A` plus `voodoo.navigate()` for internal links
-            - Keep data in `.voodoo/state/`
-            - Use `aiosqlite` by default
+            - Build UI from `voodoo.ui`
+            - Prefer `async def` for handlers and I/O
+            - Use Voodoo navigation primitives for internal links
+            - Persist application data through `voodoo.Model` and Voodoo Store
+            - Never add SQLite unless the application explicitly selects it
             - Preserve websocket large-cookie configuration
             """
         ).lstrip(),
