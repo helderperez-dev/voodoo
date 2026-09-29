@@ -54,10 +54,10 @@ def _build_workspace_rules() -> str:
 
         Core rules:
         - Use `voodoo.components` instead of raw HTML templates.
-        - Prefer `async def` for handlers, I/O, and database work.
+        - Prefer `async def` for handlers and I/O.
         - Use Voodoo's `A` component plus `voodoo.navigate()` for internal links.
-        - Keep app code in `app/` and data in `.voodoo/state/`.
-        - Use `aiosqlite` with `.voodoo/state/data.db` by default.
+        - Keep app code in `app/`; durable application data belongs in Voodoo Store.
+        - Use Voodoo `Model` and the application Store by default; SQL adapters are explicit.
         - Preserve the large-cookie websocket settings in `voodoo dev`.
 
         If Trae skills are available, use `.trae/skills/voodoo-builder/SKILL.md`.
@@ -118,8 +118,8 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Use `A(..., href=..., onClick="voodoo.navigate('...')")` for internal links.
             - Use folder-based routing: `app/<segment>/page.py` defines a `page(request)`
               function. `app/pages/` (file-per-page) is supported for backward compat.
-            - Keep persistent data inside `.voodoo/state/`.
-            - Use `aiosqlite` and `.voodoo/state/data.db` by default.
+            - Use Voodoo Store-backed models for persistent application data.
+            - Use Voodoo `Model` and `.voodoo/application.vstore` by default.
             - Preserve `WEBSOCKETS_MAX_LINE_LENGTH="8388608"` and `http="h11"` when working with websocket-heavy apps.
             """
         ).strip()
@@ -208,28 +208,34 @@ def _fallback_ai_assets() -> dict[str, str]:
             Preferred patterns:
             - Form posts for mutations
             - Async route handlers for derived UI
-            - Database-backed state for persistence
+            - Store-backed Model state for persistence
             - WebSockets only when real-time behavior is truly needed
             """
         ).strip()
         + "\n",
         ".voodoo/ai/DATABASE.md": dedent(
             """
-            # Voodoo Database
+            # Voodoo Persistence
 
             Default stack:
-            - `aiosqlite`
-            - database path: `.voodoo/state/data.db`
+            - Voodoo `Model`
+            - Voodoo Store at `.voodoo/application.vstore`
+            - no external database required
 
             Example:
 
             ```python
-            import aiosqlite
+            from voodoo import Model
 
-            async with aiosqlite.connect(".voodoo/state/data.db") as db:
-                await db.execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, name TEXT)")
-                await db.commit()
+            class Item(Model):
+                name: str
+
+            item = await Item.create(name="First item")
+            items = await Item.all()
             ```
+
+            SQLite/PostgreSQL are explicit adapters for applications that
+            deliberately need external SQL infrastructure.
             """
         ).strip()
         + "\n",
