@@ -1,4 +1,4 @@
-"""Voodoo native design-system override layer.
+"""Voodoo native design-system convergence layer.
 
 The native component stylesheet provides the structural baseline. This module
 owns the opinionated visual language that makes a zero-custom-CSS Voodoo app
@@ -9,7 +9,7 @@ from voodoo.ui.styles.theme import Theme
 
 
 def generate_design_system_css(theme: Theme) -> str:
-    """Return the premium Voodoo design-system layer.
+    """Return the premium Voodoo design-system convergence layer.
 
     The layer is deliberately token-driven. Applications can still replace
     colors and typography through Theme while keeping Voodoo's spacing,
@@ -17,7 +17,7 @@ def generate_design_system_css(theme: Theme) -> str:
     """
 
     return """
-/* ── Voodoo Design System 3 ───────────────────────────────────────── */
+/* ── Voodoo Design System 4 — Experience Convergence ─────────────── */
 
 :root {
     --vd-brand: #7c3aed;
@@ -505,6 +505,282 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     background: var(--vd-panel);
     border-color: var(--vd-line);
     box-shadow: var(--vd-shadow-card);
+}
+
+/* ── DS4 convergence: floating and contextual surfaces ───────────── */
+.vd-dropdown-menu,
+.vd-context-menu-panel,
+.vd-sub-menu-panel,
+.vd-command-panel,
+.vd-alert-dialog-panel,
+.vd-action-sheet-panel,
+.vd-bottom-sheet-panel,
+.vd-menubar-dropdown,
+.vd-navigation-menu-content,
+.vd-popover,
+.vd-modal,
+.vd-dialog {
+    border: 1px solid var(--vd-line);
+    border-radius: 0.8rem;
+    background: color-mix(in srgb, var(--vd-panel) 96%, transparent);
+    color: var(--vd-ink);
+    box-shadow: var(--vd-shadow-float);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+
+/* Interactive rows across menus, workspaces and navigation. */
+.vd-menu-item,
+.vd-command-item,
+.vd-list-box-option,
+.vd-action-item,
+.vd-nav-link-item,
+.vd-toolbar-button,
+.vd-toggle-item,
+.vd-pagination-page,
+.vd-pagination-prev,
+.vd-pagination-next,
+.vd-dock-button,
+.vd-master-detail-item-button,
+.vd-tree-view-row,
+.vd-menubar-trigger,
+.vd-menubar-dropdown-item,
+.vd-navigation-menu-trigger {
+    border-radius: 0.55rem;
+    color: var(--vd-ink-muted);
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        color 120ms ease,
+        box-shadow 120ms ease,
+        transform 120ms ease;
+}
+.vd-menu-item:hover:not(:disabled),
+.vd-menu-item:focus-visible,
+.vd-command-item:hover,
+.vd-command-item:focus-visible,
+.vd-list-box-option:hover,
+.vd-list-box-option:focus-visible,
+.vd-action-item:hover:not(:disabled),
+.vd-action-item:focus-visible,
+.vd-nav-link-item:hover,
+.vd-nav-link-item:focus-visible,
+.vd-toolbar-button:hover:not(:disabled),
+.vd-toolbar-button:focus-visible,
+.vd-toggle-item:hover:not(:disabled),
+.vd-toggle-item:focus-visible,
+.vd-pagination-page:hover:not(:disabled),
+.vd-pagination-page:focus-visible,
+.vd-pagination-prev:hover:not(:disabled),
+.vd-pagination-prev:focus-visible,
+.vd-pagination-next:hover:not(:disabled),
+.vd-pagination-next:focus-visible,
+.vd-dock-button:hover,
+.vd-dock-button:focus-visible,
+.vd-master-detail-item-button:hover,
+.vd-master-detail-item-button:focus-visible,
+.vd-tree-view-row:hover,
+.vd-tree-view-row:focus-visible,
+.vd-menubar-trigger:hover,
+.vd-menubar-trigger:focus-visible,
+.vd-menubar-dropdown-item:hover,
+.vd-menubar-dropdown-item:focus-visible,
+.vd-navigation-menu-trigger:hover,
+.vd-navigation-menu-trigger:focus-visible {
+    outline: none;
+    background: var(--vd-surface-hover);
+    color: var(--vd-ink);
+}
+.vd-pagination-page[aria-current="page"],
+.vd-toggle-item[aria-pressed="true"],
+.vd-list-box-option[aria-selected="true"],
+.vd-master-detail-item-button[aria-selected="true"],
+.vd-tree-view-row[aria-selected="true"] {
+    background: var(--vd-brand-soft);
+    color: var(--vd-brand);
+    box-shadow: inset 0 0 0 1px var(--vd-brand-line);
+}
+
+/* ── DS4 convergence: composed controls ──────────────────────────── */
+.vd-search-input,
+.vd-password-input,
+.vd-number-input,
+.vd-input-group,
+.vd-combobox,
+.vd-file-upload,
+.vd-drop-zone,
+.vd-otp-field,
+.vd-range-slider-fields,
+.vd-autocomplete {
+    border-color: var(--vd-line-strong);
+    border-radius: 0.625rem;
+    background: var(--vd-panel);
+    color: var(--vd-ink);
+}
+.vd-search-input:focus-within,
+.vd-password-input:focus-within,
+.vd-number-input:focus-within,
+.vd-input-group:focus-within,
+.vd-combobox:focus-within,
+.vd-file-upload:focus-within,
+.vd-drop-zone:focus-within,
+.vd-autocomplete:focus-within {
+    border-color: var(--vd-brand);
+    box-shadow: 0 0 0 3px var(--vd-focus-ring);
+}
+.vd-drop-zone {
+    border-style: dashed;
+    background: var(--vd-panel-subtle);
+    transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+.vd-drop-zone:hover,
+.vd-drop-zone:focus-within {
+    border-color: var(--vd-brand);
+    background: var(--vd-brand-softer);
+}
+.vd-choice-group,
+.vd-checkbox-label,
+.vd-radio-label {
+    color: var(--vd-ink);
+}
+.vd-checkbox-description,
+.vd-radio-description {
+    color: var(--vd-ink-muted);
+}
+
+/* ── DS4 convergence: data and workspace surfaces ───────────────── */
+.vd-data-table,
+.vd-enhanced-data-table-container,
+.vd-description-list,
+.vd-data-list,
+.vd-stat-card,
+.vd-master-detail,
+.vd-scroll-area,
+.vd-resizable-panels,
+.vd-keyboard-shortcuts,
+.vd-inspector-panel,
+.vd-log-viewer {
+    border-color: var(--vd-line);
+    border-radius: 0.8rem;
+    background: var(--vd-panel);
+}
+.vd-enhanced-data-table-head,
+.vd-data-table-table thead,
+.vd-description-list-section-title {
+    background: var(--vd-panel-subtle);
+    color: var(--vd-ink-muted);
+}
+.vd-enhanced-data-table-row:hover,
+.vd-data-table-row:hover,
+.vd-description-list-link:hover {
+    background: var(--vd-surface-hover);
+}
+.vd-toolbar,
+.vd-top-bar,
+.vd-menubar-list,
+.vd-dock {
+    border-color: var(--vd-line);
+    background: color-mix(in srgb, var(--vd-panel) 94%, transparent);
+    color: var(--vd-ink);
+    box-shadow: 0 1px 2px rgb(15 15 25 / 0.025);
+}
+
+/* ── DS4 convergence: navigation and progress ───────────────────── */
+.vd-tabs-list {
+    gap: 0.25rem;
+    border-color: var(--vd-line);
+}
+.vd-tabs-trigger {
+    border-radius: 0.5rem 0.5rem 0 0;
+    color: var(--vd-ink-muted);
+    transition: color 120ms ease, background-color 120ms ease;
+}
+.vd-tabs-trigger:hover:not(:disabled) {
+    background: var(--vd-surface-hover);
+    color: var(--vd-ink);
+}
+.vd-tabs-trigger[aria-selected="true"] {
+    color: var(--vd-ink);
+    font-weight: 600;
+}
+.vd-step-indicator {
+    border-color: var(--vd-line-strong);
+    background: var(--vd-panel);
+    color: var(--vd-ink-muted);
+    box-shadow: 0 1px 2px rgb(15 15 25 / 0.04);
+}
+.vd-step[data-vd-step-state="active"] .vd-step-indicator {
+    border-color: var(--vd-brand);
+    background: var(--vd-brand);
+    color: white;
+    box-shadow: 0 0 0 3px var(--vd-focus-ring);
+}
+.vd-step[data-vd-step-state="completed"] .vd-step-indicator {
+    border-color: var(--vd-brand-line);
+    background: var(--vd-brand-soft);
+    color: var(--vd-brand);
+}
+.vd-pagination {
+    gap: 0.25rem;
+}
+
+/* ── DS4 convergence: feedback and transient UI ─────────────────── */
+.vd-toast,
+.vd-form-validation-summary,
+.vd-empty-state,
+.vd-approval-card,
+.vd-policy-decision {
+    border-color: var(--vd-line);
+    border-radius: 0.8rem;
+    background: var(--vd-panel);
+    color: var(--vd-ink);
+    box-shadow: var(--vd-shadow-card);
+}
+.vd-toast {
+    box-shadow: var(--vd-shadow-float);
+}
+.vd-empty-state {
+    border-style: dashed;
+    background: var(--vd-panel-subtle);
+}
+.vd-form-validation-summary {
+    border-color: color-mix(in srgb, #ef4444 30%, var(--vd-line));
+    background: color-mix(in srgb, #ef4444 5%, var(--vd-panel));
+}
+
+/* ── DS4 convergence: system surfaces ───────────────────────────── */
+.vd-runtime-status,
+.vd-agent-status,
+.vd-device-card,
+.vd-execution-status,
+.vd-telemetry-panel,
+.vd-world-entity-inspector,
+.vd-edge-node {
+    border-color: var(--vd-line);
+    border-radius: 0.8rem;
+    background: var(--vd-panel);
+    color: var(--vd-ink);
+    box-shadow: var(--vd-shadow-card);
+}
+
+/* Dense interfaces should still breathe predictably. */
+.vd-command-item,
+.vd-menu-item,
+.vd-list-box-option,
+.vd-action-item,
+.vd-toolbar-button,
+.vd-menubar-trigger,
+.vd-menubar-dropdown-item {
+    min-height: 2.25rem;
+}
+.vd-command-item:focus-visible,
+.vd-menu-item:focus-visible,
+.vd-list-box-option:focus-visible,
+.vd-toolbar-button:focus-visible,
+.vd-pagination-page:focus-visible,
+.vd-pagination-prev:focus-visible,
+.vd-pagination-next:focus-visible {
+    box-shadow: 0 0 0 3px var(--vd-focus-ring);
 }
 
 /* ── App-shell helpers ────────────────────────────────────────────── */
