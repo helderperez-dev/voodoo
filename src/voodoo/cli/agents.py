@@ -1,8 +1,4 @@
-"""voodoo agents — list and inspect registered agents.
-
-Reads from the agent registry (SQLite by default). Falls back to
-in-memory state when no durable store is available.
-"""
+"""voodoo agents — list and inspect agents from application persistence."""
 
 from __future__ import annotations
 
@@ -19,15 +15,12 @@ agents_app = typer.Typer(
 
 
 def _get_registry():
-    """Return an AgentRegistry — SQLite by default."""
-    from voodoo.agents.registry import SQLiteAgentRegistry
-    from voodoo.config import config
+    """Return the application agent registry (Voodoo Store by default)."""
+    from voodoo.cli.context import acquire_agent_registry
 
-    db_path = config.db_path.replace(":memory:", ".voodoo/state/data.db").replace(
-        "data.db", "agents.db"
-    )
     try:
-        return SQLiteAgentRegistry(db_path)
+        registry, _store_path = acquire_agent_registry()
+        return registry
     except Exception:
         return None
 
