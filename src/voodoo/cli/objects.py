@@ -20,9 +20,9 @@ def list_objects(
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
 ):
     """List objects in the store."""
-    from voodoo.storage.objects import LocalObjectStore
+    from voodoo.cli.context import acquire_object_store
 
-    store = LocalObjectStore()
+    store, store_path = acquire_object_store()
     try:
         keys = store.list(prefix)
         if json_mode or terminal.is_json_mode():
@@ -30,7 +30,7 @@ def list_objects(
             return
         terminal.wordmark()
         terminal.blank()
-        terminal.status_block([("store", str(store.root)), ("objects", str(len(keys)))])
+        terminal.status_block([("store", store_path), ("objects", str(len(keys)))])
         terminal.blank()
         if not keys:
             terminal.muted("no objects found")
@@ -87,9 +87,9 @@ def list_artifacts(
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
 ):
     """List artifacts (optionally filtered by execution)."""
-    from voodoo.storage.execution import SQLiteExecutionStore
+    from voodoo.cli.context import acquire_execution_store
 
-    store = SQLiteExecutionStore(".voodoo/state/data.db")
+    store, _store_path = acquire_execution_store()
     try:
         artifacts = store.list_artifacts(execution_id=execution_id, limit=100)
         if json_mode or terminal.is_json_mode():
