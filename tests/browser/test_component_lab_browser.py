@@ -106,7 +106,10 @@ def test_dropdown_keyboard_and_tabs_work_in_browser(browser_page) -> None:
 
     page.get_by_role("tab", name="Activity").click()
     assert page.get_by_text("Activity content").is_visible()
-    assert page.get_by_role("tab", name="Activity").get_attribute("aria-selected") == "true"
+    assert (
+        page.get_by_role("tab", name="Activity").get_attribute("aria-selected")
+        == "true"
+    )
 
 
 def test_inputs_focus_and_theme_toggle_are_real_browser_behaviors(browser_page) -> None:
@@ -116,7 +119,9 @@ def test_inputs_focus_and_theme_toggle_are_real_browser_behaviors(browser_page) 
     name = page.locator('input[name="name"]')
     name.fill("Ada Lovelace")
     assert name.input_value() == "Ada Lovelace"
-    assert page.evaluate("document.activeElement === document.querySelector('input[name=name]')")
+    assert page.evaluate(
+        "document.activeElement === document.querySelector('input[name=name]')"
+    )
 
     page.goto(base)
     toggle = page.get_by_role("button", name="Toggle theme")
