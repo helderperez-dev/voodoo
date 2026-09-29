@@ -28,7 +28,7 @@ def test_voodoo_new_scaffold_is_store_first(tmp_path: Path) -> None:
     config = (project / "voodoo.toml").read_text()
     home = (project / "app" / "page.py").read_text()
 
-    assert '[store]' in config
+    assert "[store]" in config
     assert 'provider = "voodoo"' in config
     assert 'path = ".voodoo/application.vstore"' in config
     assert "from voodoo.ui import" in home
