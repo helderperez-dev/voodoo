@@ -48,9 +48,9 @@ def get_object(
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
 ):
     """Get object metadata (and content size)."""
-    from voodoo.storage.objects import LocalObjectStore
+    from voodoo.cli.context import acquire_object_store
 
-    store = LocalObjectStore()
+    store, _store_path = acquire_object_store()
     try:
         try:
             stat = store.stat(key)
