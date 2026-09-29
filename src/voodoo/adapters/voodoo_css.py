@@ -1187,8 +1187,22 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     font-size: {t}xs); font-weight: var(--vd-weight-semibold);
     text-transform: uppercase;
 }}
-.vd-user-badge-name {{ line-height: 1; font-size: {t}sm); }}
-.vd-user-badge-meta {{ font-size: {t}xs); color: var(--vd-color-text-muted); }}
+.vd-user-badge-copy {{
+    display: grid; gap: 0.125rem; min-width: 0; text-align: left;
+}}
+.vd-user-badge-name {{
+    line-height: 1.1; font-size: {t}sm);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}}
+.vd-user-badge-meta {{
+    font-size: {t}xs); color: var(--vd-color-text-muted);
+    text-transform: capitalize;
+}}
+.vd-user-badge-action {{
+    margin-left: {s}xs); color: var(--vd-color-text-muted);
+    font-size: {t}xs); text-decoration: none;
+}}
+.vd-user-badge-action:hover {{ color: var(--vd-color-danger); }}
 
 /* Auth guard */
 .vd-auth-guard {{
