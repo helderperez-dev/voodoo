@@ -75,7 +75,6 @@ def test_component_lab_renders_all_primary_surfaces() -> None:
         assert "vd-accordion" in navigation
         assert "vd-pagination" in navigation
 
-
         advanced = client.get("/advanced").text
         assert "vd-toggle-group" in advanced
         assert "vd-segmented-control" in advanced
