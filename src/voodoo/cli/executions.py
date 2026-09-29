@@ -1,9 +1,4 @@
-"""voodoo executions — list executions from the durable SQLite store.
-
-Reads the materialized ``executions`` table plus the append-only event
-journal. Falls back to the in-memory engine state when no SQLite store is
-available.
-"""
+"""voodoo executions — inspect canonical durable execution history."""
 
 from __future__ import annotations
 
@@ -20,16 +15,15 @@ executions_app = typer.Typer(
 
 
 def _get_store():
-    """Return (store, store_path) — SQLite by default, None if unavailable."""
-    from voodoo.config import config
-    from voodoo.storage.execution import SQLiteExecutionStore
+    """Return the configured execution store through the CLI Runtime context."""
+    from voodoo.cli.context import acquire_execution_store
 
-    store_path = config.db_path.replace(":memory:", ".voodoo/state/data.db")
     try:
-        store = SQLiteExecutionStore(store_path)
-        return store, store_path
+        return acquire_execution_store()
     except Exception:
-        return None, store_path
+        from voodoo.config import get_config
+
+        return None, str(get_config().store.path)
 
 
 @executions_app.command("list")
@@ -200,7 +194,7 @@ def import_jsonl(
     ),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
 ):
-    """Migrate legacy JSONL execution records into the SQLite store."""
+    """Migrate legacy JSONL execution records into canonical execution storage."""
     from voodoo.runtime.persistence import JSONFileExecutionStore
 
     store, store_path = _get_store()
