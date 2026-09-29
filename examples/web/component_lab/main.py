@@ -66,6 +66,85 @@ from voodoo.ui import (
     MenuSeparator,
 )
 
+from types import SimpleNamespace
+
+from voodoo.ui import (
+    Action,
+    ActionSheet,
+    AgentStatus,
+    AlertDialog,
+    AlertDialogTrigger,
+    ApprovalCard,
+    Autocomplete,
+    BottomSheet,
+    CapabilityList,
+    CheckboxInput,
+    Column,
+    ColumnDef,
+    Command,
+    CommandGroup,
+    CommandPalette,
+    ContextMenu,
+    DataList,
+    DataRow,
+    DataStat,
+    DataTable,
+    DescriptionItem,
+    DescriptionList,
+    DescriptionSection,
+    DetailPane,
+    DeviceCard,
+    Dock,
+    DockItem,
+    EdgeNode,
+    EnhancedDataTable,
+    EventRow,
+    ExecutionStatus,
+    ExecutionTimeline,
+    FormError,
+    FormValidationSummary,
+    InspectorPanel,
+    KeyBinding,
+    KeyboardShortcutRegistry,
+    ListBox,
+    ListOption,
+    LogViewer,
+    MasterDetail,
+    MasterItem,
+    MasterList,
+    MenuCheckboxItem,
+    MenuGroup,
+    MenuRadioItem,
+    Menubar,
+    MenubarItem,
+    MenubarMenu,
+    MenubarSeparator,
+    ObservationFeed,
+    OTPInput,
+    Panel,
+    PolicyDecision,
+    RadioInput,
+    RangeSlider,
+    ResizablePanels,
+    RuntimeStatus,
+    ScrollArea,
+    Segment,
+    SegmentedControl,
+    StatGroup,
+    SubMenu,
+    TelemetryPanel,
+    Timeline,
+    ToggleGroup,
+    ToggleItem,
+    Toolbar,
+    ToolbarButton,
+    ToolbarGroup,
+    ToolbarSeparator,
+    TreeNode,
+    TreeView,
+    WorldEntityInspector,
+)
+
 app = App()
 
 
@@ -78,6 +157,10 @@ def _header(active: str) -> Card:
         ("Overview", "/"),
         ("Forms", "/forms"),
         ("Navigation", "/navigation"),
+        ("Advanced", "/advanced"),
+        ("Data", "/data"),
+        ("Workspace", "/workspace"),
+        ("System", "/system"),
         ("Feedback", "/feedback"),
     ]
     return Card(
@@ -314,6 +397,45 @@ def forms():
                 ),
             ),
             _section(
+                "Specialized controls",
+                "Verification, ranges, validation and compact choice controls use the same visual contract.",
+                Card(
+                    Grid(
+                        OTPInput(name="code", length=6, label="Verification code"),
+                        RangeSlider(name="budget", min_value=20, max_value=80, minimum=0, maximum=100),
+                        Autocomplete(
+                            name="framework",
+                            suggestions=["Voodoo", "Python", "Rust"],
+                            label="Technology",
+                        ),
+                        Stack(
+                            CheckboxInput(
+                                label="Enable previews",
+                                description="Receive early visual-system updates.",
+                                checked=True,
+                            ),
+                            RadioInput(
+                                label="Stable channel",
+                                description="Prefer release-quality components.",
+                                value="stable",
+                                name="channel",
+                                checked=True,
+                            ),
+                            gap="md",
+                        ),
+                        cols="2",
+                        gap="lg",
+                    ),
+                    FormValidationSummary(
+                        errors=[
+                            FormError("Project name is required", field_id="project"),
+                            FormError("Choose a valid environment", field_id="environment"),
+                        ],
+                        title="Review these fields",
+                    ),
+                ),
+            ),
+            _section(
                 "Complete form",
                 "The common path should require composition, not browser plumbing.",
                 Form(
@@ -447,6 +569,418 @@ def feedback():
                         gap="lg",
                     )
                 ),
+            ),
+            gap="xxxl",
+        ),
+        size="xl",
+    )
+
+
+@page("/advanced")
+def advanced():
+    alert_dialog = AlertDialog(
+        "The resource will be permanently removed.",
+        title="Delete resource?",
+        cancel_label="Cancel",
+        confirm_label="Delete",
+        tone="danger",
+        on_confirm=_noop,
+        id="lab-delete-dialog",
+    )
+    return Page(
+        Stack(
+            _header("/advanced"),
+            _section(
+                "Interaction kernel",
+                "High-interaction controls should feel native, quiet and keyboard-ready.",
+                Card(
+                    Stack(
+                        ToggleGroup(
+                            ToggleItem(value="bold", label="Bold"),
+                            ToggleItem(value="italic", label="Italic"),
+                            ToggleItem(value="underline", label="Underline"),
+                            value=("bold",),
+                            type="multiple",
+                            on_change=_noop,
+                        ),
+                        SegmentedControl(
+                            Segment("day", label="Day"),
+                            Segment("week", label="Week"),
+                            Segment("month", label="Month"),
+                            value="week",
+                            on_change=_noop,
+                        ),
+                        AlertDialogTrigger("Delete resource", target=alert_dialog),
+                        alert_dialog,
+                        gap="lg",
+                    )
+                ),
+            ),
+            _section(
+                "Command and context surfaces",
+                "Transient surfaces share one elevation, border and focus language.",
+                Grid(
+                    CommandPalette(
+                        CommandGroup(
+                            "Actions",
+                            Command("Open project", shortcut="⌘O"),
+                            Command("Search files", shortcut="⌘P"),
+                            Command("Settings", shortcut="⌘,"),
+                        ),
+                        placeholder="Type a command…",
+                    ),
+                    ContextMenu(
+                        Card(Text("Right-click this surface"), variant="outline"),
+                        MenuGroup(
+                            MenuItem("Open"),
+                            MenuItem("Duplicate"),
+                            SubMenu("Share", MenuItem("Email"), MenuItem("Copy link")),
+                            label="Actions",
+                        ),
+                        MenuCheckboxItem("Show details", checked=True),
+                        MenuRadioItem("Comfortable", value="comfortable", checked=True),
+                        MenuRadioItem("Compact", value="compact"),
+                    ),
+                    cols="2",
+                    gap="lg",
+                ),
+            ),
+            _section(
+                "Mobile actions",
+                "Sheets must preserve hierarchy and comfortable touch targets.",
+                Flex(
+                    ActionSheet(
+                        Action("Edit", on_select=_noop),
+                        Action("Duplicate", on_select=_noop),
+                        Action("Delete", destructive=True, on_select=_noop),
+                        title="Project actions",
+                    ),
+                    BottomSheet(
+                        Text("A compact contextual workflow for small screens."),
+                        title="Quick settings",
+                    ),
+                    gap="lg",
+                    wrap="wrap",
+                ),
+            ),
+            gap="xxxl",
+        ),
+        size="xl",
+    )
+
+
+@page("/data")
+def data():
+    rows = [
+        {"name": "Voodoo", "status": "Healthy", "latency": "42 ms"},
+        {"name": "Store", "status": "Healthy", "latency": "8 ms"},
+        {"name": "Edge", "status": "Degraded", "latency": "96 ms"},
+    ]
+    return Page(
+        Stack(
+            _header("/data"),
+            _section(
+                "Metrics",
+                "Dense data should remain calm and scannable.",
+                StatGroup(
+                    DataStat("Requests", "12.8k", change="+8%", trend="up"),
+                    DataStat("Latency", "42 ms", change="-12%", trend="down"),
+                    DataStat("Errors", "0.08%", change="-0.02%", trend="down"),
+                    columns=3,
+                ),
+            ),
+            _section(
+                "Tables",
+                "Simple and advanced tables share row rhythm, hover and boundary treatment.",
+                DataTable(
+                    [
+                        Column("name", "Service"),
+                        Column("status", "Status"),
+                        Column("latency", "Latency", align="end"),
+                    ],
+                    rows,
+                    row_key="name",
+                    on_select=_noop,
+                ),
+                EnhancedDataTable(
+                    columns=[
+                        ColumnDef("name", "Service", sortable=True, pinned="left"),
+                        ColumnDef("status", "Status", filterable=True),
+                        ColumnDef("latency", "Latency", sortable=True, align="right"),
+                    ],
+                    rows=rows,
+                    label="Runtime services",
+                    on_sort=_noop,
+                    on_row_click=_noop,
+                ),
+            ),
+            _section(
+                "Structured details",
+                "Property sheets and dense metadata should never look like raw debug output.",
+                Grid(
+                    DescriptionList(
+                        DescriptionItem("Application", "component-lab"),
+                        DescriptionItem("Runtime", "healthy"),
+                        DescriptionSection(
+                            "Store",
+                            DescriptionItem("Provider", "voodoo"),
+                            DescriptionItem("Path", ".voodoo/application.vstore"),
+                        ),
+                        label="Application details",
+                    ),
+                    DataList(
+                        DataRow("HTTP Method", "GET", monospace=True),
+                        DataRow("Status", "200 OK", highlight=True),
+                        DataRow("Latency", "42ms"),
+                        DataRow("Trace", "7f9a2d", monospace=True, copyable=True),
+                        label="Request metadata",
+                        striped=True,
+                    ),
+                    cols="2",
+                    gap="lg",
+                ),
+            ),
+            _section(
+                "Selection and activity",
+                "Lists, timelines, logs and inspectors are product surfaces, not debug leftovers.",
+                Grid(
+                    ListBox(
+                        ListOption("Python", selected=True, description="Application language"),
+                        ListOption("Rust", description="Store core"),
+                        ListOption("TypeScript", description="Optional integration"),
+                        label="Languages",
+                        on_select=_noop,
+                    ),
+                    Timeline(
+                        EventRow("Runtime started", timestamp="09:42", status="completed"),
+                        EventRow("Store verified", timestamp="09:42", status="completed"),
+                        EventRow("Agent waiting", timestamp="09:43", status="running"),
+                    ),
+                    cols="2",
+                    gap="lg",
+                ),
+                LogViewer(["runtime ready", "store verified", "listening on :8000"]),
+                InspectorPanel(
+                    "Runtime context",
+                    Metric("Executions", "24"),
+                    description="Canonical operational state",
+                    open=True,
+                ),
+            ),
+            gap="xxxl",
+        ),
+        size="xl",
+    )
+
+
+@page("/workspace")
+def workspace():
+    return Page(
+        Stack(
+            _header("/workspace"),
+            _section(
+                "Desktop chrome",
+                "Complex desktop surfaces still follow the same restrained product language.",
+                Menubar(
+                    MenubarMenu(
+                        "File",
+                        MenubarItem("New", shortcut="⌘N"),
+                        MenubarItem("Open", shortcut="⌘O"),
+                        MenubarSeparator(),
+                        MenubarItem("Close"),
+                    ),
+                    MenubarMenu(
+                        "Edit",
+                        MenubarItem("Undo", shortcut="⌘Z"),
+                        MenubarItem("Redo", shortcut="⇧⌘Z"),
+                    ),
+                ),
+                Toolbar(
+                    ToolbarGroup(
+                        ToolbarButton("Bold", pressed=True),
+                        ToolbarButton("Italic"),
+                    ),
+                    ToolbarSeparator(),
+                    ToolbarGroup(ToolbarButton("Share")),
+                ),
+            ),
+            _section(
+                "Resizable workspace",
+                "Panels and trees should feel like one coherent desktop environment.",
+                ResizablePanels(
+                    Panel(
+                        "navigation",
+                        children=[
+                            TreeView(
+                                TreeNode(
+                                    "src",
+                                    children=[
+                                        TreeNode("runtime"),
+                                        TreeNode("ui", selected=True),
+                                        TreeNode("storage"),
+                                    ],
+                                ),
+                                TreeNode("tests"),
+                                label="Project files",
+                            )
+                        ],
+                    ),
+                    Panel(
+                        "content",
+                        children=[
+                            ScrollArea(
+                                Stack(
+                                    Heading("Design System", level=2, size="md"),
+                                    Text(
+                                        "Workspace components inherit the same tokens, focus and surface hierarchy.",
+                                        tone="muted",
+                                    ),
+                                    Card(Text("Editor/content surface"), variant="outline"),
+                                    gap="lg",
+                                )
+                            )
+                        ],
+                    ),
+                ),
+            ),
+            _section(
+                "Master-detail",
+                "Selection patterns keep the active item obvious without heavy decoration.",
+                MasterDetail(
+                    master=MasterList(
+                        MasterItem("Runtime", selected=True),
+                        MasterItem("Store"),
+                        MasterItem("UI"),
+                    ),
+                    detail=DetailPane(
+                        Stack(
+                            Heading("Runtime", level=3, size="sm"),
+                            Text("Canonical execution and application lifecycle.", tone="muted"),
+                            gap="sm",
+                        )
+                    ),
+                ),
+            ),
+            _section(
+                "Dock and shortcuts",
+                "Secondary utilities can be expressive without breaking visual restraint.",
+                Dock(
+                    DockItem(icon="⌘", label="Command"),
+                    DockItem(icon="◎", label="Runtime", badge=2),
+                    DockItem(icon="◇", label="Store"),
+                ),
+                KeyboardShortcutRegistry(
+                    KeyBinding("Command palette", "⌘K"),
+                    KeyBinding("Search", "⌘P"),
+                    KeyBinding("Save", "⌘S"),
+                    label="Workspace shortcuts",
+                ),
+            ),
+            gap="xxxl",
+        ),
+        size="xl",
+    )
+
+
+@page("/system")
+def system():
+    agent = SimpleNamespace(
+        id="agent-1",
+        name="Operations Agent",
+        status="running",
+        model="provider:model",
+        capabilities=["world.read", "device.command"],
+    )
+    device = {
+        "id": "edge-1",
+        "name": "Workshop Node",
+        "status": "online",
+        "capabilities": ["temperature.read", "motor.control"],
+        "updated_at": "now",
+    }
+    execution = SimpleNamespace(
+        id="exec-1",
+        status=SimpleNamespace(value="completed"),
+        intent=SimpleNamespace(name="device.inspect"),
+        duration_seconds=0.42,
+        created_at="now",
+    )
+    entity = {
+        "id": "robot-1",
+        "type": "robot",
+        "properties": {"battery.level": 0.82, "mode": "idle"},
+        "relationship_count": 3,
+        "observation_count": 14,
+    }
+    return Page(
+        Stack(
+            _header("/system"),
+            _section(
+                "Runtime",
+                "Voodoo's own concepts deserve the same product-grade presentation as ordinary app UI.",
+                RuntimeStatus(
+                    {
+                        "summary": {
+                            "executions": 24,
+                            "active_executions": 2,
+                            "waiting_executions": 1,
+                            "failed_executions": 0,
+                            "pending_approvals": 1,
+                            "entities": 8,
+                        }
+                    }
+                ),
+                Grid(
+                    AgentStatus(agent),
+                    DeviceCard(device),
+                    EdgeNode(device),
+                    cols="3",
+                    gap="lg",
+                ),
+            ),
+            _section(
+                "Execution and human control",
+                "Operational truth, policy and approval surfaces stay readable under pressure.",
+                ExecutionStatus(execution),
+                ExecutionTimeline([execution]),
+                ApprovalCard(
+                    {
+                        "id": "ap-1",
+                        "reason": "Refund needs review",
+                        "capability": "refund.issue",
+                    },
+                    on_approve=_noop,
+                    on_deny=_noop,
+                ),
+                PolicyDecision(
+                    {
+                        "decision": "waiting",
+                        "reason": "Human approval required",
+                        "capability": "refund.issue",
+                    }
+                ),
+            ),
+            _section(
+                "World and telemetry",
+                "Observed state, capability and metrics share one information hierarchy.",
+                Grid(
+                    WorldEntityInspector(entity),
+                    ObservationFeed(
+                        [
+                            {
+                                "property": "battery.level",
+                                "value": 0.82,
+                                "source": "bms",
+                                "confidence": 0.99,
+                                "observed_at": "now",
+                            }
+                        ]
+                    ),
+                    cols="2",
+                    gap="lg",
+                ),
+                CapabilityList(["world.read", {"name": "device.command"}]),
+                TelemetryPanel({"cpu_usage": "12%", "latency_ms": 8, "queue_depth": 2}),
             ),
             gap="xxxl",
         ),
