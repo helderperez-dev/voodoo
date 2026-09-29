@@ -231,6 +231,21 @@ def doctor():
     except Exception:
         terminal.status("store", "unavailable")
 
+    if cfg.database.provider.lower() == "voodoo":
+        legacy_candidates = (
+            Path(".voodoo/state/data.db"),
+            Path(".voodoo/state/schedules.db"),
+            Path(".voodoo/state/agents.db"),
+        )
+        legacy_files = [path for path in legacy_candidates if path.exists()]
+        terminal.status("legacy sqlite", "clean" if not legacy_files else "warning")
+        if legacy_files:
+            terminal.warning(
+                "Legacy SQLite state exists while the application uses Voodoo Store."
+            )
+            for path in legacy_files:
+                terminal.muted(f"  {path}")
+
     # External SQL is reported only when explicitly selected.
     if cfg.database.provider.lower() != "voodoo":
         db_path = cfg.database.path or cfg.database.url or cfg.db_path
