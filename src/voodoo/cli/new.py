@@ -292,7 +292,7 @@ def new(
             cloned = _clone_template(project_dir, template, variant)
             if not cloned:
                 progress.update(
-                    task, description="template unavailable, using canonical scaffold..."
+                    task,\n                    description="template unavailable, using canonical scaffold...",
                 )
         if not cloned:
             progress.add_task(description="scaffolding Voodoo app...", total=None)
