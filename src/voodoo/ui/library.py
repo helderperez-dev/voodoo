@@ -163,16 +163,14 @@ class Button(Component):
     def __init__(
         self,
         *children: Any,
-        on_click: str | None = None,
+        on_click: EventHandler | None = None,
         variant: str | None = None,
         size: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*children, **kwargs)
-        if on_click:
-            self.attrs["onclick"] = (
-                f"voodoo.sendEvent('{on_click}', this.id, this.value)"
-            )
+        if on_click is not None:
+            self.attrs["data_vd_event_click"] = bind_event(on_click)
         self.props = {"variant": variant, "size": size}
 
 
@@ -978,12 +976,7 @@ class ThemeToggle(Component):
         super().__init__(**kwargs)
         self.attrs["type"] = "button"
         self.attrs["aria-label"] = label
-        self.attrs["onclick"] = (
-            "var r=document.documentElement;"
-            "var d=r.classList.toggle('dark');"
-            "document.cookie='voodoo_theme='+(d?'dark':'light')"
-            "+';path=/;max-age=31536000';"
-        )
+        self.attrs["data-vd-action"] = "toggle-theme"
         self.children = (
             Text("☀", class_="vd-theme-toggle-sun"),
             Text("☾", class_="vd-theme-toggle-moon"),
