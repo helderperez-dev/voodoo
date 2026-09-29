@@ -41,11 +41,7 @@ def page(request):
             ),
             Flex(
                 Button("Get Started", variant="primary"),
-                A(
-                    "View about",
-                    href="/about",
-                    onClick="voodoo.navigate('/about')",
-                ),
+                A("View about", href="/about"),
                 direction="row",
                 gap="sm",
             ),
