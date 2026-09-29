@@ -55,7 +55,7 @@ def _build_workspace_rules() -> str:
         Core rules:
         - Use public components from `voodoo.ui` instead of raw HTML templates.
         - Prefer `async def` for handlers and I/O.
-        - Use Voodoo's `A` component plus `voodoo.navigate()` for internal links.
+        - Use Voodoo's `A` component with a normal internal `href`; the client runtime handles navigation.
         - Keep app code in `app/`; durable application data belongs in Voodoo Store.
         - Use Voodoo `Model` and the application Store by default; SQL adapters are explicit.
         - Preserve the large-cookie websocket settings in `voodoo dev`.
@@ -115,7 +115,7 @@ def _fallback_ai_assets() -> dict[str, str]:
               `vd-*` classes driven by theme tokens. Prefer semantic props
               (`variant`, `size`, `tone`, `level`) over utility classes. Opt into
               Tailwind only with `set_style_adapter(TailwindAdapter())`.
-            - Use `A(..., href=..., onClick="voodoo.navigate('...')")` for internal links.
+            - Use `A(..., href=...)` for internal links; do not add inline JavaScript.
             - Use folder-based routing: `app/<segment>/page.py` defines a `page(request)`
               function. `app/pages/` (file-per-page) is supported for backward compat.
             - Use Voodoo Store-backed models for persistent application data.
@@ -162,7 +162,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             ```python
             from voodoo.components import A
 
-            A("Dashboard", href="/dashboard", onClick="voodoo.navigate('/dashboard')")
+            A("Dashboard", href="/dashboard")
             ```
             """
         ).strip()
@@ -260,7 +260,7 @@ def _fallback_ai_assets() -> dict[str, str]:
 
             ## Debug Navigation
             - Check file-based route placement
-            - Check `A` + `voodoo.navigate()`
+            - Check the `A(..., href=...)` target and client navigation runtime
 
             ## Debug Cookies / WebSockets
             - Check `WEBSOCKETS_MAX_LINE_LENGTH`
