@@ -1,7 +1,7 @@
-"""Agent registry — Protocol, in-memory, and SQLite implementations (Sprint 17).
+"""Agent registry persistence.
 
-The registry persists agent identity and links every run to its execution
-history. The default backend is SQLite (WAL mode, busy_timeout=5000).
+Voodoo Store is the canonical durable backend. SQLite remains an explicit
+compatibility adapter; the in-memory implementation is intended for tests.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from voodoo.agents.models import AgentEntity, AgentRunRecord
 __all__ = [
     "AgentRegistry",
     "InMemoryAgentRegistry",
+    "VoodooStoreAgentRegistry",
     "SQLiteAgentRegistry",
 ]
 
@@ -131,6 +132,122 @@ class InMemoryAgentRegistry:
 
     async def count_runs(self, agent_id: str) -> int:
         return len(self._runs.get(agent_id, []))
+
+
+# ---------------------------------------------------------------------------
+# Voodoo Store implementation
+# ---------------------------------------------------------------------------
+
+_AGENT_PREFIX = b"runtime:agent:entity:"
+_RUN_PREFIX = b"runtime:agent:run:"
+
+
+class VoodooStoreAgentRegistry:
+    """Durable agent registry backed by the active application RuntimeStore."""
+
+    def __init__(self) -> None:
+        from voodoo.core.errors import ConfigurationError
+        from voodoo.runtime.store import get_active_runtime_store
+
+        runtime_store = get_active_runtime_store()
+        if runtime_store is None:
+            raise ConfigurationError(
+                "Agent registry requires the active application RuntimeStore."
+            )
+        provider = runtime_store.provider or runtime_store.start()
+        native = None if provider is None else getattr(provider, "native", None)
+        if native is None:
+            raise ConfigurationError(
+                "The active Voodoo Store provider does not expose durable storage."
+            )
+        self._store = native
+
+    @staticmethod
+    def _agent_key(agent_id: str) -> bytes:
+        return _AGENT_PREFIX + agent_id.encode("utf-8")
+
+    @staticmethod
+    def _run_prefix(agent_id: str) -> bytes:
+        return _RUN_PREFIX + agent_id.encode("utf-8") + b":"
+
+    @classmethod
+    def _run_key(cls, record: AgentRunRecord) -> bytes:
+        return cls._run_prefix(record.agent_id) + (
+            f"{record.started_at:020.6f}:{record.run_id}".encode("utf-8")
+        )
+
+    @staticmethod
+    def _encode(data: dict[str, Any]) -> bytes:
+        return json.dumps(data, separators=(",", ":"), default=str).encode("utf-8")
+
+    @staticmethod
+    def _decode(raw: bytes) -> dict[str, Any]:
+        return json.loads(bytes(raw).decode("utf-8"))
+
+    async def register(self, entity: AgentEntity) -> None:
+        self._store.put(self._agent_key(entity.agent_id), self._encode(entity.to_dict()))
+
+    async def get(self, agent_id: str) -> AgentEntity | None:
+        raw = self._store.get(self._agent_key(agent_id))
+        if raw is None:
+            return None
+        return AgentEntity.from_dict(self._decode(raw))
+
+    async def list_agents(
+        self,
+        state: str | None = None,
+        limit: int = 100,
+    ) -> list[AgentEntity]:
+        agents = [
+            AgentEntity.from_dict(self._decode(raw))
+            for _key, raw in self._store.scan_prefix(_AGENT_PREFIX)
+        ]
+        if state is not None:
+            agents = [agent for agent in agents if agent.state == state]
+        agents.sort(key=lambda agent: agent.updated_at, reverse=True)
+        return agents[:limit]
+
+    async def update(self, entity: AgentEntity) -> None:
+        if await self.get(entity.agent_id) is None:
+            raise KeyError(f"Agent '{entity.agent_id}' not found")
+        await self.register(entity)
+
+    async def delete(self, agent_id: str) -> bool:
+        if await self.get(agent_id) is None:
+            return False
+        tx = self._store.transaction()
+        tx.delete(self._agent_key(agent_id))
+        for key, _raw in tx.scan_prefix(self._run_prefix(agent_id)):
+            tx.delete(bytes(key))
+        tx.commit()
+        return True
+
+    async def record_run(self, record: AgentRunRecord) -> None:
+        self._store.put(self._run_key(record), self._encode(record.to_dict()))
+
+    async def get_runs(
+        self,
+        agent_id: str,
+        limit: int = 50,
+    ) -> list[AgentRunRecord]:
+        runs = [
+            AgentRunRecord.from_dict(self._decode(raw))
+            for _key, raw in self._store.scan_prefix(self._run_prefix(agent_id))
+        ]
+        runs.sort(key=lambda run: run.started_at, reverse=True)
+        return runs[:limit]
+
+    async def count_agents(self, state: str | None = None) -> int:
+        return len(await self.list_agents(state=state, limit=1_000_000))
+
+    async def count_runs(self, agent_id: str) -> int:
+        return sum(
+            1 for _key, _raw in self._store.scan_prefix(self._run_prefix(agent_id))
+        )
+
+    def close(self) -> None:
+        """No-op: RuntimeStore owns the shared Store lifecycle."""
+        return None
 
 
 # ---------------------------------------------------------------------------
