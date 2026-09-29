@@ -76,10 +76,10 @@ def _emit(data: Any, json_mode: bool = False) -> None:
 
 
 def _load_from_store(limit: int = 20):
-    """Fall back to the durable SQLite store (Sprint 3)."""
-    from voodoo.storage.execution import SQLiteExecutionStore
+    """Read durable executions from canonical application persistence."""
+    from voodoo.cli.context import acquire_execution_store
 
-    store = SQLiteExecutionStore(".voodoo/state/data.db")
+    store, _store_path = acquire_execution_store()
     try:
         return store.load_all()[-limit:]
     finally:
@@ -87,7 +87,7 @@ def _load_from_store(limit: int = 20):
 
 
 def _find_in_store(execution_id: str):
-    """Find one execution in the SQLite store by prefix."""
+    """Find one execution in canonical durable storage by prefix."""
     return next(
         (e for e in _load_from_store(1000) if e.id.startswith(execution_id)),
         None,
