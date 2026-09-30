@@ -539,7 +539,7 @@ def foundations():
                     AspectRatio(
                         Box(
                             Flex(
-                                Icon("image", label="Media"),
+                                Icon("sparkles", label="Media"),
                                 Text("16:9 media surface", tone="muted"),
                                 gap="sm",
                                 items="center",
@@ -1281,6 +1281,13 @@ def data():
             _section(
                 "Tables",
                 "Simple and advanced tables share row rhythm, hover and boundary treatment.",
+                Table(
+                    headers=["Service", "Status", "Latency"],
+                    rows=[
+                        ["Voodoo", "Healthy", "42 ms"],
+                        ["Store", "Healthy", "8 ms"],
+                    ],
+                ),
                 DataTable(
                     [
                         Column("name", "Service"),
