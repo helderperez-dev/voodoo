@@ -870,6 +870,16 @@ def navigation():
             _section(
                 "Application navigation",
                 "Top-level menus and in-page navigation use the same quiet active-state language.",
+                Navbar(
+                    Brand("Voodoo", href="/"),
+                    Flex(
+                        NavLink("Overview", href="/", active=True),
+                        NavLink("Docs", href="#docs"),
+                        gap="sm",
+                        items="center",
+                    ),
+                    sticky=False,
+                ),
                 TopBar(title="Project Atlas", sticky=False),
                 NavigationMenu(
                     NavTrigger(
