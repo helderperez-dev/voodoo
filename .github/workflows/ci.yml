@@ -157,6 +157,15 @@ jobs:
           tests/browser/test_component_lab_browser.py --tb=short
           -o asyncio_mode=strict
 
+      - name: 🖼️ Upload visual review artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: component-lab-visual-baselines
+          path: .test-results/browser/
+          if-no-files-found: warn
+          retention-days: 14
+
   test:
     name: 🧪 Test Suite (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
