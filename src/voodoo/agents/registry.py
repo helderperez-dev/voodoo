@@ -185,7 +185,9 @@ class VoodooStoreAgentRegistry:
         return json.loads(bytes(raw).decode("utf-8"))
 
     async def register(self, entity: AgentEntity) -> None:
-        self._store.put(\n            self._agent_key(entity.agent_id), self._encode(entity.to_dict())\n        )
+        self._store.put(
+            self._agent_key(entity.agent_id), self._encode(entity.to_dict())
+        )
 
     async def get(self, agent_id: str) -> AgentEntity | None:
         raw = self._store.get(self._agent_key(agent_id))
