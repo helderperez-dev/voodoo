@@ -192,7 +192,6 @@ from voodoo.ui import (
     TreeView,
     UserBadge,
     WorldEntityInspector,
-
 )
 
 app = App()
@@ -323,7 +322,10 @@ def overview():
                     ),
                     Card(
                         Heading("Outline", level=3),
-                        Text("Low-emphasis boundary with no artificial depth.", tone="muted"),
+                        Text(
+                            "Low-emphasis boundary with no artificial depth.",
+                            tone="muted",
+                        ),
                         variant="outline",
                     ),
                     cols="3",
@@ -359,7 +361,12 @@ def overview():
                     Stack(
                         Skeleton(lines=3),
                         Progress(68, label="Import progress"),
-                        Flex(Spinner("Loading"), Text("Synchronizing…", tone="muted"), gap="sm", items="center"),
+                        Flex(
+                            Spinner("Loading"),
+                            Text("Synchronizing…", tone="muted"),
+                            gap="sm",
+                            items="center",
+                        ),
                         gap="lg",
                     )
                 ),
@@ -404,7 +411,9 @@ def foundations():
                 Stack(
                     BackLink("Back to overview", href="/"),
                     Heading("Foundation hierarchy", level=2, size="lg"),
-                    Text("Interior-page chrome should be compact and calm.", tone="muted"),
+                    Text(
+                        "Interior-page chrome should be compact and calm.", tone="muted"
+                    ),
                     gap="sm",
                 )
             ),
@@ -440,7 +449,7 @@ def foundations():
                         )
                     ),
                     CodeBlock(
-                        'from voodoo import App, page\nfrom voodoo.ui import Button\n\napp = App()',
+                        "from voodoo import App, page\nfrom voodoo.ui import Button\n\napp = App()",
                         language="python",
                     ),
                     cols="2",
@@ -455,7 +464,10 @@ def foundations():
                         Stack(
                             Badge("Runtime", variant="outline"),
                             Heading("One lifecycle", level=3),
-                            Text("UI, work and durable state under one Runtime.", tone="muted"),
+                            Text(
+                                "UI, work and durable state under one Runtime.",
+                                tone="muted",
+                            ),
                             gap="sm",
                         )
                     ),
@@ -463,7 +475,10 @@ def foundations():
                         Stack(
                             Badge("Store", variant="outline"),
                             Heading("Local-first", level=3),
-                            Text("No database service required for the default path.", tone="muted"),
+                            Text(
+                                "No database service required for the default path.",
+                                tone="muted",
+                            ),
                             gap="sm",
                         )
                     ),
@@ -474,7 +489,10 @@ def foundations():
                     Flex(
                         Stack(
                             Heading("Build the real thing.", level=3),
-                            Text("Start with the canonical Voodoo scaffold.", tone="muted"),
+                            Text(
+                                "Start with the canonical Voodoo scaffold.",
+                                tone="muted",
+                            ),
                             gap="xs",
                         ),
                         Button("voodoo new", variant="primary"),
@@ -518,8 +536,14 @@ def shell():
                         tone="muted",
                     ),
                     Grid(
-                        Card(Heading("Primary content", level=3), Text("A calm working surface.")),
-                        Card(Heading("Secondary content", level=3), Text("Responsive by default.")),
+                        Card(
+                            Heading("Primary content", level=3),
+                            Text("A calm working surface."),
+                        ),
+                        Card(
+                            Heading("Secondary content", level=3),
+                            Text("Responsive by default."),
+                        ),
                         cols="2",
                         gap="lg",
                     ),
@@ -628,12 +652,27 @@ def forms():
                 "Form controls must share height, rhythm, focus and disabled behavior.",
                 Card(
                     Grid(
-                        Field("Name", Input(name="name", placeholder="Ada Lovelace"), required=True),
-                        Field("Search", SearchInput(name="search", placeholder="Search projects")),
-                        Field("Password", PasswordInput(name="password", placeholder="••••••••")),
-                        Field("Seats", NumberInput(name="seats", value=3, minimum=1, maximum=20)),
+                        Field(
+                            "Name",
+                            Input(name="name", placeholder="Ada Lovelace"),
+                            required=True,
+                        ),
+                        Field(
+                            "Search",
+                            SearchInput(name="search", placeholder="Search projects"),
+                        ),
+                        Field(
+                            "Password",
+                            PasswordInput(name="password", placeholder="••••••••"),
+                        ),
+                        Field(
+                            "Seats",
+                            NumberInput(name="seats", value=3, minimum=1, maximum=20),
+                        ),
                         Field("Volume", Slider(name="volume", value=62)),
-                        Field("Notes", Textarea(name="notes", placeholder="A short note…")),
+                        Field(
+                            "Notes", Textarea(name="notes", placeholder="A short note…")
+                        ),
                         cols="2",
                         gap="lg",
                     )
@@ -730,7 +769,13 @@ def forms():
                 Card(
                     Grid(
                         OTPInput(name="code", length=6, label="Verification code"),
-                        RangeSlider(name="budget", min_value=20, max_value=80, minimum=0, maximum=100),
+                        RangeSlider(
+                            name="budget",
+                            min_value=20,
+                            max_value=80,
+                            minimum=0,
+                            maximum=100,
+                        ),
                         Autocomplete(
                             name="framework",
                             suggestions=["Voodoo", "Python", "Rust"],
@@ -757,7 +802,9 @@ def forms():
                     FormValidationSummary(
                         errors=[
                             FormError("Project name is required", field_id="project"),
-                            FormError("Choose a valid environment", field_id="environment"),
+                            FormError(
+                                "Choose a valid environment", field_id="environment"
+                            ),
                         ],
                         title="Review these fields",
                     ),
@@ -768,7 +815,11 @@ def forms():
                 "The common path should require composition, not browser plumbing.",
                 Form(
                     Stack(
-                        Field("Project name", Input(name="project", placeholder="Atlas"), required=True),
+                        Field(
+                            "Project name",
+                            Input(name="project", placeholder="Atlas"),
+                            required=True,
+                        ),
                         Switch(
                             "Public project",
                             description="Allow anyone in the workspace to discover it.",
@@ -871,7 +922,9 @@ def navigation():
                             gap="xs",
                         ),
                     ),
-                    Tooltip(Button("Hover or focus", variant="ghost"), "Helpful context"),
+                    Tooltip(
+                        Button("Hover or focus", variant="ghost"), "Helpful context"
+                    ),
                     gap="md",
                     wrap="wrap",
                 ),
@@ -887,7 +940,9 @@ def navigation():
                     ),
                     AccordionItem(
                         "Can I use PostgreSQL?",
-                        Text("Yes. External infrastructure remains an explicit adapter."),
+                        Text(
+                            "Yes. External infrastructure remains an explicit adapter."
+                        ),
                     ),
                     variant="contained",
                 ),
@@ -908,9 +963,21 @@ def feedback():
                 "Alerts",
                 "Tone should change meaning without changing the component's visual language.",
                 Stack(
-                    Alert("A neutral informational message.", title="Information", tone="info"),
-                    Alert("Everything completed successfully.", title="Success", tone="success"),
-                    Alert("Review this before continuing.", title="Warning", tone="warning"),
+                    Alert(
+                        "A neutral informational message.",
+                        title="Information",
+                        tone="info",
+                    ),
+                    Alert(
+                        "Everything completed successfully.",
+                        title="Success",
+                        tone="success",
+                    ),
+                    Alert(
+                        "Review this before continuing.",
+                        title="Warning",
+                        tone="warning",
+                    ),
                     Alert("Something needs attention.", title="Error", tone="danger"),
                     gap="md",
                 ),
@@ -919,7 +986,9 @@ def feedback():
                 "Transient feedback",
                 "Toasts, snackbars, drawers and dialogs use a shared elevation and dismissal model.",
                 ToastRegion(
-                    Toast("Profile updated", title="Saved", tone="success", duration=None),
+                    Toast(
+                        "Profile updated", title="Saved", tone="success", duration=None
+                    ),
                     Snackbar("Connection restored", duration=None),
                     position="bottom-right",
                 ),
@@ -949,7 +1018,13 @@ def feedback():
                         Progress(58, tone="success", label="Success progress"),
                         Progress(82, tone="warning", label="Warning progress"),
                         Progress(None, label="Indeterminate progress"),
-                        Flex(Spinner(size="sm"), Spinner(), Spinner(size="lg"), gap="lg", items="center"),
+                        Flex(
+                            Spinner(size="sm"),
+                            Spinner(),
+                            Spinner(size="lg"),
+                            gap="lg",
+                            items="center",
+                        ),
                         gap="lg",
                     )
                 ),
@@ -1129,15 +1204,21 @@ def data():
                 "Lists, timelines, logs and inspectors are product surfaces, not debug leftovers.",
                 Grid(
                     ListBox(
-                        ListOption("Python", selected=True, description="Application language"),
+                        ListOption(
+                            "Python", selected=True, description="Application language"
+                        ),
                         ListOption("Rust", description="Store core"),
                         ListOption("TypeScript", description="Optional integration"),
                         label="Languages",
                         on_select=_noop,
                     ),
                     Timeline(
-                        EventRow("Runtime started", timestamp="09:42", status="completed"),
-                        EventRow("Store verified", timestamp="09:42", status="completed"),
+                        EventRow(
+                            "Runtime started", timestamp="09:42", status="completed"
+                        ),
+                        EventRow(
+                            "Store verified", timestamp="09:42", status="completed"
+                        ),
                         EventRow("Agent waiting", timestamp="09:43", status="running"),
                     ),
                     cols="2",
@@ -1219,7 +1300,10 @@ def workspace():
                                         "Workspace components inherit the same tokens, focus and surface hierarchy.",
                                         tone="muted",
                                     ),
-                                    Card(Text("Editor/content surface"), variant="outline"),
+                                    Card(
+                                        Text("Editor/content surface"),
+                                        variant="outline",
+                                    ),
                                     gap="lg",
                                 )
                             )
@@ -1239,7 +1323,10 @@ def workspace():
                     detail=DetailPane(
                         Stack(
                             Heading("Runtime", level=3, size="sm"),
-                            Text("Canonical execution and application lifecycle.", tone="muted"),
+                            Text(
+                                "Canonical execution and application lifecycle.",
+                                tone="muted",
+                            ),
                             gap="sm",
                         )
                     ),
