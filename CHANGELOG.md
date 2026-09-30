@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [3.2.0] — 2026-09-30
+
 ### Changed — Experience convergence
 
 - Made `voodoo new` the canonical built-in project scaffold and moved external
