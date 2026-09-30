@@ -107,19 +107,23 @@ jobs:
           /tmp/voodoo-clean/bin/voodoo new voodoo-clean-app --no-install
           cd voodoo-clean-app
           /tmp/voodoo-clean/bin/python - <<'PY'
-          import runpy
           from pathlib import Path
-          from starlette.testclient import TestClient
 
-          namespace = runpy.run_path("main.py", run_name="clean_install_app")
-          with TestClient(namespace["app"]) as client:
+          from starlette.testclient import TestClient
+          from voodoo import App
+
+          app = App()
+          with TestClient(app) as client:
               response = client.get("/")
               assert response.status_code == 200, response.text
               assert "Hello, Voodoo" in response.text
+              assert client.get("/about").status_code == 200
+              assert client.get("/users/42").status_code == 200
 
           store = Path(".voodoo/application.vstore")
           assert store.exists()
           assert store.stat().st_size > 0
+          assert list(Path(".").rglob("*.db")) == []
           PY
 
   browser:
