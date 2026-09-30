@@ -1,8 +1,74 @@
 import importlib
 from pathlib import Path
+from typing import Any
+
+import typer
 
 from voodoo.cli import terminal
 from voodoo.config import get_config
+
+
+def _doctor_snapshot() -> dict[str, Any]:
+    """Return side-effect-free diagnostics suitable for automation."""
+    from voodoo.cli.status import _application_snapshot
+
+    cfg = get_config()
+    modules: dict[str, str] = {}
+    for name, label in (
+        ("voodoo.mesh", "mesh"),
+        ("voodoo.integrations.mcp", "mcp"),
+        ("voodoo.ai", "ai"),
+        ("voodoo.runtime.scheduling", "workers"),
+        ("voodoo.observability", "observability"),
+    ):
+        try:
+            importlib.import_module(name)
+            modules[label] = "ready"
+        except Exception:
+            modules[label] = "not found"
+
+    legacy_candidates = (
+        Path(".voodoo/state/data.db"),
+        Path(".voodoo/state/schedules.db"),
+        Path(".voodoo/state/agents.db"),
+    )
+    legacy_files = [str(path) for path in legacy_candidates if path.exists()]
+    ai_dir = Path(".voodoo/ai")
+
+    return {
+        "application": _application_snapshot(),
+        "project": {
+            "root": str(Path.cwd()),
+            "config": "voodoo.toml" if Path("voodoo.toml").exists() else None,
+            "app_directory": Path("app").is_dir(),
+        },
+        "integrity": {
+            "legacy_sqlite": legacy_files,
+            "store_first_clean": (
+                cfg.database.provider.lower() != "voodoo" or not legacy_files
+            ),
+        },
+        "auth": {
+            "secret": (
+                "warning"
+                if cfg.auth.secret_key
+                == "dev-secret-key-change-in-production-voodoo-2026"
+                else "ready"
+            )
+        },
+        "security": {
+            "headers": cfg.security.headers_enabled,
+            "rate_limit": cfg.security.rate_limit_enabled,
+            "cors": cfg.security.cors_enabled,
+            "csrf": cfg.security.csrf_enabled,
+        },
+        "modules": modules,
+        "ai_kit": (
+            "ready"
+            if ai_dir.exists() and (ai_dir / "README.md").exists()
+            else "not found"
+        ),
+    }
 
 
 def _print_capability_matrix() -> None:
@@ -191,15 +257,23 @@ def _doctor_ai_kit() -> None:
     terminal.muted("  .voodoo/ai/" if ready else "  run 'voodoo ai init' to generate")
 
 
-def doctor():
-    """
-    Run environment and configuration diagnostics.
-    """
+def doctor(
+    json_mode: bool = typer.Option(
+        False,
+        "--json",
+        help="Output side-effect-free machine-readable diagnostics.",
+    ),
+):
+    """Run environment and configuration diagnostics."""
     import os
 
     from voodoo import __version__ as ver
 
     cfg = get_config()
+
+    if json_mode or terminal.is_json_mode():
+        terminal.json_output(_doctor_snapshot())
+        return
 
     terminal.wordmark(ver)
     terminal.blank()
