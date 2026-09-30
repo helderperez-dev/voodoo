@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from voodoo import App, page
 from voodoo.ui import (
     A,
+    Address,
     Accordion,
     AccordionItem,
     Action,
@@ -26,12 +27,16 @@ from voodoo.ui import (
     AnchorLink,
     AnchorNavigation,
     ApprovalCard,
+    Article,
+    Aside,
+    AspectRatio,
     AppShell,
     AuthGuard,
     Autocomplete,
     Avatar,
     BackLink,
     Badge,
+    Box,
     BottomNav,
     BottomNavItem,
     BottomSheet,
@@ -56,6 +61,7 @@ from voodoo.ui import (
     Command,
     CommandGroup,
     CommandPalette,
+    CommandBar,
     Composer,
     Container,
     ContextMenu,
@@ -69,6 +75,9 @@ from voodoo.ui import (
     DescriptionList,
     DescriptionSection,
     DetailPane,
+    Dialog,
+    Divider,
+    Div,
     DeviceCard,
     Dock,
     DockItem,
@@ -83,22 +92,31 @@ from voodoo.ui import (
     ExecutionTimeline,
     Eyebrow,
     FeatureCard,
+    FigCaption,
+    Figure,
     Field,
     FileUpload,
     Flex,
     Form,
     FormError,
     FormValidationSummary,
+    Footer,
     Grid,
+    Header,
     Heading,
     Hero,
     Icon,
     Input,
     InputGroup,
+    Img,
     InspectorPanel,
     Kbd,
     KeyBinding,
     KeyboardShortcutRegistry,
+    Label,
+    Link,
+    List,
+    ListItem,
     LinkArrow,
     ListBox,
     ListOption,
@@ -108,6 +126,7 @@ from voodoo.ui import (
     MasterDetail,
     MasterItem,
     MasterList,
+    Main,
     Menubar,
     MenubarItem,
     MenubarMenu,
@@ -123,6 +142,7 @@ from voodoo.ui import (
     ModalClose,
     ModalTrigger,
     MultiSelect,
+    Nav,
     Navbar,
     NavColumn,
     NavContent,
@@ -136,6 +156,7 @@ from voodoo.ui import (
     OTPInput,
     Page,
     PageHero,
+    Paragraph,
     Pagination,
     Panel,
     PasswordInput,
@@ -151,11 +172,13 @@ from voodoo.ui import (
     RuntimeStatus,
     ScrollArea,
     SearchInput,
+    Section,
     Segment,
     SegmentedControl,
     Select,
     Sidebar,
     SidebarItem,
+    SidebarToggle,
     Skeleton,
     Slider,
     Snackbar,
@@ -163,6 +186,7 @@ from voodoo.ui import (
     Stack,
     Stat,
     StatGroup,
+    Table,
     Stats,
     StatusBadge,
     Step,
@@ -175,6 +199,7 @@ from voodoo.ui import (
     TelemetryPanel,
     Text,
     Textarea,
+    Time,
     ThemeToggle,
     Timeline,
     TimePicker,
@@ -457,6 +482,95 @@ def foundations():
                 ),
             ),
             _section(
+                "Semantic foundations",
+                "Public HTML primitives should inherit Voodoo typography, spacing and focus without custom CSS.",
+                Header(
+                    Stack(
+                        Heading("Semantic document", level=3),
+                        Paragraph(
+                            "Structure remains meaningful while the design system stays quiet."
+                        ),
+                        gap="xs",
+                    )
+                ),
+                Nav(
+                    Flex(
+                        Link("Overview", href="#semantic-overview"),
+                        Link("Details", href="#semantic-details"),
+                        gap="md",
+                        wrap="wrap",
+                    )
+                ),
+                Divider(),
+                Main(
+                    Grid(
+                        Section(
+                            Article(
+                                Heading("Article surface", level=3, size="sm"),
+                                Paragraph(
+                                    "Semantic content composes directly with Voodoo primitives."
+                                ),
+                                Time("September 2026", datetime="2026-09"),
+                                List(
+                                    ListItem("Accessible by default"),
+                                    ListItem("Adapter-independent styling"),
+                                    ListItem("No application CSS required"),
+                                ),
+                            )
+                        ),
+                        Aside(
+                            Box(
+                                Stack(
+                                    Label("Supporting context"),
+                                    Text(
+                                        "Aside content shares the same typography and rhythm.",
+                                        tone="muted",
+                                    ),
+                                    gap="xs",
+                                ),
+                                padding="md",
+                            )
+                        ),
+                        cols="2",
+                        gap="lg",
+                    )
+                ),
+                Figure(
+                    AspectRatio(
+                        Box(
+                            Flex(
+                                Icon("image", label="Media"),
+                                Text("16:9 media surface", tone="muted"),
+                                gap="sm",
+                                items="center",
+                            ),
+                            padding="lg",
+                        ),
+                        ratio="16/9",
+                    ),
+                    FigCaption("AspectRatio keeps media geometry stable."),
+                ),
+                Div(
+                    Img(
+                        src=(
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' "
+                            "viewBox='0 0 16 2'%3E%3Crect width='16' height='2' "
+                            "fill='%23242a31'/%3E%3C/svg%3E"
+                        ),
+                        alt="Voodoo media placeholder",
+                        loading="lazy",
+                    )
+                ),
+                Footer(
+                    Address("Voodoo · Runtime + Store + UI"),
+                    Paragraph("Semantic primitives remain intentionally composable."),
+                ),
+                Dialog(
+                    Text("Low-level native dialog primitive"),
+                    aria_label="Native dialog primitive",
+                ),
+            ),
+            _section(
                 "Marketing surfaces",
                 "Higher-level surfaces remain minimal instead of becoming template-like.",
                 Grid(
@@ -526,7 +640,12 @@ def shell():
     )
     return AppShell(
         Stack(
-            TopBar(title="Workspace shell"),
+            Flex(
+                SidebarToggle(sidebar),
+                TopBar(title="Workspace shell"),
+                gap="sm",
+                items="center",
+            ),
             Container(
                 Stack(
                     Heading("Application chrome", level=1, size="lg"),
@@ -1089,6 +1208,7 @@ def advanced():
                 "Command and context surfaces",
                 "Transient surfaces share one elevation, border and focus language.",
                 Grid(
+                    CommandBar(on_submit=_noop),
                     CommandPalette(
                         CommandGroup(
                             "Actions",
