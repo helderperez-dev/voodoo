@@ -121,8 +121,11 @@ def test_status_json_exposes_store_first_application_contract(
     payload = json.loads(result.stdout)
     assert payload["store"]["provider"] == "voodoo"
     assert payload["store"]["path"] == ".voodoo/application.vstore"
+    from voodoo.config import get_config
+
+    cfg = get_config()
     assert payload["providers"]["database"] == "voodoo"
-    assert payload["providers"]["queue"] == "voodoo"
+    assert payload["providers"]["queue"] == cfg.queue.provider
     assert payload["providers"]["objects"] == "voodoo"
     assert payload["runtime"]["requests_total"] >= 0
 
