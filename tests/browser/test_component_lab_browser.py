@@ -191,18 +191,42 @@ def test_light_and_dark_renderings_have_distinct_visual_output(browser_page) -> 
     first_background = page.locator("body").evaluate(
         "(el) => getComputedStyle(el).backgroundColor"
     )
-    first_capture = page.screenshot(full_page=True)
+    results = Path(".test-results/browser")
+    results.mkdir(parents=True, exist_ok=True)
+    first_is_dark = "dark" in (page.locator("html").get_attribute("class") or "")
+    first_name = "dark.png" if first_is_dark else "light.png"
+    first_capture = page.screenshot(path=str(results / first_name), full_page=True)
 
     toggle.click()
     second_background = page.locator("body").evaluate(
         "(el) => getComputedStyle(el).backgroundColor"
     )
-    second_capture = page.screenshot(full_page=True)
+    second_name = "light.png" if first_is_dark else "dark.png"
+    second_capture = page.screenshot(path=str(results / second_name), full_page=True)
 
     assert first_background != second_background
     assert first_capture != second_capture
     assert len(first_capture) > 1000
     assert len(second_capture) > 1000
+
+
+def test_form_validation_focus_and_submit_lifecycle(browser_page) -> None:
+    page, base = browser_page
+    page.goto(f"{base}/forms")
+
+    form = page.locator("form.vd-form")
+    project = form.get_by_role("textbox", name="Project name")
+    submit = form.get_by_role("button", name="Create project")
+
+    submit.click()
+    assert project.evaluate("(el) => el.matches(':invalid')")
+    assert project.evaluate("(el) => document.activeElement === el")
+
+    project.fill("Atlas")
+    assert project.evaluate("(el) => el.matches(':valid')")
+    submit.click()
+    assert page.url == f"{base}/forms"
+    assert project.input_value() == "Atlas"
 
 
 def test_inputs_focus_and_theme_toggle_are_real_browser_behaviors(browser_page) -> None:
