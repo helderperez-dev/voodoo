@@ -90,6 +90,14 @@ jobs:
       - name: 🧪 Run test suite
         run: uv run pytest
 
+      - name: 🌐 Install Chromium
+        run: uv run playwright install --with-deps chromium
+
+      - name: 🌐 Run browser experience gate
+        env:
+          VOODOO_BROWSER_TESTS: "1"
+        run: uv run pytest tests/browser/test_component_lab_browser.py --tb=short
+
       - name: 🧪 Clean Store-first distribution gate
         run: |
           rm -rf /tmp/voodoo-release-clean /tmp/voodoo-release-app /tmp/voodoo-release-dist
@@ -102,7 +110,7 @@ jobs:
           assert importlib.util.find_spec("aiosqlite") is None
           PY
           cd /tmp
-          /tmp/voodoo-release-clean/bin/voodoo create voodoo-release-app
+          /tmp/voodoo-release-clean/bin/voodoo new voodoo-release-app --no-install
           cd voodoo-release-app
           /tmp/voodoo-release-clean/bin/python - <<'PY'
           import runpy
@@ -223,7 +231,7 @@ jobs:
             test do
               assert_match "Voodoo Framework CLI", shell_output("#{bin}/voodoo --help")
               system Formula["python@3.12"].opt_bin/"python3.12", "-c", "import voodoo_store"
-              system bin/"voodoo", "create", "smoke-app"
+              system bin/"voodoo", "new", "smoke-app", "--no-install"
               cd testpath/"smoke-app" do
                 system libexec/"voodoo-framework/bin/python3.12", "-c", <<~PY
                   import runpy
