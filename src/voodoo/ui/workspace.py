@@ -349,9 +349,7 @@ class TreeNode:
             "aria_selected": "true" if self.selected else "false",
             "aria_disabled": "true" if self.disabled else None,
             "aria_level": str(depth + 1),
-            "aria_expanded": (
-                "true" if effective_expanded else "false"
-            )
+            "aria_expanded": ("true" if effective_expanded else "false")
             if self.children
             else None,
             "tabindex": "0"
