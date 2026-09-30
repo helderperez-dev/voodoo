@@ -255,11 +255,24 @@ class StateRenderer:
 
     @staticmethod
     def _render_component(result: Any) -> str:
+        from voodoo.seo import SEO
         from voodoo.ui.component import Component
 
-        if isinstance(result, Component):
-            return result.render()
-        return str(result)
+        # A page may return ``(SEO, Component)`` (or the reverse) — the same
+        # contract ``render_page_result`` honours on first render. A reactive
+        # re-render patches only the ``#root`` body, so unwrap the tuple and
+        # render just the component; the SEO metadata belongs to ``<head>``.
+        component = result
+        if isinstance(result, tuple) and len(result) == 2:
+            first, second = result
+            if isinstance(first, SEO):
+                component = second
+            elif isinstance(second, SEO):
+                component = first
+
+        if isinstance(component, Component):
+            return component.render()
+        return str(component)
 
     @staticmethod
     async def _broadcast_patch(element_id: str, html: str) -> None:

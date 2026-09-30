@@ -14,6 +14,7 @@ import voodoo.data
 from voodoo import App, page, state
 from voodoo.core.events import event, event_handlers
 from voodoo.core.state import StateRenderer, state_renderer
+from voodoo.seo import SEO
 from voodoo.ui import Button, Stack, Text
 
 
@@ -73,6 +74,54 @@ def test_state_renderer_renders_component(make_app):
     renderer.bind("root", home)
     html = renderer._render_component(home())
     assert "Count: 5" in html
+
+
+def test_state_renderer_renders_seo_tuple():
+    """A (SEO, Component) result renders the component, not the tuple repr."""
+    count = state(5)
+
+    def home():
+        return (
+            SEO(title="Home"),
+            Text(f"Count: {count.get()}", id="count-display"),
+        )
+
+    renderer = StateRenderer()
+    renderer.bind("root", home)
+    html = renderer._render_component(home())
+    assert "Count: 5" in html
+    assert "SEO(" not in html
+    assert not html.strip().startswith("(")
+
+
+@pytest.mark.asyncio
+async def test_state_renderer_rerender_unwraps_seo_tuple(monkeypatch):
+    """rerender on a (SEO, Component) page patches the body, not a tuple repr."""
+    count = state(3)
+
+    def home():
+        return SEO(title="Home"), Text(f"Count: {count.get()}")
+
+    renderer = StateRenderer()
+    renderer.bind("root", home)
+
+    broadcasted = []
+
+    async def mock_broadcast(element_id, html):
+        broadcasted.append((element_id, html))
+
+    state_mod = importlib.import_module("voodoo.core.state")
+    monkeypatch.setattr(
+        state_mod.StateRenderer, "_broadcast_patch", staticmethod(mock_broadcast)
+    )
+
+    result = await renderer.rerender("root")
+    assert result is not None
+    assert "Count: 3" in result
+    assert "SEO(" not in result
+    assert len(broadcasted) == 1
+    assert "Count: 3" in broadcasted[0][1]
+    assert "SEO(" not in broadcasted[0][1]
 
 
 @pytest.mark.asyncio

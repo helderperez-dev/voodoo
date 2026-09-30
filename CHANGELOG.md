@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [3.2.1] — 2026-09-30
+
+### Fixed
+
+- Fixed reactive re-render for pages returning `(SEO, Component)` (or the
+  reverse). `StateRenderer` now unpacks the tuple and renders just the
+  component body — matching the first-render `render_page_result` contract —
+  instead of stringifying the whole tuple into the DOM patch (which previously
+  replaced the page with a raw `SEO(...)` repr on any state change).
+
 ## [3.2.0] — 2026-09-30
 
 ### Changed — Experience convergence
