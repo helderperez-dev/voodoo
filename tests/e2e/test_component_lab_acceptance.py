@@ -117,7 +117,6 @@ def test_component_lab_renders_all_primary_surfaces() -> None:
         assert "vd-telemetry-panel" in system
 
 
-
 _NON_VISUAL_PUBLIC_TYPES = {
     "Component",
     "Html",
