@@ -5,8 +5,8 @@ Source architecture: [`ROADMAP.md`](ROADMAP.md).
 This file is the **current source of truth for implementation progress**.
 Detailed historical plans live in Git history and under `docs/sprints/`.
 
-> Updated 2026-09-28 for Sprint 29 — Experience Convergence after real-world
-> application usage exposed gaps between the 3.1 architecture and product DX.
+> Updated 2026-09-30 after Sprint 29 — Experience Convergence closed the gap
+> between the 3.1 architecture and the real developer/product experience.
 
 ## North Star
 
@@ -46,9 +46,9 @@ Core laws:
 | Post-Sprint 28 | **Design System 3 + Application Graph + repository convergence DONE** |
 | 3.0 clean architecture | **DONE and released** |
 | Store 0.3 native convergence + modern Model contract | **DONE and released (v3.1.0)** |
-| Sprint 29 — Experience Convergence | **ACTIVE** |
-| Next release target | **v3.2.0 only after experience/reliability gates pass** |
-| Release checkpoint | **v3.1.0 published; Sprint 29 work is unreleased** |
+| Sprint 29 — Experience Convergence | **DONE · closed 2026-09-30** |
+| Next release target | **v3.2.0 · Sprint 29 implementation is release-ready** |
+| Release checkpoint | **v3.1.0 published; PR #79 prepares the unreleased v3.2.0 experience convergence** |
 
 Release evidence: tag `v3.1.0` points at the Store 0.3 native convergence
 release. The release workflow passed the test suite, clean Store-first
@@ -59,27 +59,29 @@ Release creation.
 
 ## Sprint 29 — Experience Convergence
 
-**Status: ACTIVE · started 2026-09-28**
+**Status: DONE · closed 2026-09-30**
 
 Plan: [`docs/sprints/SPRINT_29_EXPERIENCE_CONVERGENCE.md`](docs/sprints/SPRINT_29_EXPERIENCE_CONVERGENCE.md)
 
-Sprint 29 does not introduce a new major Runtime capability. It closes the gap
-between Voodoo's architecture and the experience of building real applications
-with it.
+Sprint 29 introduced no new major Runtime capability. It closed the gap between
+Voodoo's architecture and the experience of building real applications with it.
 
-Current priorities:
+Delivered:
 
 - one Store-first truth across Runtime, CLI, scaffolding and AI guidance;
 - `voodoo new` as the canonical project-creation path;
-- zero accidental SQLite files in a default application;
-- a complete Component Lab covering the public UI surface;
+- zero accidental SQLite files in the default application journey;
+- a complete Component Lab covering every renderable public UI component;
 - Design System 4 convergence across primitive, extended, product, workspace
   and Runtime/system components;
-- real-browser interaction, accessibility and responsive acceptance;
+- mandatory Chromium interaction, accessibility and responsive acceptance;
 - component-by-component behavior and visual hardening;
-- a 3.2 release gate based on real developer journeys, not unit tests alone.
+- Store-first `status --json` and side-effect-free `doctor --json`;
+- a 3.2 release gate based on real developer journeys, including light/dark
+  visual artifacts and 20 real-browser acceptance tests.
 
-Implementation is tracked in PR #79.
+Implementation: PR #79. Detailed completion record:
+[`docs/sprints/SPRINT_29_EXPERIENCE_CONVERGENCE.md`](docs/sprints/SPRINT_29_EXPERIENCE_CONVERGENCE.md).
 
 ---
 
@@ -267,9 +269,9 @@ Implementation/release evidence: PRs #68, #69, #70, #72 and #73; commit
 
 ## Next selection gate
 
-No Sprint 29 is declared by this tracker yet. Before assigning the number, evaluate the
-published Voodoo 3.0 architecture against real product pressure and choose a coherent
-next phase rather than accumulating unrelated features.
+Sprint 29 is closed. No Sprint 30 is declared by this tracker yet. Before assigning
+the number, evaluate the release-ready Voodoo 3.2 experience against real product
+pressure and choose a coherent next phase rather than accumulating unrelated features.
 
 Candidate directions already supported by the architecture:
 
