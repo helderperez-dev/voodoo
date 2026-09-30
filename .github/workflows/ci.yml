@@ -104,7 +104,7 @@ jobs:
         run: |
           cd /tmp
           rm -rf voodoo-clean-app
-          /tmp/voodoo-clean/bin/voodoo create voodoo-clean-app
+          /tmp/voodoo-clean/bin/voodoo new voodoo-clean-app --no-install
           cd voodoo-clean-app
           /tmp/voodoo-clean/bin/python - <<'PY'
           import runpy
@@ -121,6 +121,36 @@ jobs:
           assert store.exists()
           assert store.stat().st_size > 0
           PY
+
+  browser:
+    name: 🌐 Browser Experience Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v7
+
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: 📦 Install browser test dependencies
+        run: uv sync --python 3.12 --all-extras --dev
+
+      - name: 🌐 Install Chromium
+        run: uv run --python 3.12 playwright install --with-deps chromium
+
+      - name: 🧪 Run Component Lab browser acceptance
+        env:
+          VOODOO_BROWSER_TESTS: "1"
+        run: >-
+          uv run --python 3.12 pytest
+          tests/browser/test_component_lab_browser.py --tb=short
 
   test:
     name: 🧪 Test Suite (Python ${{ matrix.python-version }})
