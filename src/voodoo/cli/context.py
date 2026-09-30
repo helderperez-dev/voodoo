@@ -8,9 +8,10 @@ configured by the application.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any
 
 from voodoo.config import VoodooConfig, get_config
 from voodoo.data.store_backend import bind_runtime_store
