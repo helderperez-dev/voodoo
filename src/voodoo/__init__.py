@@ -12,7 +12,7 @@ from .core import App, page, state
 from .data import Model
 from .runtime.scheduling.tasks import task
 
-__version__ = "3.2.0"
+__version__ = "3.2.1"
 
 __all__ = [
     "Agent",
