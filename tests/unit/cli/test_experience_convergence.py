@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 from voodoo.agents.models import AgentEntity, AgentRunRecord
 from voodoo.agents.registry import VoodooStoreAgentRegistry
+from voodoo.cli import app
 from voodoo.cli.context import (
     acquire_execution_store,
     acquire_schedule_store,
@@ -106,3 +109,19 @@ async def test_store_backed_agent_registry_round_trip(tmp_path: Path) -> None:
     finally:
         bind_active_runtime_store(None)
         runtime.stop()
+
+
+def test_status_json_exposes_store_first_application_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(app, ["status", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["store"]["provider"] == "voodoo"
+    assert payload["store"]["path"] == ".voodoo/application.vstore"
+    assert payload["providers"]["database"] == "voodoo"
+    assert payload["providers"]["queue"] == "voodoo"
+    assert payload["providers"]["objects"] == "voodoo"
+    assert payload["runtime"]["requests_total"] >= 0
