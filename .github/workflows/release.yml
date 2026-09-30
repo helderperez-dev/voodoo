@@ -96,7 +96,9 @@ jobs:
       - name: 🌐 Run browser experience gate
         env:
           VOODOO_BROWSER_TESTS: "1"
-        run: uv run pytest tests/browser/test_component_lab_browser.py --tb=short
+        run: >-
+          uv run pytest tests/browser/test_component_lab_browser.py --tb=short
+          -o asyncio_mode=strict
 
       - name: 🧪 Clean Store-first distribution gate
         run: |
