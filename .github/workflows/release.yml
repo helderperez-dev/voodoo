@@ -113,19 +113,23 @@ jobs:
           /tmp/voodoo-release-clean/bin/voodoo new voodoo-release-app --no-install
           cd voodoo-release-app
           /tmp/voodoo-release-clean/bin/python - <<'PY'
-          import runpy
           from pathlib import Path
-          from starlette.testclient import TestClient
 
-          namespace = runpy.run_path("main.py", run_name="release_gate_app")
-          with TestClient(namespace["app"]) as client:
+          from starlette.testclient import TestClient
+          from voodoo import App
+
+          app = App()
+          with TestClient(app) as client:
               response = client.get("/")
               assert response.status_code == 200, response.text
               assert "Hello, Voodoo" in response.text
+              assert client.get("/about").status_code == 200
+              assert client.get("/users/42").status_code == 200
 
           store = Path(".voodoo/application.vstore")
           assert store.exists()
           assert store.stat().st_size > 0
+          assert list(Path(".").rglob("*.db")) == []
           PY
 
       - name: 📝 Bump version in source files
@@ -234,13 +238,16 @@ jobs:
               system bin/"voodoo", "new", "smoke-app", "--no-install"
               cd testpath/"smoke-app" do
                 system libexec/"voodoo-framework/bin/python3.12", "-c", <<~PY
-                  import runpy
                   from pathlib import Path
                   from starlette.testclient import TestClient
-                  ns = runpy.run_path('main.py', run_name='brew_smoke')
-                  with TestClient(ns['app']) as client:
+                  from voodoo import App
+                  app = App()
+                  with TestClient(app) as client:
                       assert client.get('/').status_code == 200
+                      assert client.get('/about').status_code == 200
+                      assert client.get('/users/42').status_code == 200
                   assert Path('.voodoo/application.vstore').exists()
+                  assert list(Path('.').rglob('*.db')) == []
                 PY
               end
             end
