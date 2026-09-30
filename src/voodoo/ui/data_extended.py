@@ -391,6 +391,7 @@ class ListOption:
         attrs: dict[str, Any] = {
             "type": "button",
             "role": "option",
+            "aria_label": self.label,
             "aria_selected": "true" if self.selected else "false",
             "aria_disabled": "true" if self.disabled else None,
             "tabindex": "0" if focusable and not self.disabled else "-1",
