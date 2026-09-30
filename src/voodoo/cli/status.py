@@ -1,73 +1,107 @@
-"""``voodoo status`` — runtime health overview.
-
-Displays a quick snapshot of the runtime: request counts, error rate,
-latency, agent activity, queue depth, and OTel export status.
-Works after a restart because rolling counters are persisted to
-``.voodoo/telemetry_summary.json``.
-"""
+"""voodoo status — coherent application and Runtime overview."""
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import typer
-from rich.console import Console
-from rich.table import Table
+
+from voodoo.cli import terminal
 
 __all__ = ["status"]
 
 
-def status() -> None:
-    """Show runtime health overview."""
+def _application_snapshot() -> dict[str, Any]:
+    """Return the stable machine-readable application/Runtime status contract."""
+    from voodoo import __version__
+    from voodoo.config import get_config
     from voodoo.integrations.otel import is_available as otlp_available
     from voodoo.observability import telemetry_store
 
+    cfg = get_config()
     summary = telemetry_store.get_summary()
-    console = Console()
 
-    # -- header --------------------------------------------------------
-    console.print("[bold cyan]Voodoo Runtime Status[/bold cyan]")
-    console.print()
+    total = int(summary.get("requests_total", 0) or 0)
+    errors = int(summary.get("errors_total", 0) or 0)
+    store_path = Path(cfg.store.path)
+    store_exists = store_path.exists() if cfg.store.path else False
 
-    # -- requests & errors ---------------------------------------------
-    tbl = Table(show_header=True, header_style="bold")
-    tbl.add_column("Metric", style="dim")
-    tbl.add_column("Value", justify="right")
-
-    total = summary.get("requests_total", 0)
-    errors = summary.get("errors_total", 0)
-    error_rate = f"{(errors / total * 100):.1f}%" if total else "—"
-    avg_lat = summary.get("average_latency_ms", 0.0)
-
-    tbl.add_row("Requests total", str(total))
-    tbl.add_row("Errors total", str(errors))
-    tbl.add_row("Error rate", error_rate)
-    tbl.add_row("Avg latency", f"{avg_lat:.1f} ms")
-    tbl.add_row("DB queries", str(summary.get("db_queries", 0)))
-    console.print(tbl)
-    console.print()
-
-    # -- agent activity ------------------------------------------------
-    agent_tbl = Table(show_header=True, header_style="bold")
-    agent_tbl.add_column("Agent Metric", style="dim")
-    agent_tbl.add_column("Value", justify="right")
-
-    agent_tbl.add_row("Agent runs", str(summary.get("agent_runs", 0)))
-    agent_tbl.add_row("Tokens in", str(summary.get("agent_tokens_in", 0)))
-    agent_tbl.add_row("Tokens out", str(summary.get("agent_tokens_out", 0)))
-    agent_tbl.add_row("Agent cost", f"${summary.get('agent_cost', 0.0):.6f}")
-    agent_tbl.add_row("Tool calls", str(summary.get("tool_calls_total", 0)))
-    agent_tbl.add_row("Tool errors", str(summary.get("tool_errors", 0)))
-    agent_tbl.add_row("Spans recorded", str(summary.get("spans_total", 0)))
-    console.print(agent_tbl)
-    console.print()
-
-    # -- infrastructure ------------------------------------------------
-    infra_tbl = Table(show_header=True, header_style="bold")
-    infra_tbl.add_column("Infrastructure", style="dim")
-    infra_tbl.add_column("Status")
-
-    infra_tbl.add_row("OTLP export", "active" if otlp_available() else "off")
-    console.print(infra_tbl)
+    return {
+        "version": __version__,
+        "environment": cfg.env,
+        "runtime": {
+            "mode": cfg.runtime.mode,
+            "requests_total": total,
+            "errors_total": errors,
+            "error_rate": (errors / total) if total else 0.0,
+            "average_latency_ms": float(summary.get("average_latency_ms", 0.0) or 0.0),
+            "agent_runs": int(summary.get("agent_runs", 0) or 0),
+            "tool_calls_total": int(summary.get("tool_calls_total", 0) or 0),
+        },
+        "store": {
+            "provider": cfg.store.provider,
+            "path": cfg.store.path,
+            "exists": store_exists,
+            "enabled": cfg.store.enabled,
+            "durability": cfg.store.durability,
+        },
+        "providers": {
+            "database": cfg.database.provider,
+            "queue": cfg.queue.provider,
+            "events": cfg.events.provider,
+            "objects": cfg.objects.provider,
+            "cache": cfg.cache.provider,
+            "model": cfg.models.default,
+        },
+        "telemetry": {
+            "otlp_export": "active" if otlp_available() else "off",
+        },
+    }
 
 
-app = typer.Typer(name="status", help="Runtime health overview.", no_args_is_help=True)
-app.command()(status)
+def status(
+    json_mode: bool = typer.Option(
+        False,
+        "--json",
+        help="Output the stable machine-readable application status.",
+    ),
+) -> None:
+    """Show application persistence, providers and Runtime health."""
+    snapshot = _application_snapshot()
+    if json_mode or terminal.is_json_mode():
+        terminal.json_output(snapshot)
+        return
+
+    terminal.wordmark(snapshot["version"])
+    terminal.blank()
+
+    terminal.heading("application")
+    terminal.status("environment", snapshot["environment"])
+    terminal.status("runtime", snapshot["runtime"]["mode"])
+
+    store = snapshot["store"]
+    store_state = "ready" if store["exists"] else "not created"
+    if not store["enabled"]:
+        store_state = "disabled"
+    terminal.status("store", store_state)
+    terminal.muted(
+        f"  {store['provider']} · {store['path']} · durability={store['durability']}"
+    )
+
+    terminal.heading("providers")
+    for label, provider in snapshot["providers"].items():
+        terminal.label_value(label, str(provider))
+
+    runtime = snapshot["runtime"]
+    terminal.heading("runtime health")
+    terminal.label_value("requests", str(runtime["requests_total"]))
+    terminal.label_value("errors", str(runtime["errors_total"]))
+    terminal.label_value("error rate", f"{runtime['error_rate'] * 100:.1f}%")
+    terminal.label_value("avg latency", f"{runtime['average_latency_ms']:.1f} ms")
+    terminal.label_value("agent runs", str(runtime["agent_runs"]))
+    terminal.label_value("tool calls", str(runtime["tool_calls_total"]))
+
+    terminal.heading("telemetry")
+    terminal.status("otlp export", snapshot["telemetry"]["otlp_export"])
+    terminal.blank()
