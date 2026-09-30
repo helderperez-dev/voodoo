@@ -125,3 +125,18 @@ def test_status_json_exposes_store_first_application_contract(
     assert payload["providers"]["queue"] == "voodoo"
     assert payload["providers"]["objects"] == "voodoo"
     assert payload["runtime"]["requests_total"] >= 0
+
+
+def test_doctor_json_is_store_first_and_side_effect_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(app, ["doctor", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["application"]["store"]["provider"] == "voodoo"
+    assert payload["integrity"]["legacy_sqlite"] == []
+    assert payload["integrity"]["store_first_clean"] is True
+    assert not Path(".voodoo/application.vstore").exists()
+    assert list(tmp_path.rglob("*.db")) == []
