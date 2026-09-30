@@ -155,6 +155,7 @@ jobs:
         run: >-
           uv run --python 3.12 pytest
           tests/browser/test_component_lab_browser.py --tb=short
+          -o asyncio_mode=strict
 
   test:
     name: 🧪 Test Suite (Python ${{ matrix.python-version }})
