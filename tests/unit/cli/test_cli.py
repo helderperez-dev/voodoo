@@ -248,7 +248,7 @@ def test_cli_new_page_content(tmp_path: Path):
     assert result.exit_code == 0
 
     page_content = (project_dir / "app" / "page.py").read_text()
-    assert "from voodoo import" in page_content
+    assert "from voodoo.ui import" in page_content
     # File-based convention: a module-level `page` function drives routing.
     assert "def page(request)" in page_content
     # No @page decorator in the scaffold (it conflicts with the file scanner
