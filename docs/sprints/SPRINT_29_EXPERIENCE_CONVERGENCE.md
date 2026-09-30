@@ -1,6 +1,6 @@
 # Sprint 29 — Experience Convergence
 
-**Status:** DONE · closed 2026-09-29  
+**Status:** DONE · closed 2026-09-30  
 **Started:** 2026-09-28  
 **Release target:** Voodoo 3.2.0  
 **Primary implementation:** PR #79
