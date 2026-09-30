@@ -148,7 +148,9 @@ def test_inputs_focus_and_theme_toggle_are_real_browser_behaviors(browser_page) 
         "/feedback",
     ],
 )
-def test_component_lab_has_no_mobile_horizontal_overflow(browser_page, path: str) -> None:
+def test_component_lab_has_no_mobile_horizontal_overflow(
+    browser_page, path: str
+) -> None:
     page, base = browser_page
     page.set_viewport_size({"width": 390, "height": 844})
     page.goto(f"{base}{path}")
