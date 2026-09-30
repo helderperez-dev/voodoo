@@ -605,9 +605,12 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     border: 1px solid var(--vd-color-border); background: var(--vd-color-surface);
     border-radius: {r}xl); box-shadow: {sh}lg);
     padding: {s}xl); width: 100%; max-width: 32rem;
-    margin: auto; display: flex; flex-direction: column; gap: {s}md);
-    color: var(--vd-color-text);
+    margin: auto; color: var(--vd-color-text);
 }}
+.vd-modal[open] {{
+    display: flex; flex-direction: column; gap: {s}md);
+}}
+.vd-modal:not([open]) {{ display: none; }}
 .vd-modal::backdrop {{ background: rgb(0 0 0 / 0.6); }}
 
 /* Link */
