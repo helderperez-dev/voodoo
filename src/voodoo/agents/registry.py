@@ -173,7 +173,7 @@ class VoodooStoreAgentRegistry:
     @classmethod
     def _run_key(cls, record: AgentRunRecord) -> bytes:
         return cls._run_prefix(record.agent_id) + (
-            f"{record.started_at:020.6f}:{record.run_id}".encode("utf-8")
+            f"{record.started_at:020.6f}:{record.run_id}".encode()
         )
 
     @staticmethod
