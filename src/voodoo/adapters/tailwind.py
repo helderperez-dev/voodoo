@@ -760,7 +760,9 @@ _STYLES: dict[str, Callable[[dict[str, Any], Theme], str]] = {
         "bg-[var(--vd-color-secondary)] text-xs font-semibold text-white"
     ),
     "user-badge.copy": lambda props, theme: "grid min-w-0 gap-0.5 text-left",
-    "user-badge.name": lambda props, theme: (\n        "truncate text-sm font-medium leading-tight"\n    ),
+    "user-badge.name": lambda props, theme: (
+        "truncate text-sm font-medium leading-tight"
+    ),
     "user-badge.meta": lambda props, theme: (
         "text-xs capitalize text-[var(--vd-color-text-muted)]"
     ),
