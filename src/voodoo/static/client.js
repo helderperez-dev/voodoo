@@ -800,6 +800,102 @@ document.addEventListener('click', function(e) {
         return;
     }
 
+    const tab = e.target.closest && e.target.closest('[data-vd-tab]');
+    if (tab) {
+        e.preventDefault();
+        voodoo.activateTab(tab, true);
+        return;
+    }
+
+    const menuItem = e.target.closest && e.target.closest('[role="menuitem"]');
+    if (menuItem) {
+        if (menuItem.disabled || menuItem.getAttribute('aria-disabled') === 'true') {
+            e.preventDefault();
+            return;
+        }
+        const menu = menuItem.closest('[data-vd-menu]');
+        if (menu && typeof menu.hidePopover === 'function') {
+            menu.hidePopover();
+        } else if (menu) {
+            menu.hidden = true;
+            menu.removeAttribute('data-vd-fallback-open');
+            const trigger = document.querySelector(
+                '[data-vd-menu-trigger="' + CSS.escape(menu.id) + '"]'
+            );
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    const actionEl = e.target.closest && e.target.closest('[data-vd-action]');
+    if (actionEl && actionEl.dataset.vdAction === 'toggle-theme') {
+        e.preventDefault();
+        voodoo.toggleTheme();
+        return;
+    }
+
+    const bound = e.target.closest && e.target.closest('[data-vd-event-click]');
+    if (bound) dispatchClickBinding(bound);
+
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const link = e.target.closest && e.target.closest('a[href]');
+    if (!link || link.target || link.hasAttribute('download') || link.dataset.vdFullReload !== undefined) return;
+    const url = new URL(link.href, window.location.href);
+    if (url.origin !== window.location.origin || url.hash && url.pathname === window.location.pathname) return;
+    e.preventDefault();
+    voodoo.navigate(url.href);
+});
+
+// Non-native interactive surfaces (for example selectable DataTable rows)
+// receive keyboard activation without application-side JavaScript.
+document.addEventListener('keydown', function(e) {
+    const menu = e.target.closest && e.target.closest('[data-vd-menu]');
+    if (menu) {
+        if (e.key === 'Escape') {
+            if (typeof menu.hidePopover === 'function') menu.hidePopover();
+            else {
+                menu.hidden = true;
+                menu.removeAttribute('data-vd-fallback-open');
+            }
+            const trigger = document.querySelector(
+                '[data-vd-menu-trigger="' + CSS.escape(menu.id) + '"]'
+            );
+            if (trigger) {
+                trigger.setAttribute('aria-expanded', 'false');
+                trigger.focus({preventScroll: true});
+            }
+            return;
+        }
+        const items = voodoo._menuItems(menu);
+        if (!items.length) return;
+        const current = items.indexOf(document.activeElement);
+        let next = null;
+        if (e.key === 'ArrowDown') next = items[(current + 1) % items.length];
+        if (e.key === 'ArrowUp') next = items[(current - 1 + items.length) % items.length];
+        if (e.key === 'Home') next = items[0];
+        if (e.key === 'End') next = items[items.length - 1];
+        if (next) {
+            e.preventDefault();
+            next.focus({preventScroll: true});
+            return;
+        }
+        if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            window.clearTimeout(menu._vdTypeaheadTimer);
+            menu._vdTypeahead = (menu._vdTypeahead || '') + e.key.toLocaleLowerCase();
+            menu._vdTypeaheadTimer = window.setTimeout(function() {
+                menu._vdTypeahead = '';
+            }, 500);
+            const ordered = items.slice(current + 1).concat(items.slice(0, current + 1));
+            const match = ordered.find(function(item) {
+                return item.textContent.trim().toLocaleLowerCase().startsWith(menu._vdTypeahead);
+            });
+            if (match) {
+                e.preventDefault();
+                match.focus({preventScroll: true});
+                return;
+            }
+        }
+    }
+
     const listOption = e.target.closest &&
         e.target.closest('[data-vd-list-box] [role="option"]');
     if (listOption) {
@@ -897,102 +993,6 @@ document.addEventListener('click', function(e) {
             if (!e.shiftKey && document.activeElement === last) {
                 e.preventDefault();
                 first.focus({preventScroll: true});
-                return;
-            }
-        }
-    }
-
-    const tab = e.target.closest && e.target.closest('[data-vd-tab]');
-    if (tab) {
-        e.preventDefault();
-        voodoo.activateTab(tab, true);
-        return;
-    }
-
-    const menuItem = e.target.closest && e.target.closest('[role="menuitem"]');
-    if (menuItem) {
-        if (menuItem.disabled || menuItem.getAttribute('aria-disabled') === 'true') {
-            e.preventDefault();
-            return;
-        }
-        const menu = menuItem.closest('[data-vd-menu]');
-        if (menu && typeof menu.hidePopover === 'function') {
-            menu.hidePopover();
-        } else if (menu) {
-            menu.hidden = true;
-            menu.removeAttribute('data-vd-fallback-open');
-            const trigger = document.querySelector(
-                '[data-vd-menu-trigger="' + CSS.escape(menu.id) + '"]'
-            );
-            if (trigger) trigger.setAttribute('aria-expanded', 'false');
-        }
-    }
-
-    const actionEl = e.target.closest && e.target.closest('[data-vd-action]');
-    if (actionEl && actionEl.dataset.vdAction === 'toggle-theme') {
-        e.preventDefault();
-        voodoo.toggleTheme();
-        return;
-    }
-
-    const bound = e.target.closest && e.target.closest('[data-vd-event-click]');
-    if (bound) dispatchClickBinding(bound);
-
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    const link = e.target.closest && e.target.closest('a[href]');
-    if (!link || link.target || link.hasAttribute('download') || link.dataset.vdFullReload !== undefined) return;
-    const url = new URL(link.href, window.location.href);
-    if (url.origin !== window.location.origin || url.hash && url.pathname === window.location.pathname) return;
-    e.preventDefault();
-    voodoo.navigate(url.href);
-});
-
-// Non-native interactive surfaces (for example selectable DataTable rows)
-// receive keyboard activation without application-side JavaScript.
-document.addEventListener('keydown', function(e) {
-    const menu = e.target.closest && e.target.closest('[data-vd-menu]');
-    if (menu) {
-        if (e.key === 'Escape') {
-            if (typeof menu.hidePopover === 'function') menu.hidePopover();
-            else {
-                menu.hidden = true;
-                menu.removeAttribute('data-vd-fallback-open');
-            }
-            const trigger = document.querySelector(
-                '[data-vd-menu-trigger="' + CSS.escape(menu.id) + '"]'
-            );
-            if (trigger) {
-                trigger.setAttribute('aria-expanded', 'false');
-                trigger.focus({preventScroll: true});
-            }
-            return;
-        }
-        const items = voodoo._menuItems(menu);
-        if (!items.length) return;
-        const current = items.indexOf(document.activeElement);
-        let next = null;
-        if (e.key === 'ArrowDown') next = items[(current + 1) % items.length];
-        if (e.key === 'ArrowUp') next = items[(current - 1 + items.length) % items.length];
-        if (e.key === 'Home') next = items[0];
-        if (e.key === 'End') next = items[items.length - 1];
-        if (next) {
-            e.preventDefault();
-            next.focus({preventScroll: true});
-            return;
-        }
-        if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
-            window.clearTimeout(menu._vdTypeaheadTimer);
-            menu._vdTypeahead = (menu._vdTypeahead || '') + e.key.toLocaleLowerCase();
-            menu._vdTypeaheadTimer = window.setTimeout(function() {
-                menu._vdTypeahead = '';
-            }, 500);
-            const ordered = items.slice(current + 1).concat(items.slice(0, current + 1));
-            const match = ordered.find(function(item) {
-                return item.textContent.trim().toLocaleLowerCase().startsWith(menu._vdTypeahead);
-            });
-            if (match) {
-                e.preventDefault();
-                match.focus({preventScroll: true});
                 return;
             }
         }
