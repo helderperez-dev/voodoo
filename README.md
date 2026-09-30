@@ -71,7 +71,7 @@ Voodoo requires Python 3.12+.
 ```bash
 pip install voodoo-framework
 
-voodoo create my_app
+voodoo new my_app
 cd my_app
 voodoo dev
 ```

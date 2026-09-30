@@ -1,12 +1,17 @@
-"""Object storage capability (Sprint 6).
+"""Object storage capability.
 
-``LocalObjectStore`` is the default embedded backend under
-``.voodoo/objects/``. ``VoodooObjectStore`` is the protocol every backend
-implements.
+Voodoo Store is the canonical local-first object backend. Local filesystem and
+S3 implementations remain explicit compatibility/infrastructure adapters.
 """
 
 from voodoo.storage.objects.interfaces import VoodooObjectStore
 from voodoo.storage.objects.local import LocalObjectStore
 from voodoo.storage.objects.s3 import S3ObjectStore
+from voodoo.storage.objects.store import VoodooStoreObjectStore
 
-__all__ = ["VoodooObjectStore", "LocalObjectStore", "S3ObjectStore"]
+__all__ = [
+    "VoodooObjectStore",
+    "VoodooStoreObjectStore",
+    "LocalObjectStore",
+    "S3ObjectStore",
+]

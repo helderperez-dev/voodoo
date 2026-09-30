@@ -248,7 +248,7 @@ def test_cli_new_page_content(tmp_path: Path):
     assert result.exit_code == 0
 
     page_content = (project_dir / "app" / "page.py").read_text()
-    assert "from voodoo import" in page_content
+    assert "from voodoo.ui import" in page_content
     # File-based convention: a module-level `page` function drives routing.
     assert "def page(request)" in page_content
     # No @page decorator in the scaffold (it conflicts with the file scanner
@@ -263,8 +263,10 @@ def test_cli_new_page_content(tmp_path: Path):
     # SEO tuple return.
     assert "from voodoo.seo import SEO" in page_content
     assert "return seo, ui" in page_content
-    # Internal navigation uses voodoo.navigate.
-    assert "voodoo.navigate(" in page_content
+    # Internal navigation is declarative; the client runtime intercepts normal hrefs.
+    assert "A(" in page_content
+    assert "href=" in page_content
+    assert "voodoo.navigate(" not in page_content
 
     # The dynamic route should use a bracket folder + typed segment.
     user_content = (project_dir / "app" / "users" / "[id]" / "page.py").read_text()

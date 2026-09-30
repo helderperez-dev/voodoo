@@ -314,7 +314,25 @@ class ListBox(Component):
             raise ValueError("ListBox requires at least one ListOption")
 
         binding = bind_event(on_select) if on_select else None
-        rendered = tuple(opt.render_option(binding, multi) for opt in options)
+        enabled_indexes = [
+            index for index, option in enumerate(options) if not option.disabled
+        ]
+        if not enabled_indexes:
+            raise ValueError("ListBox requires at least one enabled ListOption")
+        selected_indexes = [
+            index
+            for index, option in enumerate(options)
+            if option.selected and not option.disabled
+        ]
+        focus_index = selected_indexes[0] if selected_indexes else enabled_indexes[0]
+        rendered = tuple(
+            option.render_option(
+                binding,
+                multi,
+                focusable=index == focus_index,
+            )
+            for index, option in enumerate(options)
+        )
 
         super().__init__(
             _ListBoxGroup(
@@ -355,7 +373,13 @@ class ListOption:
         self.selected = selected
         self.disabled = disabled
 
-    def render_option(self, binding: str | None, multi: bool) -> Component:
+    def render_option(
+        self,
+        binding: str | None,
+        multi: bool,
+        *,
+        focusable: bool = False,
+    ) -> Component:
         content: list[Any] = []
         if self.icon:
             content.append(_ListOptionIcon(self.icon))
@@ -367,9 +391,10 @@ class ListOption:
         attrs: dict[str, Any] = {
             "type": "button",
             "role": "option",
+            "aria_label": self.label,
             "aria_selected": "true" if self.selected else "false",
             "aria_disabled": "true" if self.disabled else None,
-            "tabindex": "0" if self.selected else "-1",
+            "tabindex": "0" if focusable and not self.disabled else "-1",
             "data_vd_value": self.value,
         }
         if binding and not self.disabled:

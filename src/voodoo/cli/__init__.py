@@ -36,7 +36,7 @@ app = typer.Typer(
 )
 
 app.command()(new.new)
-app.command()(create.create)
+app.command("create", hidden=True)(create.create)
 app.command()(dev.dev)
 app.command()(start.start)
 app.command()(generate.generate)

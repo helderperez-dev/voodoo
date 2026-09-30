@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+### Changed — Experience convergence
+
+- Made `voodoo new` the canonical built-in project scaffold and moved external
+  template cloning behind the explicit `--template` option.
+- Converged CLI operational commands on the application's RuntimeStore so the
+  default path no longer opens hidden SQLite execution, schedule, agent or
+  artifact databases.
+- Reworked generated AI-development guidance around `Model` + Voodoo Store
+  instead of teaching `aiosqlite` as the default.
+- Promoted the native visual layer to Design System 4 and made it the final
+  framework styling layer, after primitive/product/extended/system structure and
+  before application theme overrides.
+- Migrated `UserBadge` and `AuthGuard` away from embedded utility classes to
+  semantic component styles shared by VoodooCSS and the Tailwind adapter.
+
+### Added — Experience acceptance
+
+- Added a canonical Component Lab spanning foundations, application shell,
+  chat/AI, auth, forms, navigation, advanced interactions, data-heavy views,
+  desktop workspace, Runtime/system components and feedback states.
+- Added Store-first CLI regression coverage, including a guard that the default
+  operational path creates no `.db` files.
+- Added mandatory Playwright/Chromium acceptance covering dropdowns, tabs,
+  ListBox and TreeView keyboard behavior, modal focus trap/restoration,
+  responsive sidebar transitions, form validation/submission, real input focus,
+  light/dark theme switching and mobile overflow across all Component Lab routes.
+- Added light/dark screenshot artifacts to protected CI for visual review.
+- Added complete Component Lab coverage enforcement for every renderable public
+  `voodoo.ui` component.
+- Added Store-first `voodoo status --json` and side-effect-free
+  `voodoo doctor --json` operational diagnostics.
+- Updated protected CI and release workflows to validate the canonical
+  `voodoo new --no-install` folder-based scaffold and reject accidental
+  SQLite files.
+
+
 ## [3.1.0] — 2026-09-25
 
 ### Changed — Voodoo Store 0.3 native convergence

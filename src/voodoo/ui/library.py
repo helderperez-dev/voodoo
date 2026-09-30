@@ -163,16 +163,14 @@ class Button(Component):
     def __init__(
         self,
         *children: Any,
-        on_click: str | None = None,
+        on_click: EventHandler | None = None,
         variant: str | None = None,
         size: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*children, **kwargs)
-        if on_click:
-            self.attrs["onclick"] = (
-                f"voodoo.sendEvent('{on_click}', this.id, this.value)"
-            )
+        if on_click is not None:
+            self.attrs["data_vd_event_click"] = bind_event(on_click)
         self.props = {"variant": variant, "size": size}
 
 
@@ -978,12 +976,7 @@ class ThemeToggle(Component):
         super().__init__(**kwargs)
         self.attrs["type"] = "button"
         self.attrs["aria-label"] = label
-        self.attrs["onclick"] = (
-            "var r=document.documentElement;"
-            "var d=r.classList.toggle('dark');"
-            "document.cookie='voodoo_theme='+(d?'dark':'light')"
-            "+';path=/;max-age=31536000';"
-        )
+        self.attrs["data-vd-action"] = "toggle-theme"
         self.children = (
             Text("☀", class_="vd-theme-toggle-sun"),
             Text("☾", class_="vd-theme-toggle-moon"),
@@ -1251,10 +1244,41 @@ class RegisterForm(Component):
         super().__init__(Stack(header, form, gap="lg"), **kwargs)
 
 
+class _UserBadgeAvatar(Component):
+    tag = "span"
+    style = "user-badge.avatar"
+    auto_id = False
+
+
+class _UserBadgeCopy(Component):
+    tag = "span"
+    style = "user-badge.copy"
+    auto_id = False
+
+
+class _UserBadgeName(Component):
+    tag = "span"
+    style = "user-badge.name"
+    auto_id = False
+
+
+class _UserBadgeMeta(Component):
+    tag = "span"
+    style = "user-badge.meta"
+    auto_id = False
+
+
+class _UserBadgeAction(Component):
+    tag = "a"
+    style = "user-badge.action"
+    auto_id = False
+
+
 class UserBadge(Component):
-    """Current-user pill with role, initials and logout link."""
+    """Current-user pill using the semantic design-system contract."""
 
     tag = "div"
+    style = "user-badge"
 
     def __init__(
         self,
@@ -1267,52 +1291,36 @@ class UserBadge(Component):
         self.logout_url = logout_url
 
         if not user or not getattr(user, "is_authenticated", False):
-            self.attrs["class_"] = "inline-flex items-center gap-2"
-            self.children = (
-                A(
-                    "Sign In",
-                    href="/login",
-                    class_="text-xs font-semibold text-[var(--color-primary)] hover:underline",
-                ),
-            )
+            self.props = {"state": "anonymous"}
+            self.children = (A("Sign In", href="/login"),)
             return
 
         display_name = getattr(user, "username", None) or getattr(user, "email", "User")
         initials = display_name[:2].upper() if display_name else "U"
         role = getattr(user, "role", "user")
-
-        self.attrs["class_"] = (
-            "inline-flex items-center gap-3 px-3 py-1.5 rounded-full "
-            "bg-[var(--color-surface)] border border-[var(--color-border)] "
-            "shadow-sm"
-        )
+        self.props = {"state": "authenticated"}
         self.children = (
-            Div(
-                initials,
-                class_="w-7 h-7 rounded-full bg-[var(--color-primary)] "
-                "text-white text-xs font-bold flex items-center justify-center",
+            _UserBadgeAvatar(initials, aria_hidden="true"),
+            _UserBadgeCopy(
+                _UserBadgeName(display_name),
+                _UserBadgeMeta(role),
             ),
-            Div(
-                Text(
-                    display_name,
-                    class_="text-xs font-medium text-[var(--color-text)] leading-tight",
-                ),
-                Text(
-                    role,
-                    class_="text-[10px] text-[var(--color-text-muted)] "
-                    "uppercase tracking-wider font-semibold",
-                ),
-                class_="flex flex-col text-left",
-            ),
-            A(
-                "✕",
+            _UserBadgeAction(
+                "Log out",
                 href=logout_url,
+                aria_label="Log out",
                 title="Log out",
-                class_="text-[var(--color-text-muted)] "
-                "hover:text-[var(--color-danger)] ml-1 text-xs "
-                "transition-colors",
             ),
         )
+
+
+class _AuthGuardMessage(Component):
+    style = "auth-guard"
+    auto_id = False
+
+    def __init__(self, *children: Any, error: bool = False) -> None:
+        super().__init__(*children)
+        self.props = {"variant": "error" if error else None}
 
 
 class AuthGuard(Component):
@@ -1334,25 +1342,24 @@ class AuthGuard(Component):
     def render(self) -> str:
         if not self.user or not getattr(self.user, "is_authenticated", False):
             return self._fallback(
-                '<div class="p-4 text-center text-sm '
-                'text-[var(--color-text-muted)]">Authentication required '
-                "to view this content.</div>"
+                _AuthGuardMessage("Authentication required to view this content.")
             )
         if self.required_roles and not any(
-            r in getattr(self.user, "roles", [])
-            or r == getattr(self.user, "role", None)
-            for r in self.required_roles
+            role in getattr(self.user, "roles", [])
+            or role == getattr(self.user, "role", None)
+            for role in self.required_roles
         ):
             return self._fallback(
-                '<div class="p-4 text-center text-sm '
-                'text-[var(--color-danger)] font-medium">Access restricted: '
-                "insufficient permissions.</div>"
+                _AuthGuardMessage(
+                    "Access restricted: insufficient permissions.",
+                    error=True,
+                )
             )
         return super().render()
 
-    def _fallback(self, default: str) -> str:
+    def _fallback(self, default: Component) -> str:
         if self.fallback is None:
-            return default
+            return default.render()
         if isinstance(self.fallback, Component):
             return self.fallback.render()
         return str(self.fallback)

@@ -76,6 +76,9 @@ ai = [
     "ollama"
 ]
 mcp = []
+browser = [
+    "playwright",
+]
 dev = [
     "pytest",
     "pytest-asyncio",

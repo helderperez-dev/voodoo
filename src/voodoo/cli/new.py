@@ -22,7 +22,7 @@ Voodoo CSS is the default style adapter: components emit semantic `vd-*`
 classes (e.g. `vd-button vd-button--primary`) resolved by theme tokens, so
 prefer semantic props (`variant`, `size`, `tone`) over utility classes.
 """
-from voodoo import A, Badge, Button, Card, Flex, Grid, Heading, Page, Stack, Text
+from voodoo.ui import A, Badge, Button, Card, Flex, Grid, Heading, Page, Stack, Text
 from voodoo.seo import SEO
 
 
@@ -41,11 +41,7 @@ def page(request):
             ),
             Flex(
                 Button("Get Started", variant="primary"),
-                A(
-                    "View about",
-                    href="/about",
-                    onClick="voodoo.navigate('/about')",
-                ),
+                A("View about", href="/about"),
                 direction="row",
                 gap="sm",
             ),
@@ -94,7 +90,7 @@ def page(request):
 '''
 
 _ABOUT_PAGE = '''"""About route — app/about/page.py maps to /about."""
-from voodoo import Container, Heading, Page, Stack, Text
+from voodoo.ui import Container, Heading, Page, Stack, Text
 from voodoo.seo import SEO
 
 
@@ -121,7 +117,7 @@ _USER_PAGE = '''"""User route — app/users/[id]/page.py maps to /users/{id}.
 Bracket folders create dynamic segments; the `id: int` annotation coerces
 the path segment to the declared type.
 """
-from voodoo import Card, Heading, Page, Stack, Text
+from voodoo.ui import Card, Heading, Page, Stack, Text
 from voodoo.seo import SEO
 
 
@@ -162,11 +158,11 @@ def _scaffold_offline(project_dir: Path, name: str) -> None:
     (user_dir / "page.py").write_text(_USER_PAGE)
 
     (project_dir / "voodoo.toml").write_text(
-        f'[app]\nname = "{name}"\n'
-        "# Voodoo CSS is the default style adapter.\n"
-        "# To opt into Tailwind instead:\n"
-        "#   from voodoo import TailwindAdapter, set_style_adapter\n"
-        "#   set_style_adapter(TailwindAdapter())\n"
+        f'[app]\nname = "{name}"\n\n'
+        '[store]\nprovider = "voodoo"\npath = ".voodoo/application.vstore"\n\n'
+        "# Voodoo CSS is the default design system.\n"
+        "# The Runtime creates application.vstore automatically.\n"
+        "# External SQL/object/queue infrastructure is opt-in.\n"
     )
 
     (project_dir / "pyproject.toml").write_text(
@@ -250,17 +246,22 @@ def _install_project(project_dir: Path, progress: Progress) -> None:
 
 def new(
     project_name: str,
-    template: str = typer.Option(
-        "helderperez-dev/voodoo-templates",
+    template: str | None = typer.Option(
+        None,
         "--template",
         "-t",
-        help="GitHub repository URL or 'user/repo' to use as a template",
+        help="Optional Git URL or 'user/repo'. The default scaffold is built in.",
     ),
     variant: str = typer.Option(
         "default",
         "--variant",
         "-v",
         help="Specific template variant inside the repository",
+    ),
+    install: bool = typer.Option(
+        True,
+        "--install/--no-install",
+        help="Create a local environment and install project dependencies.",
     ),
 ):
     """Scaffold a new Voodoo project or clone a community template."""
@@ -287,12 +288,14 @@ def new(
             cloned = _clone_template(project_dir, template, variant)
             if not cloned:
                 progress.update(
-                    task, description="template unavailable, using minimal scaffold..."
+                    task,
+                    description="template unavailable, using canonical scaffold...",
                 )
         if not cloned:
-            progress.add_task(description="scaffolding project...", total=None)
+            progress.add_task(description="scaffolding Voodoo app...", total=None)
             _scaffold_offline(project_dir, project_dir.name)
-        _install_project(project_dir, progress)
+        if install:
+            _install_project(project_dir, progress)
 
     terminal.blank()
     terminal.success("ready")

@@ -252,9 +252,23 @@ class TreeView(Component):
         expand_binding = bind_event(on_expand) if on_expand else None
         collapse_binding = bind_event(on_collapse) if on_collapse else None
 
+        has_active = any(node._contains_active() for node in nodes)
+        focus_index = next(
+            (index for index, node in enumerate(nodes) if not node.disabled),
+            None,
+        )
+        if focus_index is None and not has_active:
+            raise ValueError("TreeView requires at least one enabled TreeNode")
+
         rendered = tuple(
-            node.render_node(0, select_binding, expand_binding, collapse_binding)
-            for node in nodes
+            node.render_node(
+                0,
+                select_binding,
+                expand_binding,
+                collapse_binding,
+                focusable=not has_active and index == focus_index,
+            )
+            for index, node in enumerate(nodes)
         )
 
         super().__init__(
@@ -288,27 +302,38 @@ class TreeNode:
         self.selected = selected
         self.disabled = disabled
 
+    def _contains_active(self) -> bool:
+        return (self.selected and not self.disabled) or any(
+            child._contains_active() for child in self.children
+        )
+
     def render_node(
         self,
         depth: int,
         select_binding: str | None,
         expand_binding: str | None,
         collapse_binding: str | None,
+        *,
+        focusable: bool = False,
     ) -> Component:
         node_id = _ws_id("tree-node")
+        effective_expanded = self.expanded or any(
+            child._contains_active() for child in self.children
+        )
 
         # Build label content
         label_children: list[Any] = []
         if self.children:
             toggle = _TreeToggle(
-                Icon("chevron-right", aria_hidden="true")
-                if not self.expanded
-                else Icon("chevron-down", aria_hidden="true"),
+                Icon("chevron-down", aria_hidden="true")
+                if effective_expanded
+                else Icon("chevron-right", aria_hidden="true"),
                 type="button",
-                aria_expanded="true" if self.expanded else "false",
-                data_vd_event_click=expand_binding
-                if self.expanded
-                else collapse_binding,
+                tabindex="-1",
+                aria_expanded="true" if effective_expanded else "false",
+                data_vd_event_click=collapse_binding
+                if effective_expanded
+                else expand_binding,
                 data_vd_tree_toggle=True,
             )
             label_children.append(toggle)
@@ -324,6 +349,12 @@ class TreeNode:
             "aria_selected": "true" if self.selected else "false",
             "aria_disabled": "true" if self.disabled else None,
             "aria_level": str(depth + 1),
+            "aria_expanded": ("true" if effective_expanded else "false")
+            if self.children
+            else None,
+            "tabindex": "0"
+            if (self.selected or focusable) and not self.disabled
+            else "-1",
             "data_vd_tree_node=True": True,
             "data_vd_depth": str(depth),
         }
@@ -337,7 +368,10 @@ class TreeNode:
         if self.children:
             rendered_children = tuple(
                 child.render_node(
-                    depth + 1, select_binding, expand_binding, collapse_binding
+                    depth + 1,
+                    select_binding,
+                    expand_binding,
+                    collapse_binding,
                 )
                 for child in self.children
             )
@@ -345,7 +379,7 @@ class TreeNode:
                 _TreeGroup(
                     *rendered_children,
                     role="group",
-                    hidden=not self.expanded,
+                    hidden=not effective_expanded,
                 )
             )
 

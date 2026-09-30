@@ -130,13 +130,14 @@ def _print_runtime_banner() -> None:
 
     # Providers
     terminal.heading("providers")
+    terminal.status("store", cfg.store.provider.lower())
+    terminal.muted(f"  {cfg.store.path}")
+
     db_provider = cfg.database.provider.lower()
-    terminal.status("database", db_provider)
+    if db_provider != "voodoo":
+        terminal.status("database", db_provider)
 
-    queue_provider = cfg.queue.provider.lower()
-    terminal.status("queue", queue_provider)
-
-    # Object store
+    terminal.status("queue", cfg.queue.provider.lower())
     terminal.status("objects", cfg.objects.provider.lower())
 
     # Agent runtime
@@ -163,11 +164,7 @@ def _print_runtime_banner() -> None:
     except Exception:
         terminal.label_value("workers", "none")
 
-    # Schedules DB
-    schedule_path = Path(".voodoo/state/schedules.db")
-    if schedule_path.exists():
-        terminal.status("scheduler", "ready")
-    else:
-        terminal.status("scheduler", "will be created")
+    # Schedules share the application Store by default.
+    terminal.status("scheduler", cfg.store.provider.lower())
 
     terminal.blank()

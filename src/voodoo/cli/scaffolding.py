@@ -53,11 +53,11 @@ def _build_workspace_rules() -> str:
         10. `.voodoo/ai/SEO.md`
 
         Core rules:
-        - Use `voodoo.components` instead of raw HTML templates.
-        - Prefer `async def` for handlers, I/O, and database work.
-        - Use Voodoo's `A` component plus `voodoo.navigate()` for internal links.
-        - Keep app code in `app/` and data in `.voodoo/state/`.
-        - Use `aiosqlite` with `.voodoo/state/data.db` by default.
+        - Use public components from `voodoo.ui` instead of raw HTML templates.
+        - Prefer `async def` for handlers and I/O.
+        - Use Voodoo's `A` component with a normal internal `href`; the client runtime handles navigation.
+        - Keep app code in `app/`; durable application data belongs in Voodoo Store.
+        - Use Voodoo `Model` and the application Store by default; SQL adapters are explicit.
         - Preserve the large-cookie websocket settings in `voodoo dev`.
 
         If Trae skills are available, use `.trae/skills/voodoo-builder/SKILL.md`.
@@ -109,17 +109,17 @@ def _fallback_ai_assets() -> dict[str, str]:
             """
             # Voodoo Rules
 
-            - Build UI with `voodoo.components`.
+            - Build UI with public components from `voodoo.ui`.
             - Prefer `async def` for handlers and I/O.
             - Voodoo CSS is the default style adapter: components emit semantic
               `vd-*` classes driven by theme tokens. Prefer semantic props
               (`variant`, `size`, `tone`, `level`) over utility classes. Opt into
               Tailwind only with `set_style_adapter(TailwindAdapter())`.
-            - Use `A(..., href=..., onClick="voodoo.navigate('...')")` for internal links.
+            - Use `A(..., href=...)` for internal links; do not add inline JavaScript.
             - Use folder-based routing: `app/<segment>/page.py` defines a `page(request)`
               function. `app/pages/` (file-per-page) is supported for backward compat.
-            - Keep persistent data inside `.voodoo/state/`.
-            - Use `aiosqlite` and `.voodoo/state/data.db` by default.
+            - Use Voodoo Store-backed models for persistent application data.
+            - Use Voodoo `Model` and `.voodoo/application.vstore` by default.
             - Preserve `WEBSOCKETS_MAX_LINE_LENGTH="8388608"` and `http="h11"` when working with websocket-heavy apps.
             """
         ).strip()
@@ -162,7 +162,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             ```python
             from voodoo.components import A
 
-            A("Dashboard", href="/dashboard", onClick="voodoo.navigate('/dashboard')")
+            A("Dashboard", href="/dashboard")
             ```
             """
         ).strip()
@@ -208,28 +208,34 @@ def _fallback_ai_assets() -> dict[str, str]:
             Preferred patterns:
             - Form posts for mutations
             - Async route handlers for derived UI
-            - Database-backed state for persistence
+            - Store-backed Model state for persistence
             - WebSockets only when real-time behavior is truly needed
             """
         ).strip()
         + "\n",
         ".voodoo/ai/DATABASE.md": dedent(
             """
-            # Voodoo Database
+            # Voodoo Persistence
 
             Default stack:
-            - `aiosqlite`
-            - database path: `.voodoo/state/data.db`
+            - Voodoo `Model`
+            - Voodoo Store at `.voodoo/application.vstore`
+            - no external database required
 
             Example:
 
             ```python
-            import aiosqlite
+            from voodoo import Model
 
-            async with aiosqlite.connect(".voodoo/state/data.db") as db:
-                await db.execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, name TEXT)")
-                await db.commit()
+            class Item(Model):
+                name: str
+
+            item = await Item.create(name="First item")
+            items = await Item.all()
             ```
+
+            SQLite/PostgreSQL are explicit adapters for applications that
+            deliberately need external SQL infrastructure.
             """
         ).strip()
         + "\n",
@@ -240,7 +246,7 @@ def _fallback_ai_assets() -> dict[str, str]:
             ## Scaffold a Route
             - Create the correct `app/.../page.py` file
             - Export `page(request, ...)`
-            - Return `voodoo.components`
+            - Return public `voodoo.ui` components
 
             ## Create a Component
             - Build a reusable Python function
@@ -248,13 +254,13 @@ def _fallback_ai_assets() -> dict[str, str]:
             - Style through `className`
 
             ## Add Data
-            - Use `aiosqlite`
-            - Store the database in `.voodoo/state/data.db`
-            - Keep queries async
+            - Define durable data with `voodoo.Model`
+            - Use the application Store at `.voodoo/application.vstore`
+            - Add SQL adapters only when explicitly required
 
             ## Debug Navigation
             - Check file-based route placement
-            - Check `A` + `voodoo.navigate()`
+            - Check the `A(..., href=...)` target and client navigation runtime
 
             ## Debug Cookies / WebSockets
             - Check `WEBSOCKETS_MAX_LINE_LENGTH`
@@ -311,11 +317,11 @@ def _fallback_ai_assets() -> dict[str, str]:
             10. `.voodoo/ai/SEO.md`
 
             Follow these Voodoo rules:
-            - Build UI with `voodoo.components`
-            - Prefer `async def`
-            - Use `A` plus `voodoo.navigate()` for internal links
-            - Keep data in `.voodoo/state/`
-            - Use `aiosqlite` by default
+            - Build UI from `voodoo.ui`
+            - Prefer `async def` for handlers and I/O
+            - Use Voodoo navigation primitives for internal links
+            - Persist application data through `voodoo.Model` and Voodoo Store
+            - Never add SQLite unless the application explicitly selects it
             - Preserve websocket large-cookie configuration
             """
         ).lstrip(),

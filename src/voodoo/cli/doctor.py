@@ -1,8 +1,74 @@
 import importlib
 from pathlib import Path
+from typing import Any
+
+import typer
 
 from voodoo.cli import terminal
 from voodoo.config import get_config
+
+
+def _doctor_snapshot() -> dict[str, Any]:
+    """Return side-effect-free diagnostics suitable for automation."""
+    from voodoo.cli.status import _application_snapshot
+
+    cfg = get_config()
+    modules: dict[str, str] = {}
+    for name, label in (
+        ("voodoo.mesh", "mesh"),
+        ("voodoo.integrations.mcp", "mcp"),
+        ("voodoo.ai", "ai"),
+        ("voodoo.runtime.scheduling", "workers"),
+        ("voodoo.observability", "observability"),
+    ):
+        try:
+            importlib.import_module(name)
+            modules[label] = "ready"
+        except Exception:
+            modules[label] = "not found"
+
+    legacy_candidates = (
+        Path(".voodoo/state/data.db"),
+        Path(".voodoo/state/schedules.db"),
+        Path(".voodoo/state/agents.db"),
+    )
+    legacy_files = [str(path) for path in legacy_candidates if path.exists()]
+    ai_dir = Path(".voodoo/ai")
+
+    return {
+        "application": _application_snapshot(),
+        "project": {
+            "root": str(Path.cwd()),
+            "config": "voodoo.toml" if Path("voodoo.toml").exists() else None,
+            "app_directory": Path("app").is_dir(),
+        },
+        "integrity": {
+            "legacy_sqlite": legacy_files,
+            "store_first_clean": (
+                cfg.database.provider.lower() != "voodoo" or not legacy_files
+            ),
+        },
+        "auth": {
+            "secret": (
+                "warning"
+                if cfg.auth.secret_key
+                == "dev-secret-key-change-in-production-voodoo-2026"
+                else "ready"
+            )
+        },
+        "security": {
+            "headers": cfg.security.headers_enabled,
+            "rate_limit": cfg.security.rate_limit_enabled,
+            "cors": cfg.security.cors_enabled,
+            "csrf": cfg.security.csrf_enabled,
+        },
+        "modules": modules,
+        "ai_kit": (
+            "ready"
+            if ai_dir.exists() and (ai_dir / "README.md").exists()
+            else "not found"
+        ),
+    }
 
 
 def _print_capability_matrix() -> None:
@@ -162,10 +228,17 @@ def _doctor_queue() -> None:
 def _doctor_optional_services(cfg: object) -> None:
     terminal.heading("schedules")
     try:
-        sched_db = Path(cfg.db_path).parent / "schedules.db"
-        terminal.status("scheduler db", "present" if sched_db.exists() else "not found")
+        from voodoo.cli.context import acquire_schedule_store
+
+        schedule_store, store_path = acquire_schedule_store()
+        try:
+            schedule_store.list_all()
+            terminal.status("scheduler", "ready")
+            terminal.muted(f"  {store_path}")
+        finally:
+            schedule_store.close()
     except Exception:
-        terminal.status("schedules", "unavailable")
+        terminal.status("scheduler", "unavailable")
 
     terminal.heading("otel")
     try:
@@ -184,15 +257,23 @@ def _doctor_ai_kit() -> None:
     terminal.muted("  .voodoo/ai/" if ready else "  run 'voodoo ai init' to generate")
 
 
-def doctor():
-    """
-    Run environment and configuration diagnostics.
-    """
+def doctor(
+    json_mode: bool = typer.Option(
+        False,
+        "--json",
+        help="Output side-effect-free machine-readable diagnostics.",
+    ),
+):
+    """Run environment and configuration diagnostics."""
     import os
 
     from voodoo import __version__ as ver
 
     cfg = get_config()
+
+    if json_mode or terminal.is_json_mode():
+        terminal.json_output(_doctor_snapshot())
+        return
 
     terminal.wordmark(ver)
     terminal.blank()
@@ -214,13 +295,38 @@ def doctor():
     # ── Runtime ─────────────────────────────────────
     terminal.heading("runtime")
 
-    # Database resolution
-    db_path = cfg.db_path
-    if db_path == ":memory:" or Path(db_path).exists():
-        terminal.status("database", "ready")
-        terminal.muted(f"  {cfg.database.provider} ({db_path})")
-    else:
-        terminal.status("database", "not found")
+    # Canonical application Store
+    try:
+        from voodoo.runtime.store import VoodooStoreProvider
+
+        report = VoodooStoreProvider(cfg.store.path).health()
+        terminal.status("store", "ready" if report.verified else "not found")
+        terminal.muted(f"  {cfg.store.provider} ({cfg.store.path})")
+    except Exception:
+        terminal.status("store", "unavailable")
+
+    if cfg.database.provider.lower() == "voodoo":
+        legacy_candidates = (
+            Path(".voodoo/state/data.db"),
+            Path(".voodoo/state/schedules.db"),
+            Path(".voodoo/state/agents.db"),
+        )
+        legacy_files = [path for path in legacy_candidates if path.exists()]
+        terminal.status("legacy sqlite", "clean" if not legacy_files else "warning")
+        if legacy_files:
+            terminal.warning(
+                "Legacy SQLite state exists while the application uses Voodoo Store."
+            )
+            for path in legacy_files:
+                terminal.muted(f"  {path}")
+
+    # External SQL is reported only when explicitly selected.
+    if cfg.database.provider.lower() != "voodoo":
+        db_path = cfg.database.path or cfg.database.url or cfg.db_path
+        ready = db_path == ":memory:" or bool(db_path and Path(db_path).exists())
+        if cfg.database.provider.lower() in {"postgres", "postgresql"}:
+            ready = bool(db_path)
+        terminal.status("database", "ready" if ready else "not found")
         terminal.muted(f"  {cfg.database.provider} ({db_path})")
 
     # Resolved providers (Sprint 9)

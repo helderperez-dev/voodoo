@@ -750,6 +750,34 @@ _STYLES: dict[str, Callable[[dict[str, Any], Theme], str]] = {
     "avatar": _avatar,
     "avatar.img": _avatar_img,
     "avatar.fallback": _avatar_fallback,
+    "user-badge": lambda props, theme: (
+        "inline-flex items-center gap-2 rounded-full border "
+        "border-[var(--vd-color-border)] bg-[var(--vd-color-surface)] "
+        "px-2.5 py-1 text-sm text-[var(--vd-color-text)] shadow-sm"
+    ),
+    "user-badge.avatar": lambda props, theme: (
+        "inline-flex size-7 shrink-0 items-center justify-center rounded-full "
+        "bg-[var(--vd-color-secondary)] text-xs font-semibold text-white"
+    ),
+    "user-badge.copy": lambda props, theme: "grid min-w-0 gap-0.5 text-left",
+    "user-badge.name": lambda props, theme: (
+        "truncate text-sm font-medium leading-tight"
+    ),
+    "user-badge.meta": lambda props, theme: (
+        "text-xs capitalize text-[var(--vd-color-text-muted)]"
+    ),
+    "user-badge.action": lambda props, theme: (
+        "ml-1 text-xs text-[var(--vd-color-text-muted)] no-underline "
+        "hover:text-[var(--vd-color-danger)]"
+    ),
+    "auth-guard": lambda props, theme: (
+        "p-3 text-center text-sm "
+        + (
+            "font-medium text-[var(--vd-color-danger)]"
+            if props.get("variant") == "error"
+            else "text-[var(--vd-color-text-muted)]"
+        )
+    ),
     "divider": _divider,
     "dialog": _dialog,
     "modal": _modal,

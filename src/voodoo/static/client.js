@@ -250,6 +250,79 @@ const voodoo = {
         });
     },
 
+    _listBoxOptions: function(root) {
+        if (!root) return [];
+        return Array.from(root.querySelectorAll('[role="option"]')).filter(function(option) {
+            return !option.disabled && option.getAttribute('aria-disabled') !== 'true';
+        });
+    },
+
+    focusListBoxOption: function(option) {
+        const root = option && option.closest('[data-vd-list-box]');
+        if (!root) return;
+        this._listBoxOptions(root).forEach(function(candidate) {
+            candidate.tabIndex = candidate === option ? 0 : -1;
+        });
+        option.focus({preventScroll: true});
+    },
+
+    selectListBoxOption: function(option) {
+        const root = option && option.closest('[data-vd-list-box]');
+        if (!root || option.disabled || option.getAttribute('aria-disabled') === 'true') return;
+        const rawMulti = root.getAttribute('data-vd-multi');
+        const multi = rawMulti === '' || rawMulti === 'true' || rawMulti === 'True' || rawMulti === '1';
+        if (multi) {
+            option.setAttribute(
+                'aria-selected',
+                option.getAttribute('aria-selected') === 'true' ? 'false' : 'true'
+            );
+        } else {
+            this._listBoxOptions(root).forEach(function(candidate) {
+                candidate.setAttribute('aria-selected', candidate === option ? 'true' : 'false');
+            });
+        }
+        this.focusListBoxOption(option);
+    },
+
+    _visibleTreeItems: function(tree) {
+        if (!tree) return [];
+        return Array.from(tree.querySelectorAll('[role="treeitem"]')).filter(function(item) {
+            if (item.getAttribute('aria-disabled') === 'true') return false;
+            let current = item.parentElement;
+            while (current && current !== tree) {
+                if (current.hidden) return false;
+                current = current.parentElement;
+            }
+            return true;
+        });
+    },
+
+    selectTreeItem: function(item) {
+        const tree = item && item.closest('[data-vd-tree-view]');
+        if (!tree || item.getAttribute('aria-disabled') === 'true') return;
+        tree.querySelectorAll('[role="treeitem"]').forEach(function(candidate) {
+            candidate.setAttribute('aria-selected', candidate === item ? 'true' : 'false');
+            candidate.tabIndex = candidate === item ? 0 : -1;
+        });
+        item.focus({preventScroll: true});
+    },
+
+    toggleTreeNode: function(toggle, forceExpanded) {
+        const row = toggle && toggle.closest('[role="treeitem"]');
+        const wrapper = row && row.parentElement;
+        if (!row || !wrapper) return false;
+        const group = Array.from(wrapper.children).find(function(child) {
+            return child.getAttribute && child.getAttribute('role') === 'group';
+        });
+        if (!group) return false;
+        const current = toggle.getAttribute('aria-expanded') === 'true';
+        const expanded = forceExpanded === undefined ? !current : !!forceExpanded;
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        row.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        group.hidden = !expanded;
+        return expanded;
+    },
+
     _storageGet: function(key) {
         try { return window.localStorage.getItem(key); } catch (_) { return null; }
     },
@@ -278,14 +351,8 @@ const voodoo = {
         if (!dialog || !dialog.open) return;
         dialog.setAttribute('data-vd-closing', '');
         const finish = () => {
-            const trigger = document.getElementById(dialog.dataset.vdReturnFocus || '');
             dialog.removeAttribute('data-vd-closing');
             if (dialog.open) dialog.close();
-            if (trigger) {
-                window.setTimeout(function() {
-                    trigger.focus({preventScroll: true});
-                }, 0);
-            }
         };
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) finish();
         else dialog._vdCloseTimer = window.setTimeout(finish, 160);
@@ -547,6 +614,13 @@ const voodoo = {
                     dialog._vdCloseTimer = null;
                 }
                 dialog.removeAttribute('data-vd-closing');
+                const trigger = document.getElementById(dialog.dataset.vdReturnFocus || '');
+                if (trigger) {
+                    window.setTimeout(function() {
+                        trigger.focus({preventScroll: true});
+                    }, 0);
+                }
+                delete dialog.dataset.vdReturnFocus;
             });
             dialog.addEventListener('click', function(event) {
                 if (event.target !== dialog ||
@@ -658,6 +732,24 @@ document.addEventListener('click', function(e) {
             if (trigger) trigger.setAttribute('aria-expanded', 'false');
         }
     );
+
+    const listOption = e.target.closest &&
+        e.target.closest('[data-vd-list-box] [role="option"]');
+    if (listOption) {
+        voodoo.selectListBoxOption(listOption);
+    }
+
+    const treeToggle = e.target.closest && e.target.closest('[data-vd-tree-toggle]');
+    if (treeToggle) {
+        e.preventDefault();
+        voodoo.toggleTreeNode(treeToggle);
+    }
+
+    const treeItem = e.target.closest &&
+        e.target.closest('[data-vd-tree-view] [role="treeitem"]');
+    if (treeItem && !treeToggle) {
+        voodoo.selectTreeItem(treeItem);
+    }
 
     const sidebarDismiss = e.target.closest && e.target.closest('[data-vd-sidebar-dismiss]');
     if (sidebarDismiss) {
@@ -799,6 +891,108 @@ document.addEventListener('keydown', function(e) {
             if (match) {
                 e.preventDefault();
                 match.focus({preventScroll: true});
+                return;
+            }
+        }
+    }
+
+    const listOption = e.target.closest &&
+        e.target.closest('[data-vd-list-box] [role="option"]');
+    if (listOption) {
+        const root = listOption.closest('[data-vd-list-box]');
+        const options = voodoo._listBoxOptions(root);
+        const current = options.indexOf(listOption);
+        let next = null;
+        if (e.key === 'ArrowDown') next = options[(current + 1) % options.length];
+        if (e.key === 'ArrowUp') next = options[(current - 1 + options.length) % options.length];
+        if (e.key === 'Home') next = options[0];
+        if (e.key === 'End') next = options[options.length - 1];
+        if (next) {
+            e.preventDefault();
+            voodoo.focusListBoxOption(next);
+            return;
+        }
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            listOption.click();
+            return;
+        }
+    }
+
+    const treeItem = e.target.closest &&
+        e.target.closest('[data-vd-tree-view] [role="treeitem"]');
+    if (treeItem && e.target === treeItem) {
+        const tree = treeItem.closest('[data-vd-tree-view]');
+        const items = voodoo._visibleTreeItems(tree);
+        const current = items.indexOf(treeItem);
+        const toggle = treeItem.querySelector(':scope > [data-vd-tree-toggle]');
+        let next = null;
+        if (e.key === 'ArrowDown') next = items[(current + 1) % items.length];
+        if (e.key === 'ArrowUp') next = items[(current - 1 + items.length) % items.length];
+        if (e.key === 'Home') next = items[0];
+        if (e.key === 'End') next = items[items.length - 1];
+        if (next) {
+            e.preventDefault();
+            next.tabIndex = 0;
+            treeItem.tabIndex = -1;
+            next.focus({preventScroll: true});
+            return;
+        }
+        if (e.key === 'ArrowRight' && toggle) {
+            e.preventDefault();
+            if (toggle.getAttribute('aria-expanded') !== 'true') {
+                voodoo.toggleTreeNode(toggle, true);
+            } else {
+                const refreshed = voodoo._visibleTreeItems(tree);
+                const index = refreshed.indexOf(treeItem);
+                const child = refreshed[index + 1];
+                if (child && Number(child.getAttribute('aria-level')) >
+                        Number(treeItem.getAttribute('aria-level'))) {
+                    child.tabIndex = 0;
+                    treeItem.tabIndex = -1;
+                    child.focus({preventScroll: true});
+                }
+            }
+            return;
+        }
+        if (e.key === 'ArrowLeft') {
+            if (toggle && toggle.getAttribute('aria-expanded') === 'true') {
+                e.preventDefault();
+                voodoo.toggleTreeNode(toggle, false);
+                return;
+            }
+            const group = treeItem.closest('[role="group"]');
+            const wrapper = group && group.parentElement;
+            const parent = wrapper && wrapper.querySelector(':scope > [role="treeitem"]');
+            if (parent) {
+                e.preventDefault();
+                treeItem.tabIndex = -1;
+                parent.tabIndex = 0;
+                parent.focus({preventScroll: true});
+                return;
+            }
+        }
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            treeItem.click();
+            return;
+        }
+    }
+
+    const openDialog = e.target.closest && e.target.closest('dialog[data-vd-layer][open]');
+    if (openDialog && e.key === 'Tab') {
+        const focusable = voodoo._focusable(openDialog);
+        if (focusable.length) {
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus({preventScroll: true});
+                return;
+            }
+            if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus({preventScroll: true});
                 return;
             }
         }
