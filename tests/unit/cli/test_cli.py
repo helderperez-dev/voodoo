@@ -263,8 +263,10 @@ def test_cli_new_page_content(tmp_path: Path):
     # SEO tuple return.
     assert "from voodoo.seo import SEO" in page_content
     assert "return seo, ui" in page_content
-    # Internal navigation uses voodoo.navigate.
-    assert "voodoo.navigate(" in page_content
+    # Internal navigation is declarative; the client runtime intercepts normal hrefs.
+    assert "A(" in page_content
+    assert "href=" in page_content
+    assert "voodoo.navigate(" not in page_content
 
     # The dynamic route should use a bracket folder + typed segment.
     user_content = (project_dir / "app" / "users" / "[id]" / "page.py").read_text()
