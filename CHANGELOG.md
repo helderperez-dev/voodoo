@@ -24,8 +24,18 @@
   desktop workspace, Runtime/system components and feedback states.
 - Added Store-first CLI regression coverage, including a guard that the default
   operational path creates no `.db` files.
-- Added an opt-in Playwright browser acceptance harness for dropdown keyboard
-  behavior, tabs, input focus, theme switching and mobile overflow.
+- Added mandatory Playwright/Chromium acceptance covering dropdowns, tabs,
+  ListBox and TreeView keyboard behavior, modal focus trap/restoration,
+  responsive sidebar transitions, form validation/submission, real input focus,
+  light/dark theme switching and mobile overflow across all Component Lab routes.
+- Added light/dark screenshot artifacts to protected CI for visual review.
+- Added complete Component Lab coverage enforcement for every renderable public
+  `voodoo.ui` component.
+- Added Store-first `voodoo status --json` and side-effect-free
+  `voodoo doctor --json` operational diagnostics.
+- Updated protected CI and release workflows to validate the canonical
+  `voodoo new --no-install` folder-based scaffold and reject accidental
+  SQLite files.
 
 
 ## [3.1.0] — 2026-09-25
