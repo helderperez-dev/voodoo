@@ -116,8 +116,8 @@ def test_listbox_keyboard_roving_focus_and_selection(browser_page) -> None:
     page, base = browser_page
     page.goto(f"{base}/data")
 
-    python = page.get_by_role("option", name="Python Application language")
-    rust = page.get_by_role("option", name="Rust Store core")
+    python = page.get_by_role("option", name="Python", exact=True)
+    rust = page.get_by_role("option", name="Rust", exact=True)
 
     python.focus()
     page.keyboard.press("ArrowDown")
