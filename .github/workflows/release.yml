@@ -322,7 +322,7 @@ jobs:
             dist/release-notes.sig.json
           retention-days: 90
       - name: 🔏 Attest release artifacts
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/*.whl
