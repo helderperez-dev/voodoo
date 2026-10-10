@@ -1,6 +1,6 @@
 {
   "package": "voodoo",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "root_exports": [
     "Agent",
     "App",
