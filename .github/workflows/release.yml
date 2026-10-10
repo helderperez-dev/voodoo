@@ -329,6 +329,9 @@ jobs:
             dist/*.tar.gz
 
       - name: 📤 Publish to PyPI
+        env:
+          UV_PUBLISH_USERNAME: __token__
+          UV_PUBLISH_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: uv publish dist/*.whl dist/*.tar.gz
 
       - name: 🍺 Update Homebrew Formula
