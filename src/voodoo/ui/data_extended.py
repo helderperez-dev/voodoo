@@ -411,6 +411,7 @@ class ListBox(Component):
     ) -> None:
         unavailable = disabled or read_only or loading or bool(error)
         binding = bind_event(on_select) if on_select and not unavailable else None
+        rendered: tuple[Component, ...]
         if error or loading or not options:
             if error:
                 message = error if isinstance(error, str) else "Unable to load options"

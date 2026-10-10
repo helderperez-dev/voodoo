@@ -278,6 +278,7 @@ class TreeView(Component):
             bind_event(on_collapse) if on_collapse and not unavailable else None
         )
 
+        rendered: tuple[Component, ...]
         if loading or error or not nodes:
             if error:
                 message = error if isinstance(error, str) else "Unable to load tree"
