@@ -1,0 +1,13 @@
+[app]
+name = "{{ project_name }}"
+
+# Development is safe by default. For production, set VOODOO_ENV=production,
+# provide a unique VOODOO_SECRET_KEY (at least 32 characters), configure
+# explicit CORS origins, and run `voodoo doctor` before deployment.
+
+[store]
+provider = "voodoo"
+path = ".voodoo/application.vstore"
+
+# The Runtime creates application.vstore automatically.
+# External SQL, object, and queue infrastructure is opt-in.
