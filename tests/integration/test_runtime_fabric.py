@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -144,6 +145,32 @@ def test_fabric_lease_is_durable_and_generation_increases(runtime_store) -> None
     assert first.generation == 1
     assert second.generation == 2
     assert fabric.get_lease("work-1") == second
+
+    raw = runtime_store.provider.native.get_record(
+        b"runtime.fabric_leases", b"work-1"
+    )
+    assert raw is not None
+    assert json.loads(bytes(raw[1]))["_schema_version"] == 1
+
+
+def test_fabric_lease_codec_reads_legacy_and_rejects_future(runtime_store) -> None:
+    memberships = VoodooStoreMembershipStore(runtime_store)
+    join(memberships, "node-a")
+    native = runtime_store.provider.native
+    base = {
+        "work_id": "legacy-work",
+        "node_id": "node-a",
+        "generation": 1,
+        "acquired_at": "2026-09-14T00:00:00+00:00",
+        "expires_at": "2026-09-14T00:01:00+00:00",
+    }
+    native.put(b"runtime:fabric:lease:legacy-work", json.dumps(base).encode())
+    fabric = RuntimeFabric(memberships, runtime_store=runtime_store)
+    assert fabric.get_lease("legacy-work") is not None
+    future = {**base, "work_id": "future-work", "_schema_version": 99}
+    native.put(b"runtime:fabric:lease:future-work", json.dumps(future).encode())
+    with pytest.raises(ValueError, match="unsupported"):
+        fabric.get_lease("future-work")
 
 
 @pytest.mark.asyncio

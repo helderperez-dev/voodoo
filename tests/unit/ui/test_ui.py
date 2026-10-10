@@ -13,9 +13,11 @@ from voodoo.ui import (
     Button,
     Card,
     Component,
+    Dialog,
     Div,
     Heading,
     Input,
+    Label,
     Link,
     Modal,
     NoopAdapter,
@@ -26,7 +28,7 @@ from voodoo.ui import (
     Textarea,
     set_style_adapter,
 )
-from voodoo.ui.component import Html, tone_to_color_var
+from voodoo.ui.component import Html, SafeHtml, UnsafeHtml, tone_to_color_var
 from voodoo.ui.styles import current_adapter
 
 
@@ -126,6 +128,12 @@ def test_component_base_plain_div():
     )
 
 
+def test_component_attribute_for_uses_html_for_name():
+    rendered = Label("Name", for_="field-id").render()
+    assert 'for="field-id"' in rendered
+    assert "for-=" not in rendered
+
+
 def test_div_plain():
     div = Div("Content", id="d1")
     assert div.render() == '<div id="d1">Content</div>'
@@ -173,6 +181,27 @@ def test_input_hidden_has_no_style():
     assert "rounded-md" not in rendered
 
 
+def test_controls_share_disabled_loading_readonly_and_error_contract():
+    rendered = Input(
+        disabled=True,
+        read_only=True,
+        loading=True,
+        error="invalid email",
+    ).render()
+    assert " disabled" in rendered
+    assert " readonly" in rendered
+    assert 'aria-readonly="true"' in rendered
+    assert 'aria-busy="true"' in rendered
+    assert 'aria-invalid="true"' in rendered
+    assert 'data-vd-state="error"' in rendered
+
+    textarea = Textarea(read_only=True).render()
+    select = Select(disabled=True, error=True).render()
+    assert " readonly" in textarea
+    assert " disabled" in select
+    assert 'data-vd-state="error"' in select
+
+
 def test_select_default(tailwind_adapter):
     sel = Select(id="s1")
     rendered = sel.render()
@@ -202,6 +231,37 @@ def test_modal_component(tailwind_adapter):
     assert 'aria-modal="true"' in rendered
     assert "open" in rendered
     assert "shadow-2xl" in rendered
+
+
+def test_modal_state_contract_blocks_unavailable_opening(tailwind_adapter):
+    modal = Modal(
+        "Dialog content",
+        open=True,
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    )
+    rendered = modal.render()
+    assert 'aria-disabled="true"' in rendered
+    assert 'aria-busy="true"' in rendered
+    assert 'aria-invalid="true"' in rendered
+    assert 'data-vd-error="Unavailable"' in rendered
+    assert 'open="open"' not in rendered
+
+
+def test_dialog_state_contract_blocks_unavailable_opening(tailwind_adapter):
+    rendered = Dialog(
+        "Dialog content",
+        open=True,
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in rendered
+    assert 'aria-busy="true"' in rendered
+    assert 'aria-invalid="true"' in rendered
+    assert 'data-vd-error="Unavailable"' in rendered
+    assert 'open="open"' not in rendered
 
 
 def test_link_component(tailwind_adapter):
@@ -308,6 +368,13 @@ def test_html_escape_hatch():
     assert raw.render() == "<b>bold</b>"
 
 
+def test_explicit_html_safety_names():
+    assert SafeHtml("<script>alert(1)</script>").render() == (
+        "&lt;script&gt;alert(1)&lt;/script&gt;"
+    )
+    assert UnsafeHtml("<b>trusted</b>").render() == "<b>trusted</b>"
+
+
 def test_css_prop_renders_inline_style():
     btn = Component("Hi", id="c1", css={"margin_top": "2rem"})
     rendered = btn.render()
@@ -394,6 +461,39 @@ def test_card_on_click_is_keyboard_accessible_and_visually_interactive(
     assert 'tabindex="0"' in rendered
     assert "data-vd-event-click" in rendered
     assert "vd-card--interactive" in rendered
+
+
+def test_link_state_contract_removes_unavailable_navigation_target():
+    rendered = Link(
+        "Docs",
+        href="/docs",
+        read_only=True,
+        loading=True,
+        error="Navigation unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in rendered
+    assert 'aria-readonly="true"' in rendered
+    assert 'aria-busy="true"' in rendered
+    assert 'data-vd-error="Navigation unavailable"' in rendered
+    assert 'href="/docs"' not in rendered
+    assert 'tabindex="-1"' in rendered
+
+
+def test_card_state_contract_suppresses_activation():
+    rendered = Card(
+        "Open",
+        on_click=lambda: None,
+        read_only=True,
+        loading=True,
+        error="Card unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in rendered
+    assert 'aria-readonly="true"' in rendered
+    assert 'aria-busy="true"' in rendered
+    assert 'aria-invalid="true"' in rendered
+    assert 'data-vd-error="Card unavailable"' in rendered
+    assert "data-vd-event-click" not in rendered
+    assert 'role="button"' not in rendered
 
 
 def test_tailwind_card_variant_and_padding(tailwind_adapter):
@@ -544,6 +644,22 @@ def test_login_form_composed():
     assert "Sign In" in rendered
 
 
+def test_login_form_state_contract_propagates():
+    from voodoo.ui import LoginForm
+
+    rendered = LoginForm(
+        read_only=True,
+        loading=True,
+        error="Authentication unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in rendered
+    assert 'aria-readonly="true"' in rendered
+    assert 'aria-busy="true"' in rendered
+    assert 'aria-invalid="true"' in rendered
+    assert 'data-vd-error="Authentication unavailable"' in rendered
+    assert 'data-vd-event-submit' not in rendered
+
+
 def test_register_form_composed():
     from voodoo.ui import RegisterForm
 
@@ -554,11 +670,56 @@ def test_register_form_composed():
     assert 'name="email"' in rendered
 
 
+def test_register_form_state_contract_propagates():
+    from voodoo.ui import RegisterForm
+
+    rendered = RegisterForm(
+        disabled=True,
+        loading=True,
+        error="Registration unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in rendered
+    assert 'aria-busy="true"' in rendered
+    assert 'aria-invalid="true"' in rendered
+    assert 'data-vd-error="Registration unavailable"' in rendered
+
+
 def test_user_badge_anonymous():
     from voodoo.ui import UserBadge
 
     badge = UserBadge(user=None)
     assert "Sign In" in badge.render()
+
+
+def test_user_badge_state_contract_blocks_navigation():
+    from voodoo.ui import UserBadge
+
+    rendered = UserBadge(
+        disabled=True,
+        loading=True,
+        error="Identity unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in rendered
+    assert 'aria-busy="true"' in rendered
+    assert 'aria-invalid="true"' in rendered
+    assert 'data-vd-error="Identity unavailable"' in rendered
+    assert 'href="/login"' not in rendered
+
+
+def test_option_state_contract_exposes_native_disabled_state():
+    from voodoo.ui import Option
+
+    rendered = Option(
+        "Unavailable",
+        disabled=True,
+        loading=True,
+        error="Not selectable",
+    ).render()
+    assert "disabled" in rendered
+    assert 'aria-disabled="true"' in rendered
+    assert 'aria-busy="true"' in rendered
+    assert 'aria-invalid="true"' in rendered
+    assert 'data-vd-error="Not selectable"' in rendered
 
 
 def test_user_badge_authenticated():
@@ -601,3 +762,16 @@ def test_auth_guard_role_mismatch():
     user = AuthUser(id=2, email="v@b.c", role="viewer", is_authenticated=True)
     guard = AuthGuard("Secret", user=user, required_roles=["admin"])
     assert "Access restricted" in guard.render()
+
+
+def test_render_key_provides_deterministic_identity_without_overriding_explicit_id():
+    first = Button("Save", render_key="settings/save")
+    second = Button("Save", render_key="settings/save")
+    other = Button("Save", render_key="settings/delete")
+
+    assert first.id == second.id
+    assert first.id != other.id
+    assert first.id.startswith("vd-button-")
+    assert Button("Save", id="save-button", render_key="settings/save").id == (
+        "save-button"
+    )

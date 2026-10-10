@@ -11,6 +11,7 @@ MCP consumer, and mesh exposure.
 from __future__ import annotations
 
 import inspect
+import logging
 import types
 import typing
 from collections.abc import Callable
@@ -18,6 +19,9 @@ from dataclasses import dataclass, field
 from typing import Any, get_type_hints
 
 from voodoo.core.errors import ToolError
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["ToolSpec", "ToolRegistry", "default_registry"]
 
@@ -76,7 +80,11 @@ def _build_schemas(func: Callable[..., Any]) -> tuple[dict[str, Any], dict[str, 
     """Derive input/output JSON schemas from a function's type hints."""
     try:
         hints = get_type_hints(func)
-    except Exception:
+    except (AttributeError, NameError, TypeError, ValueError) as error:
+        logger.debug(
+            "tool type-hint inspection failed; using raw annotations error=%s",
+            redact_string(str(error)),
+        )
         hints = getattr(func, "__annotations__", {}) or {}
 
     sig = inspect.signature(func)

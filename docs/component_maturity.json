@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "default_status": "experimental",
+  "default_tier": "experimental/composite",
+  "tiers": {
+    "primitive": ["A", "Badge", "Button", "Heading", "Icon", "Img", "Input", "Label", "Text", "Textarea"],
+    "layout": ["Box", "Container", "Div", "Flex", "Grid", "Section", "Stack"],
+    "form": ["Checkbox", "Combobox", "Field", "Form", "NumberInput", "Radio", "Select", "Switch"],
+    "data_display": ["DataList", "DataTable", "DescriptionList", "List", "Metric", "Table"],
+    "feedback_overlay": ["Alert", "Dialog", "Modal", "Popover", "Progress", "Spinner", "Toast", "Tooltip"],
+    "navigation": ["Breadcrumb", "Link", "Nav", "Pagination", "Tabs"],
+    "application_shell": ["AppShell", "Footer", "Header", "Main", "Navbar", "Page", "Sidebar"]
+  },
+  "stable": [
+    "A",
+    "Alert",
+    "Badge",
+    "Button",
+    "Card",
+    "Container",
+    "Div",
+    "Flex",
+    "Form",
+    "Grid",
+    "Heading",
+    "Input",
+    "Label",
+    "Page",
+    "Stack",
+    "Text"
+  ],
+  "stable_contracts": {
+    "A": {"tag": "a", "required_attrs": ["href"]},
+    "Alert": {"tag": "div", "required_attrs": ["role"]},
+    "Badge": {"tag": "div", "required_attrs": []},
+    "Button": {"tag": "button", "required_attrs": []},
+    "Card": {"tag": "div", "required_attrs": []},
+    "Container": {"tag": "div", "required_attrs": []},
+    "Div": {"tag": "div", "required_attrs": []},
+    "Flex": {"tag": "div", "required_attrs": []},
+    "Form": {"tag": "form", "required_attrs": []},
+    "Grid": {"tag": "div", "required_attrs": []},
+    "Heading": {"tag": "h1", "required_attrs": []},
+    "Input": {"tag": "input", "required_attrs": ["type"]},
+    "Label": {"tag": "label", "required_attrs": []},
+    "Page": {"tag": "main", "required_attrs": []},
+    "Stack": {"tag": "div", "required_attrs": []},
+    "Text": {"tag": "span", "required_attrs": []}
+  },
+  "beta": [],
+  "deprecated": []
+}

@@ -375,8 +375,7 @@ class GoalRuntime:
             return list(result)
         intent = Intent(
             name=goal.name,
-            description=goal.objective,
-            params={"_goal_id": goal.id},
+            params={"_goal_id": goal.id, "description": goal.objective},
         )
         if goal.target_entity_id is not None:
             intent.params["entity_id"] = goal.target_entity_id

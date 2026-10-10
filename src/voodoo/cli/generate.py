@@ -7,6 +7,7 @@ import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from voodoo.cli import terminal
+from voodoo.security.redaction import redact_string
 
 
 def generate(
@@ -14,7 +15,7 @@ def generate(
         ..., help="Component type (e.g., agent, resource, tool)"
     ),
     description: str = typer.Argument(..., help="What should the AI generate?"),
-):
+) -> None:
     """
     AI-powered generation of Voodoo components using LLMs.
     """
@@ -46,7 +47,7 @@ def generate(
     terminal.muted(description)
     terminal.blank()
 
-    async def _generate():
+    async def _generate() -> str:
         with Progress(
             SpinnerColumn(style="white"),
             TextColumn("[dim]{task.description}[/]"),
@@ -81,7 +82,11 @@ def generate(
                 return code.strip()
 
             except Exception as e:
-                terminal.error(f"Failed to generate code: {e}")
+                terminal.error(
+                    "Failed to generate code: "
+                    + redact_string(str(e)).strip()[:256],
+                    hint="check the provider credentials/model configuration and retry",
+                )
                 raise typer.Exit(1) from None
 
     code = asyncio.run(_generate())

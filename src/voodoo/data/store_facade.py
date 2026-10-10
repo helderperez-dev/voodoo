@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from collections.abc import Callable
+import logging
+from collections.abc import Callable, Generator
 from datetime import date, datetime
 from enum import StrEnum
 from types import UnionType
@@ -26,6 +27,9 @@ from voodoo.data.store_backend import (
     scan_records,
     uuid7,
 )
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "BaseModel",
@@ -277,7 +281,12 @@ def _register_relations(cls: type) -> None:
     child = _get_table_name(cls)
     try:
         hints = get_type_hints(cls, include_extras=True)
-    except Exception:
+    except (AttributeError, NameError, TypeError, ValueError) as error:
+        logger.debug(
+            "relation type-hint inspection failed model=%s error=%s",
+            redact_string(cls.__name__),
+            redact_string(str(error)),
+        )
         hints = getattr(cls, "__annotations__", {})
     for name, spec in vars(cls).items():
         if isinstance(spec, _RelationSpec):
@@ -472,7 +481,12 @@ def _model_values(obj: Any, *, include_id: bool = False) -> dict[str, Any]:
     values: dict[str, Any] = {}
     try:
         hints = get_type_hints(obj.__class__, include_extras=True)
-    except Exception:
+    except (AttributeError, NameError, TypeError, ValueError) as error:
+        logger.debug(
+            "model type-hint inspection failed model=%s error=%s",
+            redact_string(obj.__class__.__name__),
+            redact_string(str(error)),
+        )
         hints = getattr(obj.__class__, "__annotations__", {})
     for name in hints:
         if name.startswith("__") or (name == "id" and not include_id):
@@ -491,7 +505,12 @@ def _hydrate(model: type[Any], row: dict[str, Any]) -> Any:
     obj = model()
     try:
         hints = get_type_hints(model, include_extras=True)
-    except Exception:
+    except (AttributeError, NameError, TypeError, ValueError) as error:
+        logger.debug(
+            "model hydration type-hint inspection failed model=%s error=%s",
+            redact_string(model.__name__),
+            redact_string(str(error)),
+        )
         hints = getattr(model, "__annotations__", {})
     for key, value in row.items():
         annotation = _unwrap_annotated(hints.get(key))
@@ -533,7 +552,10 @@ def _identity_context() -> dict[str, Any] | None:
         from voodoo.auth import current_user
 
         user = current_user.get()
-    except Exception:
+    except (ImportError, LookupError, RuntimeError) as error:
+        from voodoo.data.base import _report_data_fallback
+
+        _report_data_fallback("store_identity_context", error)
         return None
     if not user or not user.is_authenticated:
         return None
@@ -742,5 +764,5 @@ class StoreQuery:
     async def _execute(self) -> list[Model]:
         return [_hydrate(self._model, row) for row in self._rows()]
 
-    def __await__(self):
+    def __await__(self) -> Generator[Any, None, list[Model]]:
         return self._execute().__await__()

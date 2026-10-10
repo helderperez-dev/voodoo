@@ -10,10 +10,36 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
+
+from voodoo.security.redaction import redact_string
+
+_logger = logging.getLogger("voodoo.runtime.application_graph")
+
+# Discovery is best-effort because optional subsystems may not be installed or
+# initialized yet. Keep the fallback boundary explicit so programming errors
+# (for example AssertionError) cannot disappear during graph construction.
+_DISCOVERY_ERRORS = (
+    AttributeError,
+    ImportError,
+    LookupError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+
+
+def _report_discovery_failure(kind: str, error: Exception) -> None:
+    """Expose optional graph-discovery failures without breaking inspection."""
+    _logger.warning(
+        "application graph discovery failed kind=%s error=%s",
+        kind,
+        redact_string(str(error)),
+    )
 
 
 class ApplicationNodeKind(StrEnum):
@@ -420,7 +446,8 @@ def _discover_capabilities(graph: ApplicationGraph) -> None:
         from voodoo.runtime.execution.engine import engine
 
         names = engine.capabilities.describe().get("capabilities", ())
-    except Exception:
+    except _DISCOVERY_ERRORS as error:
+        _report_discovery_failure("capabilities", error)
         return
     for name in names:
         node = graph.node(ApplicationNodeKind.CAPABILITY, str(name))
@@ -432,7 +459,8 @@ def _discover_models(graph: ApplicationGraph) -> None:
         from voodoo.data.base import model_table_name, registered_models
 
         models = registered_models()
-    except Exception:
+    except _DISCOVERY_ERRORS as error:
+        _report_discovery_failure("models", error)
         return
     for model in models:
         node = graph.node(
@@ -449,7 +477,8 @@ def _discover_workers(graph: ApplicationGraph) -> None:
         from voodoo.runtime.scheduling.workers import registered_workers
 
         workers = registered_workers()
-    except Exception:
+    except _DISCOVERY_ERRORS as error:
+        _report_discovery_failure("workers", error)
         return
     for name, worker in workers:
         node = graph.node(
@@ -465,7 +494,8 @@ def _discover_tools(graph: ApplicationGraph) -> None:
         from voodoo.ai.tools.registry import default_registry
 
         specs = default_registry.all()
-    except Exception:
+    except _DISCOVERY_ERRORS as error:
+        _report_discovery_failure("tools", error)
         return
     for spec in specs:
         node = graph.node(

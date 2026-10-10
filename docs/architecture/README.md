@@ -8,6 +8,8 @@ Voodoo architecture documentation is split by purpose:
   invariants, PR checklist, and release rule for future changes.
 - [Repository migration map](repository-migration.md) — final RA1–RA6 ownership
   decisions and retained compatibility surfaces.
+- [Canonical package navigation](navigation.md) — supported public imports,
+  semantic owners, and rules for placing new modules.
 
 For runtime behavior and public API evolution, follow the corresponding concept
 and reference documents. Repository governance is intentionally separate from

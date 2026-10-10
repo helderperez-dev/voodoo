@@ -1,4 +1,5 @@
 import importlib
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -6,6 +7,9 @@ import typer
 
 from voodoo.cli import terminal
 from voodoo.config import get_config
+from voodoo.security.redaction import redact_string
+
+_logger = logging.getLogger("voodoo.cli.doctor")
 
 
 def _doctor_snapshot() -> dict[str, Any]:
@@ -24,7 +28,12 @@ def _doctor_snapshot() -> dict[str, Any]:
         try:
             importlib.import_module(name)
             modules[label] = "ready"
-        except Exception:
+        except Exception as error:
+            _logger.warning(
+                "doctor module probe failed module=%s error=%s",
+                name,
+                redact_string(str(error)),
+            )
             modules[label] = "not found"
 
     legacy_candidates = (
@@ -194,7 +203,12 @@ def _doctor_modules() -> None:
         try:
             importlib.import_module(name)
             terminal.status(label, "ready")
-        except Exception:
+        except Exception as error:
+            _logger.warning(
+                "doctor module probe failed module=%s error=%s",
+                name,
+                redact_string(str(error)),
+            )
             terminal.status(label, "not found")
 
 
@@ -213,7 +227,8 @@ def _doctor_queue() -> None:
                 depth = len(await queue.list())
             elif hasattr(queue, "depth"):
                 depth = await queue.depth()
-        except Exception:
+        except Exception as error:
+            _logger.warning("doctor queue probe failed error=%s", redact_string(str(error)))
             pass
         return depth, len(_workers)
 
@@ -221,7 +236,8 @@ def _doctor_queue() -> None:
         depth, workers = asyncio.run(check())
         terminal.status("depth", str(depth))
         terminal.status("registered workers", str(workers))
-    except Exception:
+    except Exception as error:
+        _logger.warning("doctor queue status failed error=%s", redact_string(str(error)))
         terminal.status("queue", "unavailable")
 
 
@@ -237,7 +253,10 @@ def _doctor_optional_services(cfg: object) -> None:
             terminal.muted(f"  {store_path}")
         finally:
             schedule_store.close()
-    except Exception:
+    except Exception as error:
+        _logger.warning(
+            "doctor scheduler probe failed error=%s", redact_string(str(error))
+        )
         terminal.status("scheduler", "unavailable")
 
     terminal.heading("otel")
@@ -245,7 +264,10 @@ def _doctor_optional_services(cfg: object) -> None:
         from voodoo.integrations.otel import is_available
 
         terminal.status("otlp exporter", "active" if is_available() else "off")
-    except Exception:
+    except Exception as error:
+        _logger.warning(
+            "doctor OTLP probe failed error=%s", redact_string(str(error))
+        )
         terminal.status("otlp exporter", "off")
 
 
@@ -263,7 +285,7 @@ def doctor(
         "--json",
         help="Output side-effect-free machine-readable diagnostics.",
     ),
-):
+    ) -> None:
     """Run environment and configuration diagnostics."""
     import os
 
@@ -302,7 +324,10 @@ def doctor(
         report = VoodooStoreProvider(cfg.store.path).health()
         terminal.status("store", "ready" if report.verified else "not found")
         terminal.muted(f"  {cfg.store.provider} ({cfg.store.path})")
-    except Exception:
+    except Exception as error:
+        _logger.warning(
+            "doctor Store probe failed error=%s", redact_string(str(error))
+        )
         terminal.status("store", "unavailable")
 
     if cfg.database.provider.lower() == "voodoo":
@@ -376,7 +401,10 @@ def doctor(
     terminal.heading("providers")
     try:
         _print_capability_matrix()
-    except Exception:
+    except Exception as error:
+        _logger.warning(
+            "doctor capability matrix failed error=%s", redact_string(str(error))
+        )
         terminal.status("capability matrix", "unavailable")
 
     _doctor_queue()

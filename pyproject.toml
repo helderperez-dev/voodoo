@@ -84,6 +84,9 @@ dev = [
     "pytest-asyncio",
     "ruff",
     "mypy",
+    "types-PyYAML",
+    "cryptography>=42",
+    "pip-audit",
     "pre-commit",
     "aiosqlite",
 ]
@@ -108,6 +111,9 @@ otel = [
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
 ]
+secrets = [
+    "cryptography>=42",
+]
 
 [tool.setuptools.dynamic]
 version = { attr = "voodoo.__version__" }
@@ -120,7 +126,13 @@ where = ["src"]
 include = ["voodoo*"]
 
 [tool.setuptools.package-data]
-voodoo = ["py.typed", "static/*.js", "*.html", "*.css"]
+voodoo = [
+    "py.typed",
+    "static/*.js",
+    "*.html",
+    "*.css",
+    "scaffold/default/**/*",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -176,3 +188,20 @@ strict_optional = true
 module = "tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+# Optional provider extras are tested in their own CI jobs. Keep the base
+# framework type-checkable when those integrations are intentionally absent.
+[[tool.mypy.overrides]]
+module = [
+    "playwright.*",
+    "boto3.*",
+    "botocore.*",
+    "redis.*",
+    "opentelemetry.*",
+    "ollama.*",
+    "anthropic.*",
+    "google.*",
+    "paho.*",
+    "yaml.*",
+]
+ignore_missing_imports = true

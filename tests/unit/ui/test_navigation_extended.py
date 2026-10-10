@@ -71,6 +71,20 @@ def test_pagination_with_event(adapter):
     assert "data-vd-event-click" in html
 
 
+def test_pagination_shared_control_states_disable_navigation(adapter):
+    html = Pagination(
+        total_pages=8,
+        current_page=3,
+        loading=True,
+        error="Pages unavailable",
+        on_change=lambda page: page,
+    ).render()
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert html.count("disabled") >= 3
+    assert "data-vd-event-click" not in html
+
+
 # ── Stepper ─────────────────────────────────────────────────────────────────
 
 
@@ -106,6 +120,43 @@ def test_stepper_step_states(adapter):
     assert "completed" in html or "active" in html
 
 
+def test_stepper_shared_control_states_disable_completed_steps(adapter):
+    html = Stepper(
+        Step("Account"),
+        Step("Profile"),
+        current=1,
+        loading=True,
+        error="Progress unavailable",
+        on_step_click=lambda index: index,
+    ).render()
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'aria-disabled="true"' in html
+    assert "data-vd-event-click" not in html
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, 'aria-disabled="true"'),
+        ({"read_only": True}, 'aria-readonly="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "Step unavailable"}, 'data-vd-error="Step unavailable"'),
+    ],
+)
+def test_step_item_unavailable_states_suppress_completed_selection(
+    adapter, state, expected
+):
+    html = Stepper(
+        Step("Done", **state),
+        Step("Current"),
+        current=1,
+        on_step_click=lambda index: index,
+    ).render()
+    assert expected in html
+    assert "data-vd-event-click" not in html
+
+
 # ── Anchor Navigation ───────────────────────────────────────────────────────
 
 
@@ -126,6 +177,23 @@ def test_anchor_navigation_heading(adapter):
         label="On this page",
     ).render()
     assert "On this page" in html
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, 'aria-disabled="true"'),
+        ({"read_only": True}, 'aria-readonly="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "anchor unavailable"}, 'data-vd-error="anchor unavailable"'),
+    ],
+)
+def test_anchor_link_unavailable_states_remove_target(adapter, state, expected):
+    html = AnchorNavigation(
+        AnchorLink("Setup", href="#setup", **state),
+    ).render()
+    assert expected in html
+    assert 'href="#setup"' not in html
 
 
 # ── Action Sheet ────────────────────────────────────────────────────────────
@@ -160,6 +228,38 @@ def test_action_destructive(adapter):
     assert "Delete" in html
 
 
+def test_action_state_contract_suppresses_unavailable_selection(adapter):
+    html = Action(
+        "Delete",
+        on_select=lambda: None,
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Unavailable"' in html
+    assert "data-vd-event-click" not in html
+
+
+def test_action_sheet_state_contract_blocks_unavailable_actions(adapter):
+    html = ActionSheet(
+        Action("Delete", on_select=lambda: None),
+        on_cancel=lambda: None,
+        open=True,
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Unavailable"' in html
+    assert 'open="open"' not in html
+    assert "data-vd-event-click" not in html
+
+
 # ── Bottom Sheet ────────────────────────────────────────────────────────────
 
 
@@ -178,6 +278,21 @@ def test_bottom_sheet_with_snap_points(adapter):
         snap_points=(25, 50, 100),
     ).render()
     assert "X" in html
+
+
+def test_bottom_sheet_state_contract_blocks_unavailable_opening(adapter):
+    html = BottomSheet(
+        "Filters",
+        open=True,
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Unavailable"' in html
+    assert 'open="open"' not in html
 
 
 # ── Top Bar ─────────────────────────────────────────────────────────────────
@@ -223,3 +338,64 @@ def test_navigation_menu_with_content(adapter):
     ).render()
     assert "Products" in html
     assert "Analytics" in html
+
+
+def test_navigation_menu_state_contract_blocks_all_triggers(adapter):
+    html = NavigationMenu(
+        NavTrigger("Products", NavContent()),
+        NavTrigger("Company", NavContent()),
+        read_only=True,
+        loading=True,
+        error="Navigation unavailable",
+    ).render()
+    assert html.count('aria-disabled="true"') >= 3
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Navigation unavailable"' in html
+    assert "data-vd-nav-trigger" not in html
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, 'aria-disabled="true"'),
+        ({"read_only": True}, 'aria-readonly="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "menu unavailable"}, 'data-vd-error="menu unavailable"'),
+    ],
+)
+def test_nav_trigger_unavailable_states_disable_activation(adapter, state, expected):
+    html = NavigationMenu(NavTrigger("Products", NavContent(), **state)).render()
+    assert expected in html
+    assert " disabled" in html
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, 'aria-disabled="true"'),
+        ({"read_only": True}, 'aria-readonly="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "link unavailable"}, 'data-vd-error="link unavailable"'),
+    ],
+)
+def test_nav_link_item_unavailable_states_remove_target(adapter, state, expected):
+    html = NavLinkItem("Analytics", href="/analytics", **state).render()
+    assert expected in html
+    assert 'href="/analytics"' not in html
+
+
+def test_anchor_navigation_state_contract_blocks_all_links(adapter):
+    html = AnchorNavigation(
+        AnchorLink("Intro", href="#intro"),
+        AnchorLink("Config", href="#config"),
+        read_only=True,
+        loading=True,
+        error="Anchors unavailable",
+    ).render()
+    assert html.count('aria-disabled="true"') >= 3
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Anchors unavailable"' in html
+    assert 'href="#intro"' not in html
+    assert 'href="#config"' not in html

@@ -81,3 +81,32 @@ def test_lineage_inspection_is_stable_after_restart(tmp_path):
         "intent",
         "observation",
     ]
+
+
+def test_lineage_reads_legacy_unversioned_record(tmp_path):
+    path = tmp_path / "legacy-lineage.jsonl"
+    path.write_text(
+        '{"kind":"goal","subject_id":"goal-legacy","reason":"old",'
+        '"parent_id":null,"metadata":{},'
+        '"recorded_at":"2026-01-01T00:00:00+00:00"}'
+        "\n"
+    )
+
+    restored = RuntimeLineage(path)
+
+    assert restored.events()[0].subject_id == "goal-legacy"
+    assert restored.events()[0].schema_version == 1
+
+
+def test_lineage_skips_future_schema_with_diagnostic(tmp_path, caplog):
+    path = tmp_path / "future-lineage.jsonl"
+    path.write_text(
+        '{"_schema_version":99,"kind":"goal","subject_id":"future","reason":"old"}'
+        "\n"
+    )
+
+    with caplog.at_level("WARNING", logger="voodoo.runtime.lineage"):
+        restored = RuntimeLineage(path)
+
+    assert restored.events() == ()
+    assert "lineage record skipped" in caplog.text

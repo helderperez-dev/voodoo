@@ -25,6 +25,7 @@ separate.
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -34,11 +35,17 @@ from typing import Any
 
 from voodoo.ai.providers import LLMProvider, Message, default_model, get_provider
 from voodoo.ai.tools.registry import ToolRegistry, default_registry
+from voodoo.core.errors import ToolError
+from voodoo.security.redaction import redact_string
+
+_logger = logging.getLogger("voodoo.ai.agent")
 
 __all__ = ["Agent", "AgentRun", "AgentEvent"]
 
 # Lazy import for memory — avoids circular deps and keeps memory optional.
 _memory_store_cls = None
+
+_CAPABILITY_INSPECTION_ERRORS = (AttributeError, TypeError, ValueError)
 
 
 def _get_memory_store_class() -> Any:
@@ -312,8 +319,12 @@ class Agent:
         )
         try:
             self.memory.write(entry)
-        except Exception:
-            pass
+        except Exception as error:
+            _logger.warning(
+                "agent memory write failed run_id=%s error=%s",
+                run_record.run_id,
+                redact_string(str(error)),
+            )
 
     # -- helpers -----------------------------------------------------------
 
@@ -422,7 +433,7 @@ class Agent:
         await self._broadcast("tool.called", {"tool": name, "arguments": arguments})
         try:
             result = await self.registry.call(name, **arguments)
-        except Exception as e:
+        except (ToolError, TypeError, ValueError) as e:
             effect.mark_failed(str(e))
             if ctx is not None:
                 ctx.add_effect(effect)
@@ -456,8 +467,11 @@ class Agent:
 
         intent = Intent(
             name=f"tool.{name}",
-            description=f"Tool call: {name}",
-            params={"tool": name, "arguments": arguments},
+            params={
+                "description": f"Tool call: {name}",
+                "tool": name,
+                "arguments": arguments,
+            },
             requires=list(spec.permissions if spec else []),
         )
 
@@ -470,7 +484,7 @@ class Agent:
                     {"tool": name, "status": "succeeded"},
                 )
                 return result
-            except Exception as e:
+            except (ToolError, TypeError, ValueError) as e:
                 await self._broadcast(
                     "tool.completed",
                     {"tool": name, "status": "failed", "error": str(e)},
@@ -545,8 +559,11 @@ class Agent:
         # Build the intent that represents this agent run.
         intent = Intent(
             name=f"agent.{self.name or self.agent_id}",
-            description=prompt[:200],
-            params={"prompt": prompt, "model": self.model},
+            params={
+                "description": prompt[:200],
+                "prompt": prompt,
+                "model": self.model,
+            },
         )
 
         # The compute function encapsulates the entire provider loop.
@@ -652,7 +669,11 @@ class Agent:
                 try:
                     desc = self.provider.describe()
                     tools_arg = self._tools_for_provider() if desc.tool_use else None
-                except Exception:
+                except _CAPABILITY_INSPECTION_ERRORS as capability_error:
+                    _logger.debug(
+                        "provider capability inspection failed; sending tools error=%s",
+                        redact_string(str(capability_error)),
+                    )
                     tools_arg = self._tools_for_provider()
                 response = await self.provider.complete(messages, tools=tools_arg)
                 await self._broadcast(
@@ -724,9 +745,9 @@ class Agent:
                     output = response.content
                     break
 
-        except Exception as e:
+        except Exception as exc:
             self.state = AgentState.error
-            error = str(e)
+            error = str(exc)
             await self._broadcast("agent.failed", {"run_id": run_id, "error": error})
             self.state = AgentState.failed
         else:
@@ -777,7 +798,11 @@ class Agent:
         try:
             description = self.provider.describe()
             tools = self._tools_for_provider() if description.tool_use else None
-        except Exception:
+        except _CAPABILITY_INSPECTION_ERRORS as error:
+            _logger.debug(
+                "provider capability inspection failed during stream error=%s",
+                redact_string(str(error)),
+            )
             tools = self._tools_for_provider()
         async for event in self.provider.stream(messages, tools=tools):
             yield event.type, event.data
@@ -1091,5 +1116,9 @@ class Agent:
             from voodoo.mesh import mesh
 
             await mesh.broadcast(event, payload)
-        except Exception:
-            pass
+        except Exception as error:
+            _logger.warning(
+                "agent mesh broadcast failed event=%s error=%s",
+                event,
+                redact_string(str(error)),
+            )

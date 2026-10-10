@@ -5,8 +5,9 @@ Source architecture: [`ROADMAP.md`](ROADMAP.md).
 This file is the **current source of truth for implementation progress**.
 Detailed historical plans live in Git history and under `docs/sprints/`.
 
-> Updated 2026-09-30 after Sprint 29 — Experience Convergence closed the gap
-> between the 3.1 architecture and the real developer/product experience.
+> Updated 2026-10-06. Sprint 30 — Production Readiness is active after a
+> cross-repository audit selected correctness, security, durability, component
+> quality and release evidence as the next product phase.
 
 ## North Star
 
@@ -35,25 +36,82 @@ Core laws:
 
 | Item | State |
 |---|---|
-| Latest published release | **v3.1.0** — 2026-09-25 |
-| Package version on `main` | **3.1.0** |
+| Latest repository release | **v3.2.1** |
+| Package version on `main` | **3.2.1** |
 | Sprints through 23 | **DONE** |
 | Sprint 24 — Agency Foundation | **DONE** |
 | Sprint 25 — UI Magic | **DONE** |
 | Sprint 26 — Trusted Distributed Execution Fabric | **DONE** |
 | Sprint 27 — Runtime Convergence & 3.0 Readiness | **DONE** |
 | Sprint 28 — Runtime Infrastructure Convergence | **DONE** |
-| Post-Sprint 28 | **Design System 3 + Application Graph + repository convergence DONE** |
+| Post-Sprint 28 | **Design System 4 + Application Graph + repository convergence DONE** |
 | 3.0 clean architecture | **DONE and released** |
-| Store 0.3 native convergence + modern Model contract | **DONE and released (v3.1.0)** |
+| Store 0.3 native convergence + modern Model contract | **DONE and released (v3.2.1)** |
 | Sprint 29 — Experience Convergence | **DONE · closed 2026-09-30** |
-| Next release target | **v3.2.0 · Sprint 29 implementation is release-ready** |
-| Release checkpoint | **v3.1.0 published; PR #79 prepares the unreleased v3.2.0 experience convergence** |
+| Sprint 30 — Production Readiness | **IN PROGRESS · started 2026-10-06** |
+| Next release target | **Determined by verified Sprint 30 compatibility impact** |
+| Release checkpoint | **No Sprint 30 release claim until every mandatory gate passes** |
 
-Release evidence: tag `v3.1.0` points at the Store 0.3 native convergence
+Release evidence: tag `v3.2.1` points at the Store 0.3 native convergence
 release. The release workflow passed the test suite, clean Store-first
 distribution gate, package build, PyPI publication, Homebrew update and GitHub
 Release creation.
+
+---
+
+## Sprint 30 — Production Readiness
+
+**Status: IN PROGRESS · started 2026-10-06**
+
+Plan: [`docs/sprints/SPRINT_30_PRODUCTION_READINESS.md`](docs/sprints/SPRINT_30_PRODUCTION_READINESS.md)
+
+Sprint 30 was selected at the post-Sprint-29 product gate. It hardens the
+existing Runtime, Store, UI and developer experience rather than adding another
+major subsystem.
+
+Production Profile 1 is deliberately bounded to one Runtime process, one local
+Store writer, multiple isolated authenticated browser sessions, durable local
+state and tested backup/restore. Multi-writer Store operation, consensus and
+global exactly-once execution remain out of scope.
+
+Current progress:
+
+- [x] Production-aware CORS/CSRF defaults, fail-closed startup validation,
+  application-owned security configuration, validated CSRF/rate-limit identity,
+  encrypted local secrets, and security regression coverage;
+- [x] Session-owned UI events, state, bindings and targeted WebSocket patches,
+  including two-user isolation and readiness/shutdown lifecycle contracts;
+- [x] One executable public API, resource-backed `voodoo new` scaffold,
+  documentation/skills/template convergence, and generated-application smoke
+  coverage;
+- [x] Store-first Runtime durability across data, jobs, events, objects,
+  workflows, execution state, backup/restore, migrations, quotas, health and
+  bounded object streaming;
+- [x] Stable component metadata, semantic/accessibility contracts, 102-control
+  state coverage, deterministic render checks, browser behavior gates and
+  committed visual PNG/signature baselines;
+- [x] Cross-repository governance, dependency/security automation, trusted
+  publishing workflows, SBOM/provenance contracts, release manifests and
+  release preflight;
+- [ ] Hosted Store fault/recovery/backup certification and external security
+  review;
+- [ ] Full catalog-wide component standardization plus hosted browser,
+  accessibility and visual approval;
+- [ ] Final artifact-signing/attestation verification, clean-install matrix,
+  historical compatibility certification, and GA release claim.
+
+Verified checkpoint (2026-10-10): the production-readiness plan is **112
+ complete / 36 open**. Sprint 30's execution checklist is **44 complete / 4
+ open**. Framework tests pass **2,364 passed, 133 skipped, 2
+warnings**; Site has **421 passing tests**; the root release contract passes for
+Framework `3.2.1` and Store `0.3.0`. The sprint remains intentionally open until
+the external/hosted gates above produce evidence.
+
+The local supply-chain gate now audits pinned `uv.lock` exports directly, so
+unpublished editable application packages no longer create a false-positive
+`pip-audit` skip while all resolved third-party dependencies remain covered.
+The Site hosted workflow now exports and audits that same locked dependency set
+and generates its SBOM from it.
 
 ---
 
@@ -116,7 +174,7 @@ with zero application JavaScript and zero custom CSS.
 Implementation path: PRs #33, #37–#41.
 
 Design System 2 remains the historical Sprint 25 delivery. The current native visual
-layer on `main` is Design System 3, integrated after Sprint 28.
+layer on `main` is Design System 4, integrated after Sprint 28.
 
 ---
 
@@ -224,11 +282,11 @@ the published **v3.0.0** architecture baseline.
 
 ---
 
-## Post-Sprint 28 — Design System 3
+## Post-Sprint 28 — Design System 4
 
 **Status: DONE · included in the published v3.0.0 baseline**
 
-Design System 3 moves the approved Voodoo visual identity into the framework rather
+Design System 4 moves the approved Voodoo visual identity into the framework rather
 than a template. Native VoodooCSS applications now receive premium light/dark defaults,
 a Voodoo purple brand language, stronger page geometry and production-quality controls
 with zero custom CSS.
@@ -267,13 +325,13 @@ Implementation/release evidence: PRs #68, #69, #70, #72 and #73; commit
 
 ---
 
-## Next selection gate
+## Selection record
 
-Sprint 29 is closed. No Sprint 30 is declared by this tracker yet. Before assigning
-the number, evaluate the release-ready Voodoo 3.2 experience against real product
-pressure and choose a coherent next phase rather than accumulating unrelated features.
+Sprint 29 closed at a selection gate. The cross-repository production-readiness
+audit on 2026-10-06 selected hardening and convergence as Sprint 30. The former
+candidate directions remain deferred until Production Profile 1 passes its gates.
 
-Candidate directions already supported by the architecture:
+Deferred directions already supported by the architecture:
 
 1. protocol/SDK productization;
 2. real Edge/ESP32 reference canary;

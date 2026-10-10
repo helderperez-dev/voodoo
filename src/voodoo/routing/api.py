@@ -1,4 +1,6 @@
 import inspect
+import json
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -6,6 +8,11 @@ from pydantic import BaseModel
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route
+
+from voodoo.core.errors import ConfigurationError
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
 
 
 def _default_run_through_runtime() -> bool:
@@ -16,7 +23,17 @@ def _default_run_through_runtime() -> bool:
         from voodoo.config import config
 
         return bool(config.runtime.run_api_through_runtime)
-    except Exception:
+    except (
+        AttributeError,
+        ConfigurationError,
+        ImportError,
+        TypeError,
+        ValueError,
+    ) as error:
+        logger.debug(
+            "API runtime config unavailable; defaulting to runtime execution error=%s",
+            redact_string(str(error)),
+        )
         return True
 
 
@@ -151,7 +168,16 @@ class API:
     ) -> BaseModel:
         try:
             body: Any = await request.json()
-        except Exception:
+        except (
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            TypeError,
+            ValueError,
+        ) as error:
+            logger.debug(
+                "API request body decode failed; validating an empty body error=%s",
+                redact_string(str(error)),
+            )
             body = {}
         if isinstance(body, dict):
             return model_cls(**body)

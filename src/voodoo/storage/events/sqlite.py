@@ -13,6 +13,8 @@ from typing import Any
 
 from voodoo.storage.database.interfaces import Migration
 from voodoo.storage.database.sqlite import register_framework_migration
+from voodoo.storage.events.codec import EVENT_SCHEMA_VERSION, validate_event
+from voodoo.storage.events.diagnostics import report_handler_failure
 from voodoo.storage.events.interfaces import EventBusCapabilities
 
 EVENTS_MIGRATION_VERSION = 6
@@ -50,7 +52,7 @@ class SQLiteEventBus:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
+        self._conn: Any = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA busy_timeout=5000")
@@ -103,8 +105,9 @@ class SQLiteEventBus:
             "correlation_id": envelope.get("correlation_id", trace_id_var.get()),
             "causation_id": envelope.get("causation_id"),
             "payload": payload,
-            "schema_version": envelope.get("schema_version", 1),
+            "schema_version": envelope.get("schema_version", EVENT_SCHEMA_VERSION),
         }
+        validate_event(ev)
         self._conn.execute(
             """
             INSERT INTO events (event_id, event_type, timestamp, source, subject, correlation_id, causation_id, payload, schema_version)
@@ -129,8 +132,8 @@ class SQLiteEventBus:
                 result = handler(ev)
                 if result is not None and hasattr(result, "__await__"):
                     asyncio.create_task(result)
-            except Exception:
-                pass
+            except Exception as error:
+                report_handler_failure(self.provider, event_type, error)
         return ev
 
     def subscribe(self, event_type: str, handler: Callable) -> None:
@@ -144,22 +147,22 @@ class SQLiteEventBus:
         ).fetchall()
         count = 0
         for row in rows:
-            ev = {
-                "event_id": row["event_id"],
-                "event_type": row["event_type"],
-                "timestamp": row["timestamp"],
-                "source": row["source"],
-                "subject": row["subject"],
-                "correlation_id": row["correlation_id"],
-                "causation_id": row["causation_id"],
-                "payload": json.loads(row["payload"]) if row["payload"] else None,
-                "schema_version": row["schema_version"],
-            }
             try:
+                ev = validate_event({
+                    "event_id": row["event_id"],
+                    "event_type": row["event_type"],
+                    "timestamp": row["timestamp"],
+                    "source": row["source"],
+                    "subject": row["subject"],
+                    "correlation_id": row["correlation_id"],
+                    "causation_id": row["causation_id"],
+                    "payload": json.loads(row["payload"]) if row["payload"] else None,
+                    "schema_version": row["schema_version"],
+                })
                 handler(ev)
                 count += 1
-            except Exception:
-                pass
+            except Exception as error:
+                report_handler_failure(self.provider, event_type, error)
         return count
 
     def close(self) -> None:

@@ -35,10 +35,10 @@ class EventBusAwareMesh:
 
         return wrapper
 
-    def on(self, event_type: str):
+    def on(self, event_type: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Decorator to register a handler for an event (receives raw payload)."""
 
-        def decorator(func):
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             wrapper = self._wrap(func)
             self.bus.subscribe(event_type, wrapper)
             self._handlers.setdefault(event_type, []).append(wrapper)

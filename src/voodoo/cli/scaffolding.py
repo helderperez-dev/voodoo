@@ -1,11 +1,17 @@
+import logging
 import os
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from textwrap import dedent
 
 from rich.progress import Progress
+
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
 
 AI_DOCS_BASE_URL = (
     "https://raw.githubusercontent.com/helderperez-dev/voodoo/main/docs/ai"
@@ -27,8 +33,12 @@ def _fetch_text(url: str, timeout: int = 3) -> str | None:
                 return data.decode("utf-8")
             if isinstance(data, str):
                 return data
-    except Exception:
-        pass
+    except (OSError, TimeoutError, UnicodeError, ValueError, urllib.error.URLError) as error:
+        logger.warning(
+            "remote AI asset fetch failed url=%s error=%s",
+            redact_string(url),
+            redact_string(str(error)),
+        )
     return None
 
 
@@ -399,7 +409,10 @@ def _ide_from_processes() -> str | None:
             if not ppid.isdigit():
                 return None
             curr_pid = int(ppid)
-    except Exception:
+    except (OSError, subprocess.SubprocessError, TimeoutError, ValueError) as error:
+        logger.debug(
+            "IDE process detection unavailable error=%s", redact_string(str(error))
+        )
         return None
     return None
 

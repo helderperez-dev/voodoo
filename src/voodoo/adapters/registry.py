@@ -20,8 +20,8 @@ from voodoo.config import (
 )
 from voodoo.core.errors import ConfigurationError
 
-DatabaseFactory = Callable[[DatabaseConfig], Any]
-QueueFactory = Callable[[QueueConfig], Any]
+DatabaseFactory = Callable[..., Any]
+QueueFactory = Callable[..., Any]
 EventsFactory = Callable[[EventsConfig], Any]
 ObjectsFactory = Callable[[ObjectsConfig], Any]
 CacheFactory = Callable[[CacheConfig], Any]

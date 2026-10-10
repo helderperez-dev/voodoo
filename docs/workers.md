@@ -139,5 +139,8 @@ handles so a later Runtime lifecycle cannot retain a stale closed Store.
 - `@task(...)` — inline task retry/timeout/telemetry wrapper.
 - `@queue(name)` — register a durable queue handler.
 - `enqueue(name, payload, *, max_attempts=1, idempotency_key=None)` — submit durable work.
+- `enqueue_compensation(effect, *, reason=None, max_attempts=3)` — explicitly
+  enqueue a declared reversible-effect compensation with a stable idempotency
+  key and failure metadata; it never executes compensation inline.
 - `start_workers()` / `stop_workers()` — worker lifecycle used by the App lifespan.
 - `VoodooStoreQueue` — Store-backed implementation of the durable queue contract.

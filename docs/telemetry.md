@@ -1,5 +1,13 @@
 # Telemetry
 
+## Store operational metrics
+
+Adapters report semantic Store operations through
+`telemetry_store.record_store_operation(...)`. The bounded metric contract
+covers commit latency, recovery, object I/O, compaction, lock wait, queue lag,
+errors, and bytes without recording keys or payloads. `/voodoo/metrics` exposes
+the aggregate counters and a short redacted recent-operation window.
+
 ## What it is
 
 Voodoo has built-in observability: correlation IDs, request latency tracking, agent token/cost accounting, tool call metrics, and custom trace spans. All telemetry is collected in-process by the `TelemetryStore` and exposed via a metrics endpoint.
@@ -7,7 +15,7 @@ Voodoo has built-in observability: correlation IDs, request latency tracking, ag
 ## Minimal example
 
 ```python
-from voodoo import trace
+from voodoo.observability import trace
 
 
 @trace("data_pipeline")
@@ -43,6 +51,17 @@ print(summary["tool_calls_total"])
 curl http://localhost:8000/voodoo/metrics
 ```
 
+For Prometheus-compatible scrapers, use the bounded numeric exposition:
+
+```bash
+curl http://localhost:8000/voodoo/metrics/prometheus
+```
+
+The endpoint emits only numeric aggregate metrics (no paths, keys, payloads,
+or recent trace records) and uses stable `voodoo_` names. Protect metrics
+routes with the same network/authentication boundary as other operational
+endpoints when exposing them beyond localhost.
+
 Returns:
 ```json
 {
@@ -60,10 +79,14 @@ Returns:
 
 ## How it works
 
-1. `TelemetryMiddleware` assigns a unique `trace_id` (UUID) to every HTTP/WebSocket request via a `ContextVar`.
-2. The `trace_id` propagates through agents, tool calls, queue items, and mesh events.
-3. `TelemetryStore` collects metrics in memory (ring buffers prevent unbounded growth).
-4. The `/voodoo/metrics` endpoint exposes a summary.
+1. `TelemetryMiddleware` accepts safe `X-Trace-ID` and `X-Correlation-ID` headers or generates IDs, then binds them via `ContextVar`s.
+2. Response headers echo both IDs, and structured request metrics include method, path, status, latency, and IDs.
+3. The IDs propagate through agents, tool calls, queue items, and mesh events.
+4. `TelemetryStore` collects metrics in memory (ring buffers prevent unbounded growth).
+5. The `/voodoo/metrics` endpoint exposes a summary and
+   `/voodoo/metrics/prometheus` exposes scrapeable numeric aggregates.
+   Exception messages and tracebacks pass through the centralized redaction
+   guard before logging.
 
 ## Advanced
 
@@ -96,20 +119,22 @@ telemetry_store.record_trace("my_operation", latency_ms=42.5, error=False)
 ### TelemetryMiddleware
 
 The middleware is auto-installed. It:
-- Generates a UUID trace_id per request
-- Records request latency and error status
+- Accepts validated incoming IDs or generates a UUID trace_id per request
+- Emits `X-Trace-ID` and `X-Correlation-ID` response headers
+- Records structured request latency, status, error, and correlation metadata
 - Resets the trace_id after the request completes
-- Logs request completion with the trace_id
+- Logs request completion with the trace_id after redaction
 
 ## API reference
 
 - `trace(name=None)` — decorator for tracing function blocks. Now also creates an OTel-compatible span with parent hierarchy.
 - `telemetry_store` — global `TelemetryStore` singleton.
 - `trace_id_var` — `ContextVar` holding the current trace ID.
+- `correlation_id_var` — `ContextVar` holding the current request correlation ID.
 - `new_trace_id()` — generate a new UUID4 hex trace ID.
 - `Span` — frozen dataclass: `trace_id`, `span_id`, `parent_span_id`, `name`, `start_time`, `end_time`, `status`, `attributes`. Has `duration_ms` property and `to_dict()`.
 - `start_span(name, attributes=None)` — async context manager creating child spans with automatic parent tracking.
-- `TelemetryStore.record_request(latency_ms, error=False)` — record an HTTP request.
+- `TelemetryStore.record_request(latency_ms, error=False, ...)` — record an HTTP request and optional structured correlation metadata.
 - `TelemetryStore.record_trace(name, latency_ms, error=False)` — record a custom trace.
 - `TelemetryStore.record_span(span)` — store a Span in the ring buffer (max 1000) and forward to OTLP exporter if configured.
 - `TelemetryStore.record_agent_run(run_record)` — record an agent run.

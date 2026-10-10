@@ -114,6 +114,30 @@ def test_optional_param_not_required_and_nullable():
     assert spec.input_schema["properties"]["limit"]["nullable"] is True
 
 
+def test_unresolved_type_hint_uses_raw_annotations_fallback():
+    def unresolved(value: object) -> str:
+        return str(value)
+
+    unresolved.__annotations__["value"] = "MissingToolType"
+
+    input_schema, output_schema = tools_module._build_schemas(unresolved)
+
+    assert input_schema["properties"]["value"] == {"type": "string"}
+    assert output_schema == {"type": "string"}
+
+
+def test_unexpected_type_hint_failure_propagates(monkeypatch):
+    def sample(value: int) -> int:
+        return value
+
+    def fail(_function):
+        raise RuntimeError("type-hint implementation failure")
+
+    monkeypatch.setattr(tools_module, "get_type_hints", fail)
+    with pytest.raises(RuntimeError, match="implementation failure"):
+        tools_module._build_schemas(sample)
+
+
 def test_source_metadata_is_string():
     @tool
     async def noop(x: int) -> int:

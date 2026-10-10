@@ -21,6 +21,26 @@ def _ws_id(prefix: str) -> str:
     return f"vd-{prefix}-{uuid4().hex[:8]}"
 
 
+def _workspace_state_attrs(
+    *, unavailable: bool, loading: bool, error: bool | str, read_only: bool = False
+) -> dict[str, Any]:
+    """Render the shared state semantics used by workspace controls."""
+    attrs: dict[str, Any] = {}
+    if unavailable:
+        attrs["aria_disabled"] = "true"
+    if read_only:
+        attrs["aria_readonly"] = "true"
+    if error is not False and error is not None:
+        attrs["aria_invalid"] = "true"
+    if loading:
+        attrs["aria_busy"] = "true"
+    if error:
+        attrs["aria_invalid"] = "true"
+        if isinstance(error, str):
+            attrs["data_vd_error"] = error
+    return attrs
+
+
 # ── ResizablePanels ──────────────────────────────────────────────────────────
 
 
@@ -243,43 +263,72 @@ class TreeView(Component):
         on_select: EventHandler | None = None,
         on_expand: EventHandler | None = None,
         on_collapse: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        empty_text: str = "No items available",
         **kwargs: Any,
     ) -> None:
-        if not nodes:
-            raise ValueError("TreeView requires at least one TreeNode")
+        unavailable = disabled or read_only or loading or bool(error)
 
-        select_binding = bind_event(on_select) if on_select else None
-        expand_binding = bind_event(on_expand) if on_expand else None
-        collapse_binding = bind_event(on_collapse) if on_collapse else None
-
-        has_active = any(node._contains_active() for node in nodes)
-        focus_index = next(
-            (index for index, node in enumerate(nodes) if not node.disabled),
-            None,
+        select_binding = bind_event(on_select) if on_select and not unavailable else None
+        expand_binding = bind_event(on_expand) if on_expand and not unavailable else None
+        collapse_binding = (
+            bind_event(on_collapse) if on_collapse and not unavailable else None
         )
-        if focus_index is None and not has_active:
-            raise ValueError("TreeView requires at least one enabled TreeNode")
 
-        rendered = tuple(
-            node.render_node(
-                0,
-                select_binding,
-                expand_binding,
-                collapse_binding,
-                focusable=not has_active and index == focus_index,
+        if loading or error or not nodes:
+            if error:
+                message = error if isinstance(error, str) else "Unable to load tree"
+                state = "error"
+            elif loading:
+                message = "Loading…"
+                state = "loading"
+            else:
+                message = empty_text
+                state = "empty"
+            rendered = (_TreeState(message, aria_live="polite", data_vd_state=state),)
+        else:
+            has_active = any(node._contains_active() for node in nodes)
+            focus_index = next(
+                (index for index, node in enumerate(nodes) if not node._is_unavailable()),
+                None,
             )
-            for index, node in enumerate(nodes)
-        )
+            if focus_index is None and not has_active:
+                raise ValueError("TreeView requires at least one enabled TreeNode")
+            rendered = tuple(
+                node.render_node(
+                    0,
+                    select_binding,
+                    expand_binding,
+                    collapse_binding,
+                    focusable=not unavailable and not has_active and index == focus_index,
+                )
+                for index, node in enumerate(nodes)
+            )
 
         super().__init__(
             _TreeList(
                 *rendered,
                 role="tree",
                 aria_label=label,
+                **_workspace_state_attrs(
+                    unavailable=unavailable,
+                    loading=loading,
+                    error=error,
+                    read_only=read_only,
+                ),
             ),
             data_vd_tree_view=True,
             **kwargs,
         )
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class TreeNode:
@@ -294,6 +343,9 @@ class TreeNode:
         expanded: bool = False,
         selected: bool = False,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
     ) -> None:
         self.label = label
         self.children = list(children)
@@ -301,9 +353,15 @@ class TreeNode:
         self.expanded = expanded
         self.selected = selected
         self.disabled = disabled
+        self.read_only = read_only
+        self.loading = loading
+        self.error = error
+
+    def _is_unavailable(self) -> bool:
+        return self.disabled or self.read_only or self.loading or bool(self.error)
 
     def _contains_active(self) -> bool:
-        return (self.selected and not self.disabled) or any(
+        return (self.selected and not self._is_unavailable()) or any(
             child._contains_active() for child in self.children
         )
 
@@ -315,11 +373,13 @@ class TreeNode:
         collapse_binding: str | None,
         *,
         focusable: bool = False,
+        ancestor_unavailable: bool = False,
     ) -> Component:
         node_id = _ws_id("tree-node")
         effective_expanded = self.expanded or any(
             child._contains_active() for child in self.children
         )
+        unavailable = ancestor_unavailable or self._is_unavailable()
 
         # Build label content
         label_children: list[Any] = []
@@ -331,9 +391,11 @@ class TreeNode:
                 type="button",
                 tabindex="-1",
                 aria_expanded="true" if effective_expanded else "false",
-                data_vd_event_click=collapse_binding
-                if effective_expanded
-                else expand_binding,
+                data_vd_event_click=(
+                    collapse_binding if effective_expanded else expand_binding
+                )
+                if not unavailable
+                else None,
                 data_vd_tree_toggle=True,
             )
             label_children.append(toggle)
@@ -347,18 +409,27 @@ class TreeNode:
         row_attrs: dict[str, Any] = {
             "role": "treeitem",
             "aria_selected": "true" if self.selected else "false",
-            "aria_disabled": "true" if self.disabled else None,
             "aria_level": str(depth + 1),
             "aria_expanded": ("true" if effective_expanded else "false")
             if self.children
             else None,
             "tabindex": "0"
-            if (self.selected or focusable) and not self.disabled
+            if (self.selected or focusable) and not unavailable
             else "-1",
             "data_vd_tree_node=True": True,
             "data_vd_depth": str(depth),
         }
-        if select_binding and not self.disabled:
+        row_attrs.update(
+            _workspace_state_attrs(
+                unavailable=unavailable,
+                loading=self.loading,
+                error=self.error,
+                read_only=self.read_only,
+            )
+        )
+        if unavailable:
+            row_attrs["disabled"] = True
+        if select_binding and not unavailable:
             row_attrs["data_vd_event_click"] = select_binding
 
         children_list: list[Any] = [
@@ -372,6 +443,7 @@ class TreeNode:
                     select_binding,
                     expand_binding,
                     collapse_binding,
+                    ancestor_unavailable=unavailable,
                 )
                 for child in self.children
             )
@@ -419,6 +491,12 @@ class _TreeSpacer(Component):
 
     def __init__(self) -> None:
         super().__init__(aria_hidden="true")
+
+
+class _TreeState(Component):
+    """Semantic status content for a tree without usable nodes."""
+
+    auto_id = False
 
 
 class _TreeIcon(Component):
@@ -505,6 +583,9 @@ class ToolbarButton(Component):
         label: str | None = None,
         pressed: bool | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         on_click: EventHandler | None = None,
         **kwargs: Any,
     ) -> None:
@@ -514,19 +595,31 @@ class ToolbarButton(Component):
         if children:
             content.extend(children)
 
+        unavailable = disabled or read_only or loading or bool(error)
         attrs: dict[str, Any] = {
             "type": "button",
             "aria_label": label,
         }
+        attrs.update(
+            _workspace_state_attrs(
+                unavailable=unavailable, loading=loading, error=error
+            )
+        )
         if pressed is not None:
             attrs["aria_pressed"] = "true" if pressed else "false"
-        if disabled:
+        if disabled or unavailable:
             attrs["disabled"] = True
-        if on_click is not None and not disabled:
+        if on_click is not None and not unavailable:
             attrs["data_vd_event_click"] = bind_event(on_click)
 
         super().__init__(*content, **attrs, **kwargs)
-        self.props = {"pressed": pressed, "disabled": disabled}
+        self.props = {
+            "pressed": pressed,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _ToolbarButtonIcon(Component):
@@ -577,17 +670,46 @@ class Menubar(Component):
         self,
         *menus: MenubarMenu,
         label: str = "Application menu",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not menus:
             raise ValueError("Menubar requires at least one MenubarMenu")
 
-        rendered = tuple(_MenubarItem(m.render_menu()) for m in menus)
+        unavailable = disabled or read_only or loading or bool(error)
+        rendered_menus: list[Component] = []
+        for menu in menus:
+            rendered_menu = menu.render_menu()
+            if unavailable:
+                trigger = rendered_menu.children[0]
+                trigger.attrs["disabled"] = True
+                trigger.attrs["aria_disabled"] = "true"
+                trigger.attrs.pop("data_vd_menubar_trigger", None)
+                dropdown = rendered_menu.children[1]
+                dropdown.attrs["aria_disabled"] = "true"
+            rendered_menus.append(_MenubarItem(rendered_menu))
+        state_attrs = _workspace_state_attrs(
+            unavailable=unavailable,
+            loading=loading,
+            error=error,
+            read_only=read_only,
+        )
+        rendered = tuple(rendered_menus)
         super().__init__(
-            _MenubarList(*rendered, role="menubar", aria_label=label),
+            _MenubarList(*rendered, role="menubar", aria_label=label, **state_attrs),
             data_vd_menubar=True,
+            **state_attrs,
             **kwargs,
         )
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _MenubarList(Component):
@@ -610,14 +732,29 @@ class MenubarMenu:
         label: str,
         *items: Component,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
     ) -> None:
         self.label = label
         self.items = list(items)
         self.disabled = disabled
+        self.read_only = read_only
+        self.loading = loading
+        self.error = error
 
     def render_menu(self) -> Component:
         trigger_id = _ws_id("menubar-trigger")
         content_id = _ws_id("menubar-content")
+        unavailable = self.disabled or self.read_only or self.loading or bool(self.error)
+        if unavailable:
+            for item in self.items:
+                item.attrs["disabled"] = True
+                item.attrs["aria_disabled"] = "true"
+                item.attrs.pop("data-vd-event-click", None)
+                item.attrs.pop("data_vd_event_click", None)
+                item.attrs.pop("data-vd-event-change", None)
+                item.attrs.pop("data_vd_event_change", None)
 
         trigger = _MenubarTrigger(
             Text(self.label),
@@ -627,7 +764,13 @@ class MenubarMenu:
             aria_controls=content_id,
             aria_expanded="false",
             data_vd_menubar_trigger=content_id,
-            disabled=self.disabled,
+            disabled=unavailable,
+            **_workspace_state_attrs(
+                unavailable=unavailable,
+                loading=self.loading,
+                error=self.error,
+                read_only=self.read_only,
+            ),
             role="menuitem",
         )
 
@@ -638,6 +781,12 @@ class MenubarMenu:
             hidden=True,
             data_vd_menubar_dropdown=True,
             aria_labelledby=trigger_id,
+            **_workspace_state_attrs(
+                unavailable=unavailable,
+                loading=self.loading,
+                error=self.error,
+                read_only=self.read_only,
+            ),
         )
         return _MenubarMenu(trigger, menu)
 
@@ -668,6 +817,9 @@ class MenubarItem(Component):
         *children: Any,
         shortcut: str | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         on_select: EventHandler | None = None,
         **kwargs: Any,
     ) -> None:
@@ -677,17 +829,28 @@ class MenubarItem(Component):
                 Component(shortcut, class_="vd-menubar-shortcut", aria_label=shortcut)
             )
 
+        unavailable = disabled or read_only or loading or bool(error)
         attrs: dict[str, Any] = {
             "type": "button",
             "role": "menuitem",
         }
-        if disabled:
+        attrs.update(
+            _workspace_state_attrs(
+                unavailable=unavailable, loading=loading, error=error
+            )
+        )
+        if disabled or unavailable:
             attrs["disabled"] = True
-            attrs["aria_disabled"] = "true"
-        if on_select is not None and not disabled:
+        if on_select is not None and not unavailable:
             attrs["data_vd_event_click"] = bind_event(on_select)
 
         super().__init__(*content, **attrs, **kwargs)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class MenubarSeparator(Component):
@@ -761,6 +924,9 @@ class DockItem:
         badge: int | None = None,
         on_click: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
     ) -> None:
         self.icon = icon
         self.label = label
@@ -768,8 +934,12 @@ class DockItem:
         self.badge = badge
         self.on_click = on_click
         self.disabled = disabled
+        self.read_only = read_only
+        self.loading = loading
+        self.error = error
 
     def render_item(self, index: int) -> Component:
+        unavailable = self.disabled or self.read_only or self.loading or bool(self.error)
         attrs: dict[str, Any] = {
             "type": "button",
             "aria_label": self.label,
@@ -777,9 +947,14 @@ class DockItem:
             "data_vd_dock_index": str(index),
             "data_vd_dock_active": self.active,
         }
-        if self.on_click and not self.disabled:
+        attrs.update(
+            _workspace_state_attrs(
+                unavailable=unavailable, loading=self.loading, error=self.error
+            )
+        )
+        if self.on_click and not unavailable:
             attrs["data_vd_event_click"] = bind_event(self.on_click)
-        if self.disabled:
+        if unavailable:
             attrs["disabled"] = True
 
         children: list[Any] = [
@@ -892,14 +1067,72 @@ class MasterList(Component):
 
     style = "master-detail.list"
 
-    def __init__(self, *items: MasterItem, **kwargs: Any) -> None:
-        rendered = tuple(_MasterListItem(item.render_item()) for item in items)
-        super().__init__(*rendered, role="listbox", **kwargs)
+    def __init__(
+        self,
+        *items: MasterItem,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        empty_text: str = "No items available",
+        **kwargs: Any,
+    ) -> None:
+        unavailable = disabled or read_only or loading or bool(error)
+        rendered_items: list[Component] = []
+        if error or loading or not items:
+            if error:
+                message = error if isinstance(error, str) else "Unable to load items"
+                state = "error"
+            elif loading:
+                message = "Loading…"
+                state = "loading"
+            else:
+                message = empty_text
+                state = "empty"
+            rendered_items.append(
+                _MasterListItem(
+                    _MasterListState(
+                        message,
+                        aria_live="polite",
+                        data_vd_state=state,
+                    )
+                )
+            )
+        else:
+            for item in items:
+                rendered = item.render_item()
+                if unavailable:
+                    rendered.attrs["disabled"] = True
+                    rendered.attrs["aria_disabled"] = "true"
+                    rendered.attrs["tabindex"] = "-1"
+                    rendered.attrs.pop("data_vd_event_click", None)
+                    rendered.attrs.pop("data-vd-event-click", None)
+                rendered_items.append(_MasterListItem(rendered))
+        state_attrs = _workspace_state_attrs(
+            unavailable=unavailable,
+            loading=loading,
+            error=error,
+            read_only=read_only,
+        )
+        super().__init__(*rendered_items, role="listbox", **state_attrs, **kwargs)
+        self.props = {
+            "empty": not bool(items) and not loading and not error,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _MasterListItem(Component):
     tag = "li"
     style = "master-detail.list-item"
+    auto_id = False
+
+
+class _MasterListState(Component):
+    """Semantic status content for a master list with no usable items."""
+
     auto_id = False
 
 
@@ -914,6 +1147,9 @@ class MasterItem:
         icon: Component | None = None,
         selected: bool = False,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         on_select: EventHandler | None = None,
     ) -> None:
         self.label = label
@@ -921,6 +1157,9 @@ class MasterItem:
         self.icon = icon
         self.selected = selected
         self.disabled = disabled
+        self.read_only = read_only
+        self.loading = loading
+        self.error = error
         self.on_select = on_select
 
     def render_item(self) -> Component:
@@ -934,15 +1173,22 @@ class MasterItem:
             copy.append(_MasterItemSummary(self.summary))
         content.append(_MasterItemCopy(*copy))
 
+        unavailable = self.disabled or self.read_only or self.loading or bool(self.error)
         attrs: dict[str, Any] = {
             "type": "button",
             "role": "option",
             "aria_selected": "true" if self.selected else "false",
-            "aria_disabled": "true" if self.disabled else None,
-            "tabindex": "0" if self.selected else "-1",
+            "tabindex": "0" if self.selected and not unavailable else "-1",
         }
-        if self.on_select and not self.disabled:
+        attrs.update(
+            _workspace_state_attrs(
+                unavailable=unavailable, loading=self.loading, error=self.error
+            )
+        )
+        if self.on_select and not unavailable:
             attrs["data_vd_event_click"] = bind_event(self.on_select)
+        if unavailable:
+            attrs["disabled"] = True
 
         return _MasterItemButton(*content, **attrs)
 

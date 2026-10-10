@@ -29,6 +29,9 @@ __all__ = [
 ]
 
 _MEMBERSHIP_PREFIX = b"runtime:membership:node:"
+_MEMBERSHIP_COLLECTION = b"runtime.membership"
+_SCHEMA_KEY = "_schema_version"
+_SCHEMA_VERSION = 1
 
 
 def _now() -> datetime:
@@ -103,6 +106,11 @@ class NodeMembership:
 
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> NodeMembership:
+        version = record.pop(_SCHEMA_KEY, 0)
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise ValueError("membership schema version must be an integer")
+        if version > _SCHEMA_VERSION:
+            raise ValueError(f"unsupported membership schema version: {version}")
         return cls(
             node_id=str(record["node_id"]),
             status=MemberStatus(record["status"]),
@@ -127,9 +135,27 @@ class VoodooStoreMembershipStore:
             raise StoreProviderError(
                 "VoodooStoreMembershipStore requires the Voodoo Store provider"
             )
-        self._native = getattr(provider, "native", None)
+        self._native: Any = getattr(provider, "native", None)
         if self._native is None:
             raise StoreProviderError("Active Voodoo Store has no native handle")
+
+    @staticmethod
+    def _native_collections(store: Any) -> bool:
+        return all(
+            hasattr(store, method)
+            for method in (
+                "create_collection",
+                "upsert_record",
+                "get_record",
+                "scan_collection",
+            )
+        )
+
+    def _ensure_collection(self) -> None:
+        if self._native_collections(self._native):
+            self._native.create_collection(
+                _MEMBERSHIP_COLLECTION, schema_version=1, codec=b"json"
+            )
 
     @staticmethod
     def _key(node_id: str) -> bytes:
@@ -143,12 +169,21 @@ class VoodooStoreMembershipStore:
             raise PermissionError("Only node identities may join Runtime membership")
 
     def _save(self, membership: NodeMembership) -> NodeMembership:
-        self._native.put(
-            self._key(membership.node_id),
-            json.dumps(
-                membership.describe(), sort_keys=True, separators=(",", ":")
-            ).encode("utf-8"),
-        )
+        self._ensure_collection()
+        encoded = json.dumps(
+            {**membership.describe(), _SCHEMA_KEY: _SCHEMA_VERSION},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if self._native_collections(self._native):
+            self._native.upsert_record(
+                _MEMBERSHIP_COLLECTION,
+                membership.node_id.encode("utf-8"),
+                encoded,
+            )
+            self._native.delete(self._key(membership.node_id))
+        else:
+            self._native.put(self._key(membership.node_id), encoded)
         return membership
 
     def join(
@@ -212,16 +247,56 @@ class VoodooStoreMembershipStore:
         )
 
     def get(self, node_id: str) -> NodeMembership | None:
-        raw = self._native.get(self._key(node_id))
+        self._ensure_collection()
+        raw = None
+        if self._native_collections(self._native):
+            record = self._native.get_record(
+                _MEMBERSHIP_COLLECTION, node_id.encode("utf-8")
+            )
+            if record is not None:
+                raw = record[1]
+        if raw is None:
+            raw = self._native.get(self._key(node_id))
         if raw is None:
             return None
-        return NodeMembership.from_record(json.loads(bytes(raw).decode("utf-8")))
+        record = json.loads(bytes(raw).decode("utf-8"))
+        if not isinstance(record, dict):
+            raise ValueError("membership record must be a JSON object")
+        membership = NodeMembership.from_record(record)
+        if membership.node_id != node_id:
+            raise ValueError("membership key does not match record node_id")
+        return membership
 
     def list(self, *, include_left: bool = False) -> list[NodeMembership]:
-        memberships = [
-            NodeMembership.from_record(json.loads(bytes(raw).decode("utf-8")))
-            for _key, raw in self._native.scan_prefix(_MEMBERSHIP_PREFIX)
-        ]
+        memberships: list[NodeMembership] = []
+        self._ensure_collection()
+        records: dict[str, bytes] = {}
+        if self._native_collections(self._native):
+            records.update(
+                {
+                    bytes(key).decode("utf-8"): raw
+                    for key, raw, _indexes in self._native.scan_collection(
+                        _MEMBERSHIP_COLLECTION
+                    )
+                }
+            )
+        for key, raw in self._native.scan_prefix(_MEMBERSHIP_PREFIX):
+            expected_id = bytes(key)[len(_MEMBERSHIP_PREFIX) :].decode("utf-8")
+            records.setdefault(expected_id, raw)
+        for expected_id, raw in records.items():
+            try:
+                record = json.loads(bytes(raw).decode("utf-8"))
+                if not isinstance(record, dict):
+                    continue
+                item = NodeMembership.from_record(record)
+                if item.node_id == expected_id:
+                    memberships.append(item)
+            except ValueError as error:
+                if str(error).startswith("unsupported membership schema"):
+                    raise
+                continue
+            except (TypeError, json.JSONDecodeError):
+                continue
         if include_left:
             return memberships
         return [item for item in memberships if item.status is not MemberStatus.LEFT]

@@ -47,7 +47,7 @@ def _clean_subsystems():
 
     _event_handlers.clear()
     state_renderer._bindings.clear()
-    ws_manager.active_connections.clear()
+    ws_manager.reset()
     yield
     mesh.event_handlers.clear()
     mesh.active_nodes.clear()
@@ -55,7 +55,7 @@ def _clean_subsystems():
     tools_module.default_registry._tools.clear()
     _event_handlers.clear()
     state_renderer._bindings.clear()
-    ws_manager.active_connections.clear()
+    ws_manager.reset()
     ws_manager.broadcast_patch = saved_broadcast
 
 

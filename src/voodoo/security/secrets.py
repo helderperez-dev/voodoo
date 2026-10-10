@@ -22,8 +22,10 @@ from __future__ import annotations
 
 import json
 import os
+import stat
+import tempfile
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 __all__ = [
     "SecretStore",
@@ -101,6 +103,17 @@ class LocalSecretStore:
         self._key = key
         self._data: dict[str, str] | None = None
 
+    @staticmethod
+    def _require_private(path: Path, *, label: str) -> None:
+        """Reject Unix files that expose secret material to other users."""
+        if os.name == "nt" or not path.exists():
+            return
+        if path.stat().st_mode & 0o077:
+            raise SecretsError(
+                f"{label} must not be readable by group or others: {path}. "
+                "Run chmod 600 (or restrict the containing directory)."
+            )
+
     def _ensure_key(self) -> str:
         if self._key:
             return self._key
@@ -110,6 +123,7 @@ class LocalSecretStore:
             return env_key
         key_file = Path(".voodoo-secrets-key")
         if key_file.exists():
+            self._require_private(key_file, label=".voodoo-secrets-key")
             self._key = key_file.read_text().strip()
             return self._key
         raise SecretsError(
@@ -117,29 +131,45 @@ class LocalSecretStore:
             "create .voodoo-secrets-key file, or pass key= to LocalSecretStore."
         )
 
+    def _fernet(self) -> Any:
+        try:
+            from cryptography.fernet import Fernet
+        except ImportError as exc:
+            raise SecretsError(
+                "Encrypted local secrets require the 'secrets' extra. "
+                "Install it with: pip install 'voodoo-framework[secrets]'"
+            ) from exc
+
+        try:
+            key = self._ensure_key()
+            return Fernet(key.encode())
+        except (TypeError, ValueError) as exc:
+            raise SecretsError("VOODOO_SECRETS_KEY is not a valid Fernet key.") from exc
+
     def _load(self) -> dict[str, str]:
         if self._data is not None:
             return self._data
         if not self._path.exists():
             self._data = {}
             return self._data
+        self._require_private(self._path, label="encrypted secrets file")
+        fernet = self._fernet()
         try:
-            from cryptography.fernet import Fernet
+            from cryptography.fernet import InvalidToken
 
-            key = self._ensure_key()
-            f = Fernet(key.encode() if isinstance(key, str) else key)
-            raw = self._path.read_bytes()
-            decrypted = f.decrypt(raw)
-            self._data = json.loads(decrypted)
-        except ImportError:
-            # cryptography not installed — read as plain JSON
-            self._data = json.loads(self._path.read_text())
-        except SecretsError:
-            # No key available — fall back to plain JSON
-            self._data = json.loads(self._path.read_text())
-        except Exception:
-            # Decryption failed — try plain JSON (dev convenience)
-            self._data = json.loads(self._path.read_text())
+            decrypted = fernet.decrypt(self._path.read_bytes())
+            decoded = json.loads(decrypted)
+        except (InvalidToken, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise SecretsError(
+                f"Could not decrypt local secrets file '{self._path}'. "
+                "Verify the key and file integrity."
+            ) from exc
+        if not isinstance(decoded, dict) or not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in decoded.items()
+        ):
+            raise SecretsError("The decrypted secrets payload must be string pairs.")
+        self._data = decoded
         return self._data
 
     def get(self, name: str) -> str | None:
@@ -155,16 +185,39 @@ class LocalSecretStore:
         self._save(data)
 
     def _save(self, data: dict[str, str]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if os.name != "nt":
+            # mkdir(mode=...) does not tighten permissions on an existing
+            # directory; refuse to write into a world-readable secrets dir.
+            if self._path.parent.stat().st_mode & 0o077:
+                raise SecretsError(
+                    f"secrets directory must not be readable by group or others: "
+                    f"{self._path.parent}. Run chmod 700."
+                )
+        encrypted = self._fernet().encrypt(json.dumps(data).encode())
+        temp_name: str | None = None
         try:
-            from cryptography.fernet import Fernet
-
-            key = self._ensure_key()
-            f = Fernet(key.encode() if isinstance(key, str) else key)
-            encrypted = f.encrypt(json.dumps(data).encode())
-            self._path.write_bytes(encrypted)
-        except (ImportError, SecretsError):
-            self._path.write_text(json.dumps(data, indent=2))
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=self._path.parent,
+                prefix=f".{self._path.name}.",
+                delete=False,
+            ) as temporary:
+                temp_name = temporary.name
+                temporary.write(encrypted)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            os.chmod(temp_name, stat.S_IRUSR | stat.S_IWUSR)
+            os.replace(temp_name, self._path)
+        except OSError as exc:
+            if temp_name is not None:
+                try:
+                    os.unlink(temp_name)
+                except FileNotFoundError:
+                    pass
+            raise SecretsError(
+                f"Could not persist encrypted secrets file '{self._path}'."
+            ) from exc
         self._data = data
 
 

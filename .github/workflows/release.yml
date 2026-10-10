@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: release
@@ -102,11 +104,9 @@ jobs:
 
       - name: 🧪 Clean Store-first distribution gate
         run: |
-          rm -rf /tmp/voodoo-release-clean /tmp/voodoo-release-app /tmp/voodoo-release-dist
-          mkdir -p /tmp/voodoo-release-dist
-          uv build --wheel --out-dir /tmp/voodoo-release-dist
+          rm -rf /tmp/voodoo-release-clean /tmp/voodoo-release-app
           uv venv --python 3.12 /tmp/voodoo-release-clean
-          uv pip install --python /tmp/voodoo-release-clean/bin/python /tmp/voodoo-release-dist/*.whl
+          uv pip install --python /tmp/voodoo-release-clean/bin/python -e .
           /tmp/voodoo-release-clean/bin/python - <<'PY'
           import importlib.util
           assert importlib.util.find_spec("aiosqlite") is None
@@ -158,6 +158,52 @@ jobs:
         run: |
           rm -rf dist/
           uv build
+          if tar -tzf dist/*.tar.gz | grep -E '(__pycache__/|\.py[cod]$)'; then
+            echo "source distribution contains generated interpreter bytecode" >&2
+            exit 1
+          fi
+
+      - name: 🧪 Test the exact release wheel
+        run: |
+          rm -rf /tmp/voodoo-release-artifact
+          uv venv --python 3.12 /tmp/voodoo-release-artifact
+          uv pip install --python /tmp/voodoo-release-artifact/bin/python dist/*.whl
+          /tmp/voodoo-release-artifact/bin/python - <<'PY'
+          import importlib.metadata
+          import subprocess
+
+          version = importlib.metadata.version("voodoo-framework")
+          assert version == "${{ steps.get_version.outputs.VERSION }}", version
+          result = subprocess.run(
+              ["/tmp/voodoo-release-artifact/bin/voodoo", "version"],
+              check=False,
+              capture_output=True,
+              text=True,
+          )
+          assert result.returncode == 0, result.stderr
+          assert version in result.stdout, result.stdout
+          PY
+
+      - name: 🧪 Test the exact source distribution
+        run: |
+          rm -rf /tmp/voodoo-release-sdist
+          uv venv --python 3.12 /tmp/voodoo-release-sdist
+          uv pip install --python /tmp/voodoo-release-sdist/bin/python dist/*.tar.gz
+          /tmp/voodoo-release-sdist/bin/python - <<'PY'
+          import importlib.metadata
+          import subprocess
+
+          version = importlib.metadata.version("voodoo-framework")
+          assert version == "${{ steps.get_version.outputs.VERSION }}", version
+          result = subprocess.run(
+              ["/tmp/voodoo-release-sdist/bin/voodoo", "version"],
+              check=False,
+              capture_output=True,
+              text=True,
+          )
+          assert result.returncode == 0, result.stderr
+          assert version in result.stdout, result.stdout
+          PY
 
       - name: 🔐 Calculate SHA256
         id: sha
@@ -167,10 +213,123 @@ jobs:
           echo "SHA256=$SHA256" >> "$GITHUB_OUTPUT"
           echo "SHA256: $SHA256"
 
-      - name: 📤 Publish to PyPI
+      - name: 📋 Generate release manifest
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          artifacts = []
+          for path in sorted(Path("dist").iterdir()):
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              artifacts.append({"file": path.name, "sha256": digest, "bytes": path.stat().st_size})
+          manifest = {
+              "package": "voodoo-framework",
+              "version": os.environ["VERSION"],
+              "commit": os.environ["GITHUB_SHA"],
+              "artifacts": artifacts,
+              "attestation": "GitHub Actions workflow identity; verify artifact provenance before promotion",
+          }
+          Path("dist/release-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
         env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_PASSWORD }}
-        run: uv publish
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+      - name: ⬆️ Upload release manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: voodoo-release-manifest
+          path: dist/release-manifest.json
+          retention-days: 90
+      - name: ✅ Verify release manifest
+        run: uv run python scripts/verify_release_manifest.py dist
+
+      - name: 📝 Generate and sign release notes
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+          REVISION: ${{ github.sha }}
+          RELEASE_SIGNING_KEY_B64: ${{ secrets.RELEASE_SIGNING_KEY_B64 }}
+          RELEASE_SIGNING_PUBLIC_KEY_B64: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY_B64 }}
+        run: |
+          test -n "$RELEASE_SIGNING_KEY_B64" || { echo "RELEASE_SIGNING_KEY_B64 is required" >&2; exit 1; }
+          test -n "$RELEASE_SIGNING_PUBLIC_KEY_B64" || { echo "RELEASE_SIGNING_PUBLIC_KEY_B64 is required" >&2; exit 1; }
+          export VERSION REVISION
+          python - <<'PY'
+          import base64, hashlib, json, os, re
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+
+          version = os.environ["VERSION"]
+          revision = os.environ["REVISION"]
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          match = re.search(rf"^##\s+\[?{re.escape(version)}\]?[^\n]*\n(?P<body>.*?)(?=^##\s+|\Z)", changelog, re.MULTILINE | re.DOTALL)
+          body = match.group("body").strip() if match else "No changelog section found."
+          manifest = json.loads(Path("dist/release-manifest.json").read_text(encoding="utf-8"))
+          lines = [
+              f"# voodoo-framework {version}",
+              "",
+              f"- Source revision: `{revision}`",
+              f"- Attestation subject: `voodoo-framework@{version}`",
+              f"- Manifest version: `{manifest.get('manifest_version', 1)}`",
+              "",
+              "## Changes",
+              "",
+              body,
+              "",
+              "## Artifacts",
+              "",
+              "| File | SHA-256 | Bytes |",
+              "| --- | --- | ---: |",
+          ]
+          lines.extend(f"| `{item['file']}` | `{item['sha256']}` | {item['bytes']} |" for item in manifest["artifacts"])
+          notes = ("\n".join(lines) + "\n").encode("utf-8")
+          Path("dist/release-notes.md").write_bytes(notes)
+          private = serialization.load_pem_private_key(base64.b64decode(os.environ["RELEASE_SIGNING_KEY_B64"]), password=None)
+          if not isinstance(private, Ed25519PrivateKey):
+              raise SystemExit("release signing key must be Ed25519")
+          public = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+          trusted = base64.b64decode(os.environ["RELEASE_SIGNING_PUBLIC_KEY_B64"])
+          if trusted != public:
+              raise SystemExit("release signing public key does not match private key")
+          signature = private.sign(notes)
+          payload = {
+              "schema_version": 1,
+              "algorithm": "Ed25519",
+              "notes_sha256": hashlib.sha256(notes).hexdigest(),
+              "subject": f"voodoo-framework@{version}",
+              "revision": revision,
+              "public_key_b64": base64.b64encode(public).decode("ascii"),
+              "signature_b64": base64.b64encode(signature).decode("ascii"),
+          }
+          Ed25519PublicKey.from_public_bytes(public).verify(signature, notes)
+          Path("dist/release-notes.sig.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("dist/release-notes.sig.json").read_text())
+          assert payload["schema_version"] == 1
+          assert payload["subject"] == f"voodoo-framework@{__import__('os').environ['VERSION']}"
+          assert payload["revision"] == __import__('os').environ["REVISION"]
+          print("verified signed release notes metadata")
+          PY
+      - name: ⬆️ Upload signed release notes
+        uses: actions/upload-artifact@v7
+        with:
+          name: voodoo-release-notes
+          path: |
+            dist/release-notes.md
+            dist/release-notes.sig.json
+          retention-days: 90
+      - name: 🔏 Attest release artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+
+      - name: 📤 Publish to PyPI
+        run: uv publish dist/*.whl dist/*.tar.gz
 
       - name: 🍺 Update Homebrew Formula
         if: env.HOMEBREW_TAP_TOKEN != ''
@@ -280,6 +439,6 @@ jobs:
           else
             gh release create "$TAG" dist/* \
               --title "$TAG" \
-              --generate-notes
+              --notes-file dist/release-notes.md
           fi
           echo "✓ GitHub release $TAG done."

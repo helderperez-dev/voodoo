@@ -8,6 +8,7 @@ subsystem persists through this adapter — never through aiosqlite directly.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -117,7 +118,7 @@ class SQLiteDatabase:
             await self._conn.execute("PRAGMA journal_mode=WAL")
             await self._conn.execute("PRAGMA busy_timeout=5000")
             await self._conn.commit()
-        except BaseException:
+        except (Exception, asyncio.CancelledError):
             await self.close()
             raise
 
@@ -185,7 +186,7 @@ class SQLiteDatabase:
         conn = self.connection
         try:
             yield conn
-        except BaseException:
+        except (Exception, asyncio.CancelledError):
             await conn.rollback()
             raise
         await conn.commit()

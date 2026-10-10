@@ -27,10 +27,43 @@ def generate_design_system_css(theme: Theme) -> str:
     --vd-brand-softer: color-mix(in srgb, var(--vd-brand) 5%, transparent);
     --vd-brand-line: color-mix(in srgb, var(--vd-brand) 22%, transparent);
     --vd-brand-glow: color-mix(in srgb, var(--vd-brand) 20%, transparent);
+    --vd-brand-highlight: #8b5cf6;
+    --vd-brand-highlight-hover: #8250ee;
+    --vd-on-brand: #ffffff;
+    --vd-danger-strong: #dc2626;
+    --vd-danger-badge-strong: #dc2626;
+    --vd-danger-focus: rgb(239 68 68 / 0.18);
+    --vd-success-soft: rgb(16 185 129 / 0.1);
+    --vd-success-line: rgb(16 185 129 / 0.2);
+    --vd-success-strong: #059669;
+    --vd-warning-soft: rgb(245 158 11 / 0.11);
+    --vd-warning-line: rgb(245 158 11 / 0.22);
+    --vd-warning-strong: #b45309;
+    --vd-danger-soft: rgb(239 68 68 / 0.1);
+    --vd-danger-line: rgb(239 68 68 / 0.2);
+    --vd-shadow-button: 0 1px 1px rgb(15 15 25 / 0.025);
+    --vd-shadow-input: 0 1px 1px rgb(15 15 25 / 0.02);
+    --vd-shadow-control: 0 1px 2px rgb(0 0 0 / 0.16);
+    --vd-shadow-panel: 0 1px 2px rgb(15 15 25 / 0.025);
+    --vd-shadow-panel-strong: 0 1px 2px rgb(15 15 25 / 0.04);
+    --vd-shadow-inspector: -1rem 0 3rem rgb(0 0 0 / 0.12);
+    --vd-overlay-scrim: rgb(0 0 0 / 0.24);
+    --vd-shadow-extended-lg: 0 10px 40px rgba(0,0,0,.25);
+    --vd-shadow-extended-lg-strong: 0 10px 40px rgba(0,0,0,.35);
+    --vd-shadow-extended-sm: 0 1px 3px rgba(0,0,0,.12);
+    --vd-shadow-extended-sm-strong: 0 1px 3px rgba(0,0,0,.2);
+    --vd-shadow-extended-md: 0 4px 16px rgba(0,0,0,.15);
+    --vd-color-danger-default: #ef4444;
+    --vd-color-success-default: #22c55e;
+    --vd-color-primary-fg: #ffffff;
 
     --vd-control-height-sm: 2rem;
     --vd-control-height-md: 2.5rem;
     --vd-control-height-lg: 2.875rem;
+    /* Density aliases keep control sizing semantic and theme-overridable. */
+    --vd-density-compact: var(--vd-control-height-sm);
+    --vd-density-comfortable: var(--vd-control-height-md);
+    --vd-density-spacious: var(--vd-control-height-lg);
     --vd-control-pad-x: 0.95rem;
     --vd-focus-ring: color-mix(in srgb, var(--vd-brand) 28%, transparent);
 
@@ -73,6 +106,9 @@ def generate_design_system_css(theme: Theme) -> str:
 
     --vd-shadow-card: 0 1px 1px rgb(0 0 0 / 0.35), 0 14px 44px rgb(0 0 0 / 0.18);
     --vd-shadow-float: 0 22px 64px rgb(0 0 0 / 0.5), 0 2px 12px rgb(0 0 0 / 0.25);
+    --vd-success-strong: #6ee7b7;
+    --vd-warning-strong: #fbbf24;
+    --vd-danger-badge-strong: #fca5a5;
 }
 
 html {
@@ -167,7 +203,7 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     border-radius: 0.625rem;
     background: var(--vd-panel);
     color: var(--vd-ink);
-    box-shadow: 0 1px 1px rgb(15 15 25 / 0.025);
+    box-shadow: var(--vd-shadow-button);
     font-size: 0.875rem;
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -190,19 +226,19 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
 .vd-button--primary,
 .vd-button--secondary {
     border-color: var(--vd-brand);
-    background: linear-gradient(180deg, #8b5cf6 0%, var(--vd-brand) 100%);
-    color: white;
-    box-shadow: var(--vd-shadow-brand), inset 0 1px 0 rgb(255 255 255 / 0.18);
+    background: linear-gradient(180deg, var(--vd-brand-highlight) 0%, var(--vd-brand) 100%);
+    color: var(--vd-on-brand);
+    box-shadow: var(--vd-shadow-brand), inset 0 1px 0 color-mix(in srgb, var(--vd-on-brand) 18%, transparent);
 }
 .vd-button--primary:hover:not(:disabled),
 .vd-button--secondary:hover:not(:disabled) {
-    background: linear-gradient(180deg, #8250ee 0%, var(--vd-brand-hover) 100%);
+    background: linear-gradient(180deg, var(--vd-brand-highlight-hover) 0%, var(--vd-brand-hover) 100%);
     border-color: var(--vd-brand-hover);
 }
 .vd-button--outline { background: transparent; border-color: var(--vd-line-strong); }
 .vd-button--ghost { background: transparent; border-color: transparent; color: var(--vd-ink-muted); }
 .vd-button--ghost:hover:not(:disabled) { color: var(--vd-ink); background: var(--vd-brand-softer); }
-.vd-button--danger { border-color: #ef4444; background: #ef4444; color: white; }
+.vd-button--danger { border-color: var(--vd-color-danger); background: var(--vd-color-danger); color: var(--vd-on-brand); }
 .vd-button--sm { min-height: var(--vd-control-height-sm); height: var(--vd-control-height-sm); padding-inline: 0.75rem; }
 .vd-button--lg { min-height: var(--vd-control-height-lg); height: var(--vd-control-height-lg); padding-inline: 1.2rem; }
 .vd-button[data-vd-loading="true"] { cursor: progress; }
@@ -214,6 +250,13 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     border-right-color: transparent;
     border-radius: 50%;
     animation: vd-spin 700ms linear infinite;
+}
+
+/* Calendar cells are buttons too; keep a comfortable pointer/touch target
+   even when a locale renders a narrow day label. */
+.vd-calendar-day {
+    min-inline-size: 2rem;
+    min-block-size: 2rem;
 }
 
 /* ── Surfaces and cards ──────────────────────────────────────────── */
@@ -261,7 +304,7 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
 .vd-field-hint,
 .vd-field-error { font-size: 0.75rem; line-height: 1.45; }
 .vd-field-hint { color: var(--vd-ink-muted); }
-.vd-field-error { color: #dc2626; }
+.vd-field-error { color: var(--vd-danger-strong); }
 
 .vd-input,
 .vd-select,
@@ -272,7 +315,7 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     border-radius: 0.625rem;
     background: var(--vd-panel);
     color: var(--vd-ink);
-    box-shadow: 0 1px 1px rgb(15 15 25 / 0.02);
+    box-shadow: var(--vd-shadow-input);
     transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
 }
 .vd-input,
@@ -290,8 +333,8 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     border-color: var(--vd-brand);
     box-shadow: 0 0 0 3px var(--vd-focus-ring);
 }
-[aria-invalid="true"] { border-color: #ef4444 !important; }
-[aria-invalid="true"]:focus-visible { box-shadow: 0 0 0 3px rgb(239 68 68 / 0.18); }
+[aria-invalid="true"] { border-color: var(--vd-color-danger) !important; }
+[aria-invalid="true"]:focus-visible { box-shadow: 0 0 0 3px var(--vd-danger-focus); }
 
 .vd-checkbox,
 .vd-radio { accent-color: var(--vd-brand); }
@@ -318,12 +361,9 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     border-color: var(--vd-line);
 }
 .vd-badge--outline { background: transparent; color: var(--vd-ink); border-color: var(--vd-line-strong); }
-.vd-badge--success { background: rgb(16 185 129 / 0.1); color: #059669; border-color: rgb(16 185 129 / 0.2); }
-.vd-badge--warning { background: rgb(245 158 11 / 0.11); color: #b45309; border-color: rgb(245 158 11 / 0.22); }
-.vd-badge--danger { background: rgb(239 68 68 / 0.1); color: #dc2626; border-color: rgb(239 68 68 / 0.2); }
-.dark .vd-badge--success { color: #6ee7b7; }
-.dark .vd-badge--warning { color: #fbbf24; }
-.dark .vd-badge--danger { color: #fca5a5; }
+.vd-badge--success { background: var(--vd-success-soft); color: var(--vd-success-strong); border-color: var(--vd-success-line); }
+.vd-badge--warning { background: var(--vd-warning-soft); color: var(--vd-warning-strong); border-color: var(--vd-warning-line); }
+.vd-badge--danger { background: var(--vd-danger-soft); color: var(--vd-danger-badge-strong); border-color: var(--vd-danger-line); }
 
 /* ── Navigation ──────────────────────────────────────────────────── */
 .vd-navbar {
@@ -460,7 +500,7 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     block-size: 0.875rem;
     border-radius: 50%;
     background: var(--vd-ink-muted);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+    box-shadow: var(--vd-shadow-control);
     transition: transform 140ms ease, background 140ms ease;
 }
 .vd-switch-input:checked + .vd-switch-track { background: var(--vd-brand); border-color: var(--vd-brand); }
@@ -682,7 +722,7 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     border-color: var(--vd-line);
     background: color-mix(in srgb, var(--vd-panel) 94%, transparent);
     color: var(--vd-ink);
-    box-shadow: 0 1px 2px rgb(15 15 25 / 0.025);
+    box-shadow: var(--vd-shadow-panel);
 }
 
 /* ── DS4 convergence: navigation and progress ───────────────────── */
@@ -707,7 +747,7 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     border-color: var(--vd-line-strong);
     background: var(--vd-panel);
     color: var(--vd-ink-muted);
-    box-shadow: 0 1px 2px rgb(15 15 25 / 0.04);
+    box-shadow: var(--vd-shadow-panel-strong);
 }
 .vd-step[data-vd-step-state="active"] .vd-step-indicator {
     border-color: var(--vd-brand);
@@ -744,8 +784,8 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
     background: var(--vd-panel-subtle);
 }
 .vd-form-validation-summary {
-    border-color: color-mix(in srgb, #ef4444 30%, var(--vd-line));
-    background: color-mix(in srgb, #ef4444 5%, var(--vd-panel));
+    border-color: color-mix(in srgb, var(--vd-color-danger) 30%, var(--vd-line));
+    background: color-mix(in srgb, var(--vd-color-danger) 5%, var(--vd-panel));
 }
 
 /* ── DS4 convergence: system surfaces ───────────────────────────── */

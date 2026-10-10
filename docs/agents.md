@@ -209,7 +209,8 @@ queryable recall. Memories are distinct from context: context is what you pass
 into a single run; memory is what the agent persists across runs.
 
 ```python
-from voodoo import Agent, MemoryLayer
+from voodoo import Agent
+from voodoo.memory import MemoryLayer
 
 agent = Agent(model="mock:test")
 
@@ -231,7 +232,8 @@ and execution metadata. This happens without any manual wiring.
 **Custom memory store:** Inject a `SQLiteMemoryStore` for durable persistence:
 
 ```python
-from voodoo import Agent, SQLiteMemoryStore
+from voodoo import Agent
+from voodoo.memory import SQLiteMemoryStore
 
 agent = Agent(
     model="openai:gpt-4o",
@@ -258,7 +260,8 @@ Protocol provides `InMemoryAgentRegistry` (tests) and `SQLiteAgentRegistry`
 automatically registered on its first `run()` or `stream()`:
 
 ```python
-from voodoo import Agent, SQLiteAgentRegistry
+from voodoo import Agent
+from voodoo.agents import SQLiteAgentRegistry
 
 registry = SQLiteAgentRegistry("agents.db")
 agent = Agent(
@@ -368,7 +371,8 @@ must never silently acquire authority simply because it was invoked by an
 Agent:
 
 ```python
-from voodoo import Agent, ExecutionEngine
+from voodoo import Agent
+from voodoo.runtime import ExecutionEngine
 
 engine = ExecutionEngine()
 agent = Agent(

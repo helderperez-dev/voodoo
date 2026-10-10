@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "canonical_repository": "voodoo-templates",
+  "canonical_root": "default",
+  "framework_mirror": "voodoo/src/voodoo/scaffold/default",
+  "shared_files": [
+    ".env.example",
+    ".github/workflows/quality.yml",
+    "COMPATIBILITY.json",
+    ".gitignore"
+  ],
+  "policy": "The template repository owns shared scaffold files; Framework CI and template CI must fail on drift."
+}

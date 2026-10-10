@@ -18,7 +18,7 @@ objects_app = typer.Typer(
 def list_objects(
     prefix: str = typer.Option("", "--prefix", help="Filter by key prefix"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """List objects in the store."""
     from voodoo.cli.context import acquire_object_store
 
@@ -46,7 +46,7 @@ def list_objects(
 def get_object(
     key: str = typer.Argument(..., help="Object key"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """Get object metadata (and content size)."""
     from voodoo.cli.context import acquire_object_store
 
@@ -85,7 +85,7 @@ def get_object(
 def list_artifacts(
     execution_id: str = typer.Argument(None, help="Execution ID (optional)"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """List artifacts (optionally filtered by execution)."""
     from voodoo.cli.context import acquire_execution_store
 

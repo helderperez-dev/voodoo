@@ -12,7 +12,7 @@ import asyncio
 import inspect
 import json
 import uuid
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from starlette.requests import Request
@@ -26,8 +26,17 @@ from voodoo.ai.tools.registry import (
 )
 from voodoo.integrations.mcp.client import MCPClient
 from voodoo.routing.api import api
+from voodoo.security.redaction import redact_string
 
 __all__ = ["MCPClient", "MCPServer", "mcp"]
+
+
+def _safe_error_message(error: BaseException, *, limit: int = 256) -> str:
+    """Return a bounded, secret-redacted MCP-facing error message."""
+    message = redact_string(str(error)).strip()
+    if not message:
+        message = type(error).__name__
+    return message[:limit]
 
 
 class MCPServer:
@@ -37,7 +46,7 @@ class MCPServer:
         version: str = "1.0.0",
         registry: ToolRegistry | None = None,
         engine: Any | None = None,
-    ):
+    ) -> None:
         self.name = name
         self.version = version
         self.tools: dict[str, dict[str, Any]] = {}
@@ -49,13 +58,15 @@ class MCPServer:
         self.engine = engine
 
         # Sessions map: session_id -> asyncio.Queue
-        self.sessions: dict[str, asyncio.Queue] = {}
+        self.sessions: dict[str, asyncio.Queue[Any]] = {}
 
         # Register SSE endpoints
         api.get("/mcp/sse")(self._sse_endpoint)
         api.post("/mcp/messages")(self._messages_endpoint)
 
-    def tool(self, name: str | None = None, description: str | None = None):
+    def tool(
+        self, name: str | None = None, description: str | None = None
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Register a function as an MCP tool AND in the ToolRegistry.
 
         The function is introspected to build a :class:`ToolSpec` (with
@@ -64,7 +75,7 @@ class MCPServer:
         existing MCP behavior is preserved.
         """
 
-        def decorator(func: Callable):
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             tool_name = name or func.__name__
 
             # Build and register ToolSpec in the registry.
@@ -120,20 +131,22 @@ class MCPServer:
 
         return tools_list
 
-    def resource(self, uri: str, name: str | None = None):
-        def decorator(func: Callable):
+    def resource(
+        self, uri: str, name: str | None = None
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             res_name = name or func.__name__
             self.resources[uri] = {"func": func, "name": res_name}
             return func
 
         return decorator
 
-    async def _sse_endpoint(self, request: Request):
+    async def _sse_endpoint(self, request: Request) -> StreamingResponse:
         session_id = str(uuid.uuid4())
         queue: asyncio.Queue[str] = asyncio.Queue()
         self.sessions[session_id] = queue
 
-        async def event_generator():
+        async def event_generator() -> AsyncIterator[str]:
             # The client must append the sessionId when POSTing messages
             yield f"event: endpoint\ndata: /mcp/messages?sessionId={session_id}\n\n"
             try:
@@ -150,10 +163,12 @@ class MCPServer:
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     async def _handle_tool_call(
-        self, params: dict, msg_id: object, queue: asyncio.Queue
+        self, params: dict[str, Any], msg_id: object, queue: asyncio.Queue[Any]
     ) -> None:
-        tool_name = params.get("name")
+        tool_name = str(params.get("name") or "")
         args = params.get("arguments", {})
+        if not isinstance(args, dict):
+            args = {}
         entry = self.tools.get(tool_name)
         spec = entry.get("spec") if entry else self.registry.get(tool_name)
         func = entry["func"] if entry else spec.func if spec else None
@@ -168,15 +183,17 @@ class MCPServer:
             return
         try:
             result = await self._run_tool_call(tool_name, func, spec, args)
-            payload = {"result": {"content": [{"type": "text", "text": str(result)}]}}
+            payload: dict[str, Any] = {
+                "result": {"content": [{"type": "text", "text": str(result)}]}
+            }
         except Exception as exc:
-            payload = {"error": {"code": -32603, "message": str(exc)}}
+            payload = {"error": {"code": -32603, "message": _safe_error_message(exc)}}
         await queue.put({"jsonrpc": "2.0", "id": msg_id, **payload})
 
     async def _handle_resource_read(
-        self, params: dict, msg_id: object, queue: asyncio.Queue
+        self, params: dict[str, Any], msg_id: object, queue: asyncio.Queue[Any]
     ) -> None:
-        uri = params.get("uri")
+        uri = str(params.get("uri") or "")
         resource = self.resources.get(uri)
         if resource is None:
             await queue.put(
@@ -190,12 +207,16 @@ class MCPServer:
         func = resource["func"]
         try:
             content = await func() if inspect.iscoroutinefunction(func) else func()
-            payload = {"result": {"contents": [{"uri": uri, "text": str(content)}]}}
+            payload: dict[str, Any] = {
+                "result": {"contents": [{"uri": uri, "text": str(content)}]}
+            }
         except Exception as exc:
-            payload = {"error": {"code": -32603, "message": str(exc)}}
+            payload = {"error": {"code": -32603, "message": _safe_error_message(exc)}}
         await queue.put({"jsonrpc": "2.0", "id": msg_id, **payload})
 
-    async def _handle_message(self, body: dict, queue: asyncio.Queue):
+    async def _handle_message(
+        self, body: dict[str, Any], queue: asyncio.Queue[Any]
+    ) -> None:
         method = body.get("method")
         params = body.get("params", {})
         msg_id = body.get("id")
@@ -237,7 +258,7 @@ class MCPServer:
                 }
             )
 
-    async def _messages_endpoint(self, request: Request):
+    async def _messages_endpoint(self, request: Request) -> Response:
         try:
             session_id = request.query_params.get("sessionId")
             if not session_id or session_id not in self.sessions:
@@ -255,7 +276,10 @@ class MCPServer:
             return Response(status_code=202)
         except Exception as e:
             return JSONResponse(
-                {"jsonrpc": "2.0", "error": {"code": -32603, "message": str(e)}},
+                {
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32603, "message": _safe_error_message(e)},
+                },
                 status_code=500,
             )
 

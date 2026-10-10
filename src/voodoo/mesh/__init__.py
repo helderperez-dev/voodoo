@@ -3,6 +3,7 @@
 import asyncio
 import inspect
 import json
+import logging
 import time
 import uuid
 from collections.abc import Callable
@@ -29,7 +30,10 @@ from voodoo.runtime.distributed.replay import (
     RemoteReplayStore,
     request_fingerprint,
 )
+from voodoo.security.redaction import redact_string
 from voodoo.storage.events import VoodooEventBus
+
+_logger = logging.getLogger("voodoo.mesh")
 
 
 def _make_envelope(
@@ -105,8 +109,8 @@ class MeshNetwork:
         *,
         capability: str | None = None,
         intent_name: str | None = None,
-    ):
-        def decorator(func: Callable):
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             func_name = name or func.__name__
             self.exposed_functions[func_name] = func
             self.exposed_operations[func_name] = ExposedOperation(
@@ -121,10 +125,10 @@ class MeshNetwork:
 
         return decorator
 
-    def on(self, event: str):
+    def on(self, event: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         _validate_namespace(event)
 
-        def decorator(func: Callable):
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             if event not in self.event_handlers:
                 self.event_handlers[event] = []
             self.event_handlers[event].append(func)
@@ -132,31 +136,38 @@ class MeshNetwork:
 
         return decorator
 
-    async def broadcast(self, event: str, payload: Any):
+    async def broadcast(self, event: str, payload: Any) -> None:
         _validate_namespace(event)
         envelope = _make_envelope(event, payload)
         message = json.dumps({"jsonrpc": "2.0", "method": "event", "params": envelope})
         for node in self.active_nodes:
             try:
                 await node.send_text(message)
-            except Exception:
-                pass
+            except Exception as error:
+                # A disconnected remote participant must not block local
+                # delivery, but the failed observation is operationally useful.
+                _logger.warning(
+                    "mesh remote delivery failed node=%s event=%s error=%s",
+                    type(node).__name__,
+                    event,
+                    redact_string(str(error)),
+                )
         self.bus.publish(
             event, payload, source="voodoo", correlation_id=envelope["correlation_id"]
         )
         await self._fire_local(event, payload)
 
-    async def emit(self, event: str, payload: Any):
+    async def emit(self, event: str, payload: Any) -> None:
         await self.broadcast(event, payload)
 
-    def _runtime_engine(self):
+    def _runtime_engine(self) -> Any:
         if self.execution_engine is not None:
             return self.execution_engine
         from voodoo.runtime.execution.engine import engine as runtime_engine
 
         return runtime_engine
 
-    async def _fire_local(self, event: str, payload: Any):
+    async def _fire_local(self, event: str, payload: Any) -> None:
         if event not in self.event_handlers:
             return
         from voodoo.primitives.intent import Intent
@@ -169,7 +180,9 @@ class MeshNetwork:
         for handler in self.event_handlers[event]:
             intent = Intent(name=f"mesh:{event}", params={"payload": payload})
 
-            async def compute(ctx, _handler=handler, _payload=payload):
+            async def compute(
+                ctx: Any, _handler: Callable[..., Any] = handler, _payload: Any = payload
+            ) -> Any:
                 if inspect.iscoroutinefunction(_handler):
                     return await _handler(_payload)
                 return _handler(_payload)
@@ -177,7 +190,11 @@ class MeshNetwork:
             try:
                 await engine.execute(intent, compute, actor="mesh", parent=parent)
             except Exception as e:
-                print(f"Local mesh event handler error: {e}")
+                _logger.warning(
+                    "local mesh event handler failed event=%s error=%s",
+                    event,
+                    redact_string(str(e)),
+                )
 
     async def resolve_participant(
         self,
@@ -283,7 +300,7 @@ class MeshNetwork:
         intent = operation.intent_for(request)
         granted_capabilities = self.remote_authority.names_for(request.actor)
 
-        async def compute(ctx):
+        async def compute(ctx: Any) -> Any:
             result = operation.func(**request.arguments)
             if inspect.isawaitable(result):
                 return await result
@@ -323,7 +340,9 @@ class MeshNetwork:
                 message=structured_error.get("message", str(error)),
             )
 
-    async def connect(self, endpoint_url: str, *, credential: str | None = None):
+    async def connect(
+        self, endpoint_url: str, *, credential: str | None = None
+    ) -> MeshClient:
         return MeshClient(endpoint_url, credential=credential)
 
     async def _send_remote_outcome(
@@ -370,7 +389,7 @@ class MeshNetwork:
             )
         )
 
-    async def _handle_websocket(self, websocket: WebSocket):
+    async def _handle_websocket(self, websocket: WebSocket) -> None:
         await websocket.accept()
         self.active_nodes.append(websocket)
         try:
@@ -426,7 +445,10 @@ class MeshNetwork:
         except WebSocketDisconnect:
             pass
         except Exception as e:
-            print(f"Mesh WS Error: {e}")
+            _logger.warning(
+                "mesh websocket failed error=%s",
+                redact_string(str(e)),
+            )
         finally:
             if websocket in self.active_nodes:
                 self.active_nodes.remove(websocket)

@@ -36,17 +36,18 @@ voodoo version
 ## Scaffold a new project
 
 ```bash
-voodoo create my_app
+voodoo new my_app
 cd my_app
 voodoo dev
 ```
 
 The app starts on `http://localhost:8000` with hot-reloading enabled.
 
-`voodoo create` scaffolds a **full local runtime app** with durable tasks,
-scheduler, events, object store, and agent runtime — all running on zero
-infrastructure (SQLite + local filesystem). The generated app includes a
-crash/restart demo proving durability.
+`voodoo new` is the canonical scaffold and creates the supported Store-first
+application shape. Durable tasks, schedules, events, objects, and agents are
+added through the same Runtime as the application grows. The hidden
+`voodoo create` command remains a compatibility alias for the deprecation
+window and emits a warning.
 
 ```
 my_app/
@@ -54,10 +55,12 @@ my_app/
 ├── voodoo.toml          # Runtime configuration
 ├── pyproject.toml       # Python project metadata
 ├── app/                 # Folder-based routes (add page.py files here)
-└── .voodoo/state/       # Local state (SQLite, queue, schedules)
+└── .voodoo/
+    └── application.vstore  # Local durable Store state
 ```
 
-> **Tip:** For a minimal scaffold without the full runtime, use `voodoo new` instead.
+> **Tip:** Keep the generated project minimal and add capabilities as they are
+> needed; this keeps the first deployment surface understandable.
 
 No `main.py`, no `.env`, no placeholder directories, no infrastructure configuration. Capabilities like database, storage, workers, and AI activate lazily when used.
 
@@ -107,6 +110,11 @@ Environment variables:
 | `VOODOO_ENV` | `development` | Environment name |
 | `VOODOO_DEBUG` | `true` (dev) | Debug mode |
 | `VOODOO_SECRET_KEY` | dev secret | JWT signing secret |
+| `VOODOO_JWT_ISSUER` | unset | Optional exact JWT issuer claim |
+| `VOODOO_JWT_AUDIENCE` | unset | Optional exact JWT audience claim |
+| `VOODOO_JWT_CLOCK_SKEW` | `0` | Accepted clock drift in seconds, bounded to 300 |
+| `VOODOO_JWT_PREVIOUS_SECRETS` | unset | Comma-separated old signing secrets during rotation |
+| `VOODOO_JWT_REVOCATION_MAX` | `10000` | Maximum process-local revoked-token entries |
 | `VOODOO_DB_PATH` | `.voodoo/state/data.db` | SQLite database path |
 | `DATABASE_URL` | — | Database URL (overrides path) |
 | `VOODOO_HOST` | `0.0.0.0` | Server host |

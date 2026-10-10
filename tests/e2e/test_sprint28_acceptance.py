@@ -69,9 +69,7 @@ def test_single_node_zero_external_infrastructure_survives_restart(tmp_path) -> 
         record = reopened.provider.native.get_record(b"orders", b"42")
         assert record is not None
         assert json.loads(bytes(record[1])) == {"status": "created"}
-        assert reopened.provider.native.get(
-            b"runtime:outbox:delivered:order-42-created"
-        )
+        assert reopened.provider.native.outbox_len() == 0
     finally:
         reopened.stop()
 

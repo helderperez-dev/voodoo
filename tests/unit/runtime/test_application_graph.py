@@ -1,3 +1,5 @@
+import pytest
+
 from voodoo.runtime.application_graph import (
     ApplicationGraph,
     ApplicationNodeKind,
@@ -67,6 +69,23 @@ def test_application_graph_describes_tool_capability_relationship():
     finally:
         default_registry._tools.clear()
         default_registry._tools.update(previous)
+
+
+def test_application_graph_does_not_swallow_discovery_assertion(monkeypatch):
+    from voodoo.runtime import application_graph as graph_module
+
+    class BrokenCapabilities:
+        def describe(self):
+            raise AssertionError("capability invariant broken")
+
+    class BrokenEngine:
+        capabilities = BrokenCapabilities()
+
+    import voodoo.runtime.execution.engine as engine_module
+
+    monkeypatch.setattr(engine_module, "engine", BrokenEngine())
+    with pytest.raises(AssertionError, match="capability invariant broken"):
+        graph_module._discover_capabilities(ApplicationGraph())
 
 
 def test_application_graph_describes_registered_models():

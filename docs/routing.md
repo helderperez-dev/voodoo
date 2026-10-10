@@ -7,7 +7,8 @@ Voodoo provides two routing mechanisms: decorator-based (`@page`) and file-based
 ## Minimal example
 
 ```python
-from voodoo import page, Text
+from voodoo import page
+from voodoo.ui import Text
 
 
 @page("/")
@@ -79,7 +80,7 @@ Each `page.py` defines a `page` function (the file convention), optionally accep
 
 ```python
 # app/about/page.py
-from voodoo import Page, Text
+from voodoo.ui import Page, Text
 from voodoo.seo import SEO
 
 
@@ -91,7 +92,7 @@ Bracket folders (`[id]`) create dynamic segments; the parameter is injected by n
 
 ```python
 # app/users/[id]/page.py
-from voodoo import Text
+from voodoo.ui import Text
 
 
 def page(request, id: int):

@@ -64,6 +64,7 @@ def test_store_config_defaults_to_voodoo_store_enabled() -> None:
     assert config.enabled is True
     assert config.durability == "data"
     assert config.repair_torn_tail is True
+    assert config.max_bytes is None
 
 
 def test_store_config_from_mapping_preserves_provider_specific_extra() -> None:
@@ -74,6 +75,7 @@ def test_store_config_from_mapping_preserves_provider_specific_extra() -> None:
             "enabled": True,
             "durability": "strict",
             "repair_torn_tail": False,
+            "max_bytes": 4096,
             "region": "local-a",
         }
     )
@@ -83,6 +85,7 @@ def test_store_config_from_mapping_preserves_provider_specific_extra() -> None:
     assert config.enabled is True
     assert config.durability == "strict"
     assert config.repair_torn_tail is False
+    assert config.max_bytes == 4096
     assert config.extra == {"region": "local-a"}
 
 
@@ -92,6 +95,7 @@ def test_store_config_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("VOODOO_STORE_ENABLED", "true")
     monkeypatch.setenv("VOODOO_STORE_DURABILITY", "strict")
     monkeypatch.setenv("VOODOO_STORE_REPAIR_TORN_TAIL", "false")
+    monkeypatch.setenv("VOODOO_STORE_MAX_BYTES", "8192")
 
     config = StoreConfig.from_mapping()
 
@@ -100,6 +104,7 @@ def test_store_config_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert config.enabled is True
     assert config.durability == "strict"
     assert config.repair_torn_tail is False
+    assert config.max_bytes == 8192
 
 
 def test_store_can_be_explicitly_disabled(monkeypatch: pytest.MonkeyPatch) -> None:

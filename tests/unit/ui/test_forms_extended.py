@@ -3,7 +3,7 @@
 import pytest
 
 from voodoo.adapters import TailwindAdapter, VoodooCSSAdapter
-from voodoo.ui import set_style_adapter
+from voodoo.ui import DropZone, FileUpload, set_style_adapter
 from voodoo.ui.forms_extended import (
     Autocomplete,
     CheckboxInput,
@@ -53,6 +53,70 @@ def test_otp_input_disabled(adapter):
     assert "disabled" in html
 
 
+def test_otp_input_shared_control_states(adapter):
+    html = OTPInput(
+        name="code",
+        length=4,
+        read_only=True,
+        loading=True,
+        error="Invalid code",
+    ).render()
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert html.count("disabled") >= 4
+
+
+@pytest.mark.parametrize("control", ["otp", "range", "autocomplete"])
+def test_extended_controls_suppress_callbacks_when_unavailable(adapter, control):
+    def callback(value):
+        return value
+
+    if control == "otp":
+        html = OTPInput(
+            on_change=callback, on_complete=callback, read_only=True, error="Invalid"
+        ).render()
+    elif control == "range":
+        html = RangeSlider(
+            name="price", on_change=callback, loading=True, error="Unavailable"
+        ).render()
+    else:
+        html = Autocomplete(
+            name="country",
+            suggestions=["Canada"],
+            on_change=callback,
+            on_select=callback,
+            disabled=True,
+            error="Unavailable",
+        ).render()
+    assert "data-vd-event-change" not in html
+    assert "data-vd-event-complete" not in html
+    assert "data-vd-event-select" not in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Unavailable"' in html or 'data-vd-state="error"' in html
+
+
+@pytest.mark.parametrize("control", [CheckboxInput, RadioInput])
+def test_choice_inputs_share_state_contract_and_suppress_callbacks(adapter, control):
+    def callback(value):
+        return value
+
+    kwargs = {
+        "label": "Choice",
+        "on_change": callback,
+        "read_only": True,
+        "loading": True,
+        "error": "Choice unavailable",
+    }
+    html = control(**kwargs).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Choice unavailable"' in html
+    assert "data-vd-event-change" not in html
+
+
 # ── Range Slider ────────────────────────────────────────────────────────────
 
 
@@ -82,6 +146,19 @@ def test_range_slider_with_event(adapter):
     assert "data-vd-event-input" in html
 
 
+def test_range_slider_shared_control_states(adapter):
+    html = RangeSlider(
+        name="price",
+        min_value=10,
+        max_value=90,
+        read_only=True,
+        error="Price range is locked",
+    ).render()
+    assert 'aria-readonly="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert html.count("readonly") >= 2
+
+
 # ── Autocomplete ────────────────────────────────────────────────────────────
 
 
@@ -97,6 +174,37 @@ def test_autocomplete_renders(adapter):
     assert "Banana" in html
     assert "Cherry" in html
     assert "Fruit" in html
+
+
+def test_autocomplete_shared_control_states(adapter):
+    html = Autocomplete(
+        name="country",
+        suggestions=["Canada"],
+        read_only=True,
+        loading=True,
+        error="Country is unavailable",
+    ).render()
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert "disabled" in html
+
+
+def test_file_controls_shared_control_states(adapter):
+    upload = FileUpload(
+        name="attachment",
+        read_only=True,
+        loading=True,
+        error="Upload is unavailable",
+    ).render()
+    drop = DropZone(name="attachment", disabled=True, error=True).render()
+
+    assert 'aria-readonly="true"' in upload
+    assert 'aria-busy="true"' in upload
+    assert 'aria-invalid="true"' in upload
+    assert "disabled" in upload
+    assert 'aria-disabled="true"' in drop
+    assert 'aria-invalid="true"' in drop
 
 
 def test_autocomplete_custom_placeholder(adapter):

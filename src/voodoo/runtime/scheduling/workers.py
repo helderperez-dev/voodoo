@@ -16,6 +16,7 @@ import asyncio
 import inspect
 import logging
 import os
+import time
 import uuid
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -23,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from voodoo.storage.queue import VoodooQueue
 
-_workers: dict[str, Callable] = {}
+_workers: dict[str, Callable[..., Any]] = {}
 _worker_backoff: dict[str, float] = {}
 _worker_tasks: list[asyncio.Task] = []
 _queue: VoodooQueue | None = None
@@ -31,7 +32,14 @@ _queue: VoodooQueue | None = None
 logger = logging.getLogger("voodoo.runtime.scheduling.workers")
 
 
-def registered_workers() -> tuple[tuple[str, Callable], ...]:
+def _safe_failure_reason(error: BaseException) -> str:
+    """Return a bounded, redacted reason safe for durable queue history."""
+    from voodoo.security.redaction import redact_string
+
+    return redact_string(f"{type(error).__name__}: {error}")[:512]
+
+
+def registered_workers() -> tuple[tuple[str, Callable[..., Any]], ...]:
     """Public, read-only worker registry for Runtime inspection."""
     return tuple(sorted(_workers.items(), key=lambda item: item[0]))
 
@@ -78,8 +86,8 @@ async def _get_queue() -> VoodooQueue:
     return _queue
 
 
-def queue(name: str):
-    def decorator(func: Callable):
+def queue(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         _workers[name] = func
         return func
 
@@ -106,9 +114,46 @@ async def enqueue(
     )
 
 
+async def enqueue_compensation(
+    effect: Any,
+    *,
+    reason: str | None = None,
+    max_attempts: int = 3,
+) -> Any:
+    """Durably enqueue a declared Effect compensation operation.
+
+    Compensation is explicit: this helper never runs the operation inline.
+    The payload includes the original effect identity and failure reason, and
+    the stable compensation key deduplicates retries across worker restarts.
+    """
+    name = getattr(effect, "compensation_name", None)
+    if not name:
+        raise ValueError("effect has no declared compensation")
+    from voodoo.observability import trace_id_var
+
+    q = await _get_queue()
+    key = getattr(effect, "compensation_idempotency_key", None) or (
+        f"compensate:{effect.id}"
+    )
+    payload = {
+        "version": 1,
+        "effect_id": effect.id,
+        "effect_name": effect.name,
+        "effect_payload": getattr(effect, "compensation_payload", None),
+        "reason": reason,
+    }
+    return await q.enqueue(
+        name,
+        payload,
+        trace_id=trace_id_var.get(),
+        max_attempts=max(1, int(max_attempts)),
+        idempotency_key=key,
+    )
+
+
 async def _run_worker(name: str, worker_id: str) -> None:
     """Poll the durable queue for tasks of type *name* and execute one attempt."""
-    from voodoo.observability import trace_id_var
+    from voodoo.observability import telemetry_store, trace_id_var
     from voodoo.primitives.intent import Intent
     from voodoo.runtime.execution.engine import engine as runtime_engine
 
@@ -118,10 +163,17 @@ async def _run_worker(name: str, worker_id: str) -> None:
     while True:
         try:
             q = await _get_queue()
+            claim_started = time.perf_counter()
             task = await q.claim(worker_id, types=(name,))
             if task is None:
                 await asyncio.sleep(0.5)
                 continue
+            telemetry_store.record_trace(
+                "worker.claimed",
+                (time.perf_counter() - claim_started) * 1000,
+                error=False,
+            )
+            attempt_started = time.perf_counter()
 
             resolved_trace = task.trace_id or str(uuid.uuid4())
             token = trace_id_var.set(resolved_trace)
@@ -131,7 +183,11 @@ async def _run_worker(name: str, worker_id: str) -> None:
                 intent = Intent(name=f"worker:{name}", params={"payload": task.payload})
                 ctx = ExecutionContext(trace_id=resolved_trace, actor=f"worker:{name}")
 
-                async def compute(ctx, _func=func, _payload=task.payload):
+                async def compute(
+                    ctx: Any,
+                    _func: Callable[..., Any] = func,
+                    _payload: Any = task.payload,
+                ) -> Any:
                     if is_async:
                         return await _func(_payload)
                     return _func(_payload)
@@ -141,12 +197,27 @@ async def _run_worker(name: str, worker_id: str) -> None:
                         intent, compute, actor=f"worker:{name}", parent=ctx
                     )
                 await q.complete(task.id, worker_id)
+                telemetry_store.record_trace(
+                    "worker.completed",
+                    (time.perf_counter() - attempt_started) * 1000,
+                    error=False,
+                )
             except Exception as exc:
-                logger.error("Error in worker %s task %d: %r", name, task.id, exc)
+                telemetry_store.record_trace(
+                    "worker.failed",
+                    (time.perf_counter() - attempt_started) * 1000,
+                    error=True,
+                )
+                logger.error(
+                    "Worker task failed: worker=%s task_id=%s error_type=%s",
+                    name,
+                    task.id,
+                    type(exc).__name__,
+                )
                 await q.fail(
                     task.id,
                     worker_id,
-                    str(exc),
+                    _safe_failure_reason(exc),
                     backoff_base=_worker_backoff.get(name, 1.0),
                 )
             finally:
@@ -154,7 +225,11 @@ async def _run_worker(name: str, worker_id: str) -> None:
         except asyncio.CancelledError:
             break
         except Exception as exc:
-            logger.error("Worker %s poll loop error: %r", name, exc)
+            logger.error(
+                "Worker poll loop failed: worker=%s error_type=%s",
+                name,
+                type(exc).__name__,
+            )
             await asyncio.sleep(1.0)
 
 
@@ -169,7 +244,7 @@ async def _reaper() -> None:
         except asyncio.CancelledError:
             break
         except Exception as exc:
-            logger.error("reaper error: %r", exc)
+            logger.error("Worker lease reaper failed: error_type=%s", type(exc).__name__)
         await asyncio.sleep(5.0)
 
 

@@ -7,11 +7,16 @@ the worker loop is running.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
+
+from voodoo.security.redaction import redact_string
+
+_logger = logging.getLogger("voodoo.cli.workers")
 
 __all__ = ["workers"]
 
@@ -33,7 +38,8 @@ async def _gather_worker_info() -> dict[str, Any]:
             info["queue_depth"] = len(tasks)
         elif hasattr(q, "depth"):
             info["queue_depth"] = await q.depth()
-    except Exception:
+    except Exception as error:
+        _logger.warning("worker queue probe failed error=%s", redact_string(str(error)))
         pass
 
     return info

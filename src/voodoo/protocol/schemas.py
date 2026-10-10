@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -202,6 +202,7 @@ class TimeSpec(BaseModel):
     retry_after: float | None = None
     max_retries: int | None = None
     interval: float | None = None
+    timezone: str = "UTC"
 
 
 class ComputeSpec(BaseModel):
@@ -284,7 +285,7 @@ class Execution(BaseModel):
     @classmethod
     def from_runtime_execution(
         cls,
-        exec: object,
+        exec: Any,
     ) -> Execution:
         """Convert a runtime ``Execution`` to a protocol ``Execution``.
 
@@ -329,13 +330,13 @@ class Execution(BaseModel):
             trace_id=self.trace_id,
             parent_execution_id=self.parent_execution_id,
             status=RuntimeStatus(self.status.value),
-            intent=self.intent,
+            intent=cast(Any, self.intent),
             actor=self.actor,
-            compute=self.compute,
+            compute=cast(Any, self.compute),
             capabilities=list(self.capabilities),
-            resources=self.resources,
-            effects=list(self.effects),
-            state_changes=self.state_changes,
+            resources=cast(Any, self.resources),
+            effects=cast(Any, list(self.effects)),
+            state_changes=cast(Any, self.state_changes),
             result=self.result,
             error=self.error,
             metadata=dict(self.metadata),

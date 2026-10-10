@@ -34,7 +34,7 @@ class CLIApplicationContext:
     def store_path(self) -> str:
         return str(self.runtime_store.config.path)
 
-    def execution_store(self):
+    def execution_store(self) -> Any:
         """Return the configured execution store.
 
         Voodoo Store is the default. SQLite/PostgreSQL are compatibility
@@ -68,12 +68,12 @@ class CLIApplicationContext:
             "Use 'voodoo' (default), 'sqlite', or 'postgres'."
         )
 
-    def schedule_store(self):
+    def schedule_store(self) -> Any:
         from voodoo.storage.scheduler import create_schedule_store
 
         return create_schedule_store()
 
-    def object_store(self):
+    def object_store(self) -> Any:
         provider = self.config.objects.provider.strip().lower()
         if provider == "voodoo":
             from voodoo.storage.objects import VoodooStoreObjectStore
@@ -92,7 +92,7 @@ class CLIApplicationContext:
             "Use 'voodoo' (default), 'local', or 's3'."
         )
 
-    def agent_registry(self):
+    def agent_registry(self) -> Any:
         provider = self.config.database.provider.strip().lower()
         if provider == "voodoo":
             from voodoo.agents.registry import VoodooStoreAgentRegistry

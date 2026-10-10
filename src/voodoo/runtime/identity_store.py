@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 __all__ = ["IdentityStore", "VoodooStoreIdentityStore"]
 
 _PREFIX = b"runtime:identity:data:"
+_COLLECTION = b"runtime.identity"
+_SCHEMA_KEY = "_schema_version"
+_SCHEMA_VERSION = 1
 
 
 class IdentityStore(Protocol):
@@ -59,32 +62,69 @@ class VoodooStoreIdentityStore:
             )
         return native
 
+    def _native_collections(self, store: Any) -> bool:
+        """Return whether this binding supports native collection records."""
+        return all(
+            hasattr(store, method)
+            for method in ("create_collection", "upsert_record", "get_record", "scan_collection")
+        )
+
+    def _ensure_collection(self, store: Any) -> None:
+        if self._native_collections(store):
+            store.create_collection(_COLLECTION, schema_version=_SCHEMA_VERSION, codec=b"json")
+
     @property
-    def path(self):
+    def path(self) -> Any:
         return self._runtime().config.path
 
     def save(self, identity: Identity) -> None:
-        self._store().put(
-            self._key(identity.id),
-            json.dumps(
-                identity.describe(),
-                separators=(",", ":"),
-                sort_keys=True,
-                default=str,
-            ).encode("utf-8"),
-        )
+        record = identity.describe()
+        record[_SCHEMA_KEY] = _SCHEMA_VERSION
+        encoded = json.dumps(
+            record, separators=(",", ":"), sort_keys=True, default=str
+        ).encode("utf-8")
+        store = self._store()
+        if self._native_collections(store):
+            self._ensure_collection(store)
+            store.upsert_record(_COLLECTION, identity.id.encode("utf-8"), encoded)
+            store.delete(self._key(identity.id))
+            return
+        store.put(self._key(identity.id), encoded)
 
     def get(self, identity_id: str) -> Identity | None:
-        raw = self._store().get(self._key(identity_id))
+        store = self._store()
+        raw = None
+        if self._native_collections(store):
+            self._ensure_collection(store)
+            record = store.get_record(_COLLECTION, identity_id.encode("utf-8"))
+            if record is not None:
+                raw = record[1]
+        if raw is None:
+            raw = store.get(self._key(identity_id))
         if raw is None:
             return None
-        return Identity.from_record(json.loads(bytes(raw).decode("utf-8")))
+        return Identity.from_record(self._decode(identity_id, bytes(raw)))
 
     def list(self, *, kind: IdentityKind | None = None) -> list[Identity]:
-        identities = [
-            Identity.from_record(json.loads(bytes(raw).decode("utf-8")))
-            for _key, raw in self._store().scan_prefix(_PREFIX)
-        ]
+        store = self._store()
+        identities_by_id: dict[str, Identity] = {}
+        if self._native_collections(store):
+            self._ensure_collection(store)
+            for key, raw, _indexes in store.scan_collection(_COLLECTION):
+                identity_id = bytes(key).decode("utf-8")
+                identity = Identity.from_record(self._decode(identity_id, bytes(raw)))
+                identities_by_id[identity.id] = identity
+        identities_by_id.update({
+            identity.id: identity
+            for identity in (
+            Identity.from_record(
+                self._decode(key[len(_PREFIX) :].decode("utf-8"), bytes(raw))
+            )
+            for key, raw in store.scan_prefix(_PREFIX)
+            )
+            if identity.id not in identities_by_id
+        })
+        identities = list(identities_by_id.values())
         if kind is not None:
             identities = [identity for identity in identities if identity.kind is kind]
         identities.sort(key=lambda identity: (identity.kind.value, identity.id))
@@ -92,12 +132,17 @@ class VoodooStoreIdentityStore:
 
     def delete(self, identity_id: str) -> bool:
         store = self._store()
-        if store.get(self._key(identity_id)) is None:
-            return False
-        tx = store.transaction()
-        tx.delete(self._key(identity_id))
-        tx.commit()
-        return True
+        deleted = False
+        if self._native_collections(store):
+            self._ensure_collection(store)
+            deleted = bool(store.delete_record(_COLLECTION, identity_id.encode("utf-8")))
+        legacy = store.get(self._key(identity_id))
+        if legacy is not None:
+            tx = store.transaction()
+            tx.delete(self._key(identity_id))
+            tx.commit()
+            deleted = True
+        return deleted
 
     def close(self) -> None:
         """No-op: RuntimeStore owns the shared Store lifecycle."""
@@ -105,3 +150,23 @@ class VoodooStoreIdentityStore:
     @staticmethod
     def _key(identity_id: str) -> bytes:
         return _PREFIX + identity_id.encode("utf-8")
+
+    @staticmethod
+    def _decode(identity_id: str, raw: bytes) -> dict[str, Any]:
+        try:
+            record = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("identity record is not valid UTF-8 JSON") from error
+        if not isinstance(record, dict):
+            raise ValueError("identity record must be a JSON object")
+        version = record.pop(_SCHEMA_KEY, 0)
+        if not isinstance(version, int) or isinstance(version, bool):
+            raise ValueError("identity schema version must be an integer")
+        if version > _SCHEMA_VERSION:
+            raise ValueError(
+                f"identity schema {version} is newer than supported schema {_SCHEMA_VERSION}"
+            )
+        if record.get("id") not in (None, identity_id):
+            raise ValueError("identity record does not match its key")
+        record["id"] = identity_id
+        return record

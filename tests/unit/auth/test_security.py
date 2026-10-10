@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
@@ -6,12 +11,16 @@ from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from voodoo.auth import (
+    AuthMiddleware,
     InvalidTokenError,
+    clear_revoked_tokens,
     create_access_token,
     decode_access_token,
+    revoke_access_token,
+    revoke_subject_sessions,
     set_auth_cookie,
 )
-from voodoo.config import config
+from voodoo.config import AuthConfig, SecurityConfig, config
 from voodoo.security import (
     CORSMiddleware,
     CSRFMiddleware,
@@ -61,36 +70,94 @@ def test_security_headers_middleware():
     assert "default-src" in response.headers["Content-Security-Policy"]
 
 
+def test_security_headers_emit_permissions_policy_when_configured():
+    async def hello(request: Request):
+        return PlainTextResponse("Hello Security")
+
+    security = SecurityConfig(
+        permissions_policy="camera=(), geolocation=(), microphone=()"
+    )
+    app = Starlette(
+        routes=[Route("/hello", hello, methods=["GET"])],
+        middleware=[
+            Middleware(
+                SecurityHeadersMiddleware,
+                config_override=SimpleNamespace(security=security),
+            )
+        ],
+    )
+
+    response = TestClient(app).get("/hello")
+    assert response.headers["Permissions-Policy"] == (
+        "camera=(), geolocation=(), microphone=()"
+    )
+
+
+def test_security_headers_hash_inline_scripts_for_strict_csp():
+    async def page(request: Request):
+        return PlainTextResponse(
+            "<html><script>window.__voodoo = 1;</script></html>",
+            media_type="text/html",
+        )
+
+    strict = SecurityConfig(
+        csp_directives={"default-src": "'self'", "script-src": "'self'"}
+    )
+    app = Starlette(
+        routes=[Route("/", page)],
+        middleware=[
+            Middleware(
+                SecurityHeadersMiddleware,
+                config_override=SimpleNamespace(security=strict),
+            )
+        ],
+    )
+
+    response = TestClient(app).get("/")
+
+    csp = response.headers["Content-Security-Policy"]
+    assert "'unsafe-inline'" not in csp
+    assert "'sha256-" in csp
+
+
 def test_cors_middleware():
     async def api_endpoint(request: Request):
         return JSONResponse({"data": "ok"})
 
-    app = Starlette(
-        routes=[Route("/api/data", api_endpoint, methods=["GET", "POST"])],
-        middleware=[Middleware(CORSMiddleware)],
-    )
-    client = TestClient(app)
+    original_origins = config.security.cors_origins
+    try:
+        config.security.cors_origins = ["https://example.com"]
+        app = Starlette(
+            routes=[Route("/api/data", api_endpoint, methods=["GET", "POST"])],
+            middleware=[Middleware(CORSMiddleware)],
+        )
+        client = TestClient(app)
 
-    # 1. Preflight OPTIONS request
-    preflight = client.options(
-        "/api/data",
-        headers={
-            "Origin": "https://example.com",
-            "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "Authorization, Content-Type",
-        },
-    )
-    assert preflight.status_code == 204
-    assert preflight.headers.get("Access-Control-Allow-Origin") == "https://example.com"
-    assert "POST" in preflight.headers.get(
-        "Access-Control-Allow-Methods", ""
-    ) or "*" in preflight.headers.get("Access-Control-Allow-Methods", "")
-    assert preflight.headers.get("Access-Control-Allow-Credentials") == "true"
+        # 1. Preflight OPTIONS request
+        preflight = client.options(
+            "/api/data",
+            headers={
+                "Origin": "https://example.com",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Authorization, Content-Type",
+            },
+        )
+        assert preflight.status_code == 204
+        assert (
+            preflight.headers.get("Access-Control-Allow-Origin")
+            == "https://example.com"
+        )
+        assert "POST" in preflight.headers.get(
+            "Access-Control-Allow-Methods", ""
+        ) or "*" in preflight.headers.get("Access-Control-Allow-Methods", "")
+        assert preflight.headers.get("Access-Control-Allow-Credentials") == "true"
 
-    # 2. Standard GET request with Origin
-    res = client.get("/api/data", headers={"Origin": "https://example.com"})
-    assert res.status_code == 200
-    assert res.headers.get("Access-Control-Allow-Origin") == "https://example.com"
+        # 2. Standard GET request with Origin
+        res = client.get("/api/data", headers={"Origin": "https://example.com"})
+        assert res.status_code == 200
+        assert res.headers.get("Access-Control-Allow-Origin") == "https://example.com"
+    finally:
+        config.security.cors_origins = original_origins
 
 
 def test_csrf_middleware():
@@ -134,9 +201,9 @@ def test_csrf_middleware():
         assert r_post_ok.status_code == 200
         assert r_post_ok.json()["saved"] is True
 
-        # 4. Mutating POST with API Key is exempt from CSRF
-        r_post_api = client.post("/action", headers={"X-API-Key": "vd_live_test_key"})
-        assert r_post_api.status_code == 200
+        # 4. Merely presenting an unvalidated API key does not bypass CSRF.
+        r_post_api = client.post("/action", headers={"X-API-Key": "invalid"})
+        assert r_post_api.status_code == 403
     finally:
         config.security.csrf_enabled = False
 
@@ -224,10 +291,18 @@ def test_jwt_expired_token_rejected():
     token = create_access_token(
         {"sub": 1}, expires_delta_seconds=-100, secret_key=secret
     )
-    import pytest
-
     with pytest.raises(ExpiredTokenError):
         decode_access_token(token, secret_key=secret)
+
+
+def test_jwt_token_creation_rejects_non_expiring_or_non_integer_ttl():
+    secret = "threat-model-test-secret"
+    with pytest.raises(ValueError, match="must not be zero"):
+        create_access_token({"sub": 1}, expires_delta_seconds=0, secret_key=secret)
+    with pytest.raises(ValueError, match="must be an integer"):
+        create_access_token(
+            {"sub": 1}, expires_delta_seconds=1.5, secret_key=secret  # type: ignore[arg-type]
+        )
 
 
 def test_jwt_tampered_signature_rejected():
@@ -236,8 +311,6 @@ def test_jwt_tampered_signature_rejected():
     token = create_access_token({"sub": 1}, secret_key=secret)
     parts = token.split(".")
     tampered = f"{parts[0]}.{parts[1]}.AAAAAAA"
-    import pytest
-
     with pytest.raises(InvalidTokenError):
         decode_access_token(tampered, secret_key=secret)
 
@@ -245,24 +318,133 @@ def test_jwt_tampered_signature_rejected():
 def test_jwt_malformed_exp_claim_rejected():
     """JWT with non-integer exp claim must be rejected (not crash)."""
     secret = "threat-model-test-secret"
-    token = create_access_token({"sub": 1, "exp": "not-a-number"}, secret_key=secret)
-    import pytest
-
-    with pytest.raises(InvalidTokenError):
-        decode_access_token(token, secret_key=secret)
+    for malformed in ("not-a-number", "1700000000", True, 1700000000.5):
+        token = create_access_token({"sub": 1, "exp": malformed}, secret_key=secret)
+        with pytest.raises(InvalidTokenError, match="Malformed token exp"):
+            decode_access_token(token, secret_key=secret)
 
 
 def test_jwt_nbf_future_claim_rejected():
     """JWT with nbf (not-before) in the future must be rejected."""
     import time
 
-    import pytest
-
     secret = "threat-model-test-secret"
     future_nbf = int(time.time()) + 3600
     token = create_access_token({"sub": 1, "nbf": future_nbf}, secret_key=secret)
     with pytest.raises(InvalidTokenError):
         decode_access_token(token, secret_key=secret)
+
+
+def test_jwt_iat_future_claim_rejected(monkeypatch: pytest.MonkeyPatch):
+    """A token cannot claim it was issued in the future."""
+    import voodoo.auth.jwt as jwt_module
+
+    secret = "threat-model-test-secret"
+    real_time = jwt_module.time.time
+    future = int(real_time()) + 3600
+    monkeypatch.setattr(jwt_module.time, "time", lambda: future)
+    token = create_access_token(
+        {"sub": 1}, secret_key=secret
+    )
+    monkeypatch.setattr(jwt_module.time, "time", real_time)
+    with pytest.raises(InvalidTokenError, match="issued-at"):
+        decode_access_token(token, secret_key=secret)
+
+
+def test_jwt_rejects_algorithm_confusion_header():
+    """Tokens must use the one supported signed algorithm and type."""
+    import base64
+    import json
+
+    secret = "threat-model-test-secret"
+    token = create_access_token({"sub": 1}, secret_key=secret)
+    header, payload, signature = token.split(".")
+    forged_header = base64.urlsafe_b64encode(
+        json.dumps({"alg": "none", "typ": "JWT"}, separators=(",", ":")).encode()
+    ).decode().rstrip("=")
+    with pytest.raises(InvalidTokenError, match="algorithm"):
+        decode_access_token(f"{forged_header}.{payload}.{signature}", secret_key=secret)
+
+
+def test_jwt_issuer_and_audience_are_enforced(monkeypatch: pytest.MonkeyPatch):
+    secret = "threat-model-test-secret"
+    monkeypatch.setattr(config.auth, "jwt_issuer", "voodoo-test")
+    monkeypatch.setattr(config.auth, "jwt_audience", "web")
+    token = create_access_token({"sub": 1}, secret_key=secret)
+    assert decode_access_token(token, secret_key=secret)["iss"] == "voodoo-test"
+
+    monkeypatch.setattr(config.auth, "jwt_audience", "api")
+    with pytest.raises(InvalidTokenError, match="audience"):
+        decode_access_token(token, secret_key=secret)
+
+
+def test_jwt_previous_secret_supports_rotation(monkeypatch: pytest.MonkeyPatch):
+    old_secret = "old-threat-model-secret"
+    new_secret = "new-threat-model-secret"
+    token = create_access_token({"sub": 1}, secret_key=old_secret)
+    monkeypatch.setattr(config.auth, "jwt_previous_secrets", [old_secret])
+    assert decode_access_token(token, secret_key=None)["sub"] == 1
+    with pytest.raises(InvalidTokenError):
+        decode_access_token(token, secret_key=new_secret)
+
+
+def test_jwt_clock_skew_is_bounded_and_applied(monkeypatch: pytest.MonkeyPatch):
+    import time
+
+    secret = "threat-model-test-secret"
+    token = create_access_token(
+        {"sub": 1, "nbf": int(time.time()) + 100}, secret_key=secret
+    )
+    with pytest.raises(InvalidTokenError):
+        decode_access_token(token, secret_key=secret)
+    monkeypatch.setattr(config.auth, "jwt_clock_skew_seconds", 300)
+    assert decode_access_token(token, secret_key=secret)["sub"] == 1
+
+
+def test_jwt_revocation_invalidates_only_the_selected_token():
+    secret = "threat-model-test-secret"
+    clear_revoked_tokens()
+    first = create_access_token({"sub": 1}, secret_key=secret)
+    second = create_access_token({"sub": 1}, secret_key=secret)
+    revoke_access_token(first, secret_key=secret)
+    with pytest.raises(InvalidTokenError, match="revoked"):
+        decode_access_token(first, secret_key=secret)
+    assert decode_access_token(second, secret_key=secret)["sub"] == 1
+    clear_revoked_tokens()
+
+
+def test_jwt_subject_revocation_invalidates_all_subject_sessions():
+    secret = "threat-model-test-secret"
+    clear_revoked_tokens()
+    first = create_access_token({"sub": "user-1"}, secret_key=secret)
+    second = create_access_token({"sub": "user-1"}, secret_key=secret)
+    other = create_access_token({"sub": "user-2"}, secret_key=secret)
+    revoke_subject_sessions("user-1")
+    for token in (first, second):
+        with pytest.raises(InvalidTokenError, match="revoked"):
+            decode_access_token(token, secret_key=secret)
+    assert decode_access_token(other, secret_key=secret)["sub"] == "user-2"
+    clear_revoked_tokens()
+
+
+def test_auth_middleware_uses_configured_rotation_keys():
+    old_secret = "old-middleware-secret"
+    custom = SimpleNamespace(
+        auth=AuthConfig(secret_key="new-middleware-secret", jwt_previous_secrets=[old_secret])
+    )
+
+    async def protected(request: Request):
+        return JSONResponse({"authenticated": request.state.user.is_authenticated})
+
+    app = Starlette(
+        routes=[Route("/protected", protected)],
+        middleware=[Middleware(AuthMiddleware, config_override=custom)],
+    )
+    token = create_access_token({"sub": "rotated-user"}, secret_key=old_secret)
+    response = TestClient(app).get(
+        "/protected", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.json() == {"authenticated": True}
 
 
 def test_csrf_token_generation_uniqueness():
@@ -305,6 +487,31 @@ def test_cors_disallowed_origin_not_reflected():
         config.security.cors_origins = orig_origins
 
 
+def test_cors_wildcard_credentials_never_reflects_origin():
+    """An unsafe wildcard configuration still fails closed at request time."""
+
+    async def api_endpoint(request: Request):
+        return JSONResponse({"data": "ok"})
+
+    original_origins = config.security.cors_origins
+    original_credentials = config.security.cors_allow_credentials
+    try:
+        config.security.cors_origins = ["*"]
+        config.security.cors_allow_credentials = True
+        app = Starlette(
+            routes=[Route("/api/data", api_endpoint, methods=["GET"])],
+            middleware=[Middleware(CORSMiddleware)],
+        )
+        response = TestClient(app).get(
+            "/api/data", headers={"Origin": "https://evil.example.com"}
+        )
+        assert response.headers.get("Access-Control-Allow-Origin") is None
+        assert response.headers.get("Access-Control-Allow-Credentials") is None
+    finally:
+        config.security.cors_origins = original_origins
+        config.security.cors_allow_credentials = original_credentials
+
+
 def test_cors_vary_origin_header():
     """CORS responses with reflected origins must include Vary: Origin."""
 
@@ -329,8 +536,54 @@ def test_cors_vary_origin_header():
         config.security.cors_origins = orig_origins
 
 
-def test_rate_limit_isolates_clients():
-    """Rate limiting should track different clients separately."""
+def test_cors_preflight_fails_closed_for_disallowed_policy():
+    """Preflight must reject origins, methods, and headers outside policy."""
+
+    async def api_endpoint(request: Request):
+        return JSONResponse({"data": "ok"})
+
+    original = (
+        config.security.cors_origins,
+        config.security.cors_allow_credentials,
+        config.security.cors_allow_methods,
+        config.security.cors_allow_headers,
+    )
+    try:
+        config.security.cors_origins = ["https://allowed.example.com"]
+        config.security.cors_allow_credentials = True
+        config.security.cors_allow_methods = ["POST"]
+        config.security.cors_allow_headers = ["authorization", "content-type"]
+        app = Starlette(
+            routes=[Route("/api/data", api_endpoint, methods=["POST"])],
+            middleware=[Middleware(CORSMiddleware)],
+        )
+        client = TestClient(app)
+        base_headers = {
+            "Origin": "https://allowed.example.com",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Authorization",
+        }
+        assert client.options("/api/data", headers=base_headers).status_code == 204
+
+        disallowed_origin = {**base_headers, "Origin": "https://evil.example.com"}
+        assert client.options("/api/data", headers=disallowed_origin).status_code == 403
+
+        disallowed_method = {**base_headers, "Access-Control-Request-Method": "DELETE"}
+        assert client.options("/api/data", headers=disallowed_method).status_code == 403
+
+        disallowed_header = {**base_headers, "Access-Control-Request-Headers": "X-Evil"}
+        assert client.options("/api/data", headers=disallowed_header).status_code == 403
+    finally:
+        (
+            config.security.cors_origins,
+            config.security.cors_allow_credentials,
+            config.security.cors_allow_methods,
+            config.security.cors_allow_headers,
+        ) = original
+
+
+def test_rate_limit_ignores_unvalidated_credential_buckets():
+    """Rotating fake credential headers must not evade the IP bucket."""
     rate_limiter.reset()
     orig_reqs = config.security.rate_limit_requests
     orig_window = config.security.rate_limit_window
@@ -349,7 +602,7 @@ def test_rate_limit_isolates_clients():
         )
         client = TestClient(app)
 
-        # Client A (API key A) exhausts limit
+        # Both fake keys share the same unauthenticated client bucket.
         assert (
             client.get("/ping", headers={"X-API-Key": "key_a_123"}).status_code == 200
         )
@@ -360,15 +613,27 @@ def test_rate_limit_isolates_clients():
             client.get("/ping", headers={"X-API-Key": "key_a_123"}).status_code == 429
         )
 
-        # Client B (API key B) still allowed
         assert (
-            client.get("/ping", headers={"X-API-Key": "key_b_456"}).status_code == 200
+            client.get("/ping", headers={"X-API-Key": "key_b_456"}).status_code == 429
         )
     finally:
         config.security.rate_limit_requests = orig_reqs
         config.security.rate_limit_window = orig_window
         config.security.rate_limit_enabled = orig_enabled
         rate_limiter.reset()
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_rejects_invalid_runtime_limits():
+    from voodoo.security.rate_limit import RateLimiter
+
+    with pytest.raises(ValueError, match="max_clients"):
+        RateLimiter(max_clients=0)
+    limiter = RateLimiter(max_clients=1)
+    with pytest.raises(ValueError, match="max_requests"):
+        await limiter.is_allowed("client", 0, 60)
+    with pytest.raises(ValueError, match="window_seconds"):
+        await limiter.is_allowed("client", 1, 0)
 
 
 def test_security_headers_csp_present():
@@ -410,8 +675,6 @@ def test_security_headers_hsts_only_in_production():
 
 def test_error_messages_no_secret_leakage():
     """Token error messages must not leak the secret key."""
-    import pytest
-
     secret = "my-super-secret-key-12345"
     token = create_access_token({"sub": 1}, secret_key=secret)
     with pytest.raises(InvalidTokenError) as exc_info:
@@ -433,7 +696,7 @@ def test_password_hash_uses_constant_time():
 
 
 def test_csrf_exempt_api_key_requests():
-    """CSRF should exempt M2M requests with API key headers."""
+    """CSRF exempts only credentials validated by AuthMiddleware."""
     config.security.csrf_enabled = True
     try:
 
@@ -442,19 +705,44 @@ def test_csrf_exempt_api_key_requests():
 
         app = Starlette(
             routes=[Route("/action", post_action, methods=["POST"])],
+            middleware=[Middleware(AuthMiddleware), Middleware(CSRFMiddleware)],
+        )
+        client = TestClient(app)
+
+        token = create_access_token({"sub": "service-1"})
+
+        # A validated bearer token is exempt.
+        r = client.post(
+            "/action",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+
+        # Invalid credentials are not an exemption.
+        r2 = client.post("/action", headers={"X-API-Key": "invalid"})
+        assert r2.status_code == 403
+    finally:
+        config.security.csrf_enabled = False
+
+
+def test_csrf_does_not_exempt_trace_or_mutating_exempt_paths():
+    """TRACE and non-GET requests must not bypass double-submit protection."""
+    config.security.csrf_enabled = True
+    try:
+
+        async def action(request: Request):
+            return JSONResponse({"saved": True})
+
+        app = Starlette(
+            routes=[
+                Route("/trace", action, methods=["TRACE"]),
+                Route("/openapi.json", action, methods=["POST"]),
+            ],
             middleware=[Middleware(CSRFMiddleware)],
         )
         client = TestClient(app)
 
-        # POST with Bearer token is exempt
-        r = client.post(
-            "/action",
-            headers={"Authorization": "Bearer some.jwt.token"},
-        )
-        assert r.status_code == 200
-
-        # POST with API key is exempt
-        r2 = client.post("/action", headers={"X-API-Key": "vd_live_test_key"})
-        assert r2.status_code == 200
+        assert client.request("TRACE", "/trace").status_code == 403
+        assert client.post("/openapi.json").status_code == 403
     finally:
         config.security.csrf_enabled = False

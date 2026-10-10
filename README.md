@@ -256,6 +256,9 @@ from voodoo.integrations.mcp import mcp
 See [Voodoo 3.0 public API law](docs/public-api-3.md) for the canonical import
 model and the clean-break migration map from 2.x.
 
+For contributor-facing ownership and package placement, see the [canonical
+package navigation](docs/architecture/navigation.md).
+
 ## Adaptive applications
 
 An adaptive application can observe facts, express desired outcomes and allow
@@ -536,11 +539,11 @@ As the project grows, these properties are architectural constraints:
 
 Voodoo is **beta software**.
 
-**v3.1.0** is the current published architecture baseline: Runtime adapters
-converged on the published Voodoo Store 0.3 native surface, with the modern
-Model contract and UUIDv7 identity. The `main` branch may
-contain post-release documentation or implementation work, so a merge to
-`main` is not itself a package release.
+**v3.2.1** is the current published architecture baseline: Runtime adapters
+converge on the published Voodoo Store 0.3 native surface, with the modern
+Model contract, UUIDv7 identity, and the current Voodoo Design System component system.
+The `main` branch may contain post-release documentation or implementation
+work, so a merge to `main` is not itself a package release.
 
 The next numbered development sprint is intentionally selected from real
 product/architecture pressure rather than by accumulating unrelated framework

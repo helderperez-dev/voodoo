@@ -4,7 +4,7 @@ from voodoo import __version__
 from voodoo.cli import terminal
 
 
-def version():
+def version() -> None:
     """
     Show Voodoo Framework version and environment info.
     """

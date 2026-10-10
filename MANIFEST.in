@@ -1,0 +1,9 @@
+# Never ship interpreter caches or generated build artifacts in source releases.
+global-exclude __pycache__/
+global-exclude *.py[cod]
+global-exclude *.so
+prune .mypy_cache
+prune .pytest_cache
+prune .ruff_cache
+prune build
+prune dist

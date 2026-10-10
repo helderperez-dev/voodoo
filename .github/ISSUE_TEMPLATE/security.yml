@@ -1,0 +1,14 @@
+name: Security report
+description: Report a suspected vulnerability privately.
+title: "security: "
+labels: [security]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include secrets or exploit details in a public issue; use SECURITY.md first.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true

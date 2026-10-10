@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added a package-owned default scaffold shared by `voodoo new` and the
+  deprecated `voodoo create` compatibility alias, with placeholder-safe
+  project metadata and folder-based routes.
+- Added Runtime-owned UI sessions with opaque HttpOnly identity, per-session
+  callable bindings, reactive state values, render ownership and targeted
+  WebSocket delivery.
+- Added production startup validation and an explicit encrypted-secrets extra.
+- Added generated-app compilation smoke coverage and a CI documentation import
+  contract that validates Markdown examples against the canonical module owners.
+- Added the Production Profile 1 threat model covering sessions, Runtime
+  authority, Store files/backups, secrets, objects, generated projects, and
+  supply-chain boundaries.
+
+### Changed
+
+- Removed the second inline `voodoo create` scaffold implementation; new
+  projects now converge on the same resource-backed starter files used by the
+  canonical command.
+- `state()` is session-scoped by default; deliberate process-wide sharing uses
+  `state(..., scope="application")`.
+- Authentication and security middleware now consume the exact configuration
+  resolved for their application instead of a potentially stale module global.
+- UI WebSockets enforce origin, message-size and per-connection rate bounds,
+  while disconnected sessions receive a bounded reconnect grace period.
+
+### Security
+
+- Production rejects development signing keys, debug mode, insecure cookies,
+  disabled HSTS/CSRF and credentialed wildcard CORS.
+- CSRF exemptions and rate-limit identities now require validated credentials;
+  attacker-controlled credential strings cannot bypass CSRF or create buckets.
+- `LocalSecretStore` no longer silently reads or writes plaintext. Encrypted
+  writes use atomic replacement and owner-only file permissions.
+- UI event bindings and reactive patches can no longer cross browser sessions.
+
 ## [3.2.1] — 2026-09-30
 
 ### Fixed

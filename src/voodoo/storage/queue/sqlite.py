@@ -22,6 +22,7 @@ from voodoo.storage.queue.interfaces import (
     QueueStats,
     TaskRecord,
     TaskStatus,
+    retry_delay,
 )
 
 TASKS_TABLE = "tasks"
@@ -228,7 +229,7 @@ class SQLiteQueue:
         record = self._record(row)
         now = _now()
         if record.attempts < record.max_attempts:
-            delay = backoff_base * (2 ** max(0, record.attempts - 1))
+            delay = retry_delay(backoff_base, record.attempts)
             status = TaskStatus.RETRYING
             completed_at: str | None = None
             available_at = _ts(now + timedelta(seconds=delay))
@@ -296,7 +297,8 @@ class SQLiteQueue:
         task_type: str | None = None,
         limit: int = 50,
     ) -> list[TaskRecord]:
-        clauses, params = [], []
+        clauses: list[str] = []
+        params: list[Any] = []
         if status is not None:
             clauses.append("status = ?")
             params.append(TaskStatus(status).value)

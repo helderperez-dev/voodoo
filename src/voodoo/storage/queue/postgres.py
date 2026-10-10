@@ -28,6 +28,7 @@ from voodoo.storage.queue.interfaces import (
     QueueStats,
     TaskRecord,
     TaskStatus,
+    retry_delay,
 )
 
 TASKS_TABLE = "tasks"
@@ -209,7 +210,7 @@ class PostgresQueue:
             "WHERE id = %s AND locked_by = %s AND status = 'running'",
             (_ts(now), _ts(now + timedelta(seconds=lease_seconds)), task_id, worker),
         )
-        return cursor.rowcount > 0
+        return bool(cursor.rowcount > 0)
 
     async def complete(self, task_id: int, worker: str) -> bool:
         cursor = await self._db.execute(
@@ -218,7 +219,7 @@ class PostgresQueue:
             "WHERE id = %s AND locked_by = %s AND status = 'running'",
             (_ts(_now()), task_id, worker),
         )
-        return cursor.rowcount > 0
+        return bool(cursor.rowcount > 0)
 
     async def fail(
         self,
@@ -238,7 +239,7 @@ class PostgresQueue:
         record = self._record(row)
         now = _now()
         if record.attempts < record.max_attempts:
-            delay = backoff_base * (2 ** max(0, record.attempts - 1))
+            delay = retry_delay(backoff_base, record.attempts)
             status = TaskStatus.RETRYING
             completed_at: str | None = None
             available_at = _ts(now + timedelta(seconds=delay))
@@ -264,7 +265,7 @@ class PostgresQueue:
             "WHERE id = %s AND locked_by = %s AND status = 'running'",
             (task_id, worker),
         )
-        return cursor.rowcount > 0
+        return bool(cursor.rowcount > 0)
 
     async def release_expired(self) -> int:
         now = _now()
@@ -306,7 +307,8 @@ class PostgresQueue:
         task_type: str | None = None,
         limit: int = 50,
     ) -> list[TaskRecord]:
-        clauses, params = [], []
+        clauses: list[str] = []
+        params: list[Any] = []
         if status is not None:
             clauses.append("status = %s")
             params.append(TaskStatus(status).value)

@@ -14,6 +14,7 @@ from typing import Any
 
 from voodoo.adapters.capabilities import QueueCapabilities
 from voodoo.core.errors import ConfigurationError
+from voodoo.observability import store_span
 from voodoo.runtime.store import acquire_runtime_store
 from voodoo.storage.queue.interfaces import QueueStats, TaskRecord, TaskStatus
 
@@ -129,19 +130,25 @@ class VoodooStoreQueue:
             separators=(",", ":"),
             default=str,
         ).encode("utf-8")
-        job_id = store.submit_job(
-            task_type.encode("utf-8"),
-            envelope,
-            now_ms,
-            available_at_ms=available_at_ms,
-            priority=int(priority),
-            max_attempts=max(1, int(max_attempts)),
-            retry_backoff_ms=1_000,
-            idempotency_key=(
-                idempotency_key.encode("utf-8") if idempotency_key is not None else None
-            ),
-        )
-        job = store.get_job(job_id)
+        with store_span(
+            "store.queue.enqueue",
+            attributes={"provider": self.provider, "task_type": task_type},
+        ):
+            job_id = store.submit_job(
+                task_type.encode("utf-8"),
+                envelope,
+                now_ms,
+                available_at_ms=available_at_ms,
+                priority=int(priority),
+                max_attempts=max(1, int(max_attempts)),
+                retry_backoff_ms=1_000,
+                idempotency_key=(
+                    idempotency_key.encode("utf-8")
+                    if idempotency_key is not None
+                    else None
+                ),
+            )
+            job = store.get_job(job_id)
         if job is None:
             raise RuntimeError("Voodoo Store submitted a job that cannot be read back")
         return self._record(job)
@@ -155,11 +162,15 @@ class VoodooStoreQueue:
     ) -> TaskRecord | None:
         store = self._store()
         handlers = [name.encode("utf-8") for name in types] if types else []
-        job = store.claim_job(
-            _now_ms(),
-            max(1, int(lease_seconds * 1000)),
-            handlers=handlers,
-        )
+        with store_span(
+            "store.queue.claim",
+            attributes={"provider": self.provider, "worker": worker},
+        ):
+            job = store.claim_job(
+                _now_ms(),
+                max(1, int(lease_seconds * 1000)),
+                handlers=handlers,
+            )
         if job is None:
             return None
         task_id = _public_id(bytes(job["id"]))
@@ -190,7 +201,10 @@ class VoodooStoreQueue:
         if generation is None:
             return False
         try:
-            self._store().complete_job(_native_id(task_id), generation, _now_ms())
+            with store_span(
+                "store.queue.complete", attributes={"provider": self.provider}
+            ):
+                self._store().complete_job(_native_id(task_id), generation, _now_ms())
         except Exception as exc:
             if "lease" in str(exc).lower() or "not found" in str(exc).lower():
                 self._leases.pop(task_id, None)
@@ -211,9 +225,12 @@ class VoodooStoreQueue:
         if generation is None:
             return None
         _ = backoff_base
-        self._store().fail_job(
-            _native_id(task_id), generation, _now_ms(), error.encode("utf-8")
-        )
+        with store_span(
+            "store.queue.fail", attributes={"provider": self.provider}
+        ):
+            self._store().fail_job(
+                _native_id(task_id), generation, _now_ms(), error.encode("utf-8")
+            )
         self._leases.pop(task_id, None)
         job = self._store().get_job(_native_id(task_id))
         return self._record(job) if job is not None else None

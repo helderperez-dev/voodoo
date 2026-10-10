@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from voodoo.storage.events.codec import EventCodecError
 from voodoo.storage.events.interfaces import VoodooEventBus
 
 
@@ -115,6 +116,10 @@ class TestLocalEventBusContract(EventBusContractTests):
         yield
         self.bus._handlers.clear()
 
+    def test_publish_rejects_future_event_schema(self) -> None:
+        with pytest.raises(EventCodecError, match="unsupported event schema"):
+            self.bus.publish("future.event", {}, schema_version=99)
+
 
 class TestSQLiteEventBusContract(EventBusContractTests):
     @pytest.fixture(autouse=True)
@@ -124,6 +129,27 @@ class TestSQLiteEventBusContract(EventBusContractTests):
         self.bus = SQLiteEventBus(tmp_path / "events.db")
         yield
         self.bus.close()
+
+    def test_replay_skips_future_event_schema(self, tmp_path) -> None:
+        from voodoo.storage.events.sqlite import SQLiteEventBus
+
+        path = tmp_path / "future-events.db"
+        bus = SQLiteEventBus(path)
+        bus.publish("future.event", {})
+        bus.close()
+        connection = __import__("sqlite3").connect(path)
+        connection.execute(
+            "UPDATE events SET schema_version = 99 WHERE event_type = ?",
+            ("future.event",),
+        )
+        connection.commit()
+        connection.close()
+
+        reopened = SQLiteEventBus(path)
+        received: list[dict] = []
+        assert reopened.replay("future.event", received.append) == 0
+        assert received == []
+        reopened.close()
 
 
 @pytest.mark.asyncio

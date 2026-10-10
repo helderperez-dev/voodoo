@@ -12,11 +12,12 @@ Executions remain owned by :class:`ExecutionEngine`.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from voodoo.primitives.intent import Intent
@@ -27,8 +28,24 @@ from voodoo.runtime.execution.engine import ExecutionEngine
 from voodoo.runtime.execution.engine import engine as default_engine
 from voodoo.runtime.task import Task, TaskStatus
 from voodoo.runtime.workflow_store import WorkflowStore
+from voodoo.security.redaction import redact_string
 
 __all__ = ["WorkflowStrategy", "Workflow", "WorkflowRun"]
+
+_logger = logging.getLogger("voodoo.runtime.workflow")
+
+# Mesh publication is an optional observability side effect. Only expected
+# transport/configuration failures are downgraded to a warning; invariant
+# failures must remain visible to the caller.
+_WORKFLOW_EVENT_ERRORS = (
+    AttributeError,
+    ConnectionError,
+    ImportError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 
 
 def _now_iso() -> str:
@@ -332,7 +349,7 @@ class Workflow:
             ]
             executions = await asyncio.gather(*coroutines, return_exceptions=True)
             for task, execution in zip(ready, executions, strict=True):
-                if isinstance(execution, Exception):
+                if isinstance(execution, BaseException):
                     run.task_statuses[task.name] = TaskStatus.FAILED.value
                     run.task_results[task.name] = None
                     self._persist(run)
@@ -476,7 +493,7 @@ class Workflow:
 
         planner = Planner(engine=engine)
         for task in self._topological_order():
-            kind = (
+            kind: Literal["agent", "compute", "tool", "worker", "human", "workflow"] = (
                 "human"
                 if task.human
                 else ("agent" if task.agent is not None else "compute")
@@ -538,8 +555,12 @@ class Workflow:
             from voodoo.mesh import mesh
 
             await mesh.broadcast(event, payload)
-        except Exception:
-            pass
+        except _WORKFLOW_EVENT_ERRORS as error:
+            _logger.warning(
+                "workflow event emission failed event=%s error=%s",
+                event,
+                redact_string(str(error)),
+            )
 
     def describe(self) -> dict[str, Any]:
         return {

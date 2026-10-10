@@ -40,6 +40,9 @@ __all__ = [
 ]
 
 _LEASE_PREFIX = b"runtime:fabric:lease:"
+_LEASE_COLLECTION = b"runtime.fabric_leases"
+_SCHEMA_KEY = "_schema_version"
+_SCHEMA_VERSION = 1
 
 
 def _now() -> datetime:
@@ -121,6 +124,11 @@ class FabricLease:
 
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> FabricLease:
+        version = record.pop(_SCHEMA_KEY, 0)
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise ValueError("fabric lease schema version must be an integer")
+        if version > _SCHEMA_VERSION:
+            raise ValueError(f"unsupported fabric lease schema version: {version}")
         return cls(
             work_id=str(record["work_id"]),
             node_id=str(record["node_id"]),
@@ -169,12 +177,30 @@ class RuntimeFabric:
             raise StoreProviderError("RuntimeStore must be started for Runtime fabric")
         if provider.name != "voodoo":
             raise StoreProviderError("RuntimeFabric currently requires Voodoo Store")
-        self._native = getattr(provider, "native", None)
+        self._native: Any = getattr(provider, "native", None)
         if self._native is None:
             raise StoreProviderError("Active Voodoo Store has no native handle")
+        self._ensure_collection()
         self.membership = membership or VoodooStoreMembershipStore(self.runtime_store)
         self.policy = policy
         self.lease_seconds = lease_seconds
+
+    def _native_collections(self) -> bool:
+        return all(
+            hasattr(self._native, method)
+            for method in (
+                "create_collection",
+                "upsert_record",
+                "get_record",
+                "delete_record",
+            )
+        )
+
+    def _ensure_collection(self) -> None:
+        if self._native_collections():
+            self._native.create_collection(
+                _LEASE_COLLECTION, schema_version=1, codec=b"json"
+            )
 
     def sweep_health(
         self,
@@ -279,10 +305,25 @@ class RuntimeFabric:
         return _LEASE_PREFIX + work_id.encode("utf-8")
 
     def get_lease(self, work_id: str) -> FabricLease | None:
-        raw = self._native.get(self._lease_key(work_id))
+        self._ensure_collection()
+        raw = None
+        if self._native_collections():
+            record = self._native.get_record(
+                _LEASE_COLLECTION, work_id.encode("utf-8")
+            )
+            if record is not None:
+                raw = record[1]
+        if raw is None:
+            raw = self._native.get(self._lease_key(work_id))
         if raw is None:
             return None
-        return FabricLease.from_record(json.loads(bytes(raw).decode("utf-8")))
+        record = json.loads(bytes(raw).decode("utf-8"))
+        if not isinstance(record, dict):
+            raise ValueError("fabric lease record must be a JSON object")
+        lease = FabricLease.from_record(record)
+        if lease.work_id != work_id:
+            raise ValueError("fabric lease key does not match record work_id")
+        return lease
 
     def acquire_lease(
         self,
@@ -301,15 +342,25 @@ class RuntimeFabric:
             acquired_at=current,
             expires_at=current + timedelta(seconds=self.lease_seconds),
         )
-        self._native.put(
-            self._lease_key(work_id),
-            json.dumps(
-                lease.describe(), sort_keys=True, separators=(",", ":")
-            ).encode(),
-        )
+        encoded = json.dumps(
+            {**lease.describe(), _SCHEMA_KEY: _SCHEMA_VERSION},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        self._ensure_collection()
+        if self._native_collections():
+            self._native.upsert_record(
+                _LEASE_COLLECTION, work_id.encode("utf-8"), encoded
+            )
+            self._native.delete(self._lease_key(work_id))
+        else:
+            self._native.put(self._lease_key(work_id), encoded)
         return lease
 
     def release_lease(self, work_id: str) -> None:
+        self._ensure_collection()
+        if self._native_collections():
+            self._native.delete_record(_LEASE_COLLECTION, work_id.encode("utf-8"))
         self._native.delete(self._lease_key(work_id))
 
     async def execute(self, work: FabricWork, executor: FabricExecutor) -> Any:

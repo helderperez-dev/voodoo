@@ -151,6 +151,29 @@ async def test_structured_client_receive_does_not_turn_waiting_into_exception():
 
 
 @pytest.mark.asyncio
+async def test_client_receive_failure_fails_pending_requests():
+    client = MeshClient("ws://unused")
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+    client._pending_requests["rpc-1"] = future
+
+    class Socket:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise ValueError("malformed remote frame")
+
+    client.ws = Socket()
+    await client._receive_loop()
+
+    with pytest.raises(ConnectionError, match="mesh receive loop failed"):
+        await future
+    assert client._pending_requests == {}
+    assert client._structured_requests == set()
+
+
+@pytest.mark.asyncio
 async def test_client_execute_sends_stable_request_identity_and_lineage():
     client = MeshClient("ws://unused")
     sent: list[str] = []

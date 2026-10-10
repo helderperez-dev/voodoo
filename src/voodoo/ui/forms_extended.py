@@ -17,6 +17,27 @@ from voodoo.ui.interactive import Input
 EventHandler = Callable[..., Any] | str
 
 
+def _apply_extended_state(
+    attrs: dict[str, Any], *, disabled: bool, read_only: bool,
+    loading: bool, error: bool | str
+) -> bool:
+    """Apply shared state attributes and return whether activation is unavailable."""
+    unavailable = disabled or read_only or loading or bool(error)
+    if unavailable:
+        attrs["disabled"] = True
+        attrs["aria_disabled"] = "true"
+    if read_only:
+        attrs["aria_readonly"] = "true"
+    if loading:
+        attrs["aria_busy"] = "true"
+    if error:
+        attrs["aria_invalid"] = "true"
+        attrs["data_vd_state"] = "error"
+        if isinstance(error, str):
+            attrs["data_vd_error"] = error
+    return unavailable
+
+
 # ── OTPInput ─────────────────────────────────────────────────────────────────
 
 
@@ -48,23 +69,46 @@ class OTPInput(Component):
         on_change: EventHandler | None = None,
         on_complete: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         mask: bool = False,
         **kwargs: Any,
     ) -> None:
         if length < 1 or length > 12:
             raise ValueError("OTPInput length must be between 1 and 12")
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(**kwargs)
-        self.props = {"length": length, "mask": mask}
+        self.props = {
+            "length": length,
+            "mask": mask,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
         attrs: dict[str, Any] = {
             "data_vd_otp": True,
             "data_vd_otp_length": str(length),
             "data_vd_otp_name": name,
         }
-        if on_change is not None:
+        if on_change is not None and not unavailable:
             attrs["data_vd_event_change"] = bind_event(on_change)
-        if on_complete is not None:
+        if on_complete is not None and not unavailable:
             attrs["data_vd_event_complete"] = bind_event(on_complete)
+        if unavailable:
+            attrs["aria_disabled"] = "true"
+        if read_only:
+            attrs["aria_readonly"] = "true"
+        if loading:
+            attrs["aria_busy"] = "true"
+            attrs["data_vd_loading"] = True
+        if error:
+            attrs["aria_invalid"] = "true"
+            attrs["data_vd_state"] = "error"
+            if isinstance(error, str):
+                attrs["data_vd_error"] = error
         self.attrs.update(attrs)
 
         fields: list[Component] = []
@@ -81,7 +125,10 @@ class OTPInput(Component):
                 autocomplete="one-time-code" if i == 0 else "off",
                 data_vd_otp_field=True,
                 data_vd_otp_index=str(i),
-                disabled=disabled,
+                disabled=unavailable,
+                readonly=read_only,
+                aria_readonly="true" if read_only else None,
+                aria_invalid="true" if error else None,
             )
             fields.append(field)
 
@@ -145,6 +192,9 @@ class RangeSlider(Component):
         max_label: str | None = None,
         on_change: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if maximum <= minimum:
@@ -158,7 +208,10 @@ class RangeSlider(Component):
 
         slider_id = _control_id("range-slider")
         track_id = f"{slider_id}-track"
-        binding = bind_event(on_change) if on_change is not None else None
+        unavailable = disabled or read_only or loading or bool(error)
+        binding = (
+            bind_event(on_change) if on_change is not None and not unavailable else None
+        )
 
         min_field = Input(
             id=f"{slider_id}-min",
@@ -173,6 +226,9 @@ class RangeSlider(Component):
             on_input=binding,
             data_vd_range_min=True,
             disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
         )
         max_field = Input(
             id=f"{slider_id}-max",
@@ -187,6 +243,9 @@ class RangeSlider(Component):
             on_input=binding,
             data_vd_range_max=True,
             disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
         )
 
         children: list[Any] = [
@@ -199,8 +258,29 @@ class RangeSlider(Component):
             _RangeFields(min_field, max_field),
         ]
         children = [c for c in children if c is not None]
-        super().__init__(*children, data_vd_range_slider=True, **kwargs)
-        self.props = {"minimum": minimum, "maximum": maximum, "step": step}
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            state_attrs["data_vd_state"] = "error"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(*children, data_vd_range_slider=True, **state_attrs, **kwargs)
+        self.props = {
+            "minimum": minimum,
+            "maximum": maximum,
+            "step": step,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _RangeLabel(Component):
@@ -269,6 +349,9 @@ class Autocomplete(Component):
         on_change: EventHandler | None = None,
         on_select: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         root_id = kwargs.get("id") or _control_id("autocomplete")
@@ -279,8 +362,21 @@ class Autocomplete(Component):
             "id": root_id,
             "data_vd_autocomplete": True,
         }
-        if on_select is not None:
+        unavailable = disabled or read_only or loading or bool(error)
+        if on_select is not None and not unavailable:
             attrs["data_vd_event_select"] = bind_event(on_select)
+        if unavailable:
+            attrs["aria_disabled"] = "true"
+        if read_only:
+            attrs["aria_readonly"] = "true"
+        if loading:
+            attrs["aria_busy"] = "true"
+            attrs["data_vd_loading"] = True
+        if error:
+            attrs["aria_invalid"] = "true"
+            attrs["data_vd_state"] = "error"
+            if isinstance(error, str):
+                attrs["data_vd_error"] = error
         super().__init__(**attrs, **kwargs)
 
         field = Input(
@@ -295,9 +391,12 @@ class Autocomplete(Component):
             aria_autocomplete="list",
             aria_controls=listbox_id,
             aria_expanded="false",
-            on_input=on_change,
+            on_input=on_change if not unavailable else None,
             data_vd_autocomplete_input=True,
             disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
         )
 
         options = tuple(
@@ -308,6 +407,8 @@ class Autocomplete(Component):
                 aria_selected="false",
                 data_vd_autocomplete_option=True,
                 data_vd_value=suggestion,
+                disabled=unavailable,
+                aria_disabled="true" if unavailable else None,
             )
             for i, suggestion in enumerate(suggestions)
         )
@@ -324,6 +425,12 @@ class Autocomplete(Component):
         )
 
         self.children = (field, listbox)
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _AutocompleteList(Component):
@@ -464,6 +571,9 @@ class CheckboxInput(Component):
         checked: bool = False,
         indeterminate: bool = False,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         required: bool = False,
         on_change: EventHandler | None = None,
         **kwargs: Any,
@@ -482,12 +592,16 @@ class CheckboxInput(Component):
             attrs["checked"] = True
         if indeterminate:
             attrs["data_vd_indeterminate"] = True
-        if disabled:
-            attrs["disabled"] = True
-            attrs["aria_disabled"] = "true"
+        unavailable = _apply_extended_state(
+            attrs,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+        )
         if required:
             attrs["required"] = True
-        if on_change is not None:
+        if on_change is not None and not unavailable:
             attrs["data_vd_event_change"] = bind_event(on_change)
 
         input_el = Input(**attrs)
@@ -508,6 +622,9 @@ class CheckboxInput(Component):
             "checked": checked,
             "indeterminate": indeterminate,
             "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
         }
 
 
@@ -534,6 +651,9 @@ class RadioInput(Component):
         value: str = "",
         checked: bool = False,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         on_change: EventHandler | None = None,
         **kwargs: Any,
     ) -> None:
@@ -546,10 +666,14 @@ class RadioInput(Component):
         }
         if checked:
             attrs["checked"] = True
-        if disabled:
-            attrs["disabled"] = True
-            attrs["aria_disabled"] = "true"
-        if on_change is not None:
+        unavailable = _apply_extended_state(
+            attrs,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+        )
+        if on_change is not None and not unavailable:
             attrs["data_vd_event_change"] = bind_event(on_change)
 
         input_el = Input(**attrs)
@@ -564,7 +688,13 @@ class RadioInput(Component):
             data_vd_radio=True,
             **kwargs,
         )
-        self.props = {"checked": checked, "disabled": disabled}
+        self.props = {
+            "checked": checked,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _RadioCopy(Component):

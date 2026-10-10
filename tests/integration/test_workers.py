@@ -153,6 +153,7 @@ async def test_worker_job_executes_through_runtime_engine():
     from voodoo.runtime.execution.engine import engine as runtime_engine
     from voodoo.runtime.scheduling import start_workers, stop_workers
 
+    telemetry_store.metrics["custom_traces"].clear()
     processed: list[str] = []
 
     @task(retries=0, name="rt_job")
@@ -175,6 +176,10 @@ async def test_worker_job_executes_through_runtime_engine():
     assert matches[0].status is ExecutionStatus.COMPLETED
     assert matches[0].actor == "worker:rt_job"
     assert matches[0].intent.params == {"payload": "payload-1"}
+    assert _spans_for("worker.claimed")
+    assert _spans_for("worker.completed")
+    assert _spans_for("worker.completed")[0]["latency_ms"] >= 0
+    assert not any(span["error"] for span in _spans_for("worker.completed"))
 
 
 @pytest.mark.asyncio
@@ -184,6 +189,7 @@ async def test_worker_failure_records_failed_execution_and_keeps_running():
     from voodoo.runtime.execution.engine import engine as runtime_engine
     from voodoo.runtime.scheduling import start_workers, stop_workers
 
+    telemetry_store.metrics["custom_traces"].clear()
     @task(retries=0, name="rt_bad_job")
     async def rt_bad_job(payload):
         raise RuntimeError("worker blew up")
@@ -200,3 +206,6 @@ async def test_worker_failure_records_failed_execution_and_keeps_running():
     ]
     assert len(matches) == 1
     assert matches[0].status is ExecutionStatus.FAILED
+    assert _spans_for("worker.claimed")
+    assert any(span["error"] for span in _spans_for("worker.failed"))
+    assert _spans_for("worker.failed")[0]["latency_ms"] >= 0

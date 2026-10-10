@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 from voodoo.runtime.context import ExecutionContext
 from voodoo.runtime.identity import Principal
@@ -56,7 +56,7 @@ class PolicyRequest:
     world: WorldSnapshot | None = None
 
     @property
-    def intent(self):
+    def intent(self) -> Any:
         return self.context.intent if self.context is not None else None
 
 
@@ -102,7 +102,7 @@ class PolicyEngine:
         """Register one rule in deterministic insertion order."""
         self._rules.append(
             _RegisteredPolicy(
-                name=name or getattr(rule, "__name__", rule.__class__.__name__),
+                name=str(name or getattr(rule, "__name__", rule.__class__.__name__)),
                 rule=rule,
             )
         )
@@ -156,7 +156,7 @@ class PolicyEngine:
         if self.world is None or target_entity_id is None:
             return None
         try:
-            return self.world.snapshot(target_entity_id)
+            return cast(WorldSnapshot, self.world.snapshot(target_entity_id))
         except KeyError:
             return None
 

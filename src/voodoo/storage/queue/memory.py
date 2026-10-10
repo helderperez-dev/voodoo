@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from voodoo.adapters.capabilities import require
 from voodoo.storage.queue.interfaces import (
@@ -17,6 +17,7 @@ from voodoo.storage.queue.interfaces import (
     QueueStats,
     TaskRecord,
     TaskStatus,
+    retry_delay,
 )
 
 _next_id = 0
@@ -100,7 +101,7 @@ class MemoryQueue:
                 for tid in self._order
                 if self._tasks[tid].status in (TaskStatus.PENDING, TaskStatus.RETRYING)
                 and self._tasks[tid].available_at
-                and self._tasks[tid].available_at <= now
+                and cast(datetime, self._tasks[tid].available_at) <= now
                 and (types is None or self._tasks[tid].type in types)
             ]
             if not candidates:
@@ -194,7 +195,7 @@ class MemoryQueue:
                 return None
             now = datetime.now(UTC)
             if rec.attempts < rec.max_attempts:
-                delay = backoff_base * (2 ** max(0, rec.attempts - 1))
+                delay = retry_delay(backoff_base, rec.attempts)
                 status = TaskStatus.RETRYING
                 available = now + timedelta(seconds=delay)
                 completed = None

@@ -20,7 +20,7 @@ from voodoo.storage.cache.interfaces import VoodooCache
 try:
     import redis
 except ImportError:  # pragma: no cover - exercised when redis is absent
-    redis = None
+    redis = None  # type: ignore[assignment]
 
 
 class RedisCache:

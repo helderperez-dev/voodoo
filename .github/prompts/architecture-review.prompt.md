@@ -50,7 +50,7 @@ For each file changed:
 - [ ] **No new required deps** — Provider SDKs in optional extras.
 - [ ] **Capability-based adapters** — Protocols + boolean flags. No enums for capabilities.
 - [ ] **Contract tests immutable** — No changes to `tests/contracts/` mixin classes.
-- [ ] **Compatibility shims** — Old import paths preserved.
+- [ ] **Compatibility policy** — Preserve only explicitly supported 3.x aliases; do not require removed 2.x shims without a documented external consumer and deprecation window.
 - [ ] **Lazy imports** — Provider SDKs at function level.
 - [ ] **Correlation IDs** — `trace_id` propagates through the stack.
 - [ ] **Events namespaced** — Dotted names (`"agent.started"`).

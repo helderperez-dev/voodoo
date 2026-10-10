@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from voodoo.storage.scheduler import SQLiteScheduleStore
 
@@ -20,6 +23,29 @@ class TestScheduleStore:
         assert len(schedules) == 1
         assert schedules[0]["id"] == "s1"
         assert schedules[0]["task_type"] == "task_a"
+        store.close()
+
+    def test_payload_codec_reads_legacy_and_rejects_future(self, tmp_path):
+        store = _make_store(tmp_path)
+        now = datetime.now(UTC)
+        store.create("versioned", "test", "at", now.isoformat(), now, "task", {"x": 1})
+        raw = store._conn.execute(
+            "SELECT payload FROM schedules WHERE id = 'versioned'"
+        ).fetchone()[0]
+        assert json.loads(raw)["_schema_version"] == 1
+        store._conn.execute(
+            "INSERT INTO schedules (id,name,kind,spec,next_run_at,task_type,payload,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            ("legacy", "legacy", "at", now.isoformat(), now.isoformat(), "task", json.dumps({"legacy": True}), now.isoformat()),
+        )
+        store._conn.commit()
+        assert json.loads(store.get("legacy")["payload"]) == {"legacy": True}
+        store._conn.execute(
+            "UPDATE schedules SET payload = ? WHERE id = 'legacy'",
+            (json.dumps({"_schema_version": 99, "value": {}}),),
+        )
+        store._conn.commit()
+        with pytest.raises(ValueError, match="unsupported"):
+            store.get("legacy")
         store.close()
 
     def test_claim_due_one_shot(self, tmp_path):

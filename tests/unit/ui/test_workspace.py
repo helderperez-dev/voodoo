@@ -124,6 +124,68 @@ def test_tree_node_selected(adapter):
     assert 'aria-selected="true"' in html
 
 
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, " disabled"),
+        ({"read_only": True}, 'aria-disabled="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "tree unavailable"}, 'data-vd-error="tree unavailable"'),
+    ],
+)
+def test_tree_node_unavailable_states_suppress_selection_and_expansion(
+    adapter, state, expected
+):
+    html = TreeView(
+        TreeNode(
+            "Documents",
+            children=[TreeNode("Report.pdf")],
+            **state,
+        ),
+        TreeNode("Other"),
+        on_select=lambda: None,
+        on_expand=lambda: None,
+        on_collapse=lambda: None,
+    ).render()
+    assert expected in html
+    # Only the enabled sibling may retain the selection binding; the
+    # unavailable node's selection and expansion paths remain unbound.
+    assert html.count("data-vd-event-click") == 1
+
+
+def test_tree_view_state_contract_suppresses_all_callbacks(adapter):
+    html = TreeView(
+        TreeNode("Documents", children=[TreeNode("Report.pdf")]),
+        on_select=lambda: None,
+        on_expand=lambda: None,
+        on_collapse=lambda: None,
+        read_only=True,
+        loading=True,
+        error="Tree unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Tree unavailable"' in html
+    assert "data-vd-event-click" not in html
+
+
+def test_tree_view_state_replaces_stale_nodes(adapter):
+    loading = TreeView(TreeNode("stale"), loading=True).render()
+    assert "Loading…" in loading
+    assert "stale" not in loading
+    assert 'data-vd-state="loading"' in loading
+
+    error = TreeView(TreeNode("stale"), error="Unavailable").render()
+    assert "Unavailable" in error
+    assert "stale" not in error
+    assert 'data-vd-state="error"' in error
+
+    empty = TreeView(empty_text="Nothing here").render()
+    assert "Nothing here" in empty
+    assert 'aria-live="polite"' in empty
+
+
 # ── Toolbar ─────────────────────────────────────────────────────────────────
 
 
@@ -154,6 +216,26 @@ def test_toolbar_vertical(adapter):
 def test_toolbar_button_pressed(adapter):
     html = ToolbarButton("Bold", pressed=True).render()
     assert 'aria-pressed="true"' in html
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, " disabled"),
+        ({"read_only": True}, 'aria-disabled="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "formatting failed"}, 'data-vd-error="formatting failed"'),
+    ],
+)
+def test_toolbar_button_unavailable_states_suppress_activation(
+    adapter, state, expected
+):
+    def on_click(_event):
+        return None
+
+    html = ToolbarButton("Bold", on_click=on_click, **state).render()
+    assert expected in html
+    assert "data-vd-event-click" not in html
 
 
 def test_toolbar_separator(adapter):
@@ -192,6 +274,58 @@ def test_menubar_item_with_shortcut(adapter):
     assert "⌘S" in html
 
 
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, " disabled"),
+        ({"read_only": True}, 'aria-disabled="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "menu unavailable"}, 'data-vd-error="menu unavailable"'),
+    ],
+)
+def test_menubar_item_unavailable_states_suppress_selection(
+    adapter, state, expected
+):
+    def on_select(_event):
+        return None
+
+    html = MenubarItem("Save", on_select=on_select, **state).render()
+    assert expected in html
+    assert "data-vd-event-click" not in html
+
+
+def test_menubar_menu_state_contract_blocks_trigger_and_children(adapter):
+    html = Menubar(
+        MenubarMenu(
+            "File",
+            MenubarItem("Open", on_select=lambda: None),
+            read_only=True,
+            loading=True,
+            error="Menu unavailable",
+        )
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Menu unavailable"' in html
+    assert "data-vd-event-click" not in html
+
+
+def test_menubar_state_contract_blocks_all_menu_triggers(adapter):
+    html = Menubar(
+        MenubarMenu("File", MenubarItem("Open", on_select=lambda: None)),
+        MenubarMenu("Edit", MenubarItem("Undo")),
+        read_only=True,
+        loading=True,
+        error="Menubar unavailable",
+    ).render()
+    assert html.count('aria-disabled="true"') >= 3
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Menubar unavailable"' in html
+    assert "data-vd-menubar-trigger" not in html
+
+
 # ── Dock ────────────────────────────────────────────────────────────────────
 
 
@@ -211,6 +345,22 @@ def test_dock_item_with_badge(adapter):
     ).render()
     assert "5" in html
     assert "Mail" in html
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, " disabled"),
+        ({"read_only": True}, 'aria-disabled="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "dock unavailable"}, 'data-vd-error="dock unavailable"'),
+    ],
+)
+def test_dock_item_unavailable_states_suppress_activation(adapter, state, expected):
+    item = DockItem("🔍", label="Search", on_click=lambda: None, **state)
+    html = item.render_item(0).render()
+    assert expected in html
+    assert "data-vd-event-click" not in html
 
 
 # ── Master-Detail ───────────────────────────────────────────────────────────
@@ -234,9 +384,56 @@ def test_master_item_selected(adapter):
     assert 'aria-selected="true"' in html
 
 
+def test_master_list_state_contract_blocks_all_selection(adapter):
+    html = MasterList(
+        MasterItem("Item 1", on_select=lambda value: value),
+        MasterItem("Item 2"),
+        read_only=True,
+        loading=True,
+        error="Master list unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Master list unavailable"' in html
+    assert "data-vd-event-click" not in html
+
+
+def test_master_list_state_rows_replace_stale_items(adapter):
+    loading = MasterList(MasterItem("stale"), loading=True).render()
+    assert "Loading…" in loading
+    assert "stale" not in loading
+    assert 'data-vd-state="loading"' in loading
+
+    error = MasterList(MasterItem("stale"), error="Unavailable").render()
+    assert "Unavailable" in error
+    assert "stale" not in error
+    assert 'data-vd-state="error"' in error
+
+    empty = MasterList(empty_text="Nothing here").render()
+    assert "Nothing here" in empty
+    assert 'aria-live="polite"' in empty
+
+
 def test_master_detail_with_event(adapter):
     html = MasterItem("Clickable", on_select=lambda: None).render_item().render()
     assert "data-vd-event-click" in html
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, " disabled"),
+        ({"read_only": True}, 'aria-disabled="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "item unavailable"}, 'data-vd-error="item unavailable"'),
+    ],
+)
+def test_master_item_unavailable_states_suppress_selection(adapter, state, expected):
+    item = MasterItem("Project", on_select=lambda: None, **state)
+    html = item.render_item().render()
+    assert expected in html
+    assert "data-vd-event-click" not in html
 
 
 # ── Keyboard Shortcut Registry ──────────────────────────────────────────────

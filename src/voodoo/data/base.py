@@ -3,13 +3,41 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
-from typing import Any, get_type_hints
+from typing import Any, cast, get_type_hints
 
+from voodoo.security.redaction import redact_string
 from voodoo.storage.database import Migration, SQLiteDatabase, VoodooDatabase
+
+_logger = logging.getLogger("voodoo.data")
+
+# Compatibility fallbacks may handle malformed/absent optional adapter state,
+# but must not conceal an arbitrary implementation defect from the caller.
+_DATA_FALLBACK_ERRORS = (
+    AttributeError,
+    ImportError,
+    LookupError,
+    NameError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+
+
+def _report_data_fallback(operation: str, error: Exception) -> None:
+    """Report an intentionally non-fatal compatibility fallback safely."""
+    _logger.warning(
+        "data fallback operation=%s error=%s", operation, redact_string(str(error))
+    )
 
 _db_connection = None
 _database: SQLiteDatabase | None = None
+_migration_health: dict[str, Any] = {
+    "status": "unknown",
+    "current_version": None,
+    "error": None,
+}
 _triggers: dict[str, dict[str, list[Callable]]] = {}
 _rls_policies: dict[str, Callable] = {}
 
@@ -36,15 +64,16 @@ def _backend_uses_identity() -> bool:
         return False
     try:
         caps = adapter.capabilities()
-    except Exception:
+    except _DATA_FALLBACK_ERRORS as error:
+        _report_data_fallback("backend_capabilities", error)
         return False
-    return caps.provider == "postgres"
+    return bool(caps.provider == "postgres")
 
 
 async def _ensure_user_tables(db: VoodooDatabase) -> None:
     """Create tables for every registered user model (idempotent DDL)."""
     for model in _models:
-        await model._create_table()
+        await cast(Any, model)._create_table()
 
 
 # Migration 0001: the user-model baseline. Runs once to enter the ledger,
@@ -70,7 +99,7 @@ async def _cascade_delete_children(parent_table: str, parent_id: Any) -> None:
     await db.commit()
 
 
-async def init_db(db_path: str = None):
+async def init_db(db_path: str | None = None) -> Any:
     """Initializes the database connection using the configured provider (Sprint 9).
 
     Uses the central :class:`~voodoo.adapters.registry.ProviderRegistry` to
@@ -101,18 +130,31 @@ async def init_db(db_path: str = None):
     _database = database
     if hasattr(database, "connection"):
         _db_connection = database.connection
-    await database.migrate()
-    await _ensure_user_tables(database)
+    _migration_health.update(status="migrating", error=None)
+    try:
+        await database.migrate()
+        await _ensure_user_tables(database)
+    except Exception as exc:
+        _migration_health.update(status="migration_required", error=str(exc))
+        raise
+    _migration_health.update(
+        status="ready", current_version=database.current_version(), error=None
+    )
     return database
 
 
-async def get_db():
+def migration_health() -> dict[str, Any]:
+    """Return a copy of the process migration state for health consumers."""
+    return dict(_migration_health)
+
+
+async def get_db() -> Any:
     if _db_connection is None:
         await init_db()
     return _db_connection
 
 
-async def close_db():
+async def close_db() -> None:
     """Close the database connection if one is open.
 
     aiosqlite runs each connection on a dedicated non-daemon thread; an
@@ -131,6 +173,7 @@ async def close_db():
         finally:
             _db_connection = None
             _database = None
+    _migration_health.update(status="unknown", current_version=None, error=None)
 
 
 def _get_table_name(cls_or_obj: Any) -> str:
@@ -140,8 +183,10 @@ def _get_table_name(cls_or_obj: Any) -> str:
     return cls.__name__.lower()
 
 
-def on_insert(model_cls: type):
-    def decorator(func: Callable):
+def on_insert(
+    model_cls: type,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         table = _get_table_name(model_cls)
         if table not in _triggers:
             _triggers[table] = {"insert": [], "update": []}
@@ -151,8 +196,10 @@ def on_insert(model_cls: type):
     return decorator
 
 
-def on_update(model_cls: type):
-    def decorator(func: Callable):
+def on_update(
+    model_cls: type,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         table = _get_table_name(model_cls)
         if table not in _triggers:
             _triggers[table] = {"insert": [], "update": []}
@@ -162,8 +209,10 @@ def on_update(model_cls: type):
     return decorator
 
 
-def rls_policy(model_cls: type):
-    def decorator(func: Callable):
+def rls_policy(
+    model_cls: type,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         table = _get_table_name(model_cls)
         _rls_policies[table] = func
         return func
@@ -222,7 +271,9 @@ class FK:
 
 
 class ModelMeta(type):
-    def __init__(cls, name, bases, attrs):
+    def __init__(
+        cls, name: str, bases: tuple[type, ...], attrs: dict[str, Any]
+    ) -> None:
         super().__init__(name, bases, attrs)
         # BaseModel and the Model facade are abstract; concrete models
         # (subclasses of either) register themselves for table creation.
@@ -239,12 +290,13 @@ def _register_foreign_keys(cls: type) -> None:
     """
     try:
         hints = get_type_hints(cls)
-    except Exception:
+    except _DATA_FALLBACK_ERRORS as error:
+        _report_data_fallback("foreign_key_type_hints", error)
         return
     for col_name, col_type in hints.items():
         ref = getattr(col_type, "__origin__", None)
         if isinstance(ref, _FKRef) or isinstance(col_type, _FKRef):
-            target = (col_type if isinstance(col_type, _FKRef) else ref).target
+            target = cast(Any, col_type if isinstance(col_type, _FKRef) else ref).target
             parent_table = _get_table_name(target)
             child_table = _get_table_name(cls)
             _cascades.setdefault(parent_table, []).append((child_table, col_name))
@@ -255,7 +307,7 @@ class BaseModel(metaclass=ModelMeta):
     __tablename__: str | None = None
 
     @classmethod
-    async def _create_table(cls):
+    async def _create_table(cls) -> None:
         db = await get_db()
         table_name = _get_table_name(cls)
         hints = get_type_hints(cls)
@@ -292,14 +344,16 @@ class BaseModel(metaclass=ModelMeta):
         await db.commit()
 
     @classmethod
-    async def find_all(cls, user_context: dict = None) -> list[BaseModel]:
+    async def find_all(
+        cls, user_context: dict[str, Any] | None = None
+    ) -> list[BaseModel]:
         from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
         db = await get_db()
         table_name = _get_table_name(cls)
         query = f"SELECT * FROM {table_name}"
-        params = []
+        params: list[Any] = []
 
         if user_context is None:
             try:
@@ -308,8 +362,8 @@ class BaseModel(metaclass=ModelMeta):
                 u = current_user.get()
                 if u and u.is_authenticated:
                     user_context = u.to_dict()
-            except Exception:
-                pass
+            except _DATA_FALLBACK_ERRORS as error:
+                _report_data_fallback("current_user_context", error)
 
         if table_name in _rls_policies and user_context:
             policy = _rls_policies[table_name]
@@ -331,7 +385,7 @@ class BaseModel(metaclass=ModelMeta):
                 results.append(obj)
             return results
 
-    async def insert(self):
+    async def insert(self) -> BaseModel:
         from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()
@@ -375,7 +429,7 @@ class BaseModel(metaclass=ModelMeta):
                     hook(self)
         return self
 
-    async def update(self):
+    async def update(self) -> BaseModel:
         from voodoo.observability import telemetry_store
 
         telemetry_store.record_db_query()

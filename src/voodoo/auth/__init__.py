@@ -33,8 +33,11 @@ from voodoo.auth.jwt import (
     PermissionDeniedError,
     _b64decode_str,
     _b64encode_str,
+    clear_revoked_tokens,
     create_access_token,
     decode_access_token,
+    revoke_access_token,
+    revoke_subject_sessions,
 )
 from voodoo.auth.middleware import AuthMiddleware
 from voodoo.auth.passwords import (
@@ -57,9 +60,12 @@ __all__ = [
     "PermissionDeniedError",
     "User",
     "clear_auth_cookie",
+    "clear_revoked_tokens",
     "create_access_token",
     "current_user",
     "decode_access_token",
+    "revoke_access_token",
+    "revoke_subject_sessions",
     "generate_api_key",
     "generate_secret_key",
     "get_current_user",

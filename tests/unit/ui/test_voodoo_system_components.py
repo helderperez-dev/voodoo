@@ -135,6 +135,34 @@ def test_approval_card_wires_python_actions_semantically():
         set_style_adapter(original)
 
 
+def test_approval_card_state_contract_blocks_decisions():
+    original = _native()
+
+    async def approve(value):
+        return value
+
+    async def deny(value):
+        return value
+
+    try:
+        html = ApprovalCard(
+            {"id": "ap-1", "reason": "Refund needs review"},
+            on_approve=approve,
+            on_deny=deny,
+            read_only=True,
+            loading=True,
+            error="Approval unavailable",
+        ).render()
+        assert 'aria-disabled="true"' in html
+        assert 'aria-readonly="true"' in html
+        assert 'aria-busy="true"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'data-vd-error="Approval unavailable"' in html
+        assert "data-vd-event-click" not in html
+    finally:
+        set_style_adapter(original)
+
+
 def test_world_entity_inspector_uses_projected_world_data():
     original = _native()
     try:

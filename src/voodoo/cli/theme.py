@@ -8,6 +8,7 @@ be switched with ``voodoo theme use <name|path|url>``.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -15,7 +16,11 @@ from pathlib import Path
 import typer
 
 from voodoo.cli import terminal
+from voodoo.core.errors import ConfigurationError
+from voodoo.security.redaction import redact_string
 from voodoo.ui.styles.theme import Theme
+
+logger = logging.getLogger(__name__)
 
 theme_app = typer.Typer(
     name="theme",
@@ -85,7 +90,7 @@ def use_theme(
 
     try:
         source = resolve_theme(preset)
-    except Exception as exc:
+    except ConfigurationError as exc:
         terminal.error(str(exc), hint="try 'voodoo theme list'")
         raise typer.Exit(1) from exc
 
@@ -116,7 +121,7 @@ def init_theme(
 
     try:
         source = resolve_theme(name)
-    except Exception as exc:
+    except ConfigurationError as exc:
         terminal.error(str(exc), hint="try 'voodoo theme list'")
         raise typer.Exit(1) from exc
 
@@ -159,7 +164,12 @@ def install_theme(
         terminal.status_block([("theme", name), ("status", "already installed")])
         terminal.console.print(f"  [dim]{source.origin}[/]")
         return
-    except Exception:
+    except ConfigurationError as error:
+        logger.info(
+            "theme preset lookup fell back to package installation name=%s error=%s",
+            redact_string(name),
+            redact_string(str(error)),
+        )
         pass
 
     terminal.wordmark()
@@ -173,14 +183,15 @@ def install_theme(
     )
     if result.returncode != 0:
         terminal.error(
-            f"install failed: {result.stderr.strip() or result.stdout.strip()}"
+            f"install failed: {result.stderr.strip() or result.stdout.strip()}",
+            hint="check the theme name, Python environment, and network access, then retry",
         )
         raise typer.Exit(1)
 
     try:
         source = _load_from_pypi(name)
-    except Exception as exc:
-        terminal.error(str(exc))
+    except ConfigurationError as exc:
+        terminal.error(str(exc), hint="try 'voodoo theme list' or verify the theme name")
         raise typer.Exit(1) from exc
     terminal.status_block([("theme", name), ("status", "installed")])
     terminal.console.print(f"  [dim]{source.origin}[/]")

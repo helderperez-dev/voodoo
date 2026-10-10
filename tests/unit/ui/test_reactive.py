@@ -3,8 +3,11 @@
 Tests the canonical counter app: state + @event → re-render → WS patch.
 """
 
+from __future__ import annotations
+
 import importlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -223,9 +226,128 @@ def test_counter_app_full_flow_via_websocket(make_app):
             assert msg["type"] == "patch"
             assert "Count: 1" in msg["html"]
 
-        assert count.get() == 1
+        from voodoo.ui.events import activate_ui_session
+
+        with activate_ui_session(response.cookies["voodoo_ui_session"]):
+            assert count.get() == 1
 
     state_renderer.unbind("root")
+
+
+def test_two_browser_sessions_isolate_bindings_state_and_patches(make_app):
+    """One browser cannot invoke or receive another session's UI work."""
+    count = state(0)
+
+    @page("/")
+    def isolated_home():
+        async def increment():
+            count.set(count.get() + 1)
+
+        return Stack(
+            Text(f"Count: {count.get()}", id="count-display"),
+            Button("Increment", on_click=increment),
+        )
+
+    with TestClient(make_app()) as client:
+        response_a = client.get("/")
+        session_a = response_a.cookies["voodoo_ui_session"]
+        binding_a = re.search(r'data-vd-event-click="([^"]+)"', response_a.text)
+        assert binding_a is not None
+
+        client.cookies.clear()
+        response_b = client.get("/")
+        session_b = response_b.cookies["voodoo_ui_session"]
+        binding_b = re.search(r'data-vd-event-click="([^"]+)"', response_b.text)
+        assert binding_b is not None
+        assert session_a != session_b
+        assert binding_a.group(1) != binding_b.group(1)
+
+        client.cookies.clear()
+        client.cookies.set("voodoo_ui_session", session_a)
+        with client.websocket_connect("/_voodoo_ws") as ws_a:
+            client.cookies.clear()
+            client.cookies.set("voodoo_ui_session", session_b)
+            with client.websocket_connect("/_voodoo_ws") as ws_b:
+                ws_a.send_json(
+                    {
+                        "type": "event",
+                        "binding": binding_a.group(1),
+                        "event_type": "click",
+                    }
+                )
+                patch_a = ws_a.receive_json()
+                assert patch_a["type"] == "patch"
+                assert "Count: 1" in patch_a["html"]
+
+                # If patches were still broadcast globally, this read would
+                # receive A's patch instead of B's authorization-safe error.
+                ws_b.send_json(
+                    {
+                        "type": "event",
+                        "binding": binding_a.group(1),
+                        "event_type": "click",
+                    }
+                )
+                error_b = ws_b.receive_json()
+                assert error_b == {"type": "error", "code": "unknown_binding"}
+
+                ws_b.send_json(
+                    {
+                        "type": "event",
+                        "binding": binding_b.group(1),
+                        "event_type": "click",
+                    }
+                )
+                patch_b = ws_b.receive_json()
+                assert patch_b["type"] == "patch"
+                assert "Count: 1" in patch_b["html"]
+
+
+def test_application_state_is_shared_only_when_explicit():
+    from voodoo.ui.events import activate_ui_session
+
+    session_state = state(0)
+    shared_state = state(0, scope="application")
+
+    with activate_ui_session("session-a-with-a-valid-length-0001"):
+        session_state.set(7)
+        shared_state.set(9)
+    with activate_ui_session("session-b-with-a-valid-length-0002"):
+        assert session_state.get() == 0
+        assert shared_state.get() == 9
+
+
+@pytest.mark.asyncio
+async def test_destroyed_ui_session_discards_bindings_and_state(make_app):
+    """Session teardown must remove all server-owned reactive state."""
+    count = state(0)
+
+    @page("/")
+    def teardown_home():
+        async def increment():
+            count.set(count.get() + 1)
+
+        return Stack(Text(f"Count: {count.get()}"), Button("Increment", on_click=increment))
+
+    from voodoo.ui.events import dispatch_ui_event, ws_manager
+
+    with TestClient(make_app()) as client:
+        response = client.get("/")
+        session_id = response.cookies["voodoo_ui_session"]
+        binding = re.search(r'data-vd-event-click="([^"]+)"', response.text)
+        assert binding is not None
+        session = ws_manager.get_session(session_id)
+        assert session is not None
+        assert binding.group(1) in session.event_bindings
+        assert session.state_cells
+
+        ws_manager.destroy_session(session_id)
+        assert ws_manager.get_session(session_id) is None
+        assert await dispatch_ui_event(
+            binding.group(1), event_type="click", session_id=session_id
+        ) is False
+
+    assert count.get() == 0
 
 
 # ---------------------------------------------------------------------------

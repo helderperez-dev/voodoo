@@ -11,12 +11,15 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from voodoo.core.errors import ConfigurationError
 from voodoo.runtime.store import get_active_runtime_store
 
 _META_PREFIX = b"voodoo:scheduler:meta:"
+_META_COLLECTION = b"runtime.scheduler_metadata"
+_SCHEMA_KEY = "_schema_version"
+_SCHEMA_VERSION = 1
 _REQUIRED_API = (
     "create_schedule",
     "get_schedule",
@@ -86,6 +89,23 @@ class VoodooStoreScheduleStore:
             )
         self._store = native
 
+    @staticmethod
+    def _native_collections(store: Any) -> bool:
+        return all(
+            hasattr(store, method)
+            for method in (
+                "create_collection",
+                "upsert_record",
+                "get_record",
+                "scan_collection",
+            )
+        )
+
+    @classmethod
+    def _ensure_collection(cls, store: Any) -> None:
+        if cls._native_collections(store):
+            store.create_collection(_META_COLLECTION, schema_version=1, codec=b"json")
+
     def create(
         self,
         schedule_id: str,
@@ -97,6 +117,7 @@ class VoodooStoreScheduleStore:
         payload: Any = None,
     ) -> None:
         """Create a Framework schedule backed by a native Store schedule."""
+        self._ensure_collection(self._store)
         existing = self.get(schedule_id)
         if existing is not None:
             raise ValueError(f"schedule {schedule_id!r} already exists")
@@ -142,6 +163,7 @@ class VoodooStoreScheduleStore:
             raise ValueError(f"unsupported schedule kind: {kind!r}")
 
         metadata = {
+            _SCHEMA_KEY: _SCHEMA_VERSION,
             "id": schedule_id,
             "name": name,
             "kind": kind,
@@ -152,10 +174,18 @@ class VoodooStoreScheduleStore:
             "native_id": native_id.hex(),
             "created_at": datetime.now(UTC).isoformat(),
         }
-        self._store.put(
-            _metadata_key(schedule_id),
-            json.dumps(metadata, separators=(",", ":"), default=str).encode("utf-8"),
-        )
+        encoded = json.dumps(
+            metadata, separators=(",", ":"), default=str
+        ).encode("utf-8")
+        if self._native_collections(self._store):
+            self._store.upsert_record(
+                _META_COLLECTION, schedule_id.encode("utf-8"), encoded
+            )
+            # A successful metadata write is the migration point for the
+            # pre-collection hashed KV record.
+            self._store.delete(_metadata_key(schedule_id))
+        else:
+            self._store.put(_metadata_key(schedule_id), encoded)
 
     def get(self, schedule_id: str) -> dict[str, Any] | None:
         metadata = self._read_metadata(schedule_id)
@@ -166,13 +196,52 @@ class VoodooStoreScheduleStore:
             return None
         return self._record(metadata, native)
 
+    @staticmethod
+    def _metadata_id_or_none(raw: bytes) -> str | None:
+        """Return a metadata ID, ignoring malformed legacy entries."""
+        try:
+            return str(VoodooStoreScheduleStore._decode_metadata(raw)["id"])
+        except ValueError as error:
+            if str(error).startswith("unsupported scheduler metadata schema"):
+                raise
+        except (TypeError, json.JSONDecodeError):
+            pass
+        return None
+
+    def _record_or_none(self, raw: bytes) -> dict[str, Any] | None:
+        """Decode one metadata record while preserving future-schema errors."""
+        try:
+            metadata = self._decode_metadata(raw)
+            native = self._get_native(metadata)
+            return None if native is None else self._record(metadata, native)
+        except ValueError as error:
+            if str(error).startswith("unsupported scheduler metadata schema"):
+                raise
+        except (TypeError, json.JSONDecodeError):
+            pass
+        return None
+
     def list_all(self) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
+        self._ensure_collection(self._store)
+        metadata_by_id: dict[str, bytes] = {}
+        if self._native_collections(self._store):
+            metadata_by_id.update(
+                {
+                    bytes(key).decode("utf-8"): raw
+                    for key, raw, _indexes in self._store.scan_collection(
+                        _META_COLLECTION
+                    )
+                }
+            )
         for _key, raw in self._store.scan_prefix(_META_PREFIX):
-            metadata = json.loads(bytes(raw).decode("utf-8"))
-            native = self._get_native(metadata)
-            if native is not None:
-                records.append(self._record(metadata, native))
+            metadata_id = self._metadata_id_or_none(raw)
+            if metadata_id is not None:
+                metadata_by_id.setdefault(metadata_id, raw)
+        for raw in metadata_by_id.values():
+            record = self._record_or_none(raw)
+            if record is not None:
+                records.append(record)
         records.sort(key=lambda record: record["created_at"])
         return records
 
@@ -235,19 +304,42 @@ class VoodooStoreScheduleStore:
         """No-op: RuntimeStore owns the shared native Store lifecycle."""
 
     def _read_metadata(self, schedule_id: str) -> dict[str, Any] | None:
-        raw = self._store.get(_metadata_key(schedule_id))
+        self._ensure_collection(self._store)
+        raw = None
+        if self._native_collections(self._store):
+            record = self._store.get_record(
+                _META_COLLECTION, schedule_id.encode("utf-8")
+            )
+            if record is not None:
+                raw = record[1]
+        if raw is None:
+            raw = self._store.get(_metadata_key(schedule_id))
         if raw is None:
             return None
-        metadata = json.loads(bytes(raw).decode("utf-8"))
+        metadata = self._decode_metadata(raw)
         if metadata.get("id") != schedule_id:
             raise RuntimeError("Voodoo Store scheduler metadata hash collision")
+        return metadata
+
+    @staticmethod
+    def _decode_metadata(raw: bytes) -> dict[str, Any]:
+        metadata = json.loads(bytes(raw).decode("utf-8"))
+        if not isinstance(metadata, dict):
+            raise ValueError("scheduler metadata must be a JSON object")
+        version = metadata.pop(_SCHEMA_KEY, 0)
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise ValueError("scheduler metadata schema version must be an integer")
+        if version > _SCHEMA_VERSION:
+            raise ValueError(
+                f"unsupported scheduler metadata schema version: {version}"
+            )
         return metadata
 
     def _get_native(self, metadata: dict[str, Any]) -> dict[str, Any] | None:
         native_id = bytes.fromhex(metadata["native_id"])
         if metadata["native_kind"] == "cron":
-            return self._store.get_cron_schedule(native_id)
-        return self._store.get_schedule(native_id)
+            return cast(dict[str, Any] | None, self._store.get_cron_schedule(native_id))
+        return cast(dict[str, Any] | None, self._store.get_schedule(native_id))
 
     def _set_enabled(self, metadata: dict[str, Any], enabled: bool) -> bool:
         native_id = bytes.fromhex(metadata["native_id"])
@@ -258,16 +350,18 @@ class VoodooStoreScheduleStore:
     def _record(
         self, metadata: dict[str, Any], native: dict[str, Any]
     ) -> dict[str, Any]:
+        next_run = _from_ms(native.get("next_run_ms"))
+        last_run = _from_ms(native.get("last_fired_at_ms"))
         return {
             "id": metadata["id"],
             "name": metadata["name"],
             "kind": metadata["kind"],
             "spec": metadata["spec"],
-            "next_run_at": _from_ms(native.get("next_run_ms")).isoformat(),
+            "next_run_at": (
+                next_run.isoformat() if next_run is not None else None
+            ),
             "last_run_at": (
-                _from_ms(native.get("last_fired_at_ms")).isoformat()
-                if native.get("last_fired_at_ms") is not None
-                else None
+                last_run.isoformat() if last_run is not None else None
             ),
             "task_type": metadata["task_type"],
             "payload": (

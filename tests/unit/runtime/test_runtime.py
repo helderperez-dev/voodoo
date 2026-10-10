@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import BaseModel as PydBaseModel
 
+from voodoo.observability import telemetry_store
 from voodoo.primitives import Capability, Constraint, Effect, Resource, State
 from voodoo.primitives.intent import IntentStatus
 from voodoo.runtime import (
@@ -258,6 +259,25 @@ class TestExecutionEngine:
         assert ex.intent.status == IntentStatus.COMPLETED
 
     @pytest.mark.asyncio
+    async def test_effect_recording_emits_structured_trace(self, engine: ExecutionEngine):
+        before = len(telemetry_store.metrics["custom_traces"])
+
+        async def compute(ctx):
+            return ComputeResult(value=True, effects=[Effect(name="lead.created")])
+
+        await engine.execute(
+            RTIntent(name="qualify").require("crm.write"),
+            compute,
+            capabilities=["crm.write"],
+        )
+
+        traces = telemetry_store.metrics["custom_traces"][before:]
+        assert any(
+            trace["name"] == "effect.recorded" and trace["error"] is False
+            for trace in traces
+        )
+
+    @pytest.mark.asyncio
     async def test_unauthorized_effect_cannot_execute(self, engine: ExecutionEngine):
         async def compute(ctx):
             return ComputeResult(value=1)
@@ -266,6 +286,23 @@ class TestExecutionEngine:
             await engine.execute(
                 RTIntent(name="refund").require("payment.execute"),
                 compute,
+            )
+
+    @pytest.mark.asyncio
+    async def test_effect_boundary_rechecks_capability(self, engine: ExecutionEngine):
+        engine.capabilities.register(Capability(name="safe.read"))
+
+        async def compute(ctx):
+            return ComputeResult(
+                value=1,
+                effects=[Effect(name="payment.execute", capability_name="payment.execute")],
+            )
+
+        with pytest.raises(CapabilityDenied):
+            await engine.execute(
+                RTIntent(name="misleading-compute").require("safe.read"),
+                compute,
+                capabilities=["safe.read"],
             )
 
     @pytest.mark.asyncio
@@ -305,6 +342,18 @@ class TestExecutionEngine:
 
         with pytest.raises(ValidationError):
             await engine.execute(RTIntent(name="analyze"), compute, output_type=Result)
+
+    def test_validator_implementation_errors_propagate(self):
+        """Unexpected validator defects must not be mislabeled as bad input."""
+
+        class BrokenValidator:
+            @classmethod
+            def model_validate(cls, value):
+                raise RuntimeError("validator implementation failed")
+
+        result = ComputeResult(value={"ok": True}, output_type=BrokenValidator)
+        with pytest.raises(RuntimeError, match="validator implementation failed"):
+            result.validated()
 
     @pytest.mark.asyncio
     async def test_state_change_recorded(self, engine: ExecutionEngine):
@@ -594,3 +643,54 @@ class TestAgentRuntimeIntegration:
         ex = await t.run()
         assert t.status is TaskStatus.COMPLETED
         assert isinstance(ex.result, str)
+
+    @pytest.mark.asyncio
+    async def test_task_typed_agent_output_keeps_raw_value_for_decode_errors(self):
+        """Malformed provider JSON is a recoverable compatibility failure."""
+        from types import SimpleNamespace
+
+        class Result(PydBaseModel):
+            summary: str
+
+        class Agent:
+            async def run(self, prompt, *, context):
+                del prompt, context
+                return SimpleNamespace(
+                    output="not-json",
+                    cost=0.0,
+                    tokens_in=0,
+                    tokens_out=0,
+                    timings={},
+                )
+
+        task = Task(name="typed", agent=Agent(), output=Result)
+        compute = task._resolve_compute({})
+        result = await compute(ExecutionContext())
+
+        assert result.value == "not-json"
+
+    @pytest.mark.asyncio
+    async def test_task_typed_agent_output_propagates_unexpected_validator_errors(self):
+        """Unexpected validator bugs must not be hidden as raw provider output."""
+        from types import SimpleNamespace
+
+        class BrokenResult:
+            @staticmethod
+            def model_validate(value):
+                del value
+                raise RuntimeError("validator implementation bug")
+
+        class Agent:
+            async def run(self, prompt, *, context):
+                del prompt, context
+                return SimpleNamespace(
+                    output='{"summary":"ok"}',
+                    cost=0.0,
+                    tokens_in=0,
+                    tokens_out=0,
+                    timings={},
+                )
+
+        task = Task(name="typed", agent=Agent(), output=BrokenResult)
+        with pytest.raises(RuntimeError, match="validator implementation bug"):
+            await task._resolve_compute({})(ExecutionContext())

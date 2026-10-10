@@ -11,6 +11,7 @@ Covers:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -173,24 +174,32 @@ class TestEnvSecretStore:
 class TestLocalSecretStore:
     """LocalSecretStore reads/writes encrypted JSON files."""
 
-    def test_get_from_plain_json(self, tmp_path: Path) -> None:
-        """Without cryptography, falls back to plain JSON."""
-        from voodoo.security.secrets import LocalSecretStore
+    def test_plain_json_fails_closed(self, tmp_path: Path) -> None:
+        from cryptography.fernet import Fernet
+
+        from voodoo.security.secrets import LocalSecretStore, SecretsError
 
         secrets_file = tmp_path / "secrets.json"
         secrets_file.write_text(json.dumps({"API_KEY": "sk-abc123"}))
-        store = LocalSecretStore(secrets_file)
-        assert store.get("API_KEY") == "sk-abc123"
-        assert store.has("API_KEY") is True
-        assert store.has("MISSING") is False
+        if os.name != "nt":
+            secrets_file.chmod(0o600)
+        store = LocalSecretStore(secrets_file, key=Fernet.generate_key().decode())
+        with pytest.raises(SecretsError, match="Could not decrypt"):
+            store.get("API_KEY")
 
     def test_set_creates_file(self, tmp_path: Path) -> None:
+        from cryptography.fernet import Fernet
+
         from voodoo.security.secrets import LocalSecretStore
 
         secrets_file = tmp_path / "secrets.json"
-        store = LocalSecretStore(secrets_file)
+        store = LocalSecretStore(
+            secrets_file,
+            key=Fernet.generate_key().decode(),
+        )
         store.set("NEW_KEY", "new-value")
         assert store.get("NEW_KEY") == "new-value"
+        assert b"new-value" not in secrets_file.read_bytes()
 
     def test_missing_file_returns_none(self, tmp_path: Path) -> None:
         from voodoo.security.secrets import LocalSecretStore
@@ -199,12 +208,52 @@ class TestLocalSecretStore:
         assert store.get("anything") is None
 
     def test_get_missing_key(self, tmp_path: Path) -> None:
+        from cryptography.fernet import Fernet
+
         from voodoo.security.secrets import LocalSecretStore
 
         secrets_file = tmp_path / "secrets.json"
-        secrets_file.write_text(json.dumps({"KEY": "val"}))
-        store = LocalSecretStore(secrets_file)
+        store = LocalSecretStore(
+            secrets_file,
+            key=Fernet.generate_key().decode(),
+        )
+        store.set("KEY", "val")
         assert store.get("OTHER") is None
+
+    def test_set_without_key_fails_closed(self, tmp_path: Path) -> None:
+        from voodoo.security.secrets import LocalSecretStore, SecretsError
+
+        store = LocalSecretStore(tmp_path / "secrets.json")
+        with pytest.raises(SecretsError, match="No encryption key"):
+            store.set("KEY", "value")
+
+    @pytest.mark.skipif(os.name == "nt", reason="Unix permission contract")
+    def test_insecure_existing_file_fails_closed(self, tmp_path: Path) -> None:
+        from cryptography.fernet import Fernet
+
+        from voodoo.security.secrets import LocalSecretStore, SecretsError
+
+        secrets_file = tmp_path / "secrets.json"
+        writer = LocalSecretStore(secrets_file, key=Fernet.generate_key().decode())
+        writer.set("KEY", "value")
+        secrets_file.chmod(0o644)
+        with pytest.raises(SecretsError, match="must not be readable"):
+            LocalSecretStore(secrets_file, key=writer._key).get("KEY")
+
+    @pytest.mark.skipif(os.name == "nt", reason="Unix permission contract")
+    def test_insecure_existing_directory_fails_closed(self, tmp_path: Path) -> None:
+        from cryptography.fernet import Fernet
+
+        from voodoo.security.secrets import LocalSecretStore, SecretsError
+
+        secrets_dir = tmp_path / "secrets"
+        secrets_dir.mkdir(mode=0o755)
+        secrets_dir.chmod(0o755)
+        store = LocalSecretStore(
+            secrets_dir / "secrets.json", key=Fernet.generate_key().decode()
+        )
+        with pytest.raises(SecretsError, match="secrets directory"):
+            store.set("KEY", "value")
 
 
 class TestSecretsModuleAPI:
@@ -401,6 +450,26 @@ class TestRedactionInEngine:
         assert len(captured) == 1
         _, payload = captured[0]
         assert payload["data"]["token"] == "[REDACTED]"
+
+    @pytest.mark.asyncio
+    async def test_emit_failure_is_logged_without_failing_execution(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Observation failures stay non-fatal but are visible and redacted."""
+        from voodoo.runtime.execution.engine import ExecutionEngine
+
+        async def failing_broadcast(_event: str, _payload: dict[str, Any]) -> None:
+            raise RuntimeError("password=super-secret")
+
+        from voodoo.mesh import mesh
+
+        monkeypatch.setattr(mesh, "broadcast", failing_broadcast)
+
+        with caplog.at_level("WARNING", logger="voodoo.runtime.execution"):
+            await ExecutionEngine()._emit("test.event", {"ok": True})
+
+        assert "execution event emission failed" in caplog.text
+        assert "super-secret" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_journal_redacts_payload(

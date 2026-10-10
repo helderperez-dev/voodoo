@@ -1,0 +1,97 @@
+name: Release dry run
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/release-dry-run.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    name: Build and validate without publishing
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync --python 3.12 --all-extras --dev
+      - name: Full tests
+        run: uv run --python 3.12 pytest -q
+      - name: Full type ratchet
+        run: uv run --python 3.12 python scripts/check_mypy_ratchet.py
+      - name: Documentation imports
+        run: uv run --python 3.12 python scripts/check_docs_imports.py
+      - name: Durable migration corpus
+        run: uv run --python 3.12 python scripts/check_migration_corpus.py
+      - name: Build wheel and source distribution
+        run: uv build --out-dir /tmp/voodoo-release-dry-run
+      - name: Verify release artifacts
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          root = Path("/tmp/voodoo-release-dry-run")
+          artifacts = []
+          for path in sorted(root.iterdir()):
+              artifacts.append({
+                  "file": path.name,
+                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                  "bytes": path.stat().st_size,
+              })
+          (root / "release-manifest.json").write_text(json.dumps({"artifacts": artifacts}) + "\n")
+          for item in artifacts:
+              path = root / item["file"]
+              assert path.stat().st_size == item["bytes"]
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == item["sha256"]
+          print(f"verified {len(artifacts)} release artifacts")
+          PY
+
+      - name: Build release artifacts
+        run: |
+          uv build --out-dir /tmp/voodoo-release-dry-run
+          if tar -tzf /tmp/voodoo-release-dry-run/*.tar.gz | grep -E '(__pycache__/|\.py[cod]$)'; then
+            echo "source distribution contains generated interpreter bytecode" >&2
+            exit 1
+          fi
+
+      - name: Clean-install scaffold lifecycle
+        run: |
+          uv venv --python 3.12 /tmp/voodoo-release-env
+          uv pip install --python /tmp/voodoo-release-env/bin/python /tmp/voodoo-release-dry-run/*.whl
+          cd /tmp
+          /tmp/voodoo-release-env/bin/voodoo new voodoo-release-dry-run --no-install
+          cd voodoo-release-dry-run
+          /tmp/voodoo-release-env/bin/python -m compileall -q app
+
+      - name: Clean-install exact source distribution
+        run: |
+          uv venv --python 3.12 /tmp/voodoo-release-sdist-env
+          uv pip install --python /tmp/voodoo-release-sdist-env/bin/python /tmp/voodoo-release-dry-run/*.tar.gz
+          /tmp/voodoo-release-sdist-env/bin/python - <<'PY'
+          import importlib.metadata
+          import subprocess
+
+          version = importlib.metadata.version("voodoo-framework")
+          result = subprocess.run(
+              ["/tmp/voodoo-release-sdist-env/bin/voodoo", "version"],
+              check=False,
+              capture_output=True,
+              text=True,
+          )
+          assert result.returncode == 0, result.stderr
+          assert version in result.stdout, result.stdout
+          print(f"verified exact source distribution {version}")
+          PY

@@ -1,10 +1,16 @@
 import json
+import logging
 import os
+from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+
+from voodoo.security.redaction import redact_string
+
+_logger = logging.getLogger("voodoo.i18n")
 
 # Context variables for the current request's language and translations
 current_language: ContextVar[str] = ContextVar("current_language", default="en")
@@ -16,13 +22,13 @@ translations: ContextVar[dict[str, Any] | None] = ContextVar(
 class I18n:
     """Internationalization manager for Voodoo."""
 
-    def __init__(self, default_lang: str = "en", locales_dir: str = "locales"):
+    def __init__(self, default_lang: str = "en", locales_dir: str = "locales") -> None:
         self.default_lang = default_lang
         self.locales_dir = locales_dir
         self.locales: dict[str, dict[str, Any]] = {}
         self.load_locales()
 
-    def load_locales(self):
+    def load_locales(self) -> None:
         """Loads JSON locale files from the locales directory."""
         if not os.path.exists(self.locales_dir):
             return
@@ -34,16 +40,21 @@ class I18n:
                 try:
                     with open(filepath, encoding="utf-8") as f:
                         self.locales[lang] = json.load(f)
-                except Exception as e:
-                    print(f"Error loading locale {lang}: {e}")
+                except (OSError, UnicodeError, TypeError, ValueError) as e:
+                    _logger.warning(
+                        "locale load failed language=%s path=%s error=%s",
+                        lang,
+                        filepath,
+                        redact_string(str(e)),
+                    )
 
-    def get_translation(self, lang: str, key: str, **kwargs) -> str:
+    def get_translation(self, lang: str, key: str, **kwargs: Any) -> str:
         """Retrieves a translation string by key for a specific language."""
         lang_dict = self.locales.get(lang) or self.locales.get(self.default_lang) or {}
 
         # Support nested keys like "home.title"
         keys = key.split(".")
-        val = lang_dict
+        val: Any = lang_dict
         for k in keys:
             if isinstance(val, dict):
                 val = val.get(k)
@@ -67,7 +78,7 @@ class I18n:
 i18n_instance = I18n()
 
 
-def _(key: str, **kwargs) -> str:
+def _(key: str, **kwargs: Any) -> str:
     """
     Translates a key using the current request's language.
     This is the main function to be used in components and pages.
@@ -82,11 +93,13 @@ class I18nMiddleware(BaseHTTPMiddleware):
     Priority: Query Param (?lang=) > Cookie (voodoo_lang) > Accept-Language Header > Default
     """
 
-    def __init__(self, app, i18n: I18n | None = None):
+    def __init__(self, app: Any, i18n: I18n | None = None) -> None:
         super().__init__(app)
         self.i18n = i18n or i18n_instance
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Any]
+    ) -> Any:
         # 1. Query Param
         lang = request.query_params.get("lang")
 

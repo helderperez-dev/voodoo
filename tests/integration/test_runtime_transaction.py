@@ -47,9 +47,10 @@ def test_transaction_commits_collection_state_and_outbox_atomically(
     record = native.get_record(b"orders", b"42")
     assert record is not None
     assert bytes(record[1]) == b'{"status":"created"}'
-    raw = native.get(b"runtime:outbox:pending:order-created-42")
-    assert raw is not None
-    envelope = json.loads(bytes(raw))
+    events = native.outbox_events_after(None, 10)
+    assert len(events) == 1
+    envelope = json.loads(bytes(events[0]["payload"]))
+    assert envelope["_schema_version"] == 1
     assert envelope["topic"] == "order.created"
     assert envelope["payload"] == {"order_id": "42"}
 
@@ -101,9 +102,28 @@ def test_outbox_dispatch_moves_successful_message_to_delivered(runtime_store) ->
         ("order.created", {"order_id": "42"}, {"correlation_id": "trace-1"})
     ]
     assert native.get(b"runtime:outbox:pending:event-1") is None
-    delivered = native.get(b"runtime:outbox:delivered:event-1")
-    assert delivered is not None
-    assert OutboxMessage.decode(bytes(delivered)) == message
+    assert native.outbox_len() == 0
+    assert OutboxDispatcher().pending() == []
+
+
+def test_outbox_codec_accepts_legacy_and_skips_future(runtime_store) -> None:
+    native = runtime_store.provider.native
+    legacy = {"id": "legacy", "topic": "legacy.topic", "payload": {}}
+    future = {
+        "id": "future",
+        "topic": "future.topic",
+        "payload": {},
+        "_schema_version": 99,
+    }
+    native.put(b"runtime:outbox:pending:legacy", json.dumps(legacy).encode())
+    native.put(b"runtime:outbox:pending:future", json.dumps(future).encode())
+    native.emit_outbox_event(
+        b"future.topic",
+        json.dumps({"_schema_version": 99, "id": "native-future"}).encode(),
+        1,
+    )
+
+    assert [item.id for item in OutboxDispatcher().pending()] == ["legacy"]
 
 
 def test_outbox_failed_publish_remains_pending(runtime_store) -> None:

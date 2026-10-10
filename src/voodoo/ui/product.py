@@ -20,6 +20,23 @@ from voodoo.ui.library import Heading, Icon, Text
 EventHandler = Callable[..., Any] | str
 
 
+def _product_state_attrs(
+    *, unavailable: bool, read_only: bool, loading: bool, error: bool | str
+) -> dict[str, Any]:
+    attrs: dict[str, Any] = {}
+    if unavailable:
+        attrs["aria_disabled"] = "true"
+    if read_only:
+        attrs["aria_readonly"] = "true"
+    if loading:
+        attrs["aria_busy"] = "true"
+    if error:
+        attrs["aria_invalid"] = "true"
+        if isinstance(error, str):
+            attrs["data_vd_error"] = error
+    return attrs
+
+
 _STATUS_TONES = {
     "online": "success",
     "healthy": "success",
@@ -53,12 +70,35 @@ class StatusBadge(Component):
         label: str | None = None,
         *,
         pulse: bool = False,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)
+        state_attrs: dict[str, Any] = {}
+        if disabled or read_only or loading or bool(error):
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(**state_attrs, **kwargs)
         normalized = status.strip().lower()
         tone = _STATUS_TONES.get(normalized, "default")
-        self.props = {"status": normalized, "tone": tone, "pulse": pulse}
+        self.props = {
+            "status": normalized,
+            "tone": tone,
+            "pulse": pulse,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
         self.attrs["data-status"] = normalized
         self.attrs["data-tone"] = tone
         if pulse:
@@ -124,9 +164,25 @@ class EmptyState(Component):
         *,
         action: Component | None = None,
         icon: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)
+        unavailable = disabled or read_only or loading or bool(error)
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(**state_attrs, **kwargs)
         children: list[Any] = []
         if icon:
             children.append(Icon(icon, size="lg", class_="vd-empty-state-icon"))
@@ -136,9 +192,15 @@ class EmptyState(Component):
                 Text(description, class_="vd-empty-state-description"),
             ]
         )
-        if action is not None:
+        if action is not None and not unavailable:
             children.append(_ActionSlot(action))
         self.children = tuple(children)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _ActionSlot(Component):
@@ -175,14 +237,33 @@ class DataTable(Component):
         on_select: EventHandler | None = None,
         empty: Component | None = None,
         caption: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)
+        unavailable = disabled or read_only or loading or bool(error)
+        super().__init__(
+            **_product_state_attrs(
+                unavailable=unavailable,
+                read_only=read_only,
+                loading=loading,
+                error=error,
+            ),
+            **kwargs,
+        )
         normalized = [self._column(column) for column in columns]
         materialized = list(rows)
         if not materialized and empty is not None:
             self.children = (empty,)
-            self.props = {"empty": True}
+            self.props = {
+                "empty": True,
+                "disabled": disabled,
+                "read_only": read_only,
+                "loading": loading,
+                "error": bool(error),
+            }
             return
 
         caption_html = (
@@ -196,16 +277,47 @@ class DataTable(Component):
             + f">{escape(column.label)}</th>"
             for column in normalized
         )
-        body = "".join(
-            self._render_row(row, normalized, row_key, on_select)
-            for row in materialized
-        )
+        if error:
+            message = error if isinstance(error, str) else "Unable to load data"
+            body = (
+                '<tr role="row" data-vd-error-state="true">'
+                f'<td role="cell" colspan="{len(normalized)}" aria-live="polite">{escape(message)}</td>'
+                "</tr>"
+            )
+        elif loading:
+            body = (
+                '<tr role="row" data-vd-loading-state="true">'
+                f'<td role="cell" colspan="{len(normalized)}" aria-live="polite">Loading…</td>'
+                "</tr>"
+            )
+        elif not materialized:
+            body = (
+                '<tr role="row" data-vd-empty-state="true">'
+                f'<td role="cell" colspan="{len(normalized)}" aria-live="polite">No data available</td>'
+                "</tr>"
+            )
+        else:
+            body = "".join(
+                self._render_row(
+                    row, normalized, row_key, on_select if not unavailable else None
+                )
+                for row in materialized
+            )
+        table_label = "" if caption else ' aria-label="Data table"'
         self._markup = (
-            '<div class="vd-data-table-scroll"><table class="vd-data-table-table">'
+            '<div class="vd-data-table-scroll"><table class="vd-data-table-table"'
+            f"{table_label}>"
             f"{caption_html}<thead><tr>{head}</tr></thead><tbody>{body}</tbody>"
             "</table></div>"
         )
-        self.props = {"empty": False, "interactive": on_select is not None}
+        self.props = {
+            "empty": False,
+            "interactive": on_select is not None and not unavailable,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
     @staticmethod
     def _column(value: Column | tuple[str, str] | str) -> Column:
@@ -415,20 +527,49 @@ class CommandBar(Component):
         on_submit: EventHandler,
         placeholder: str = "Search or run a command…",
         action_label: str = "Run",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)
-        binding = bind_event(on_submit)
+        unavailable = disabled or read_only or loading or bool(error)
+        binding = bind_event(on_submit) if not unavailable else None
+        super().__init__(
+            **_product_state_attrs(
+                unavailable=unavailable,
+                read_only=read_only,
+                loading=loading,
+                error=error,
+            ),
+            **kwargs,
+        )
         field = Input(
             name="command",
             placeholder=placeholder,
             autocomplete="off",
             aria_label=placeholder,
+            disabled=unavailable,
+            read_only=read_only,
+            loading=loading,
+            error=error,
         )
         self.attrs["data-vd-command-bar"] = "true"
+        if binding:
+            self.attrs["data-vd-command-binding"] = binding
         self.children = (
             Icon("search", class_="vd-command-bar-icon", aria_hidden="true"),
             field,
-            Button(action_label, variant="primary", data_vd_command_submit=binding),
+            Button(
+                action_label,
+                variant="primary",
+                disabled=unavailable,
+                data_vd_command_submit=binding,
+            ),
         )
-        self.attrs["data-vd-command-binding"] = binding
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }

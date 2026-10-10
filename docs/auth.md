@@ -182,6 +182,21 @@ The compatibility auth module provides:
 Treat generated raw API keys like credentials: return/display them only at the
 appropriate creation boundary and persist only their hash.
 
+JWTs use the fixed `HS256`/`JWT` header contract. Deployments may set
+`VOODOO_JWT_ISSUER` and `VOODOO_JWT_AUDIENCE` for exact claim validation,
+`VOODOO_JWT_CLOCK_SKEW` for bounded (0–300 second) clock drift, and
+`VOODOO_JWT_PREVIOUS_SECRETS` for an explicitly bounded signing-key rotation
+window, and `VOODOO_JWT_REVOCATION_MAX` to bound process-local revocation
+state. Call `revoke_access_token()` during logout or
+`revoke_subject_sessions()` for administrative invalidation; revoked entries
+are retained only until the configured expiry horizon and store only a
+JTI/hash, never the token. This registry is intentionally single-process and
+is not a distributed session-revocation service.
+
+`AuthMiddleware` validates bearer and cookie tokens against its injected
+`AuthConfig`, including previous signing keys and issuer/audience settings, so
+custom application configuration does not silently bypass the JWT contract.
+
 ## Identity persistence
 
 Runtime-native identity records can be persisted through the Store-backed

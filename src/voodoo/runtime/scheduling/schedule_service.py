@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 logger = logging.getLogger("voodoo.scheduler")
 
@@ -17,7 +18,7 @@ logger = logging.getLogger("voodoo.scheduler")
 class ScheduleService:
     """Background service that advances durable temporal work."""
 
-    def __init__(self, store, tick_interval: float = 1.0):
+    def __init__(self, store: Any, tick_interval: float = 1.0) -> None:
         self.store = store
         self.tick_interval = tick_interval
         self._task: asyncio.Task | None = None
@@ -59,7 +60,7 @@ class ScheduleService:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.error("scheduler tick error: %r", exc)
+                logger.error("Scheduler tick failed: error_type=%s", type(exc).__name__)
             await asyncio.sleep(self.tick_interval)
 
     async def _fire(self, schedule: dict) -> None:

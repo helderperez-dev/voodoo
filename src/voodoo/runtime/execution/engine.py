@@ -21,11 +21,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Union
+from typing import Any, Union, cast
 
 from voodoo.primitives.effect import Effect
 from voodoo.primitives.intent import Intent
@@ -41,6 +42,7 @@ from voodoo.runtime.errors import (
 )
 from voodoo.runtime.execution.model import Execution, ExecutionStatus
 from voodoo.runtime.identity import Principal
+from voodoo.security.redaction import redact_string
 
 __all__ = [
     "ComputeFn",
@@ -52,6 +54,8 @@ __all__ = [
 ComputeFn = Callable[
     [ExecutionContext], Union[Awaitable["ComputeResult"], "ComputeResult"]
 ]
+
+_logger = logging.getLogger("voodoo.runtime.execution")
 
 
 @dataclass
@@ -78,7 +82,7 @@ class ComputeResult:
                 if isinstance(self.value, dict)
                 else self.value
             )
-        except Exception as e:
+        except (TypeError, ValueError) as e:
             raise ValidationError(
                 f"Structured output validation failed: {e}",
                 context={
@@ -193,8 +197,11 @@ class ExecutionEngine:
             return []
         try:
             all_execs = self._execution_store.load_all()
-        except Exception:
-            return []
+        except ValueError:
+            # Future-schema and corrupt-record failures are data-integrity
+            # signals; hiding them as an empty recovery would risk silently
+            # dropping durable executions.
+            raise
         recovered = []
         for ex in filter_unfinished(all_execs):
             if ex.status is ExecutionStatus.RUNNING:
@@ -265,7 +272,7 @@ class ExecutionEngine:
                 parent.deadline = waiting.intent.deadline
         else:
             parent = ExecutionContext(actor=approval.requested_by, engine=self)
-        return parent
+        return cast(ExecutionContext, parent)
 
     def _resolve_approved_compute(
         self, approval: Any, waiting: Execution | None
@@ -361,7 +368,7 @@ class ExecutionEngine:
         participant = self.resolve_participant(approval.participant)
         if participant is None:
             return None
-        return participant["compute"]
+        return cast(ComputeFn, participant["compute"])
 
     async def deny(
         self, execution_id: str, *, by: str = "human", reason: str = "denied"
@@ -489,11 +496,19 @@ class ExecutionEngine:
             effect.intent_id = intent.id
             if effect.actor is None:
                 effect.actor = ctx.actor
-            if effect.capability_name is None and ctx.capabilities:
-                effect.capability_name = ctx.capabilities[0].name
+            if effect.principal is None and ctx.principal is not None:
+                effect.principal = ctx.principal.actor
+            self._authorize_effect(effect, ctx, execution.id)
             if effect.idempotency_key is None:
                 effect.idempotency_key = f"{execution.id}:{effect.id}"
             execution.add_effect(effect)
+            from voodoo.observability import telemetry_store
+
+            telemetry_store.record_trace(
+                "effect.recorded",
+                0.0,
+                error=effect.failed,
+            )
             await self._emit(
                 "effect.executed",
                 {
@@ -521,6 +536,47 @@ class ExecutionEngine:
             execution_id=execution.id,
         )
 
+    def _authorize_effect(
+        self, effect: Effect, ctx: ExecutionContext, execution_id: str
+    ) -> None:
+        """Re-authorize every returned effect at the Runtime boundary.
+
+        Compute may describe an effect, but it cannot mint authority by naming
+        it. The capability must already be present on the execution context or
+        be explicitly declared on the effect, and the same policy resolver used
+        for intent authorization evaluates it again immediately before the
+        effect enters the execution record.
+        """
+        # A failed effect is an authorization/audit record, not an operation
+        # entering the execution boundary. Preserve it for diagnostics while
+        # ensuring only pending/successful effects require execution authority.
+        if effect.failed:
+            return
+        capability = effect.capability_name
+        if capability is None and ctx.capabilities:
+            capability = ctx.capabilities[0].name
+            effect.capability_name = capability
+        if capability is None:
+            # Preserve the framework's unscoped-effect compatibility mode:
+            # applications that do not declare capabilities can still record
+            # effects for an external dispatcher. Once a capability policy is
+            # present, every named effect is re-authorized below.
+            if not self.capabilities.capabilities:
+                return
+            from voodoo.runtime.errors import CapabilityDenied
+
+            raise CapabilityDenied(
+                f"Effect '{effect.name}' has no authorizing capability",
+                execution_id=execution_id,
+                trace_id=ctx.trace_id,
+            )
+        self.capabilities.authorize(
+            capability,
+            scope=effect.scope,
+            context=ctx,
+            execution_id=execution_id,
+        )
+
     async def _handle_failure(
         self,
         execution: Execution,
@@ -532,6 +588,7 @@ class ExecutionEngine:
         output_type: type | None = None,
     ) -> None:
         """Transition the execution to its terminal state and re-raise."""
+        raised: Exception = exc
         if isinstance(exc, ApprovalRequired):
             execution.wait()
             self._build_checkpoint(execution)
@@ -587,11 +644,55 @@ class ExecutionEngine:
                 "execution.failed",
                 {"execution_id": execution.id, "reason": "error", "message": str(exc)},
             )
-            raise ExecutionError(
+            raised = ExecutionError(
                 str(exc), execution_id=execution.id, trace_id=ctx.trace_id
-            ) from exc
+            )
+        if execution.failed:
+            await self._enqueue_failure_compensations(execution, reason=str(exc))
         self._persist(execution)
-        raise exc
+        if raised is not exc:
+            raise raised from exc
+        raise raised
+
+    async def _enqueue_failure_compensations(
+        self, execution: Execution, *, reason: str
+    ) -> None:
+        """Enqueue opt-in compensations for successful effects on failure.
+
+        Compensation remains explicit by default. Effects must declare
+        ``trigger="on_failure"``; queue idempotency keys make retries and
+        recovery safe. A queue outage never hides the original execution
+        failure, but is emitted as an operational diagnostic.
+        """
+        candidates = [
+            effect
+            for effect in execution.effects
+            if effect.succeeded
+            and effect.has_compensation
+            and effect.compensation_trigger == "on_failure"
+        ]
+        if not candidates:
+            return
+        from voodoo.runtime.scheduling.workers import enqueue_compensation
+
+        for effect in candidates:
+            try:
+                await enqueue_compensation(effect, reason=reason)
+                await self._emit(
+                    "effect.compensation_queued",
+                    {
+                        "execution_id": execution.id,
+                        "effect_id": effect.id,
+                        "idempotency_key": effect.compensation_idempotency_key,
+                    },
+                )
+            except Exception as error:
+                _logger.warning(
+                    "effect compensation enqueue failed execution=%s effect=%s error=%s",
+                    execution.id,
+                    effect.id,
+                    redact_string(str(error)),
+                )
 
     async def delegate(
         self,
@@ -693,8 +794,14 @@ class ExecutionEngine:
             from voodoo.security.redaction import redact
 
             await mesh.broadcast(event, redact(payload))
-        except Exception:
-            pass
+        except Exception as error:
+            # Event observation must not make a completed execution fail, but
+            # a lost emission is operationally meaningful and must not vanish.
+            _logger.warning(
+                "execution event emission failed event=%s error=%s",
+                event,
+                redact_string(str(error)),
+            )
 
     def _record_telemetry(self, execution: Execution) -> None:
         """Record execution telemetry with redaction (Sprint 19)."""
@@ -706,8 +813,11 @@ class ExecutionEngine:
                 (execution.duration_seconds or 0.0) * 1000,
                 error=execution.failed,
             )
-        except Exception:
-            pass
+        except Exception as error:
+            _logger.warning(
+                "execution telemetry recording failed error=%s",
+                redact_string(str(error)),
+            )
 
 
 engine = ExecutionEngine()

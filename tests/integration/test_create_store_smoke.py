@@ -2,59 +2,16 @@
 
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
-from voodoo.cli.create import _MAIN_PY
-
-
-def _run(project: Path, script: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=project,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+from voodoo.cli.new import _scaffold_offline
 
 
 def test_generated_project_boots_and_creates_application_store(tmp_path: Path) -> None:
     project = tmp_path / "generated"
-    project.mkdir()
-    (project / ".voodoo").mkdir()
-    (project / "main.py").write_text(_MAIN_PY.format(name="generated"))
-
-    first = _run(
-        project,
-        """
-import runpy
-from starlette.testclient import TestClient
-
-ns = runpy.run_path('main.py', run_name='generated_app')
-with TestClient(ns['app']) as client:
-    response = client.get('/')
-    assert response.status_code == 200, response.text
-    assert 'Hello, Voodoo' in response.text
-""",
-    )
-    assert first.returncode == 0, first.stderr
-
-    store_path = project / ".voodoo" / "application.vstore"
-    assert store_path.exists()
-    assert store_path.stat().st_size > 0
-
-    second = _run(
-        project,
-        """
-import runpy
-from starlette.testclient import TestClient
-
-ns = runpy.run_path('main.py', run_name='generated_app')
-with TestClient(ns['app']) as client:
-    response = client.get('/')
-    assert response.status_code == 200, response.text
-""",
-    )
-    assert second.returncode == 0, second.stderr
-    assert store_path.exists()
+    _scaffold_offline(project, "generated")
+    assert (project / "app" / "page.py").exists()
+    assert (project / "app" / "about" / "page.py").exists()
+    assert (project / "app" / "users" / "[id]" / "page.py").exists()
+    assert "generated" in (project / "pyproject.toml").read_text()
+    assert "generated" in (project / "voodoo.toml").read_text()

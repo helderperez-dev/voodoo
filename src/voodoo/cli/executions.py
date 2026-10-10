@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 import typer
 
 from voodoo.cli import terminal
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
 
 executions_app = typer.Typer(
     name="executions",
@@ -14,13 +20,16 @@ executions_app = typer.Typer(
 )
 
 
-def _get_store():
+def _get_store() -> Any:
     """Return the configured execution store through the CLI Runtime context."""
     from voodoo.cli.context import acquire_execution_store
 
     try:
         return acquire_execution_store()
-    except Exception:
+    except Exception as error:
+        logger.warning(
+            "execution store acquisition failed error=%s", redact_string(str(error))
+        )
         from voodoo.config import get_config
 
         return None, str(get_config().store.path)
@@ -31,7 +40,7 @@ def list_executions(
     status: str = typer.Option(None, "--status", help="Filter by status"),
     limit: int = typer.Option(20, "--limit", help="Maximum rows"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """List recent executions from the durable store."""
     store, store_path = _get_store()
     if store is None:
@@ -85,7 +94,7 @@ def list_executions(
 def show_execution(
     execution_id: str = typer.Argument(..., help="Execution ID (full or prefix)"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """Show one execution and its event timeline from the journal."""
     store, store_path = _get_store()
     if store is None:
@@ -143,7 +152,7 @@ def show_execution(
 def list_events(
     limit: int = typer.Option(50, "--limit", help="Maximum events"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """List recent journal events across all executions."""
     store, store_path = _get_store()
     if store is None:
@@ -193,7 +202,7 @@ def import_jsonl(
         ..., help="Path to the legacy .voodoo/executions.jsonl file"
     ),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """Migrate legacy JSONL execution records into canonical execution storage."""
     from voodoo.runtime.persistence import JSONFileExecutionStore
 

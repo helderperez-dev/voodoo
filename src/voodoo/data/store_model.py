@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, get_type_hints
+from typing import Any, cast, get_type_hints
 
 from voodoo.data.store_backend import (
     delete_record,
@@ -20,9 +20,15 @@ class StoreModelMixin:
     @classmethod
     async def find_all(cls, user_context: dict | None = None) -> list[Any]:
         if not should_use_store():
-            return await super().find_all(user_context=user_context)
+            return cast(
+                list[Any], await cast(Any, super()).find_all(user_context=user_context)
+            )
 
-        from voodoo.data.base import _get_table_name, _rls_policies
+        from voodoo.data.base import (
+            _get_table_name,
+            _report_data_fallback,
+            _rls_policies,
+        )
 
         rows = scan_records(_get_table_name(cls))
         if user_context is None:
@@ -32,8 +38,15 @@ class StoreModelMixin:
                 user = current_user.get()
                 if user and user.is_authenticated:
                     user_context = user.to_dict()
-            except Exception:
-                pass
+            except (
+                AttributeError,
+                ImportError,
+                LookupError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as error:
+                _report_data_fallback("store_current_user_context", error)
 
         table_name = _get_table_name(cls)
         if table_name in _rls_policies and user_context:
@@ -48,7 +61,7 @@ class StoreModelMixin:
 
     async def insert(self) -> Any:
         if not should_use_store():
-            return await super().insert()
+            return await cast(Any, super()).insert()
 
         from voodoo.data.base import _get_table_name, _triggers
 
@@ -60,7 +73,7 @@ class StoreModelMixin:
 
     async def update(self) -> Any:
         if not should_use_store():
-            return await super().update()
+            return await cast(Any, super()).update()
 
         from voodoo.data.base import _get_table_name, _triggers
 

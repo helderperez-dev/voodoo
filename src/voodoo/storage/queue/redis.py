@@ -31,9 +31,9 @@ redis-py is an optional dependency — nothing on the default path imports it.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from voodoo.core.errors import ConfigurationError
 from voodoo.storage.queue.interfaces import (
@@ -46,7 +46,7 @@ from voodoo.storage.queue.interfaces import (
 try:
     import redis as _redis
 except ImportError:  # pragma: no cover - exercised when redis is absent
-    _redis = None
+    _redis = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # Lua scripts (atomic state transitions)
@@ -249,7 +249,12 @@ local attempts = tonumber(redis.call('HGET', hash, 'attempts'))
 local max_attempts = tonumber(redis.call('HGET', hash, 'max_attempts'))
 redis.call('SREM', status_prefix .. 'running', ARGV[2])
 if attempts < max_attempts then
-  local delay = backoff_base * (2 ^ math.max(0, attempts - 1))
+  local seed = attempts
+  for index = 1, string.len(ARGV[2]) do
+    seed = (seed + string.byte(ARGV[2], index)) % 21
+  end
+  local jitter_multiplier = 0.90 + (seed / 100.0)
+  local delay = backoff_base * (2 ^ math.max(0, attempts - 1)) * jitter_multiplier
   local available_at = now + delay
   redis.call('HSET', hash, 'status', 'retrying', 'available_at', available_at,
     'completed_at', '', 'locked_by', '', 'locked_at', '', 'lease_until', '',
@@ -576,7 +581,9 @@ class RedisQueue:
     ) -> list[TaskRecord]:
         if status is not None:
             status_val = TaskStatus(status).value
-            ids = await self._client.smembers(f"{self._ns}status:{status_val}")
+            ids: Iterable[Any] = await self._client.smembers(
+                f"{self._ns}status:{status_val}"
+            )
         else:
             ids = await self._client.zrevrange(f"{self._ns}all", 0, -1)
         records: list[TaskRecord] = []
@@ -626,7 +633,7 @@ class RedisQueue:
         flat = await self._client.hgetall(f"{self._ns}task:{task_id}")
         if not flat:
             return None
-        return self._record_from_hash(flat)
+        return self._record_from_hash(cast(dict[str, str], flat))
 
     def _record_from_hash(self, h: dict[str, str]) -> TaskRecord:
         return TaskRecord(

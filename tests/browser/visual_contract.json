@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "comparison": {
+    "max_pixel_diff_ratio": 0.01,
+    "max_shifted_pixel_ratio": 0.02,
+    "review_required_on_baseline_change": true
+  },
+  "viewports": {
+    "desktop": [1440, 960],
+    "mobile": [390, 844]
+  },
+  "cases": [
+    {"id": "home-light-desktop", "route": "/", "viewport": "desktop", "theme": "light", "state": "default", "density": "comfortable"},
+    {"id": "home-dark-desktop", "route": "/", "viewport": "desktop", "theme": "dark", "state": "default", "density": "spacious"},
+    {"id": "forms-mobile", "route": "/forms", "viewport": "mobile", "theme": "light", "state": "default", "density": "compact"},
+    {"id": "navigation-focus", "route": "/navigation", "viewport": "desktop", "theme": "light", "state": "focus", "density": "comfortable"},
+    {"id": "feedback-modal", "route": "/feedback", "viewport": "desktop", "theme": "light", "state": "overlay", "density": "comfortable"},
+    {"id": "data-empty-error", "route": "/data", "viewport": "desktop", "theme": "light", "state": "empty-error", "density": "compact"},
+    {"id": "workspace-long-content", "route": "/workspace", "viewport": "mobile", "theme": "dark", "state": "long-content", "density": "spacious"}
+  ]
+}

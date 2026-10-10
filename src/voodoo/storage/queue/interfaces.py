@@ -10,7 +10,8 @@ The in-memory ``asyncio.Queue`` broker remains available as an explicit
 from __future__ import annotations
 
 import enum
-from collections.abc import Sequence
+import random
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
@@ -24,7 +25,30 @@ __all__ = [
     "TaskRecord",
     "TaskStatus",
     "VoodooQueue",
+    "retry_delay",
 ]
+
+
+def retry_delay(
+    backoff_base: float,
+    attempt: int,
+    *,
+    jitter_ratio: float = 0.1,
+    random_fn: Callable[[], float] = random.random,
+) -> float:
+    """Return bounded exponential backoff with optional jitter.
+
+    Jitter is symmetric and bounded to ``±jitter_ratio`` of the base delay,
+    preventing synchronized worker retries while keeping the configured
+    exponential ceiling predictable.  ``random_fn`` is injectable for
+    deterministic tests and should return a value in ``[0, 1)``.
+    """
+    delay = float(max(0.0, float(backoff_base)) * (2 ** max(0, int(attempt) - 1)))
+    if delay == 0.0 or jitter_ratio <= 0.0:
+        return delay
+    bounded = max(0.0, min(1.0, float(jitter_ratio)))
+    sample = float(random_fn())
+    return float(max(0.0, delay * (1.0 + bounded * (2.0 * sample - 1.0))))
 
 
 class TaskStatus(enum.StrEnum):
@@ -225,4 +249,5 @@ __all__ = [
     "TaskRecord",
     "TaskStatus",
     "VoodooQueue",
+    "retry_delay",
 ]

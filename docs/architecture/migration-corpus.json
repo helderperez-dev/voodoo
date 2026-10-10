@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "legacy": "Unversioned records remain readable and are migrated on the next write when the owner supports it.",
+    "current": "Current records carry the owner-defined schema or codec version.",
+    "future": "Records newer than the reader are rejected or skipped with a redacted diagnostic; they are never silently converted."
+  },
+  "records": [
+    {"name": "identity", "source": "src/voodoo/runtime/identity_store.py", "fixture": "tests/integration/test_identity_foundation.py", "version": "_SCHEMA_VERSION"},
+    {"name": "agent_registry", "source": "src/voodoo/agents/registry.py", "fixture": "tests/integration/test_agent_registry_store.py", "version": "_SCHEMA_VERSION"},
+    {"name": "goal", "source": "src/voodoo/runtime/agency/goal_store.py", "fixture": "tests/integration/test_durable_goal_runtime.py", "version": "_SCHEMA_VERSION"},
+    {"name": "workflow_checkpoint", "source": "src/voodoo/runtime/workflow_store.py", "fixture": "tests/integration/test_durable_workflow_runtime.py", "version": "_CHECKPOINT_SCHEMA_VERSION"},
+    {"name": "jsonl_execution", "source": "src/voodoo/runtime/persistence.py", "fixture": "tests/unit/storage/test_persistence.py", "version": "_SCHEMA_VERSION"},
+    {"name": "store_execution", "source": "src/voodoo/storage/execution/store.py", "fixture": "tests/integration/test_voodoo_store_execution.py", "version": "_SCHEMA_VERSION"},
+    {"name": "outbox", "source": "src/voodoo/runtime/transaction.py", "fixture": "tests/integration/test_runtime_transaction.py", "version": "_SCHEMA_VERSION"},
+    {"name": "membership", "source": "src/voodoo/runtime/distributed/membership.py", "fixture": "tests/integration/test_node_membership.py", "version": "_SCHEMA_VERSION"},
+    {"name": "fabric_lease", "source": "src/voodoo/runtime/distributed/fabric.py", "fixture": "tests/integration/test_runtime_fabric.py", "version": "_SCHEMA_VERSION"},
+    {"name": "edge", "source": "src/voodoo/edge/store_voodoo.py", "fixture": "tests/integration/test_edge_voodoo_store.py", "version": "_SCHEMA_VERSION"},
+    {"name": "scheduler_metadata", "source": "src/voodoo/storage/scheduler/store.py", "fixture": "tests/integration/test_voodoo_store_scheduler.py", "version": "_SCHEMA_VERSION"},
+    {"name": "scheduler_payload", "source": "src/voodoo/storage/scheduler/sqlite.py", "fixture": "tests/unit/storage/test_scheduler.py", "version": "_PAYLOAD_SCHEMA_VERSION"},
+    {"name": "event_envelope", "source": "src/voodoo/storage/events/codec.py", "fixture": "tests/integration/test_voodoo_store_events.py", "version": "EVENT_SCHEMA_VERSION"},
+    {"name": "lineage_jsonl", "source": "src/voodoo/runtime/inspection/lineage.py", "fixture": "tests/unit/runtime/test_lineage.py", "version": "_SCHEMA_VERSION"}
+  ]
+}

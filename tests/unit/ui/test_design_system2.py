@@ -40,6 +40,64 @@ def test_field_wires_label_hint_and_error_accessibly():
         set_style_adapter(original)
 
 
+def test_input_group_state_contract_propagates_to_wrapped_control():
+    from voodoo.ui import InputGroup
+
+    original = _with_native_adapter()
+    try:
+        html = InputGroup(
+            Input(name="domain", on_change=lambda value: value),
+            leading="https://",
+            read_only=True,
+            loading=True,
+            error="Domain unavailable",
+        ).render()
+        assert 'aria-disabled="true"' in html
+        assert 'aria-readonly="true"' in html
+        assert 'aria-busy="true"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'data-vd-error="Domain unavailable"' in html
+        assert "data-vd-event-change" not in html
+        assert "disabled" in html
+    finally:
+        set_style_adapter(original)
+
+
+def test_field_state_contract_propagates_to_native_control():
+    original = _with_native_adapter()
+    try:
+        html = Field(
+            "Domain",
+            Input(name="domain", on_change=lambda value: value),
+            read_only=True,
+            loading=True,
+            error="Domain unavailable",
+        ).render()
+        assert 'aria-disabled="true"' in html
+        assert 'aria-readonly="true"' in html
+        assert 'aria-busy="true"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'data-vd-error="Domain unavailable"' in html
+        assert "data-vd-event-change" not in html
+    finally:
+        set_style_adapter(original)
+
+
+def test_field_associates_labels_with_nested_native_controls():
+    from voodoo.ui import InputGroup
+
+    original = _with_native_adapter()
+    try:
+        html = Field(
+            "Domain",
+            InputGroup(Input(name="domain"), leading="https://"),
+        ).render()
+        input_id = html.split('<input id="', 1)[1].split('"', 1)[0]
+        assert f'for="{input_id}"' in html
+    finally:
+        set_style_adapter(original)
+
+
 def test_form_generates_semantic_submit_action():
     original = _with_native_adapter()
 
@@ -98,6 +156,26 @@ def test_popover_uses_native_browser_contract():
         assert "popover" in html
         assert "Popover content" in html
         assert "onclick=" not in html
+    finally:
+        set_style_adapter(original)
+
+
+def test_popover_state_contract_blocks_unavailable_trigger():
+    original = _with_native_adapter()
+    try:
+        html = Popover(
+            Button("Options"),
+            "Popover content",
+            read_only=True,
+            loading=True,
+            error="Popover unavailable",
+        ).render()
+        assert 'aria-disabled="true"' in html
+        assert 'aria-readonly="true"' in html
+        assert 'aria-busy="true"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'data-vd-error="Popover unavailable"' in html
+        assert "popovertarget=" not in html
     finally:
         set_style_adapter(original)
 

@@ -19,6 +19,8 @@ import logging
 import os
 from typing import Any
 
+from voodoo.security.redaction import redact_string
+
 logger = logging.getLogger("voodoo.integrations.otel")
 
 __all__ = ["OTLPExporter", "is_available", "export_span"]
@@ -91,8 +93,14 @@ def _get_exporter() -> OTLPExporter | None:
     if is_available():
         try:
             _exporter = OTLPExporter()
-        except Exception:
-            logger.warning("Failed to initialise OTLP exporter", exc_info=True)
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as error:
+            # Exporting telemetry is optional; expose the failure without
+            # leaking endpoint credentials or provider payloads through a
+            # traceback. The checked flag prevents repeated startup churn.
+            logger.warning(
+                "Failed to initialise OTLP exporter error=%s",
+                redact_string(str(error)),
+            )
             _exporter = None
     return _exporter
 
@@ -103,5 +111,9 @@ def export_span(span: Any) -> None:
     if exporter is not None:
         try:
             exporter.export_span(span)
-        except Exception:
-            logger.debug("OTLP export failed for span %s", span.span_id, exc_info=True)
+        except Exception as error:
+            logger.warning(
+                "OTLP export failed span_id=%s error=%s",
+                redact_string(str(span.span_id)),
+                redact_string(str(error)),
+            )

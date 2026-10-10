@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from voodoo.edge import (
@@ -33,6 +35,11 @@ async def test_edge_device_and_effect_survive_store_restart(tmp_path) -> None:
         capability="relay.control",
         payload={"on": True},
     )
+    raw = runtime.provider.native.get_record(
+        b"runtime.edge_devices", b"device-1"
+    )
+    assert raw is not None
+    assert json.loads(bytes(raw[1]))["_schema_version"] == 1
     runtime.stop()
     bind_active_runtime_store(None)
 
@@ -100,3 +107,78 @@ async def test_edge_closed_loop_ack_is_durable(tmp_path) -> None:
     finally:
         bind_active_runtime_store(None)
         reopened.stop()
+
+
+@pytest.mark.asyncio
+async def test_edge_replay_records_use_native_collections(tmp_path) -> None:
+    path = tmp_path / "edge-replay.vstore"
+    runtime = RuntimeStore(StoreConfig(path=path))
+    runtime.start()
+    bind_active_runtime_store(runtime)
+    try:
+        store = VoodooStoreDeviceStore(runtime)
+        await store.mark_message_seen("message-1")
+        await store.store_response("message-1", '{"status":"accepted"}')
+        native = runtime.provider.native
+        assert native.get_record(b"runtime.edge_seen", b"message-1")[1] == b"1"
+        assert native.get_record(b"runtime.edge_responses", b"message-1")[1] == (
+            b'{"status":"accepted"}'
+        )
+        assert native.get(b"runtime:edge:seen:message-1") is None
+        assert native.get(b"runtime:edge:response:message-1") is None
+    finally:
+        bind_active_runtime_store(None)
+        runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_edge_future_schema_fails_closed_on_hydration(tmp_path) -> None:
+    path = tmp_path / "edge-future.vstore"
+    runtime = RuntimeStore(StoreConfig(path=path))
+    runtime.start()
+    bind_active_runtime_store(runtime)
+    try:
+        store = VoodooStoreDeviceStore(runtime)
+        store._native.upsert_record(
+            b"runtime.edge_devices",
+            b"future-device",
+            json.dumps(
+                {
+                    "_schema_version": 99,
+                    "device_id": "future-device",
+                    "capabilities": [],
+                }
+            ).encode("utf-8"),
+        )
+        with pytest.raises(ValueError, match="unsupported edge schema version"):
+            VoodooStoreDeviceStore(runtime)
+    finally:
+        bind_active_runtime_store(None)
+        runtime.stop()
+
+
+@pytest.mark.asyncio
+async def test_edge_reads_legacy_unversioned_device_record(tmp_path) -> None:
+    path = tmp_path / "edge-legacy.vstore"
+    runtime = RuntimeStore(StoreConfig(path=path))
+    runtime.start()
+    bind_active_runtime_store(runtime)
+    try:
+        first = VoodooStoreDeviceStore(runtime)
+        device = Device(device_id="legacy-device", capabilities=["relay.control"])
+        await first.register_device(device)
+        raw = device.to_dict()
+        raw.pop("_schema_version", None)
+        runtime.provider.native.upsert_record(
+            b"runtime.edge_devices", b"legacy-device", json.dumps(raw).encode()
+        )
+
+        restored = VoodooStoreDeviceStore(runtime)
+        loaded = await restored.get_device("legacy-device")
+        assert loaded is not None
+        assert loaded.capabilities == ["relay.control"]
+        await restored.register_device(loaded)
+        assert runtime.provider.native.get(b"runtime:edge:device:legacy-device") is None
+    finally:
+        bind_active_runtime_store(None)
+        runtime.stop()

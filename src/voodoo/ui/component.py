@@ -13,16 +13,20 @@ Guarantees provided by the base:
   ``for_`` → ``for``, ``aria_label`` → ``aria-label``, ``data_x`` / ``data-x``
   → ``data-x``; ``True`` renders a bare attribute; ``None``/``False`` omit.
 - **Escaping** — text children and attribute values are HTML-escaped. Event
-  handler attributes (``on*``, framework-generated) and :class:`Html` content
-  are the only trusted paths.
+  handler attributes (``on*``, framework-generated) and :class:`UnsafeHtml`
+  content are the only trusted paths. Use :class:`SafeHtml` for an explicit
+  fragment that still escapes string content.
 - **``css={}`` prop** — escape hatch for inline styles; keys use underscores
   (``margin_top``) which are converted to hyphens (``margin-top``).
 - **``tone`` prop** — semantic color mapping (``"muted"``, ``"primary"``,
   ``"danger"``, …) resolved via the active theme.
+- **``render_key`` prop** — optional deterministic render-tree identity for
+  hydration, patching, and tests; explicit ``id`` remains authoritative.
 """
 
 from __future__ import annotations
 
+import hashlib
 import html
 from collections.abc import Iterable, Mapping
 from typing import Any, ClassVar
@@ -46,6 +50,8 @@ def escape(value: Any) -> str:
 def _attr_name(key: str) -> str:
     if key == "className" or key == "class_":
         return "class"
+    if key == "for_":
+        return "for"
     return key.replace("_", "-")
 
 
@@ -101,6 +107,7 @@ class Component:
         self,
         *children: Any,
         id: str | None = None,
+        render_key: str | None = None,
         css: Mapping[str, Any] | None = None,
         color: str | None = None,
         background: str | None = None,
@@ -112,7 +119,13 @@ class Component:
         self.attrs: dict[str, Any] = {}
         self._inline_css: str = ""
         raw_style = kwargs.pop("style", None)
-        if id is None and self.auto_id:
+        if id is None and render_key is not None:
+            # Stable render-tree identity for hydration, patching, and tests.
+            # Hashing keeps arbitrary user data out of HTML identifiers while
+            # preserving deterministic identity across processes.
+            digest = hashlib.sha256(render_key.encode("utf-8")).hexdigest()[:12]
+            id = f"vd-{self.__class__.__name__.lower()}-{digest}"
+        elif id is None and self.auto_id:
             id = f"vd-{uuid4().hex[:8]}"
         if id is not None:
             self.attrs["id"] = id
@@ -221,8 +234,22 @@ class Component:
         )
 
 
-class Html(Component):
-    """Escape hatch: renders children as pre-built HTML without escaping."""
+class SafeHtml(Component):
+    """Render a fragment while escaping all string children."""
+
+    auto_id: ClassVar[bool] = False
+
+    def render(self) -> str:
+        return self._render_children()
+
+
+class UnsafeHtml(Component):
+    """Trusted escape hatch for application-owned, pre-built HTML.
+
+    Never pass request, user, model, or provider text directly to this class.
+    Sanitize untrusted markup before constructing it and prefer :class:`SafeHtml`
+    whenever interpolation is not intentionally trusted.
+    """
 
     auto_id: ClassVar[bool] = False
 
@@ -234,3 +261,8 @@ class Html(Component):
             child.render() if isinstance(child, Component) else str(child)
             for child in self.children
         )
+
+
+# ``Html`` remains a compatibility spelling for the historical raw-fragment
+# escape hatch. New code must choose the explicit SafeHtml/UnsafeHtml name.
+Html = UnsafeHtml

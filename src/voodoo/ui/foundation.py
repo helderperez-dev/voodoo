@@ -36,14 +36,36 @@ class Alert(Component):
         title: Any | None = None,
         tone: str = "info",
         variant: str = "soft",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         tone = _choice("Alert", "tone", tone, _TONES)
         variant = _choice(
             "Alert", "variant", variant, frozenset({"soft", "outline", "solid"})
         )
-        super().__init__(**kwargs)
-        self.props = {"tone": tone, "variant": variant}
+        state_attrs: dict[str, Any] = {}
+        if disabled or read_only or loading or bool(error):
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(**state_attrs, **kwargs)
+        self.props = {
+            "tone": tone,
+            "variant": variant,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
         self.attrs.setdefault(
             "role", "alert" if tone in {"warning", "danger"} else "status"
         )
@@ -79,6 +101,10 @@ class Progress(Component):
         label: str = "Progress",
         tone: str = "primary",
         size: str = "md",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not math.isfinite(max) or max <= 0:
@@ -87,10 +113,29 @@ class Progress(Component):
             raise ValueError("Progress value must be between zero and max")
         tone = _choice("Progress", "tone", tone, _TONES)
         size = _choice("Progress", "size", size, _SIZES)
-        super().__init__(aria_label=label, max=max, **kwargs)
-        if value is not None:
+        unavailable = disabled or read_only or loading or bool(error)
+        state_attrs: dict[str, Any] = {"aria_label": label, "max": max}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(**state_attrs, **kwargs)
+        if value is not None and not loading:
             self.attrs["value"] = value
-        self.props = {"tone": tone, "size": size}
+        self.props = {
+            "tone": tone,
+            "size": size,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class Spinner(Component):
@@ -104,11 +149,32 @@ class Spinner(Component):
         label: str = "Loading",
         *,
         size: str = "md",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         size = _choice("Spinner", "size", size, _SIZES)
-        super().__init__(role="status", aria_live="polite", **kwargs)
-        self.props = {"size": size}
+        state_attrs: dict[str, Any] = {"role": "status", "aria_live": "polite"}
+        if disabled or read_only or loading or bool(error):
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(**state_attrs, **kwargs)
+        self.props = {
+            "size": size,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
         self.children = (_SpinnerGlyph(), _VisuallyHidden(label))
 
 
@@ -166,24 +232,63 @@ class BreadcrumbItem(Component):
         href: str | None = None,
         *,
         current: bool = False,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.current = current
         self.label = label
         self.href = href
+        self.disabled = disabled
+        self.read_only = read_only
+        self.loading = loading
+        self.error = error
+        self._apply_state_attrs()
         self._sync_content()
 
     def set_current(self) -> None:
         self.current = True
         self._sync_content()
 
+    def _apply_state_attrs(self) -> None:
+        unavailable = self.disabled or self.read_only or self.loading or bool(self.error)
+        if unavailable:
+            self.attrs["aria_disabled"] = "true"
+        if self.read_only:
+            self.attrs["aria_readonly"] = "true"
+        if self.loading:
+            self.attrs["aria_busy"] = "true"
+        if self.error:
+            self.attrs["aria_invalid"] = "true"
+            if isinstance(self.error, str):
+                self.attrs["data_vd_error"] = self.error
+
     def _sync_content(self) -> None:
-        if self.current or not self.href:
+        unavailable = self.disabled or self.read_only or self.loading or bool(self.error)
+        if self.current or not self.href or unavailable:
+            current_attrs: dict[str, Any] = {
+                "aria_current": "page" if self.current else None,
+            }
+            if unavailable:
+                current_attrs.update(
+                    {
+                        "aria_disabled": "true",
+                        "tabindex": "-1",
+                    }
+                )
+            if self.read_only:
+                current_attrs["aria_readonly"] = "true"
+            if self.loading:
+                current_attrs["aria_busy"] = "true"
+            if self.error:
+                current_attrs["aria_invalid"] = "true"
+            if isinstance(self.error, str):
+                current_attrs["data_vd_error"] = self.error
             self.children = (
-                _BreadcrumbCurrent(
-                    self.label, aria_current="page" if self.current else None
-                ),
+                _BreadcrumbCurrent(self.label, **current_attrs),
             )
         else:
             self.children = (_BreadcrumbLink(self.label, href=self.href),)
@@ -212,6 +317,10 @@ class ButtonGroup(Component):
         label: str = "Actions",
         orientation: str = "horizontal",
         attached: bool = True,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         orientation = _choice(
@@ -224,8 +333,33 @@ class ButtonGroup(Component):
             raise ValueError("ButtonGroup requires at least one button")
         if not all(isinstance(button, Component) for button in buttons):
             raise TypeError("ButtonGroup children must be Component instances")
-        super().__init__(*buttons, role="group", aria_label=label, **kwargs)
-        self.props = {"orientation": orientation, "attached": attached}
+        unavailable = disabled or read_only or loading or bool(error)
+        if unavailable:
+            for button in buttons:
+                button.attrs["disabled"] = True
+                button.attrs["aria_disabled"] = "true"
+                button.attrs.pop("data-vd-event-click", None)
+                button.attrs.pop("data_vd_event_click", None)
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(*buttons, role="group", aria_label=label, **state_attrs, **kwargs)
+        self.props = {
+            "orientation": orientation,
+            "attached": attached,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class Accordion(Component):
@@ -264,10 +398,40 @@ class AccordionItem(Component):
         title: Any,
         *children: Any,
         open: bool = False,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
-        super().__init__(open=open, **kwargs)
-        self.children = (_AccordionSummary(title), _AccordionContent(*children))
+        unavailable = disabled or read_only or loading or bool(error)
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+            state_attrs["data_vd_disclosure_disabled"] = True
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(open=open and not unavailable, **state_attrs, **kwargs)
+        summary_attrs = dict(state_attrs)
+        if unavailable:
+            summary_attrs["tabindex"] = "-1"
+        self.children = (
+            _AccordionSummary(title, **summary_attrs),
+            _AccordionContent(*children),
+        )
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _AccordionSummary(Component):

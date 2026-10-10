@@ -4,14 +4,45 @@
 
 Voodoo uses a React-like component system in pure Python. Components are Python classes that render to HTML. No templates, no JSX, no separate markup files.
 
+## Maturity and accessibility contract
+
+The supported component surface is classified in
+[`docs/component_maturity.json`](./component_maturity.json). Components in the
+`stable` tier are the recommended production primitives; their semantic tag,
+required accessibility attributes, and script-free server rendering are
+validated by `scripts/check_component_maturity.py` in CI. Components not yet
+listed as stable remain usable, but their APIs may evolve before the next
+compatibility window.
+
+Every stable component also has an executable documentation contract in
+[`docs/stable_component_docs.json`](./stable_component_docs.json). It records a
+runnable example, composition guidance, accessibility notes, and a Site route;
+CI fails if a stable component is missing any of those fields.
+
+## Preferred APIs for overlapping families
+
+The catalog intentionally keeps a few compatibility variants, but new code
+should choose one preferred API per job:
+
+| Family | Preferred API | Compatibility variants |
+| --- | --- | --- |
+| Tabular data | `DataTable` | `Table`, `EnhancedDataTable` |
+| Read-only/selectable lists | `List` | `ListBox`, `DataList`, `ListItem` |
+| Navigation links | `Link` | `A`, `NavLink`, `NavLinkItem` |
+| Dialog overlays | `Dialog` | `Modal`, `AlertDialog` |
+
+See [`docs/component_families.json`](./component_families.json) for migration
+guidance. Compatibility variants remain supported only within their documented
+role; new component families require an architecture review.
+
 ## Minimal example
 
 ```python
-from voodoo import Div, Text, Button
+from voodoo.ui import Div, Text, Button
 
-card = Div(Text("Hello"), Button("Click me", onclick="doSomething()"))
+card = Div(Text("Hello"), Button("Click me", on_click="doSomething"))
 print(card.render())
-# <div>Hello<button onclick="doSomething()">Click me</button></div>
+# The button carries a Voodoo event descriptor; browser handlers stay framework-owned.
 ```
 
 ## Common usage
@@ -19,7 +50,7 @@ print(card.render())
 ### Layout components
 
 ```python
-from voodoo import Container, Flex, Stack, Grid
+from voodoo.ui import Container, Flex, Stack, Grid, Heading, Text
 
 layout = Container(
     Flex(Heading("Title"), Text("Body")),
@@ -38,7 +69,7 @@ Layout is expressed through semantic props, not utility classes:
 | `Stack` | `gap` (vertical `Flex`) |
 
 ```python
-from voodoo import Flex, Grid, Page, Stack
+from voodoo.ui import Flex, Grid, Page, Stack
 
 ui = Page(
     Stack(
@@ -55,7 +86,7 @@ reference.
 ### Cards and content
 
 ```python
-from voodoo import Card, Heading, Text, Badge
+from voodoo.ui import Card, Heading, Text, Badge
 
 profile = Card(
     Heading("Ada Lovelace", level=2),
@@ -77,7 +108,7 @@ Common feedback, navigation, disclosure, and content patterns are available
 without custom CSS:
 
 ```python
-from voodoo import (
+from voodoo.ui import (
     Accordion,
     AccordionItem,
     Alert,
@@ -123,13 +154,48 @@ shortcut = Kbd("Cmd+K")
 `details`/`summary` elements, preserving keyboard behavior without application
 JavaScript.
 
+### Data-display states
+
+`Table`, `ListBox`, and `TreeView` share explicit state semantics. Pass
+`loading=True` or `error="…"` to replace stale content with one semantic status
+row; when no content is available, the components render an accessible empty
+state. Use `empty_text` to provide domain-specific wording. Unavailable
+interactive content never retains selection or activation bindings.
+
+```python
+from voodoo.ui import ListBox, ListOption, Table, TreeView
+
+orders = Table(
+    headers=["Order", "Status"],
+    rows=[],
+    empty_text="No orders yet",
+)
+choices = ListBox(
+    ListOption("Production"),
+    loading=is_loading,
+    error=load_error,
+    empty_text="No environments available",
+)
+files = TreeView(
+    *nodes,
+    loading=is_loading,
+    error=load_error,
+    empty_text="No files found",
+)
+```
+
+State messages are escaped as text, announced with `aria-live="polite"`, and
+are mutually exclusive with data rows/options/nodes. Prefer `DataTable` for
+new tabular product surfaces when sorting, selection, or richer column metadata
+is required.
+
 ### Adaptive application UI
 
 Voodoo includes the interaction patterns needed by desktop, mobile, and
 installable PWA interfaces:
 
 ```python
-from voodoo import (
+from voodoo.ui import (
     AppShell,
     BottomNav,
     BottomNavItem,
@@ -233,7 +299,7 @@ voodoo.snackbar("Connection restored");
 ### Forms
 
 ```python
-from voodoo import Form, Input, Label, Button
+from voodoo.ui import Form, Input, Label, Button
 
 login = Form(
     Label("Email", Input(type="email", name="email")),
@@ -248,7 +314,7 @@ Ready-made building blocks for navigation, heroes, and landing sections — no
 custom CSS required:
 
 ```python
-from voodoo import (
+from voodoo.ui import (
     Navbar,
     NavLink,
     Brand,
@@ -294,7 +360,7 @@ page = Hero(
 ### Custom components
 
 ```python
-from voodoo import Component, Div, Text
+from voodoo.ui import Component, Div, Text
 
 
 class UserCard(Component):
@@ -317,6 +383,11 @@ print(card.render())
 Div(Text("Centered"), css={"text_align": "center", "margin_top": "20px"})
 ```
 
+`css={}` emits an inline `style` attribute and is an explicit escape hatch.
+Production CSP defaults allow styles only from `'self'`, so production UIs
+should prefer theme tokens and component classes; use this escape hatch only
+with an intentional CSP policy review.
+
 ### Semantic tone
 
 ```python
@@ -330,7 +401,8 @@ Text("Danger!", tone="danger")
 Voodoo supports pluggable style adapters. `VoodooCSSAdapter` is the default CSS adapter; `TailwindAdapter` ships out of the box as an alternative:
 
 ```python
-from voodoo import set_style_adapter, VoodooCSSAdapter, TailwindAdapter
+from voodoo.ui.styles import set_style_adapter
+from voodoo.adapters import VoodooCSSAdapter, TailwindAdapter
 
 # Default
 set_style_adapter(VoodooCSSAdapter())
@@ -373,3 +445,18 @@ set_style_adapter(TailwindAdapter())
   `voodoo.snackbar(message, options)`, plus automatic interaction and chat
   behaviors re-applied after every DOM patch.
 - `set_style_adapter(adapter)` — set the active style adapter.
+## Trusted HTML escape hatches
+
+Normal string children are escaped. For fragments, choose the name that
+matches the trust boundary:
+
+```python
+from voodoo.ui import SafeHtml, UnsafeHtml
+
+SafeHtml("<em>user text</em>")       # emits escaped text
+UnsafeHtml("<em>app-owned</em>")     # emits markup; sanitize first
+```
+
+`Html` remains a compatibility alias for `UnsafeHtml`. New code should use the
+explicit name and must never pass request, user, model, or provider text to
+`UnsafeHtml` without sanitization.

@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 import typer
 
 from voodoo.cli import terminal
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
 
 agents_app = typer.Typer(
     name="agents",
@@ -14,14 +20,17 @@ agents_app = typer.Typer(
 )
 
 
-def _get_registry():
+def _get_registry() -> Any:
     """Return the application agent registry (Voodoo Store by default)."""
     from voodoo.cli.context import acquire_agent_registry
 
     try:
         registry, _store_path = acquire_agent_registry()
         return registry
-    except Exception:
+    except Exception as error:
+        logger.warning(
+            "agent registry could not be opened error=%s", redact_string(str(error))
+        )
         return None
 
 
@@ -30,7 +39,7 @@ def list_agents(
     state_filter: str = typer.Option(None, "--state", help="Filter by state"),
     limit: int = typer.Option(20, "--limit", help="Maximum rows"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """List registered agents."""
     import asyncio
 
@@ -44,7 +53,7 @@ def list_agents(
         terminal.muted("cannot open agent registry")
         return
 
-    async def _list():
+    async def _list() -> None:
         agents = await registry.list_agents(state=state_filter, limit=limit)
         if json_mode or terminal.is_json_mode():
             terminal.json_output([a.to_dict() for a in agents])
@@ -72,7 +81,7 @@ def show_agent(
     agent_id: str = typer.Argument(help="Agent ID to inspect"),
     limit: int = typer.Option(10, "--limit", help="Maximum run history"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """Show agent details and recent run history."""
     import asyncio
 
@@ -86,7 +95,7 @@ def show_agent(
         terminal.muted("cannot open agent registry")
         return
 
-    async def _show():
+    async def _show() -> None:
         entity = await registry.get(agent_id)
         if entity is None:
             if json_mode or terminal.is_json_mode():
@@ -94,7 +103,10 @@ def show_agent(
                 return
             terminal.wordmark()
             terminal.blank()
-            terminal.error(f"agent '{agent_id}' not found")
+            terminal.error(
+                f"agent '{agent_id}' not found",
+                hint="run 'voodoo agents list' to choose an available agent",
+            )
             return
 
         runs = await registry.get_runs(agent_id, limit=limit)

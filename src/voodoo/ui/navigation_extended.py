@@ -52,6 +52,9 @@ class Pagination(Component):
         label: str = "Pagination",
         on_change: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if total_pages < 1:
@@ -63,7 +66,12 @@ class Pagination(Component):
         if sibling_count < 0:
             raise ValueError("Pagination sibling_count must be non-negative")
 
-        binding = bind_event(on_change) if on_change is not None else None
+        unavailable = disabled or read_only or loading or bool(error)
+        binding = (
+            bind_event(on_change)
+            if on_change is not None and not unavailable
+            else None
+        )
 
         items: list[Component] = []
 
@@ -73,7 +81,7 @@ class Pagination(Component):
             type="button",
             aria_label="Previous page",
             data_vd_page=str(current_page - 1),
-            disabled=current_page <= 1 or disabled,
+            disabled=current_page <= 1 or unavailable,
             data_vd_event_click=binding,
             data_vd_pagination_action=True,
         )
@@ -94,7 +102,7 @@ class Pagination(Component):
                         aria_current="page" if is_current else None,
                         data_vd_page=str(page),
                         data_vd_event_click=binding,
-                        disabled=disabled,
+                        disabled=unavailable,
                         data_vd_pagination_action=True,
                     )
                 )
@@ -105,12 +113,23 @@ class Pagination(Component):
             type="button",
             aria_label="Next page",
             data_vd_page=str(current_page + 1),
-            disabled=current_page >= total_pages or disabled,
+            disabled=current_page >= total_pages or unavailable,
             data_vd_event_click=binding,
             data_vd_pagination_action=True,
         )
         items.append(next_btn)
 
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            state_attrs["data_vd_state"] = "error"
         super().__init__(
             *items,
             role="navigation",
@@ -118,9 +137,17 @@ class Pagination(Component):
             data_vd_pagination=True,
             data_vd_current_page=str(current_page),
             data_vd_total_pages=str(total_pages),
+            **state_attrs,
             **kwargs,
         )
-        self.props = {"total_pages": total_pages, "current_page": current_page}
+        self.props = {
+            "total_pages": total_pages,
+            "current_page": current_page,
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 def _pagination_range(current: int, total: int, siblings: int) -> list[int | str]:
@@ -197,6 +224,10 @@ class Stepper(Component):
         orientation: str = "horizontal",
         label: str = "Progress",
         on_step_click: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not steps:
@@ -206,7 +237,12 @@ class Stepper(Component):
         if current < 0 or current >= len(steps):
             raise ValueError("Stepper current must be a valid step index")
 
-        binding = bind_event(on_step_click) if on_step_click is not None else None
+        unavailable = disabled or read_only or loading or bool(error)
+        binding = (
+            bind_event(on_step_click)
+            if on_step_click is not None and not unavailable
+            else None
+        )
 
         rendered: list[Component] = []
         for index, step in enumerate(steps):
@@ -217,17 +253,36 @@ class Stepper(Component):
                 if index == current
                 else "upcoming"
             )
-            rendered.append(step.render_step(index, state, binding))
+            rendered.append(step.render_step(index, state, binding, unavailable))
 
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            state_attrs["data_vd_state"] = "error"
         super().__init__(
             *rendered,
             role="navigation",
             aria_label=label,
             data_vd_stepper=True,
             data_vd_orientation=orientation,
+            **state_attrs,
             **kwargs,
         )
-        self.props = {"current": current, "orientation": orientation}
+        self.props = {
+            "current": current,
+            "orientation": orientation,
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class Step:
@@ -240,25 +295,49 @@ class Step:
         description: str | None = None,
         icon: Component | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
     ) -> None:
         self.label = label
         self.description = description
         self.icon = icon
         self.disabled = disabled
+        self.read_only = read_only
+        self.loading = loading
+        self.error = error
 
     def render_step(
         self,
         index: int,
         state: str,
         binding: str | None,
+        group_disabled: bool = False,
     ) -> Component:
+        unavailable = (
+            group_disabled
+            or self.disabled
+            or self.read_only
+            or self.loading
+            or bool(self.error)
+        )
         attrs: dict[str, Any] = {
             "aria_current": "step" if state == "active" else None,
             "data_vd_step_state": state,
             "data_vd_step_index": str(index),
         }
-        if binding and not self.disabled and state == "completed":
+        if binding and not unavailable and state == "completed":
             attrs["data_vd_event_click"] = binding
+        if unavailable:
+            attrs["aria_disabled"] = "true"
+        if self.read_only:
+            attrs["aria_readonly"] = "true"
+        if self.loading:
+            attrs["aria_busy"] = "true"
+        if self.error:
+            attrs["aria_invalid"] = "true"
+            if isinstance(self.error, str):
+                attrs["data_vd_error"] = self.error
 
         indicator_children: list[Any] = []
         if self.icon and state == "completed":
@@ -334,11 +413,36 @@ class AnchorNavigation(Component):
         *links: AnchorLink,
         label: str = "On this page",
         active_class: str = "active",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not links:
             raise ValueError("AnchorNavigation requires at least one AnchorLink")
-        list_items = tuple(_AnchorItem(link.render_link()) for link in links)
+        unavailable = disabled or read_only or loading or bool(error)
+        rendered_links: list[Component] = []
+        for link in links:
+            rendered = link.render_link()
+            if unavailable:
+                rendered.attrs["disabled"] = True
+                rendered.attrs["aria_disabled"] = "true"
+                rendered.attrs["tabindex"] = "-1"
+                rendered.attrs.pop("href", None)
+            rendered_links.append(rendered)
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        list_items = tuple(_AnchorItem(link) for link in rendered_links)
         super().__init__(
             _AnchorHeading(label),
             _AnchorList(
@@ -348,8 +452,16 @@ class AnchorNavigation(Component):
             role="navigation",
             aria_label=label,
             data_vd_anchor_nav=True,
+            **state_attrs,
             **kwargs,
         )
+        self.props = {
+            "active_class": active_class,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class AnchorLink:
@@ -362,23 +474,43 @@ class AnchorLink:
         href: str,
         level: int = 0,
         icon: Component | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
     ) -> None:
         self.label = label
         self.href = href
         self.level = level
         self.icon = icon
+        self.disabled = disabled
+        self.read_only = read_only
+        self.loading = loading
+        self.error = error
 
     def render_link(self) -> Component:
         children: list[Any] = []
         if self.icon:
             children.append(self.icon)
         children.append(Text(self.label))
-        return _AnchorLink(
-            *children,
-            href=self.href,
-            data_vd_anchor_level=str(self.level),
-            aria_label=self.label,
-        )
+        unavailable = self.disabled or self.read_only or self.loading or bool(self.error)
+        attrs: dict[str, Any] = {
+            "data_vd_anchor_level": str(self.level),
+            "aria_label": self.label,
+        }
+        if not unavailable:
+            attrs["href"] = self.href
+        if unavailable:
+            attrs.update({"aria_disabled": "true", "tabindex": "-1", "disabled": True})
+        if self.read_only:
+            attrs["aria_readonly"] = "true"
+        if self.loading:
+            attrs["aria_busy"] = "true"
+        if self.error:
+            attrs["aria_invalid"] = "true"
+            if isinstance(self.error, str):
+                attrs["data_vd_error"] = self.error
+        return _AnchorLink(*children, **attrs)
 
 
 class _AnchorHeading(Component):
@@ -432,10 +564,15 @@ class ActionSheet(Component):
         cancel_label: str = "Cancel",
         on_cancel: EventHandler | None = None,
         open: bool = False,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not actions:
             raise ValueError("ActionSheet requires at least one Action")
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(**kwargs)
         sheet_id = f"{self.id}-panel" if self.id else _nav_id("action-sheet")
 
@@ -449,12 +586,22 @@ class ActionSheet(Component):
             *actions,
             role="list",
         )
+        if unavailable:
+            for action in actions:
+                action.attrs["disabled"] = True
+                action.attrs["aria_disabled"] = "true"
+                action.attrs.pop("data-vd-event-click", None)
+                action.attrs.pop("data_vd_event_click", None)
 
         cancel = _ActionSheetCancel(
             cancel_label,
             type="button",
             data_vd_dialog_close=True,
-            data_vd_event_click=bind_event(on_cancel) if on_cancel else None,
+            data_vd_event_click=(
+                bind_event(on_cancel) if on_cancel and not unavailable else None
+            ),
+            disabled=unavailable,
+            aria_disabled="true" if unavailable else None,
         )
 
         panel = _ActionSheetPanel(
@@ -468,9 +615,19 @@ class ActionSheet(Component):
             tabindex="-1",
             data_vd_layer=True,
             data_vd_action_sheet=True,
-            open=open,
+            open=open and not unavailable,
+            aria_disabled="true" if unavailable else None,
+            aria_busy="true" if loading else None,
+            aria_invalid="true" if error else None,
+            data_vd_error=error if isinstance(error, str) else None,
         )
         self.children = (panel,)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _ActionSheetPanel(Component):
@@ -520,17 +677,27 @@ class Action(Component):
         description: str | None = None,
         destructive: bool = False,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         on_select: EventHandler | None = None,
         **kwargs: Any,
     ) -> None:
+        unavailable = disabled or read_only or loading or bool(error)
         attrs: dict[str, Any] = {
             "type": "button",
             "role": "button",
         }
-        if disabled:
+        if unavailable:
             attrs["disabled"] = True
             attrs["aria_disabled"] = "true"
-        if on_select is not None and not disabled:
+        if loading:
+            attrs["aria_busy"] = "true"
+        if error:
+            attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                attrs["data_vd_error"] = error
+        if on_select is not None and not unavailable:
             attrs["data_vd_event_click"] = bind_event(on_select)
 
         content: list[Any] = []
@@ -542,7 +709,13 @@ class Action(Component):
         content.append(_ActionCopy(*copy_children))
 
         super().__init__(*content, **attrs, **kwargs)
-        self.props = {"destructive": destructive, "disabled": disabled}
+        self.props = {
+            "destructive": destructive,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _ActionIcon(Component):
@@ -589,6 +762,10 @@ class BottomSheet(Component):
         dismissible: bool = True,
         open: bool = False,
         close_label: str = "Close",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not snap_points:
@@ -596,6 +773,7 @@ class BottomSheet(Component):
         if any(p < 1 or p > 100 for p in snap_points):
             raise ValueError("BottomSheet snap_points must be percentages (1-100)")
 
+        unavailable = disabled or read_only or loading or bool(error)
         default = default_snap or snap_points[0]
         super().__init__(**kwargs)
         sheet_id = f"{self.id}-panel" if self.id else _nav_id("bottom-sheet")
@@ -612,6 +790,8 @@ class BottomSheet(Component):
                 variant="ghost",
                 aria_label=close_label,
                 data_vd_dialog_close=True,
+                disabled=unavailable,
+                aria_disabled="true" if unavailable else None,
             )
         )
 
@@ -628,9 +808,19 @@ class BottomSheet(Component):
             data_vd_dismissible=dismissible,
             data_vd_snap_points=",".join(str(p) for p in snap_points),
             data_vd_default_snap=str(default),
-            open=open,
+            open=open and not unavailable,
+            aria_disabled="true" if unavailable else None,
+            aria_busy="true" if loading else None,
+            aria_invalid="true" if error else None,
+            data_vd_error=error if isinstance(error, str) else None,
         )
         self.children = (panel,)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _BottomSheetPanel(Component):
@@ -780,16 +970,50 @@ class NavigationMenu(Component):
         self,
         *triggers: NavTrigger,
         label: str = "Main navigation",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not triggers:
             raise ValueError("NavigationMenu requires at least one NavTrigger")
-        items = tuple(_NavItem(trigger.render_trigger()) for trigger in triggers)
+        unavailable = disabled or read_only or loading or bool(error)
+        rendered_triggers: list[Component] = []
+        for trigger in triggers:
+            rendered = trigger.render_trigger()
+            if unavailable:
+                trigger_button = rendered.children[0]
+                trigger_button.attrs["disabled"] = True
+                trigger_button.attrs["aria_disabled"] = "true"
+                trigger_button.attrs.pop("data_vd_nav_trigger", None)
+                panel = rendered.children[1]
+                panel.attrs["aria_disabled"] = "true"
+            rendered_triggers.append(rendered)
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        items = tuple(_NavItem(rendered) for rendered in rendered_triggers)
         super().__init__(
-            _NavList(*items, role="menubar", aria_label=label),
+            _NavList(*items, role="menubar", aria_label=label, **state_attrs),
             data_vd_navigation_menu=True,
+            **state_attrs,
             **kwargs,
         )
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _NavList(Component):
@@ -814,15 +1038,34 @@ class NavTrigger:
         *,
         href: str | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
     ) -> None:
         self.label = label
         self.content = content
         self.href = href
         self.disabled = disabled
+        self.read_only = read_only
+        self.loading = loading
+        self.error = error
 
     def render_trigger(self) -> Component:
         trigger_id = _nav_id("nav-trigger")
         content_id = _nav_id("nav-content")
+
+        unavailable = self.disabled or self.read_only or self.loading or bool(self.error)
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if self.read_only:
+            state_attrs["aria_readonly"] = "true"
+        if self.loading:
+            state_attrs["aria_busy"] = "true"
+        if self.error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(self.error, str):
+                state_attrs["data_vd_error"] = self.error
 
         trigger = _NavTriggerButton(
             Text(self.label),
@@ -832,7 +1075,8 @@ class NavTrigger:
             aria_controls=content_id,
             aria_expanded="false",
             data_vd_nav_trigger=content_id,
-            disabled=self.disabled,
+            disabled=unavailable,
+            **state_attrs,
         )
 
         panel = _NavContentPanel(
@@ -889,6 +1133,9 @@ class NavLinkItem(Component):
         icon: Component | None = None,
         description: str | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         content: list[Any] = []
@@ -901,10 +1148,22 @@ class NavLinkItem(Component):
             )
         content.append(_NavLinkCopy(*copy_children))
 
-        attrs: dict[str, Any] = {"href": href}
-        if disabled:
+        unavailable = disabled or read_only or loading or bool(error)
+        attrs: dict[str, Any] = {}
+        if not unavailable:
+            attrs["href"] = href
+        if unavailable:
             attrs["aria_disabled"] = "true"
             attrs["tabindex"] = "-1"
+            attrs["disabled"] = True
+        if read_only:
+            attrs["aria_readonly"] = "true"
+        if loading:
+            attrs["aria_busy"] = "true"
+        if error:
+            attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                attrs["data_vd_error"] = error
 
         super().__init__(*content, role="menuitem", **attrs, **kwargs)
 

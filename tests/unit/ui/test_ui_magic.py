@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from voodoo.ui import Button, Checkbox, Form, Input, Text, ThemeToggle
+from voodoo.ui import Button, Checkbox, Composer, Form, Input, Text, ThemeToggle
 from voodoo.ui.events import UIEvent, bind_event, dispatch_ui_event
 from voodoo.ui.state import StateRenderer, state
 
@@ -26,6 +26,65 @@ def test_interactive_components_emit_semantic_event_bindings():
     checkbox = Checkbox(on_change=changed).render()
     assert "data-vd-event-change" in checkbox
     assert 'type="checkbox"' in checkbox
+
+
+def test_form_state_contract_suppresses_submit_and_disables_generated_action():
+    html = Form(
+        submit="Save",
+        on_submit=lambda value: value,
+        read_only=True,
+        loading=True,
+        error="Form unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Form unavailable"' in html
+    assert "data-vd-event-submit" not in html
+
+
+def test_composer_state_contract_suppresses_send_binding():
+    html = Composer(
+        on_send="send_message",
+        read_only=True,
+        loading=True,
+        error="Composer unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Composer unavailable"' in html
+    assert "data-vd-enter-send=" not in html
+    assert "data-vd-enter-send-trigger=" not in html
+
+
+def test_button_state_contract_suppresses_click_binding():
+    html = Button(
+        "Save",
+        on_click=lambda: None,
+        read_only=True,
+        loading=True,
+        error="Button unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Button unavailable"' in html
+    assert "data-vd-event-click" not in html
+
+
+def test_theme_toggle_state_contract_blocks_client_action():
+    html = ThemeToggle(
+        read_only=True,
+        loading=True,
+        error="Theme unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Theme unavailable"' in html
+    assert 'data-vd-action="toggle-theme"' not in html
 
 
 def test_theme_toggle_contains_no_inline_javascript():

@@ -12,6 +12,21 @@ from voodoo.ui.library import Sidebar
 EventHandler = Callable[..., Any] | str
 
 
+def _navigation_state_attrs(
+    *, unavailable: bool, loading: bool, error: bool | str
+) -> dict[str, Any]:
+    attrs: dict[str, Any] = {}
+    if unavailable:
+        attrs["aria_disabled"] = "true"
+    if loading:
+        attrs["aria_busy"] = "true"
+    if error:
+        attrs["aria_invalid"] = "true"
+        if isinstance(error, str):
+            attrs["data_vd_error"] = error
+    return attrs
+
+
 class AppShell(Component):
     """Full-height application frame for sidebars, content, and mobile nav.
 
@@ -124,24 +139,38 @@ class SidebarItem(Component):
         badge: str | int | None = None,
         active: bool = False,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         on_click: EventHandler | None = None,
         **kwargs: Any,
     ) -> None:
-        self.tag = "a" if href and not disabled else "button"
+        unavailable = disabled or read_only or loading or bool(error)
+        self.tag = "a" if href and not unavailable else "button"
         attrs: dict[str, Any] = {"aria_label": label}
-        if href and not disabled:
+        attrs.update(
+            _navigation_state_attrs(
+                unavailable=unavailable, loading=loading, error=error
+            )
+        )
+        if href and not unavailable:
             attrs["href"] = href
         else:
             attrs["type"] = "button"
-        if disabled:
+        if unavailable:
             attrs["disabled"] = True
-            attrs["aria_disabled"] = "true"
-        if on_click is not None and not disabled:
+        if on_click is not None and not unavailable:
             attrs["data_vd_event_click"] = bind_event(on_click)
         if active:
             attrs["aria_current"] = "page"
         super().__init__(data_vd_sidebar_item=True, **attrs, **kwargs)
-        self.props = {"active": active}
+        self.props = {
+            "active": active,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
         children: list[Component] = []
         if icon is not None:
             children.append(_SidebarIcon(icon))
@@ -189,6 +218,10 @@ class SidebarToggle(Component):
         label: str = "Toggle navigation",
         on_change: EventHandler | None = None,
         placement: str = "standalone",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not modes or any(
@@ -202,6 +235,7 @@ class SidebarToggle(Component):
         target_id = target.id if isinstance(target, Sidebar) else target
         if not target_id:
             raise ValueError("SidebarToggle target must have an id")
+        unavailable = disabled or read_only or loading or bool(error)
         current_mode = (
             target.attrs.get("data_vd_sidebar_mode", "expanded")
             if isinstance(target, Sidebar)
@@ -219,11 +253,21 @@ class SidebarToggle(Component):
                 "Collapse navigation" if label == "Toggle navigation" else label
             ),
         }
-        if on_change is not None:
+        if on_change is not None and not unavailable:
             attrs["data_vd_event_change"] = bind_event(on_change)
+        if read_only:
+            attrs["aria_readonly"] = "true"
+        if loading:
+            attrs["aria_busy"] = "true"
+        if error:
+            attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                attrs["data_vd_error"] = error
         super().__init__(
             _SidebarToggleGlyph(),
             type="button",
+            disabled=unavailable,
+            aria_disabled="true" if unavailable else None,
             aria_label=(
                 attrs["data_vd_sidebar_collapse_label"]
                 if current_mode == "expanded"
@@ -239,7 +283,13 @@ class SidebarToggle(Component):
             **attrs,
             **kwargs,
         )
-        self.props = {"placement": placement}
+        self.props = {
+            "placement": placement,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 def _configure_sidebar_toggle(
@@ -332,13 +382,37 @@ class BottomNav(Component):
         self,
         *items: BottomNavItem,
         label: str = "Primary navigation",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not 2 <= len(items) <= 5:
             raise ValueError("BottomNav requires between two and five items")
         if not all(isinstance(item, BottomNavItem) for item in items):
             raise TypeError("BottomNav children must be BottomNavItem instances")
-        super().__init__(*items, aria_label=label, **kwargs)
+        unavailable = disabled or read_only or loading or bool(error)
+        if unavailable:
+            for item in items:
+                item.attrs["disabled"] = True
+                item.attrs["aria_disabled"] = "true"
+                item.attrs["tabindex"] = "-1"
+                item.attrs.pop("href", None)
+                item.attrs.pop("data-vd-event-click", None)
+                item.attrs.pop("data_vd_event_click", None)
+        state_attrs = _navigation_state_attrs(
+            unavailable=unavailable, loading=loading, error=error
+        )
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        super().__init__(*items, aria_label=label, **state_attrs, **kwargs)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class BottomNavItem(Component):
@@ -355,15 +429,39 @@ class BottomNavItem(Component):
         icon: Component | None = None,
         active: bool = False,
         on_click: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
-        attrs: dict[str, Any] = {"href": href, "aria_label": label}
+        unavailable = disabled or read_only or loading or bool(error)
+        attrs: dict[str, Any] = {
+            "aria_label": label,
+        }
+        attrs.update(
+            _navigation_state_attrs(
+                unavailable=unavailable, loading=loading, error=error
+            )
+        )
+        if not unavailable:
+            attrs["href"] = href
+        if unavailable:
+            attrs["tabindex"] = "-1"
+            attrs["data_vd_disabled"] = True
+            attrs["disabled"] = True
         if active:
             attrs["aria_current"] = "page"
-        if on_click is not None:
+        if on_click is not None and not unavailable:
             attrs["data_vd_event_click"] = bind_event(on_click)
         super().__init__(**attrs, **kwargs)
-        self.props = {"active": active}
+        self.props = {
+            "active": active,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
         children: list[Component] = []
         if icon is not None:
             children.append(_BottomNavIcon(icon))

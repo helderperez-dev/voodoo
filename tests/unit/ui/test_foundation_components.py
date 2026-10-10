@@ -50,6 +50,17 @@ def test_alert_validates_tone_and_variant():
         Alert("Message", variant="glass")
 
 
+def test_alert_state_contract_exposes_feedback_metadata():
+    html = Alert(
+        "Saving",
+        loading=True,
+        error="Save failed",
+    ).render()
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Save failed"' in html
+
+
 def test_progress_supports_determinate_and_indeterminate_states(adapter):
     determinate = Progress(72, label="Upload progress", tone="success").render()
     assert "<progress" in determinate
@@ -72,12 +83,35 @@ def test_progress_validates_numeric_contract():
         Progress(float("nan"))
 
 
+def test_progress_state_contract_exposes_status_metadata():
+    html = Progress(
+        value=40,
+        loading=True,
+        error="Progress unavailable",
+    ).render()
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Progress unavailable"' in html
+    assert 'value="40"' not in html
+
+
 def test_spinner_has_visible_motion_and_screen_reader_label(adapter):
     html = Spinner("Saving", size="lg").render()
     assert 'role="status"' in html
     assert 'aria-live="polite"' in html
     assert "Saving" in html
     assert "spinner" in html or "animate-spin" in html
+
+
+def test_spinner_state_contract_exposes_status_metadata():
+    html = Spinner(
+        "Saving",
+        loading=True,
+        error="Save unavailable",
+    ).render()
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Save unavailable"' in html
 
 
 def test_breadcrumb_marks_last_item_as_current(adapter):
@@ -92,6 +126,22 @@ def test_breadcrumb_marks_last_item_as_current(adapter):
     assert 'aria-current="page"' in html
 
 
+def test_breadcrumb_item_state_contract_blocks_unavailable_navigation(adapter):
+    html = BreadcrumbItem(
+        "Settings",
+        "/settings",
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Unavailable"' in html
+    assert "href=\"/settings\"" not in html
+
+
 def test_button_group_has_group_semantics_and_layout(adapter):
     html = ButtonGroup(
         Button("List"),
@@ -102,6 +152,22 @@ def test_button_group_has_group_semantics_and_layout(adapter):
     assert 'role="group"' in html
     assert 'aria-label="View"' in html
     assert html.count("<button") == 2
+
+
+def test_button_group_state_contract_blocks_all_actions(adapter):
+    html = ButtonGroup(
+        Button("List", on_click=lambda: None),
+        Button("Grid", on_click=lambda: None),
+        read_only=True,
+        loading=True,
+        error="Actions unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Actions unavailable"' in html
+    assert html.count('aria-disabled="true"') >= 3
+    assert "data-vd-event-click" not in html
 
 
 def test_button_group_rejects_non_component_children():
@@ -124,6 +190,24 @@ def test_accordion_uses_native_disclosure_elements(adapter):
 def test_accordion_rejects_non_item_children():
     with pytest.raises(TypeError, match="AccordionItem"):
         Accordion(Text("Not an item"))
+
+
+def test_accordion_item_state_contract_blocks_unavailable_disclosure():
+    html = AccordionItem(
+        "Security",
+        Text("Passkeys"),
+        open=True,
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Unavailable"' in html
+    assert 'tabindex="-1"' in html
+    assert 'open="open"' not in html
 
 
 def test_kbd_and_aspect_ratio_render_content_helpers(adapter):

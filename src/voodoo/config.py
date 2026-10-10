@@ -1,13 +1,48 @@
+"""Typed configuration loading and production-safety validation."""
+
+from __future__ import annotations
+
+import logging
 import os
 import re
 from collections.abc import Callable
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from voodoo.core.errors import ConfigurationError
+from voodoo.security.redaction import redact_string
+
+_logger = logging.getLogger("voodoo.config")
+
+__all__ = [
+    "AIConfig",
+    "AuthConfig",
+    "CacheConfig",
+    "DatabaseConfig",
+    "EdgeConfig",
+    "EventsConfig",
+    "ModelsConfig",
+    "ObjectsConfig",
+    "QueueConfig",
+    "RuntimeConfig",
+    "SEOConfig",
+    "SecurityConfig",
+    "StoreSettings",
+    "ThemeConfig",
+    "VoodooConfig",
+    "config",
+    "get_config",
+    "interpolate_env_vars",
+    "load_toml_config",
+    "load_yaml_config",
+    "validate_production_config",
+]
+
+DEVELOPMENT_SECRET_KEY = "dev-secret-key-change-in-production-voodoo-2026"
 
 load_dotenv()
 
@@ -25,7 +60,7 @@ def interpolate_env_vars(value: Any) -> Any:
             if val is not None:
                 return val
             if default_val is not None:
-                return default_val
+                return str(default_val)
             return ""
 
         return _ENV_VAR_PATTERN.sub(_replace, value)
@@ -48,6 +83,143 @@ def _resolve_debug() -> bool:
     if explicit is not None:
         return explicit
     return os.getenv("VOODOO_ENV", "development") != "production"
+
+
+def _is_production() -> bool:
+    return os.getenv("VOODOO_ENV", "development").strip().lower() == "production"
+
+
+def _default_cors_origins() -> list[str]:
+    configured = os.getenv("VOODOO_CORS_ORIGINS")
+    if configured is not None:
+        return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return [] if _is_production() else ["*"]
+
+
+def _default_cors_credentials() -> bool:
+    configured = _env_flag("VOODOO_CORS_ALLOW_CREDENTIALS")
+    return configured if configured is not None else not _is_production()
+
+
+def _default_csrf_enabled() -> bool:
+    configured = _env_flag("VOODOO_CSRF_ENABLED")
+    return configured if configured is not None else _is_production()
+
+
+def _default_cors_methods() -> list[str]:
+    """Use an explicit production method allow-list; keep dev zero-config."""
+    if _is_production():
+        return ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    return ["*"]
+
+
+def _default_cors_headers() -> list[str]:
+    """Use only headers required by the framework's authenticated APIs."""
+    if _is_production():
+        return [
+            "Accept",
+            "Authorization",
+            "Content-Type",
+            "X-CSRF-Token",
+            "X-Correlation-ID",
+            "X-Request-ID",
+            "X-Trace-ID",
+        ]
+    return ["*"]
+
+
+def _default_csp_directives() -> dict[str, str]:
+    """Return a profile-aware CSP, keeping development conveniences explicit."""
+    if _is_production():
+        return {
+            "default-src": "'self'",
+            "script-src": "'self'",
+            "style-src": "'self'",
+            "font-src": "'self' data:",
+            "img-src": "'self' data: https: blob:",
+            "connect-src": "'self' wss:",
+            "frame-ancestors": "'self'",
+        }
+    return {
+        "default-src": "'self'",
+        "script-src": "'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com",
+        "style-src": "'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
+        "font-src": "'self' data: https://fonts.gstatic.com",
+        "img-src": "'self' data: https: blob:",
+        "connect-src": "'self' ws: wss: http: https:",
+        "frame-ancestors": "'self'",
+    }
+
+
+def _default_permissions_policy() -> str:
+    """Disable high-risk browser capabilities unless explicitly opted in."""
+    if _is_production():
+        return "camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+    return ""
+
+
+def _production_csp_problems(security: SecurityConfig) -> list[str]:
+    """Return production CSP violations without weakening other checks."""
+    script_src = security.csp_directives.get("script-src", "")
+    problems: list[str] = []
+    if "'self'" not in script_src:
+        problems.append("production CSP script-src must include self")
+    if "'unsafe-inline'" in script_src:
+        problems.append("production CSP script-src cannot allow unsafe-inline")
+    if "'unsafe-eval'" in script_src:
+        problems.append("production CSP script-src cannot allow unsafe-eval")
+    if "*" in script_src:
+        problems.append("production CSP script-src cannot allow wildcard sources")
+    style_src = security.csp_directives.get("style-src", "")
+    if "'unsafe-inline'" in style_src:
+        problems.append("production CSP style-src cannot allow unsafe-inline")
+    return problems
+
+
+def _production_cors_problems(security: SecurityConfig) -> list[str]:
+    """Return production CORS policy violations without weakening defaults."""
+    problems: list[str] = []
+    if "*" in security.cors_origins and security.cors_allow_credentials:
+        problems.append("credentialed CORS cannot allow the wildcard origin")
+    if "*" in security.cors_origins and not security.cors_allow_credentials:
+        problems.append("production CORS origins cannot allow a wildcard")
+    for origin in security.cors_origins:
+        if origin == "*":
+            continue
+        try:
+            parsed = urlsplit(origin)
+            # Accessing ``port`` forces urlsplit to reject malformed ports.
+            _ = parsed.port
+        except ValueError:
+            problems.append(
+                "production CORS origins must be absolute HTTP(S) origins"
+            )
+            break
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+        ):
+            problems.append(
+                "production CORS origins must be absolute HTTP(S) origins"
+            )
+            break
+    if "*" in security.cors_allow_methods:
+        problems.append("production CORS methods cannot allow a wildcard")
+    if "*" in security.cors_allow_headers:
+        problems.append("production CORS headers cannot allow a wildcard")
+    return problems
+
+
+def _production_permissions_policy_problems(security: SecurityConfig) -> list[str]:
+    """Reject wildcard browser-capability grants in production."""
+    if "*" in security.permissions_policy:
+        return ["production Permissions-Policy cannot allow wildcard features"]
+    return []
 
 
 def _resolve_db_path() -> str:
@@ -91,14 +263,37 @@ class SEOConfig(BaseModel):
 
 class AuthConfig(BaseModel):
     secret_key: str = Field(
-        default_factory=lambda: os.getenv(
-            "VOODOO_SECRET_KEY", "dev-secret-key-change-in-production-voodoo-2026"
-        )
+        default_factory=lambda: os.getenv("VOODOO_SECRET_KEY", DEVELOPMENT_SECRET_KEY)
     )
     token_expiry_seconds: int = Field(
+        gt=0,
+        le=31_536_000,
         default_factory=lambda: int(
             os.getenv("VOODOO_TOKEN_EXPIRY", str(7 * 24 * 3600))
         )
+    )
+    jwt_issuer: str | None = Field(
+        default_factory=lambda: os.getenv("VOODOO_JWT_ISSUER") or None
+    )
+    jwt_audience: str | None = Field(
+        default_factory=lambda: os.getenv("VOODOO_JWT_AUDIENCE") or None
+    )
+    jwt_clock_skew_seconds: int = Field(
+        default_factory=lambda: int(os.getenv("VOODOO_JWT_CLOCK_SKEW", "0")),
+        ge=0,
+        le=300,
+    )
+    jwt_revocation_max_entries: int = Field(
+        default_factory=lambda: int(os.getenv("VOODOO_JWT_REVOCATION_MAX", "10000")),
+        gt=0,
+        le=1_000_000,
+    )
+    jwt_previous_secrets: list[str] = Field(
+        default_factory=lambda: [
+            value.strip()
+            for value in os.getenv("VOODOO_JWT_PREVIOUS_SECRETS", "").split(",")
+            if value.strip()
+        ]
     )
     cookie_name: str = "voodoo_auth"
     cookie_secure: bool = Field(
@@ -114,34 +309,24 @@ class SecurityConfig(BaseModel):
     hsts_enabled: bool = Field(
         default_factory=lambda: os.getenv("VOODOO_ENV", "development") == "production"
     )
-    hsts_max_age: int = 31536000
+    hsts_max_age: int = Field(default=31536000, gt=0, le=31_536_000)
     frame_options: str = "SAMEORIGIN"
     content_type_options: str = "nosniff"
     xss_protection: str = "1; mode=block"
     referrer_policy: str = "strict-origin-when-cross-origin"
-    permissions_policy: str = ""
-    csp_directives: dict[str, str] = Field(
-        default_factory=lambda: {
-            "default-src": "'self'",
-            "script-src": "'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com",
-            "style-src": "'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
-            "font-src": "'self' data: https://fonts.gstatic.com",
-            "img-src": "'self' data: https: blob:",
-            "connect-src": "'self' ws: wss: http: https:",
-            "frame-ancestors": "'self'",
-        }
-    )
+    permissions_policy: str = Field(default_factory=_default_permissions_policy)
+    csp_directives: dict[str, str] = Field(default_factory=_default_csp_directives)
     cors_enabled: bool = True
-    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
-    cors_allow_credentials: bool = True
-    cors_allow_methods: list[str] = Field(default_factory=lambda: ["*"])
-    cors_allow_headers: list[str] = Field(default_factory=lambda: ["*"])
-    csrf_enabled: bool = False
+    cors_origins: list[str] = Field(default_factory=_default_cors_origins)
+    cors_allow_credentials: bool = Field(default_factory=_default_cors_credentials)
+    cors_allow_methods: list[str] = Field(default_factory=_default_cors_methods)
+    cors_allow_headers: list[str] = Field(default_factory=_default_cors_headers)
+    csrf_enabled: bool = Field(default_factory=_default_csrf_enabled)
     csrf_cookie_name: str = "voodoo_csrf"
     csrf_header_name: str = "X-CSRF-Token"
     rate_limit_enabled: bool = True
-    rate_limit_requests: int = 100
-    rate_limit_window: int = 60
+    rate_limit_requests: int = Field(default=100, gt=0, le=1_000_000)
+    rate_limit_window: int = Field(default=60, gt=0, le=86_400)
 
 
 class RuntimeConfig(BaseModel):
@@ -163,6 +348,7 @@ class StoreSettings(BaseModel):
     enabled: bool = True
     durability: str = "data"
     repair_torn_tail: bool = True
+    max_bytes: int | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -199,6 +385,14 @@ class ObjectsConfig(BaseModel):
     bucket: str = ""
     endpoint: str = ""
     base_dir: str = ""
+    # Bound request bodies before they reach any object provider.  The limit
+    # is intentionally conservative by default and can be raised explicitly
+    # for applications that have a documented larger-object workflow.
+    max_upload_bytes: int = Field(
+        default=50 * 1024 * 1024,
+        ge=1,
+        le=10 * 1024 * 1024 * 1024,
+    )
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -284,9 +478,18 @@ def load_yaml_config(file_path: str = "voodoo.yaml") -> dict[str, Any]:
         with open(file_path) as f:
             try:
                 raw_data = yaml.safe_load(f) or {}
-                return interpolate_env_vars(raw_data)
+                resolved = interpolate_env_vars(raw_data)
+                if not isinstance(resolved, dict):
+                    raise ConfigurationError(
+                        f"The root of {file_path} must be a mapping."
+                    )
+                return resolved
             except yaml.YAMLError as e:
-                print(f"Error parsing {file_path}: {e}")
+                _logger.warning(
+                    "configuration parse failed file=%s error=%s",
+                    file_path,
+                    redact_string(str(e)),
+                )
     return {}
 
 
@@ -297,9 +500,18 @@ def load_toml_config(file_path: str = "voodoo.toml") -> dict[str, Any]:
 
             with open(file_path, "rb") as f:
                 raw_data = tomllib.load(f)
-                return interpolate_env_vars(raw_data)
-        except Exception as e:
-            print(f"Error parsing {file_path}: {e}")
+                resolved = interpolate_env_vars(raw_data)
+                if not isinstance(resolved, dict):
+                    raise ConfigurationError(
+                        f"The root of {file_path} must be a mapping."
+                    )
+                return resolved
+        except (OSError, TypeError, ValueError, ConfigurationError) as e:
+            _logger.warning(
+                "configuration load failed file=%s error=%s",
+                file_path,
+                redact_string(str(e)),
+            )
     return {}
 
 
@@ -310,6 +522,7 @@ def _build_store_config(file_data: dict[str, Any]) -> StoreSettings:
 
     enabled_flag = _env_flag("VOODOO_STORE_ENABLED")
     repair_flag = _env_flag("VOODOO_STORE_REPAIR_TORN_TAIL")
+    max_bytes_value = store_data.get("max_bytes") or os.getenv("VOODOO_STORE_MAX_BYTES")
     return StoreSettings(
         provider=store_data.get("provider")
         or os.getenv("VOODOO_STORE_PROVIDER")
@@ -334,6 +547,7 @@ def _build_store_config(file_data: dict[str, Any]) -> StoreSettings:
             if repair_flag is not None
             else True
         ),
+        max_bytes=int(max_bytes_value) if max_bytes_value is not None else None,
         extra={
             k: v
             for k, v in store_data.items()
@@ -344,6 +558,7 @@ def _build_store_config(file_data: dict[str, Any]) -> StoreSettings:
                 "enabled",
                 "durability",
                 "repair_torn_tail",
+                "max_bytes",
             }
         },
     )
@@ -427,15 +642,37 @@ def _build_objects_config(file_data: dict[str, Any]) -> ObjectsConfig:
         or os.getenv("VOODOO_OBJECTS_DIR")
         or ".voodoo/objects"
     )
+    max_upload_raw = objects_data.get("max_upload_bytes")
+    if max_upload_raw is None:
+        max_upload_raw = os.getenv("VOODOO_MAX_UPLOAD_BYTES")
+    if max_upload_raw in (None, ""):
+        max_upload_bytes = 50 * 1024 * 1024
+    else:
+        try:
+            max_upload_bytes = int(max_upload_raw)
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(
+                "objects.max_upload_bytes must be a positive integer"
+            ) from exc
+    if max_upload_bytes < 1:
+        raise ConfigurationError("objects.max_upload_bytes must be a positive integer")
     return ObjectsConfig(
         provider=objects_provider,
         bucket=objects_bucket,
         endpoint=objects_endpoint,
         base_dir=objects_base_dir,
+        max_upload_bytes=max_upload_bytes,
         extra={
             k: v
             for k, v in objects_data.items()
-            if k not in ("provider", "bucket", "endpoint", "base_dir")
+            if k
+            not in (
+                "provider",
+                "bucket",
+                "endpoint",
+                "base_dir",
+                "max_upload_bytes",
+            )
         },
     )
 
@@ -509,7 +746,7 @@ def _build_edge_config(file_data: dict[str, Any]) -> EdgeConfig:
         if "mqtt_enabled" in edge_data or "VOODOO_EDGE_MQTT_ENABLED" in os.environ
         else (bool(mqtt) or "MQTT_BROKER_URL" in os.environ),
         "mqtt_broker_url": mqtt.get("broker_url") or os.getenv("MQTT_BROKER_URL", ""),
-        "mqtt_port": int(mqtt.get("port") or os.getenv("MQTT_PORT", "1883")),
+        "mqtt_port": int(str(mqtt.get("port") or os.getenv("MQTT_PORT", "1883"))),
         "mqtt_tls": bool(mqtt.get("tls") or _env_flag("MQTT_TLS") or False),
         "mqtt_username": mqtt.get("username") or os.getenv("MQTT_USERNAME", ""),
         "mqtt_password": mqtt.get("password") or os.getenv("MQTT_PASSWORD", ""),
@@ -653,6 +890,53 @@ def get_config(
     config_args["extra"] = {k: v for k, v in file_data.items() if k not in known_keys}
 
     return VoodooConfig(**config_args)
+
+
+def validate_production_config(resolved: VoodooConfig) -> None:
+    """Reject configurations that are unsafe for the production profile.
+
+    Development remains zero-configuration. Production is deliberately
+    fail-closed so a deployment cannot accidentally inherit development
+    credentials or browser-security settings.
+
+    Parameters
+    ----------
+    resolved:
+        The fully merged application configuration.
+
+    Raises
+    ------
+    ConfigurationError
+        If one or more production-safety requirements are not satisfied.
+    """
+    if resolved.env.strip().lower() != "production":
+        return
+
+    problems: list[str] = []
+    if resolved.debug:
+        problems.append("debug mode must be disabled")
+    if (
+        resolved.auth.secret_key == DEVELOPMENT_SECRET_KEY
+        or len(resolved.auth.secret_key) < 32
+    ):
+        problems.append(
+            "VOODOO_SECRET_KEY must be set to a unique value of at least 32 characters"
+        )
+    if not resolved.auth.cookie_secure:
+        problems.append("authentication cookies must use Secure")
+    if not resolved.security.hsts_enabled:
+        problems.append("HSTS must be enabled")
+    if not resolved.security.csrf_enabled:
+        problems.append("CSRF protection must be enabled for cookie authentication")
+    problems.extend(_production_cors_problems(resolved.security))
+    problems.extend(_production_permissions_policy_problems(resolved.security))
+    if resolved.auth.cookie_samesite == "none" and not resolved.auth.cookie_secure:
+        problems.append("SameSite=None cookies must use Secure")
+    problems.extend(_production_csp_problems(resolved.security))
+
+    if problems:
+        details = "; ".join(problems)
+        raise ConfigurationError(f"Unsafe production configuration: {details}.")
 
 
 config = get_config()

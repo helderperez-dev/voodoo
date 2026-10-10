@@ -40,6 +40,11 @@ _SENSITIVE_KEY_PATTERNS: re.Pattern[str] = re.compile(
 
 #: Value patterns that look like secrets regardless of key name.
 _SENSITIVE_VALUE_PATTERNS: list[re.Pattern[str]] = [
+    # Key/value pairs commonly emitted by exception messages and URLs.
+    re.compile(
+        r"(?i)(\b(?:secret|password|passwd|token|api[_-]?key|credential)\s*[=:]\s*)"
+        r"([^\s,;]+)"
+    ),
     # Bearer tokens
     re.compile(r"(?i)bearer\s+[A-Za-z0-9\-._~+/]+=*"),
     # OpenAI-style keys
@@ -71,6 +76,8 @@ def _redact_value_pattern(value: str) -> str:
         if pattern.pattern.startswith("(?i)([a-z]+://"):
             # URI password pattern — preserve scheme and host
             result = pattern.sub(rf"\1{_REDACTED}\2", result)
+        elif "\\b(?:secret|password" in pattern.pattern:
+            result = pattern.sub(rf"\1{_REDACTED}", result)
         else:
             result = pattern.sub(_REDACTED, result)
     return result

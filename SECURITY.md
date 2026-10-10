@@ -8,8 +8,8 @@ minor release line.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.15.x  | ✅ Current release |
-| < 1.15  | ❌ Not supported   |
+| 3.2.x   | ✅ Current line    |
+| < 3.2   | ❌ Not supported   |
 
 ## Reporting a Vulnerability
 
@@ -43,15 +43,24 @@ we will explain why.
 
 ## Security Features
 
-Voodoo includes several security features enabled by default:
+Voodoo includes development-safe defaults and a fail-closed production profile:
 
-- **CSRF Protection** — Double-submit cookie with cryptographic validation
+- **CSRF Protection** — Enabled automatically in production; non-cookie
+  exemptions require authentication validated by `AuthMiddleware`
 - **Security Headers** — CSP, HSTS, X-Frame-Options, X-Content-Type-Options,
   Referrer-Policy, Permissions-Policy
-- **CORS** — Configurable origin validation
-- **Rate Limiting** — Token bucket / sliding window limiter
+- **Production CSP** — the production profile defaults `script-src` to
+  `'self'` and rejects `unsafe-inline`, `unsafe-eval`, and wildcard script
+  sources at configuration validation time. The security middleware adds
+  response-bound SHA-256 hashes for inline HTML scripts, while applications
+  that need durable inline behavior should migrate it to same-origin assets
+  or an explicit nonce/hash policy before deployment.
+- **CORS** — Same-origin by default in production; wildcard credentials are
+  rejected at startup and denied by middleware
+- **Rate Limiting** — Bounded single-process sliding window keyed by validated
+  principal or client address
 - **Input Sanitization** — HTML escaping and XSS prevention
-- **JWT Authentication** — HS256 with expiration and revocation
+- **JWT Authentication** — HS256 signature and time-claim validation
 - **API Key Management** — High-entropy keys with SHA256 hashed storage
 - **RBAC** — Role-based access control with declarative guards
 
@@ -62,13 +71,15 @@ Before deploying Voodoo to production:
 - [ ] Set `VOODOO_SECRET_KEY` to a cryptographically secure random value
       (`voodoo auth secret-key` generates one)
 - [ ] Set `VOODOO_ENV=production` (disables debug mode)
-- [ ] Configure CORS to only allow your actual origins
+- [ ] Configure `VOODOO_CORS_ORIGINS` only when cross-origin access is needed
 - [ ] Set a restrictive Content-Security-Policy
-- [ ] Enable HSTS with an appropriate `max-age`
+- [ ] Keep HSTS and CSRF enabled (production startup rejects disabling them)
 - [ ] Configure rate limiting for sensitive endpoints
 - [ ] Use HTTPS (terminate TLS at a reverse proxy or load balancer)
 - [ ] Set `VOODOO_TOKEN_EXPIRY` to an appropriate value for your app
 - [ ] Review and restrict database permissions
+- [ ] Install `voodoo-framework[secrets]` before using `LocalSecretStore`; it
+      never falls back to plaintext
 
 ## Dependency Security
 

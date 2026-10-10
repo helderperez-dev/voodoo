@@ -20,12 +20,22 @@ same three methods.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Protocol
 
 from voodoo.runtime.execution import Execution, ExecutionStatus
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["ExecutionStore", "InMemoryExecutionStore", "JSONFileExecutionStore"]
+
+# JSONL records are append-only and may outlive a framework process.  Keep an
+# explicit envelope marker so readers can reject records they cannot safely
+# interpret while still accepting pre-versioned (legacy) lines.
+_SCHEMA_KEY = "_schema_version"
+_SCHEMA_VERSION = 1
 
 #: States considered unfinished (resumable) after a restart.
 UNFINISHED_STATUSES = (
@@ -74,13 +84,32 @@ class JSONFileExecutionStore:
             return []
         executions: list[Execution] = []
         with self.path.open(encoding="utf-8") as fh:
-            for line in fh:
+            for line_number, line in enumerate(fh, start=1):
                 line = line.strip()
                 if not line:
                     continue
                 try:
-                    executions.append(Execution.model_validate_json(line))
-                except Exception:
+                    executions.append(_decode_execution(line))
+                except ValueError as error:
+                    if str(error).startswith(
+                        "unsupported execution persistence schema version"
+                    ):
+                        # A future durable schema must stop recovery rather
+                        # than silently omitting state from a mixed-version
+                        # deployment.
+                        raise
+                    logger.warning(
+                        "execution persistence record could not be decoded line=%s error=%s",
+                        line_number,
+                        redact_string(str(error)),
+                    )
+                    continue
+                except (json.JSONDecodeError, UnicodeDecodeError, TypeError) as error:
+                    logger.warning(
+                        "execution persistence record could not be decoded line=%s error=%s",
+                        line_number,
+                        redact_string(str(error)),
+                    )
                     continue
         return executions
 
@@ -95,11 +124,27 @@ class JSONFileExecutionStore:
 def _safe_json(execution: Execution) -> str:
     """Serialize an execution, degrading non-JSON results to strings."""
     data = execution.model_dump(mode="json")
+    data[_SCHEMA_KEY] = _SCHEMA_VERSION
     try:
         return json.dumps(data, default=str)
     except (TypeError, ValueError):
         data["result"] = str(execution.result)
         return json.dumps(data, default=str)
+
+
+def _decode_execution(raw: str) -> Execution:
+    """Decode a versioned execution record, accepting legacy JSONL lines."""
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise ValueError("execution persistence record must be a JSON object")
+    version = payload.pop(_SCHEMA_KEY, 0)
+    if isinstance(version, bool) or not isinstance(version, int):
+        raise ValueError("execution persistence schema version must be an integer")
+    if version > _SCHEMA_VERSION:
+        raise ValueError(
+            f"unsupported execution persistence schema version: {version}"
+        )
+    return Execution.model_validate(payload)
 
 
 def filter_unfinished(executions: list[Execution]) -> list[Execution]:

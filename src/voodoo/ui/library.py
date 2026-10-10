@@ -9,12 +9,49 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypedDict
 
 from voodoo.ui.component import Component, escape, tone_to_color_var
 from voodoo.ui.events import bind_event
 
 EventHandler = Callable[..., Any] | str
+
+
+class _AuthState(TypedDict):
+    disabled: bool
+    read_only: bool
+    loading: bool
+    error: bool | str
+
+
+def _library_state(
+    component: Component,
+    *,
+    disabled: bool,
+    read_only: bool,
+    loading: bool,
+    error: bool | str,
+) -> dict[str, Any]:
+    unavailable = disabled or read_only or loading or bool(error)
+    if unavailable:
+        component.attrs["disabled"] = True
+        component.attrs["aria-disabled"] = "true"
+    if read_only:
+        component.attrs["readonly"] = True
+        component.attrs["aria-readonly"] = "true"
+    if loading:
+        component.attrs["aria-busy"] = "true"
+    if error:
+        component.attrs["aria-invalid"] = "true"
+        component.attrs["data-vd-state"] = "error"
+        if isinstance(error, str):
+            component.attrs["data-vd-error"] = error
+    return {
+        "disabled": disabled,
+        "read_only": read_only,
+        "loading": loading,
+        "error": error,
+    }
 
 # ---------------------------------------------------------------------------
 # Layout
@@ -142,12 +179,35 @@ class A(Component):
         *children: Any,
         href: str = "#",
         target: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(*children, **kwargs)
-        self.attrs["href"] = href
-        if target:
+        if not unavailable:
+            self.attrs["href"] = href
+        else:
+            self.attrs["aria-disabled"] = "true"
+            self.attrs["tabindex"] = "-1"
+        if read_only:
+            self.attrs["aria-readonly"] = "true"
+        if loading:
+            self.attrs["aria-busy"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            if isinstance(error, str):
+                self.attrs["data-vd-error"] = error
+        if target and not unavailable:
             self.attrs["target"] = target
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class Link(A):
@@ -166,12 +226,27 @@ class Button(Component):
         on_click: EventHandler | None = None,
         variant: str | None = None,
         size: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(*children, **kwargs)
-        if on_click is not None:
+        unavailable = disabled or read_only or loading or bool(error)
+        if on_click is not None and not unavailable:
             self.attrs["data_vd_event_click"] = bind_event(on_click)
-        self.props = {"variant": variant, "size": size}
+        self.props = {
+            "variant": variant,
+            "size": size,
+            **_library_state(
+                self,
+                disabled=disabled,
+                read_only=read_only,
+                loading=loading,
+                error=error,
+            ),
+        }
 
 
 class Card(Component):
@@ -192,6 +267,10 @@ class Card(Component):
         variant: str = "default",
         padding: str = "lg",
         on_click: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if variant not in self._VARIANTS:
@@ -204,8 +283,19 @@ class Card(Component):
                 f"invalid Card padding {padding!r}; expected one of "
                 f"{sorted(self._PADDINGS)}"
             )
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(*children, **kwargs)
-        if on_click is not None:
+        if unavailable:
+            self.attrs["aria-disabled"] = "true"
+        if read_only:
+            self.attrs["aria-readonly"] = "true"
+        if loading:
+            self.attrs["aria-busy"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            if isinstance(error, str):
+                self.attrs["data-vd-error"] = error
+        if on_click is not None and not unavailable:
             self.attrs["data_vd_event_click"] = bind_event(on_click)
             self.attrs.setdefault("role", "button")
             self.attrs.setdefault("tabindex", "0")
@@ -214,7 +304,12 @@ class Card(Component):
         self.props = {
             "variant": None if variant == "default" else variant,
             "padding": padding,
-            "interactive": on_click is not None or variant == "interactive",
+            "interactive": (on_click is not None or variant == "interactive")
+            and not unavailable,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
         }
 
 
@@ -336,11 +431,35 @@ class Dialog(Component):
     tag = "dialog"
     style = "dialog"
 
-    def __init__(self, *children: Any, open: bool = False, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *children: Any,
+        open: bool = False,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
+    ) -> None:
         kwargs.setdefault("tabindex", "-1")
+        unavailable = disabled or read_only or loading
         super().__init__(*children, data_vd_layer=True, **kwargs)
-        if open:
+        if unavailable:
+            self.attrs["aria-disabled"] = "true"
+        if loading:
+            self.attrs["aria-busy"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            if isinstance(error, str):
+                self.attrs["data-vd-error"] = error
+        if open and not unavailable:
             self.attrs["open"] = True
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class Modal(Component):
@@ -354,16 +473,35 @@ class Modal(Component):
         *children: Any,
         open: bool = False,
         labelled_by: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         kwargs.setdefault("tabindex", "-1")
+        unavailable = disabled or read_only or loading
         super().__init__(*children, data_vd_layer=True, **kwargs)
         self.attrs["role"] = "dialog"
         self.attrs["aria-modal"] = "true"
         if labelled_by:
             self.attrs["aria-labelledby"] = labelled_by
-        if open:
+        if unavailable:
+            self.attrs["aria-disabled"] = "true"
+        if loading:
+            self.attrs["aria-busy"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            if isinstance(error, str):
+                self.attrs["data-vd-error"] = error
+        if open and not unavailable:
             self.attrs["open"] = True
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class List(Component):
@@ -677,14 +815,29 @@ class Form(Component):
     style = "form"
 
     def __init__(
-        self, *children: Any, on_submit: str | None = None, **kwargs: Any
+        self,
+        *children: Any,
+        on_submit: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
     ) -> None:
         super().__init__(*children, **kwargs)
-        if on_submit:
+        unavailable = disabled or read_only or loading or bool(error)
+        if on_submit and not unavailable:
             self.attrs["onsubmit"] = (
                 f"event.preventDefault(); voodoo.sendEvent('{on_submit}', "
                 "this.id, new FormData(this))"
             )
+        self.props = _library_state(
+            self,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+        )
 
 
 class Label(Component):
@@ -701,10 +854,15 @@ class Input(Component):
         *children: Any,
         on_change: str | None = None,
         size: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(*children, **kwargs)
-        if on_change:
+        unavailable = disabled or read_only or loading or bool(error)
+        if on_change and not unavailable:
             self.attrs["onchange"] = (
                 f"voodoo.sendEvent('{on_change}', this.id, this.value)"
             )
@@ -712,7 +870,16 @@ class Input(Component):
             self.attrs["type"] = "text"
         if self.attrs["type"] in ("checkbox", "radio", "hidden"):
             self.style = None
-        self.props = {"size": size}
+        self.props = {
+            "size": size,
+            **_library_state(
+                self,
+                disabled=disabled,
+                read_only=read_only,
+                loading=loading,
+                error=error,
+            ),
+        }
 
 
 class Textarea(Component):
@@ -720,13 +887,28 @@ class Textarea(Component):
     style = "textarea"
 
     def __init__(
-        self, *children: Any, on_change: str | None = None, **kwargs: Any
+        self,
+        *children: Any,
+        on_change: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
     ) -> None:
         super().__init__(*children, **kwargs)
-        if on_change:
+        unavailable = disabled or read_only or loading or bool(error)
+        if on_change and not unavailable:
             self.attrs["onchange"] = (
                 f"voodoo.sendEvent('{on_change}', this.id, this.value)"
             )
+        self.props = _library_state(
+            self,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+        )
 
 
 class Select(Component):
@@ -734,42 +916,105 @@ class Select(Component):
     style = "select"
 
     def __init__(
-        self, *children: Any, on_change: str | None = None, **kwargs: Any
+        self,
+        *children: Any,
+        on_change: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
     ) -> None:
         super().__init__(*children, **kwargs)
-        if on_change:
+        unavailable = disabled or read_only or loading or bool(error)
+        if on_change and not unavailable:
             self.attrs["onchange"] = (
                 f"voodoo.sendEvent('{on_change}', this.id, this.value)"
             )
+        self.props = _library_state(
+            self,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+        )
 
 
 class Option(Component):
     tag = "option"
 
+    def __init__(
+        self,
+        *children: Any,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*children, **kwargs)
+        self.props = _library_state(
+            self,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+        )
+
 
 class Checkbox(Input):
     def __init__(
-        self, *children: Any, on_change: str | None = None, **kwargs: Any
+        self,
+        *children: Any,
+        on_change: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
     ) -> None:
         kwargs["type"] = "checkbox"
-        if on_change:
+        unavailable = disabled or read_only or loading or bool(error)
+        if on_change and not unavailable:
             kwargs["onchange"] = (
                 f"voodoo.sendEvent('{on_change}', this.id, this.checked)"
             )
-        super().__init__(*children, **kwargs)
+        super().__init__(
+            *children,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+            **kwargs,
+        )
         self.style = "checkbox"
 
 
 class Radio(Input):
     def __init__(
-        self, *children: Any, on_change: str | None = None, **kwargs: Any
+        self,
+        *children: Any,
+        on_change: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
     ) -> None:
         kwargs["type"] = "radio"
-        if on_change:
+        unavailable = disabled or read_only or loading or bool(error)
+        if on_change and not unavailable:
             kwargs["onchange"] = (
                 f"voodoo.sendEvent('{on_change}', this.id, this.checked)"
             )
-        super().__init__(*children, **kwargs)
+        super().__init__(
+            *children,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+            **kwargs,
+        )
         self.style = "radio"
 
 
@@ -796,9 +1041,25 @@ class Table(Component):
     tag = "table"
 
     def __init__(
-        self, headers: list[str], rows: list[list[Any]], **kwargs: Any
+        self,
+        headers: list[str],
+        rows: list[list[Any]],
+        *,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        empty_text: str = "No data available",
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
+        _library_state(
+            self,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+        )
 
         head_cells = [
             _Cell("th", header, style="table.header_cell") for header in headers
@@ -806,17 +1067,46 @@ class Table(Component):
         head_row = _Cell("tr", *head_cells, style="table.row")
         thead = _Cell("thead", head_row, style="table.head")
 
-        body_rows = [
-            _Cell(
-                "tr",
-                *[_Cell("td", value, style="table.cell") for value in row],
-                style="table.row",
+        if error or loading or not rows:
+            if error:
+                message = error if isinstance(error, str) else "Unable to load data"
+                state = "error"
+            elif loading:
+                message = "Loading…"
+                state = "loading"
+            else:
+                message = empty_text
+                state = "empty"
+            cell = _Cell(
+                "td",
+                message,
+                style="table.cell",
+                colspan=max(1, len(headers)),
+                aria_live="polite",
+                data_vd_state=state,
             )
-            for row in rows
-        ]
+            body_rows = [_Cell("tr", cell, style="table.row")]
+        else:
+            body_rows = [
+                _Cell(
+                    "tr",
+                    *[_Cell("td", value, style="table.cell") for value in row],
+                    style="table.row",
+                )
+                for row in rows
+            ]
         tbody = _Cell("tbody", *body_rows)
 
         self.children = (thead, tbody)
+        self.props.update(
+            {
+                "empty": not rows,
+                "disabled": disabled,
+                "read_only": read_only,
+                "loading": loading,
+                "error": error,
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -948,11 +1238,34 @@ class NavLink(Component):
         *children: Any,
         href: str = "#",
         active: bool = False,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(*children, **kwargs)
-        self.attrs["href"] = href
-        self.props = {"active": active}
+        if not unavailable:
+            self.attrs["href"] = href
+        else:
+            self.attrs["aria-disabled"] = "true"
+            self.attrs["tabindex"] = "-1"
+        if read_only:
+            self.attrs["aria-readonly"] = "true"
+        if loading:
+            self.attrs["aria-busy"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            if isinstance(error, str):
+                self.attrs["data-vd-error"] = error
+        self.props = {
+            "active": active,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class Brand(Component):
@@ -972,15 +1285,44 @@ class ThemeToggle(Component):
     tag = "button"
     style = "theme-toggle"
 
-    def __init__(self, label: str = "Toggle theme", **kwargs: Any) -> None:
-        super().__init__(**kwargs)
+    def __init__(
+        self,
+        label: str = "Toggle theme",
+        *,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
+    ) -> None:
+        unavailable = disabled or read_only or loading or bool(error)
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["disabled"] = True
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(**state_attrs, **kwargs)
         self.attrs["type"] = "button"
         self.attrs["aria-label"] = label
-        self.attrs["data-vd-action"] = "toggle-theme"
+        if not unavailable:
+            self.attrs["data-vd-action"] = "toggle-theme"
         self.children = (
             Text("☀", class_="vd-theme-toggle-sun"),
             Text("☾", class_="vd-theme-toggle-moon"),
         )
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class Hero(Component):
@@ -1087,9 +1429,31 @@ class BackLink(Component):
     tag = "a"
     style = "back-link"
 
-    def __init__(self, *children: Any, href: str = "/", **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *children: Any,
+        href: str = "/",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
+    ) -> None:
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(*children, **kwargs)
-        self.attrs["href"] = href
+        if not unavailable:
+            self.attrs["href"] = href
+        else:
+            self.attrs["aria-disabled"] = "true"
+            self.attrs["tabindex"] = "-1"
+        if read_only:
+            self.attrs["aria-readonly"] = "true"
+        if loading:
+            self.attrs["aria-busy"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            if isinstance(error, str):
+                self.attrs["data-vd-error"] = error
 
 
 class FeatureCard(Component):
@@ -1105,9 +1469,31 @@ class LinkArrow(Component):
     tag = "a"
     style = "link-arrow"
 
-    def __init__(self, *children: Any, href: str = "#", **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *children: Any,
+        href: str = "#",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
+    ) -> None:
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(*children, **kwargs)
-        self.attrs["href"] = href
+        if not unavailable:
+            self.attrs["href"] = href
+        else:
+            self.attrs["aria-disabled"] = "true"
+            self.attrs["tabindex"] = "-1"
+        if read_only:
+            self.attrs["aria-readonly"] = "true"
+        if loading:
+            self.attrs["aria-busy"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            if isinstance(error, str):
+                self.attrs["data-vd-error"] = error
 
 
 # ---------------------------------------------------------------------------
@@ -1135,8 +1521,18 @@ class LoginForm(Component):
         redirect_url: str = "/dashboard",
         csrf_token: str | None = None,
         username_field: str = "username",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
+        state: _AuthState = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
         hidden: list[Component] = []
         if csrf_token:
             hidden.append(Input(type="hidden", name="csrf_token", value=csrf_token))
@@ -1153,6 +1549,7 @@ class LoginForm(Component):
                     required=True,
                     autocomplete="username",
                     placeholder="you@example.com",
+                    **state,
                 ),
             ),
             _auth_field(
@@ -1163,11 +1560,13 @@ class LoginForm(Component):
                     required=True,
                     autocomplete="current-password",
                     placeholder="••••••••",
+                    **state,
                 ),
             ),
-            Button(submit_text, type="submit", variant="primary"),
+            Button(submit_text, type="submit", variant="primary", **state),
             action=action,
             method=method,
+            **state,
         )
         header = Stack(
             Heading(title, level=2),
@@ -1176,6 +1575,7 @@ class LoginForm(Component):
             items="center",
         )
         super().__init__(Stack(header, form, gap="lg"), **kwargs)
+        self.props = dict(state)
 
 
 class RegisterForm(Component):
@@ -1192,8 +1592,18 @@ class RegisterForm(Component):
         subtitle: str = "Get started in seconds",
         submit_text: str = "Create Account",
         csrf_token: str | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
+        state: _AuthState = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
         hidden: list[Component] = []
         if csrf_token:
             hidden.append(Input(type="hidden", name="csrf_token", value=csrf_token))
@@ -1208,6 +1618,7 @@ class RegisterForm(Component):
                     required=True,
                     autocomplete="email",
                     placeholder="you@example.com",
+                    **state,
                 ),
             ),
             _auth_field(
@@ -1218,6 +1629,7 @@ class RegisterForm(Component):
                     required=True,
                     autocomplete="username",
                     placeholder="johndoe",
+                    **state,
                 ),
             ),
             _auth_field(
@@ -1229,11 +1641,13 @@ class RegisterForm(Component):
                     autocomplete="new-password",
                     minlength="8",
                     placeholder="Min. 8 characters",
+                    **state,
                 ),
             ),
-            Button(submit_text, type="submit", variant="primary"),
+            Button(submit_text, type="submit", variant="primary", **state),
             action=action,
             method=method,
+            **state,
         )
         header = Stack(
             Heading(title, level=2),
@@ -1242,6 +1656,7 @@ class RegisterForm(Component):
             items="center",
         )
         super().__init__(Stack(header, form, gap="lg"), **kwargs)
+        self.props = dict(state)
 
 
 class _UserBadgeAvatar(Component):
@@ -1284,21 +1699,56 @@ class UserBadge(Component):
         self,
         user: Any | None = None,
         logout_url: str = "/api/auth/logout",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.user = user
         self.logout_url = logout_url
+        state = _library_state(
+            self,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+        )
 
         if not user or not getattr(user, "is_authenticated", False):
-            self.props = {"state": "anonymous"}
-            self.children = (A("Sign In", href="/login"),)
+            self.props = {"state": "anonymous", **state}
+            self.children = (
+                A(
+                    "Sign In",
+                    href="/login",
+                    disabled=disabled,
+                    read_only=read_only,
+                    loading=loading,
+                    error=error,
+                ),
+            )
             return
 
         display_name = getattr(user, "username", None) or getattr(user, "email", "User")
         initials = display_name[:2].upper() if display_name else "U"
         role = getattr(user, "role", "user")
-        self.props = {"state": "authenticated"}
+        self.props = {"state": "authenticated", **state}
+        action_attrs: dict[str, Any] = {
+            "aria_disabled": "true"
+            if disabled or read_only or loading or bool(error)
+            else None,
+            "aria_readonly": "true" if read_only else None,
+            "aria_busy": "true" if loading else None,
+            "aria_invalid": "true" if error else None,
+            "tabindex": "-1"
+            if disabled or read_only or loading or bool(error)
+            else None,
+            "aria_label": "Log out",
+            "title": "Log out",
+        }
+        if not (disabled or read_only or loading or bool(error)):
+            action_attrs["href"] = logout_url
         self.children = (
             _UserBadgeAvatar(initials, aria_hidden="true"),
             _UserBadgeCopy(
@@ -1307,9 +1757,7 @@ class UserBadge(Component):
             ),
             _UserBadgeAction(
                 "Log out",
-                href=logout_url,
-                aria_label="Log out",
-                title="Log out",
+                **action_attrs,
             ),
         )
 

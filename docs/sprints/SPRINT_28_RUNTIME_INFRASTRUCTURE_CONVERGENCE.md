@@ -137,9 +137,11 @@ Identity                -> Store-backed identity state
 Edge                    -> devices/credentials/sessions/effects/replay state
 ```
 
-Events and Objects use Store KV/transaction compatibility boundaries because the richer
-Store Topics/Streams and Objects subsystems are not yet exposed by the 0.2.2 Python
-binding. Their public Framework contracts remain stable for a later native binding swap.
+Execution events and Runtime outbox messages now use the released Store 0.3 stream and
+outbox primitives inside the local transaction boundary. Workflow checkpoints use the
+native workflow primitive through a durable external-ID mapping. Objects and any
+remaining compatibility adapters continue to use their documented KV boundaries until
+their native semantics are explicitly consumed by Framework.
 
 ### Scheduler capability boundary
 

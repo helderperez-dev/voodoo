@@ -13,7 +13,7 @@ import time
 from datetime import date, datetime
 from pathlib import Path
 from threading import Lock
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from voodoo.core.errors import ConfigurationError
@@ -176,7 +176,7 @@ def _encode(record: dict[str, Any]) -> bytes:
 
 
 def _decode(value: bytes) -> dict[str, Any]:
-    return json.loads(value.decode("utf-8"))
+    return cast(dict[str, Any], json.loads(value.decode("utf-8")))
 
 
 def _encode_index_value(value: Any) -> bytes:
@@ -322,7 +322,7 @@ def query_records(
         name = column[1:] if descending else column
         if name == native_order_field and column == order_by[0]:
             continue
-        rows.sort(key=lambda row: row.get(name), reverse=descending)
+        rows.sort(key=lambda row: cast(Any, row.get(name)), reverse=descending)
 
     if offset is not None:
         rows = rows[offset:]

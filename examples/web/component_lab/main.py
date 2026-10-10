@@ -656,11 +656,11 @@ def shell():
                     ),
                     Grid(
                         Card(
-                            Heading("Primary content", level=3),
+                            Heading("Primary content", level=2),
                             Text("A calm working surface."),
                         ),
                         Card(
-                            Heading("Secondary content", level=3),
+                            Heading("Secondary content", level=2),
                             Text("Responsive by default."),
                         ),
                         cols="2",
@@ -820,8 +820,8 @@ def forms():
                         ),
                         Calendar(year=2026, month=9, label="September 2026"),
                         Stack(
-                            Checkbox(name="terms", checked=True),
-                            Radio(name="mode", value="safe", checked=True),
+                            Field("Accept terms", Checkbox(name="terms", checked=True)),
+                            Field("Mode", Radio(name="mode", value="safe", checked=True)),
                             gap="md",
                         ),
                         cols="2",

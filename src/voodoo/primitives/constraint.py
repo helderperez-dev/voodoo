@@ -63,7 +63,7 @@ class Constraint(BaseModel):
         if op is None:
             raise ValueError(f"Unknown operator: {self.operator}")
         try:
-            return op(actual, self.value)
+            return bool(op(actual, self.value))
         except TypeError:
             return False
 

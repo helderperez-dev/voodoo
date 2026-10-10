@@ -10,6 +10,8 @@ user authentication.
 from __future__ import annotations
 
 import json
+import logging
+from collections.abc import Callable
 from typing import Any
 
 from starlette.requests import Request
@@ -28,8 +30,11 @@ from voodoo.edge.protocol import (
     EdgeMessageType,
     make_message,
 )
+from voodoo.security.redaction import redact_string
 
 __all__ = ["build_edge_routes", "EdgeHTTPRouter"]
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +65,11 @@ async def _json_body(request: Request) -> dict[str, Any]:
     try:
         body = await request.json()
         return body if isinstance(body, dict) else {}
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError) as error:
+        logger.warning(
+            "edge request body could not be decoded error=%s",
+            redact_string(str(error)),
+        )
         return {}
 
 
@@ -73,7 +82,7 @@ def _envelope_response(message: Any) -> JSONResponse:
 # ---------------------------------------------------------------------------
 
 
-def _make_enrollments_endpoint(gateway: DeviceGateway):
+def _make_enrollments_endpoint(gateway: DeviceGateway) -> Callable[..., Any]:
     """POST /v1/edge/enrollments — issue a single-use enrollment key.
 
     Protected by ``X-Admin-Token`` when
@@ -109,7 +118,7 @@ def _make_enrollments_endpoint(gateway: DeviceGateway):
     return enrollments
 
 
-def _make_enroll_endpoint(gateway: DeviceGateway):
+def _make_enroll_endpoint(gateway: DeviceGateway) -> Callable[..., Any]:
     """POST /v1/edge/enroll — consume a key, issue device + credential."""
 
     async def enroll(request: Request) -> Response:
@@ -139,7 +148,7 @@ def _make_enroll_endpoint(gateway: DeviceGateway):
     return enroll
 
 
-def _make_auth_endpoint(gateway: DeviceGateway):
+def _make_auth_endpoint(gateway: DeviceGateway) -> Callable[..., Any]:
     """POST /v1/edge/auth — credential → session (EDGE §18)."""
 
     async def auth(request: Request) -> Response:
@@ -169,7 +178,9 @@ def _make_auth_endpoint(gateway: DeviceGateway):
     return auth
 
 
-def _make_device_endpoint(gateway: DeviceGateway, message_type: EdgeMessageType):
+def _make_device_endpoint(
+    gateway: DeviceGateway, message_type: EdgeMessageType
+) -> Callable[..., Any]:
     """Shared factory for stateless authenticated device → runtime endpoints.
 
     Each HTTP request authenticates independently via
@@ -211,7 +222,7 @@ def _make_device_endpoint(gateway: DeviceGateway, message_type: EdgeMessageType)
     return handler
 
 
-def _make_effects_endpoint(gateway: DeviceGateway):
+def _make_effects_endpoint(gateway: DeviceGateway) -> Callable[..., Any]:
     """GET /v1/edge/effects — poll pending effects (EDGE §34)."""
 
     async def effects(request: Request) -> Response:
@@ -250,7 +261,7 @@ def _make_effects_endpoint(gateway: DeviceGateway):
     return effects
 
 
-def _make_effect_ack_endpoint(gateway: DeviceGateway):
+def _make_effect_ack_endpoint(gateway: DeviceGateway) -> Callable[..., Any]:
     """POST /v1/edge/effects/{effect_id}/ack — acknowledge an effect (EDGE §27)."""
 
     async def ack(request: Request) -> Response:

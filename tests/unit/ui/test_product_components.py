@@ -45,6 +45,22 @@ def test_metric_is_not_cardified_by_default():
         set_style_adapter(original)
 
 
+def test_status_badge_state_contract_exposes_metadata():
+    original = _native()
+    try:
+        html = StatusBadge(
+            "degraded",
+            loading=True,
+            error="Status unavailable",
+        ).render()
+        assert 'aria-busy="true"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'data-vd-error="Status unavailable"' in html
+        assert 'data-status="degraded"' in html
+    finally:
+        set_style_adapter(original)
+
+
 def test_empty_state_answers_next_action():
     original = _native()
     try:
@@ -57,6 +73,24 @@ def test_empty_state_answers_next_action():
         assert "No devices" in html
         assert "Enroll a device" in html
         assert "Enroll" in html
+    finally:
+        set_style_adapter(original)
+
+
+def test_empty_state_state_contract_suppresses_unavailable_action():
+    original = _native()
+    try:
+        html = EmptyState(
+            "Nothing here",
+            "Try again later.",
+            action=Button("Create"),
+            loading=True,
+            error="Unavailable",
+        ).render()
+        assert 'aria-busy="true"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'data-vd-error="Unavailable"' in html
+        assert "Create" not in html
     finally:
         set_style_adapter(original)
 
@@ -82,6 +116,17 @@ def test_data_table_accepts_semantic_columns_and_callable_selection():
         assert "data-vd-value=" in html
         assert 'role="button"' in html
         assert "onclick=" not in html
+        assert 'aria-label="Data table"' in html
+    finally:
+        set_style_adapter(original)
+
+
+def test_data_table_caption_is_the_accessible_name():
+    original = _native()
+    try:
+        html = DataTable(["name"], [{"name": "Edge One"}], caption="Devices").render()
+        assert '<caption class="vd-data-table-caption">Devices</caption>' in html
+        assert 'aria-label="Data table"' not in html
     finally:
         set_style_adapter(original)
 
@@ -98,6 +143,29 @@ def test_data_table_can_render_meaningful_empty_state():
         assert "Nothing here" in html
         assert "Create the first resource" in html
         assert "<table" not in html
+    finally:
+        set_style_adapter(original)
+
+
+def test_data_table_state_contract_suppresses_row_selection():
+    original = _native()
+    try:
+        html = DataTable(
+            ["name"],
+            [{"id": "dev-1", "name": "Edge One"}],
+            on_select=lambda value: value,
+            read_only=True,
+            loading=True,
+            error="Table unavailable",
+        ).render()
+        assert 'aria-disabled="true"' in html
+        assert 'aria-readonly="true"' in html
+        assert 'aria-busy="true"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'data-vd-error="Table unavailable"' in html
+        assert "data-vd-event-click" not in html
+        assert 'data-vd-error-state="true"' in html
+        assert "Table unavailable" in html
     finally:
         set_style_adapter(original)
 
@@ -165,6 +233,30 @@ def test_command_bar_binds_python_handler_without_inline_js():
         set_style_adapter(original)
 
 
+def test_command_bar_state_contract_suppresses_submit():
+    original = _native()
+
+    async def run_command(value):
+        return value
+
+    try:
+        html = CommandBar(
+            on_submit=run_command,
+            read_only=True,
+            loading=True,
+            error="Command unavailable",
+        ).render()
+        assert 'aria-disabled="true"' in html
+        assert 'aria-readonly="true"' in html
+        assert 'aria-busy="true"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'data-vd-error="Command unavailable"' in html
+        assert "data-vd-command-binding" not in html
+        assert "data-vd-command-submit" not in html
+    finally:
+        set_style_adapter(original)
+
+
 def test_product_css_is_included_in_native_rendering():
     original = _native()
     try:
@@ -172,5 +264,29 @@ def test_product_css_is_included_in_native_rendering():
         assert "Voodoo Product Components" in html
         assert ".vd-data-table" in html
         assert ".vd-inspector-panel" in html
+    finally:
+        set_style_adapter(original)
+
+
+def test_data_table_loading_state_is_visible_and_semantic():
+    original = _native()
+    try:
+        html = DataTable(["name", "status"], [], loading=True).render()
+        assert 'data-vd-loading-state="true"' in html
+        assert "Loading…" in html
+        assert 'aria-live="polite"' in html
+        assert 'colspan="2"' in html
+    finally:
+        set_style_adapter(original)
+
+
+def test_data_table_default_empty_state_is_semantic():
+    original = _native()
+    try:
+        html = DataTable(["name", "status"], []).render()
+        assert 'data-vd-empty-state="true"' in html
+        assert "No data available" in html
+        assert 'aria-live="polite"' in html
+        assert 'colspan="2"' in html
     finally:
         set_style_adapter(original)

@@ -35,6 +35,21 @@ def _require_button_trigger(component: Component, owner: str) -> None:
         raise TypeError(f"{owner} trigger must render a button")
 
 
+def _state_attrs(
+    *, unavailable: bool, loading: bool, error: bool | str
+) -> dict[str, Any]:
+    attrs: dict[str, Any] = {}
+    if unavailable:
+        attrs["aria_disabled"] = "true"
+    if loading:
+        attrs["aria_busy"] = "true"
+    if error:
+        attrs["aria_invalid"] = "true"
+        if isinstance(error, str):
+            attrs["data_vd_error"] = error
+    return attrs
+
+
 # ── AlertDialog ───────────────────────────────────────────────────────────────
 
 
@@ -70,17 +85,22 @@ class AlertDialog(Component):
         on_cancel: EventHandler | None = None,
         open: bool = False,
         close_label: str = "Close",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if tone not in {"danger", "warning", "info"}:
             raise ValueError("AlertDialog tone must be danger, warning, or info")
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(**kwargs)
         dialog_id = f"{self.id}-panel" if self.id else _control_id("alert-dialog")
         title_id = f"{dialog_id}-title"
         description_id = f"{dialog_id}-desc"
 
         actions: list[Component] = []
-        if on_cancel is not None:
+        if on_cancel is not None and not unavailable:
             actions.append(
                 Button(
                     cancel_label,
@@ -104,8 +124,13 @@ class AlertDialog(Component):
             "type": "button",
             "variant": confirm_variant,
         }
-        if on_confirm is not None:
+        if on_confirm is not None and not unavailable:
             confirm_attrs["data_vd_event_click"] = bind_event(on_confirm)
+        if unavailable:
+            actions = [
+                Button(cancel_label, type="button", variant="ghost", disabled=True),
+                Button(confirm_label, disabled=True, **confirm_attrs),
+            ]
         actions.append(Button(confirm_label, **confirm_attrs))
 
         panel = _AlertDialogPanel(
@@ -126,9 +151,19 @@ class AlertDialog(Component):
             data_vd_layer=True,
             data_vd_alert_dialog=True,
             data_vd_tone=tone,
-            open=open,
+            open=open and not unavailable,
+            aria_disabled="true" if unavailable else None,
+            aria_busy="true" if loading else None,
+            aria_invalid="true" if error else None,
+            data_vd_error=error if isinstance(error, str) else None,
         )
         self.children = (panel,)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _AlertDialogPanel(Component):
@@ -164,12 +199,30 @@ class _AlertDialogFooter(Component):
 class AlertDialogTrigger(Button):
     """Button that opens an :class:`AlertDialog`."""
 
-    def __init__(self, *children: Any, target: Component | str, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *children: Any,
+        target: Component | str,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        **kwargs: Any,
+    ) -> None:
         target_id = target.id if isinstance(target, Component) else target
         if not target_id:
             raise ValueError("AlertDialogTrigger target must have an id")
-        super().__init__(*children, **kwargs)
-        self.attrs["data_vd_dialog_open"] = target_id
+        unavailable = disabled or read_only or loading or bool(error)
+        super().__init__(
+            *children,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+            **kwargs,
+        )
+        if not unavailable:
+            self.attrs["data_vd_dialog_open"] = target_id
         self.attrs["aria_controls"] = target_id
         self.attrs["aria_haspopup"] = "dialog"
 
@@ -203,6 +256,9 @@ class ToggleGroup(Component):
         orientation: str = "horizontal",
         on_change: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if type not in {"single", "multiple"}:
@@ -213,6 +269,7 @@ class ToggleGroup(Component):
             raise ValueError("ToggleGroup requires at least one ToggleItem")
         if not all(isinstance(item, ToggleItem) for item in items):
             raise TypeError("ToggleGroup children must be ToggleItem instances")
+        unavailable = disabled or read_only or loading or bool(error)
 
         selected = set()
         if value is not None:
@@ -224,15 +281,21 @@ class ToggleGroup(Component):
             "data_vd_toggle_group": True,
             "data_vd_toggle_type": type,
         }
-        if on_change is not None:
+        if on_change is not None and not unavailable:
             attrs["data_vd_event_change"] = bind_event(on_change)
-        if disabled:
-            attrs["aria_disabled"] = "true"
+        attrs.update(_state_attrs(unavailable=unavailable, loading=loading, error=error))
         super().__init__(**attrs, **kwargs)
-        self.props = {"type": type, "orientation": orientation}
+        self.props = {
+            "type": type,
+            "orientation": orientation,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
         rendered_items = tuple(
-            item.render_toggled(item.value in selected, disabled) for item in items
+            item.render_toggled(item.value in selected, unavailable) for item in items
         )
         self.children = rendered_items
 
@@ -250,18 +313,24 @@ class ToggleItem(Component):
         icon: Component | None = None,
         label: str | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         self.value = value
         self._icon = icon
         self._label_text = label
         self._disabled = disabled
+        self._read_only = read_only
+        self._loading = loading
+        self._error = error
         self._children_raw = children
         super().__init__(**kwargs)
 
     def render_toggled(self, pressed: bool, group_disabled: bool) -> Component:
         """Return a configured toggle button for the group."""
-        disabled = self._disabled or group_disabled
+        unavailable = self._disabled or self._read_only or self._loading or group_disabled
         content: list[Any] = []
         if self._icon is not None:
             content.append(self._icon)
@@ -276,15 +345,27 @@ class ToggleItem(Component):
             "data_vd_toggle_value": self.value,
             "data_vd_toggle_item": True,
         }
-        if disabled:
+        if unavailable:
             attrs["disabled"] = True
             attrs["aria_disabled"] = "true"
+        if self._loading:
+            attrs["aria_busy"] = "true"
+        if self._error:
+            attrs["aria_invalid"] = "true"
+            if isinstance(self._error, str):
+                attrs["data_vd_error"] = self._error
         if self._label_text:
             attrs["aria_label"] = self._label_text
 
         btn = Button(*content, **attrs)
         btn.style = "toggle-item"
-        btn.props = {"pressed": pressed, "disabled": disabled}
+        btn.props = {
+            "pressed": pressed,
+            "disabled": self._disabled,
+            "read_only": self._read_only,
+            "loading": self._loading,
+            "error": self._error,
+        }
         return btn
 
 
@@ -314,6 +395,9 @@ class SegmentedControl(Component):
         label: str = "Options",
         on_change: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not segments:
@@ -322,19 +406,34 @@ class SegmentedControl(Component):
             raise TypeError("SegmentedControl children must be Segment instances")
 
         selected = value or segments[0].value
+        unavailable = disabled or read_only or loading or bool(error)
         attrs: dict[str, Any] = {
             "role": "tablist",
             "aria_label": label,
             "data_vd_segmented": True,
         }
-        if on_change is not None:
+        if unavailable:
+            attrs["aria_disabled"] = "true"
+        if loading:
+            attrs["aria_busy"] = "true"
+        if error:
+            attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                attrs["data_vd_error"] = error
+        if on_change is not None and not unavailable:
             attrs["data_vd_event_change"] = bind_event(on_change)
         super().__init__(**attrs, **kwargs)
 
         rendered = tuple(
-            seg.render_selected(seg.value == selected, disabled) for seg in segments
+            seg.render_selected(seg.value == selected, unavailable) for seg in segments
         )
         self.children = rendered
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class Segment(Component):
@@ -350,16 +449,22 @@ class Segment(Component):
         label: str,
         icon: Component | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         self.value = value
         self._label_text = label
         self._icon = icon
         self._disabled = disabled
+        self._read_only = read_only
+        self._loading = loading
+        self._error = error
         super().__init__(**kwargs)
 
     def render_selected(self, selected: bool, group_disabled: bool) -> Component:
-        disabled = self._disabled or group_disabled
+        unavailable = self._disabled or self._read_only or self._loading or group_disabled
         content: list[Any] = []
         if self._icon is not None:
             content.append(self._icon)
@@ -372,13 +477,25 @@ class Segment(Component):
             "data_vd_segment_value": self.value,
             "tabindex": "0" if selected else "-1",
         }
-        if disabled:
+        if unavailable:
             attrs["disabled"] = True
             attrs["aria_disabled"] = "true"
+        if self._loading:
+            attrs["aria_busy"] = "true"
+        if self._error:
+            attrs["aria_invalid"] = "true"
+            if isinstance(self._error, str):
+                attrs["data_vd_error"] = self._error
 
         btn = Button(*content, **attrs)
         btn.style = "segment"
-        btn.props = {"selected": selected, "disabled": disabled}
+        btn.props = {
+            "selected": selected,
+            "disabled": self._disabled,
+            "read_only": self._read_only,
+            "loading": self._loading,
+            "error": self._error,
+        }
         return btn
 
 
@@ -415,6 +532,9 @@ class MenuCheckboxItem(Component):
         checked: bool = False,
         on_select: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         shortcut: str | None = None,
         **kwargs: Any,
     ) -> None:
@@ -424,13 +544,21 @@ class MenuCheckboxItem(Component):
             "tabindex": "-1",
             "type": "button",
         }
-        if disabled:
+        unavailable = disabled or read_only or loading or bool(error)
+        if unavailable:
             attrs["disabled"] = True
             attrs["aria_disabled"] = "true"
-        if on_select is not None and not disabled:
+        attrs.update(_state_attrs(unavailable=unavailable, loading=loading, error=error))
+        if on_select is not None and not unavailable:
             attrs["data_vd_event_click"] = bind_event(on_select)
         super().__init__(**attrs, **kwargs)
-        self.props = {"checked": checked}
+        self.props = {
+            "checked": checked,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
         content: list[Any] = [
             _MenuCheckboxIndicator(checked),
             _MenuItemLabel(*children),
@@ -462,6 +590,9 @@ class MenuRadioItem(Component):
         checked: bool = False,
         on_select: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         shortcut: str | None = None,
         **kwargs: Any,
     ) -> None:
@@ -472,13 +603,22 @@ class MenuRadioItem(Component):
             "type": "button",
             "data_vd_radio_value": value,
         }
-        if disabled:
+        unavailable = disabled or read_only or loading or bool(error)
+        if unavailable:
             attrs["disabled"] = True
             attrs["aria_disabled"] = "true"
-        if on_select is not None and not disabled:
+        attrs.update(_state_attrs(unavailable=unavailable, loading=loading, error=error))
+        if on_select is not None and not unavailable:
             attrs["data_vd_event_click"] = bind_event(on_select)
         super().__init__(**attrs, **kwargs)
-        self.props = {"checked": checked, "value": value}
+        self.props = {
+            "checked": checked,
+            "value": value,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
         content: list[Any] = [
             _MenuRadioIndicator(checked),
             _MenuItemLabel(*children),
@@ -508,8 +648,12 @@ class SubMenu(Component):
         label: str,
         *items: Component,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
+        unavailable = disabled or read_only or loading or bool(error)
         trigger_id = _control_id("submenu-trigger")
         menu_id = _control_id("submenu")
         trigger_attrs: dict[str, Any] = {
@@ -522,9 +666,18 @@ class SubMenu(Component):
             "aria_expanded": "false",
             "data_vd_submenu_trigger": menu_id,
         }
-        if disabled:
+        if unavailable:
             trigger_attrs["disabled"] = True
             trigger_attrs["aria_disabled"] = "true"
+        trigger_attrs.update(
+            _state_attrs(unavailable=unavailable, loading=loading, error=error)
+        )
+        if unavailable:
+            for item in items:
+                item.attrs["disabled"] = True
+                item.attrs["aria_disabled"] = "true"
+                item.attrs.pop("data_vd_event_click", None)
+                item.attrs.pop("data-vd-event-click", None)
 
         trigger = _SubMenuTrigger(
             _MenuItemLabel(label),
@@ -538,8 +691,18 @@ class SubMenu(Component):
             aria_label=label,
             data_vd_submenu=True,
             hidden=True,
+            aria_disabled="true" if unavailable else None,
+            aria_busy="true" if loading else None,
+            aria_invalid="true" if error else None,
+            data_vd_error=error if isinstance(error, str) else None,
         )
         super().__init__(trigger, panel, **kwargs)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _SubMenuTrigger(Component):
@@ -598,27 +761,56 @@ class ContextMenu(Component):
         target: Component,
         *items: Component,
         label: str = "Actions",
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not items:
             raise ValueError("ContextMenu requires at least one item")
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(**kwargs)
         menu_id = f"{self.id}-menu" if self.id else _control_id("ctx-menu")
         target_id = _ensure_id(target, "ctx-target")
-        target.attrs["data_vd_context_menu"] = menu_id
-        target.attrs["aria_haspopup"] = "menu"
+        if unavailable:
+            target.attrs.pop("data_vd_context_menu", None)
+            target.attrs["aria_disabled"] = "true"
+        else:
+            target.attrs["data_vd_context_menu"] = menu_id
+            target.attrs["aria_haspopup"] = "menu"
+        if unavailable:
+            for item in items:
+                item.attrs["aria_disabled"] = "true"
+                item.attrs["disabled"] = True
+                item.attrs.pop("data-vd-event-click", None)
+                item.attrs.pop("data_vd_event_click", None)
+
+        panel_attrs: dict[str, Any] = {
+            "role": "menu",
+            "aria_label": label,
+            "tabindex": "-1",
+            "data_vd_context_menu_panel": True,
+            "data_vd_anchor": target_id,
+            "hidden": True,
+            "aria_disabled": "true" if unavailable else None,
+            "aria_busy": "true" if loading else None,
+            "aria_invalid": "true" if error else None,
+            "data_vd_error": error if isinstance(error, str) else None,
+        }
 
         panel = _ContextMenuPanel(
             *items,
             id=menu_id,
-            role="menu",
-            aria_label=label,
-            tabindex="-1",
-            data_vd_context_menu_panel=True,
-            data_vd_anchor=target_id,
-            hidden=True,
+            **panel_attrs,
         )
         self.children = (target, panel)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _ContextMenuPanel(Component):
@@ -660,10 +852,15 @@ class CommandPalette(Component):
         label: str = "Command palette",
         empty_text: str = "No results found.",
         open: bool = False,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not groups:
             raise ValueError("CommandPalette requires at least one CommandGroup")
+        unavailable = disabled or read_only or loading or bool(error)
         super().__init__(**kwargs)
         palette_id = f"{self.id}-panel" if self.id else _control_id("cmd-palette")
         input_id = f"{palette_id}-input"
@@ -682,6 +879,9 @@ class CommandPalette(Component):
                 aria_expanded="true",
                 autocomplete="off",
                 data_vd_cmd_input=True,
+                disabled=unavailable,
+                aria_disabled="true" if unavailable else None,
+                aria_busy="true" if loading else None,
             ),
             _CommandKbd("ESC"),
         )
@@ -694,6 +894,23 @@ class CommandPalette(Component):
             aria_label="Commands",
             data_vd_cmd_results=True,
         )
+        if unavailable:
+            for group in groups:
+                for command in group.children[1:]:
+                    command.attrs["disabled"] = True
+                    command.attrs["aria_disabled"] = "true"
+                    command.attrs.pop("data_vd_event_click", None)
+        panel_attrs: dict[str, Any] = {
+            "open": open and not unavailable,
+        }
+        if unavailable:
+            panel_attrs["aria_disabled"] = "true"
+        if loading:
+            panel_attrs["aria_busy"] = "true"
+        if error:
+            panel_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                panel_attrs["data_vd_error"] = error
 
         panel = _CommandPanel(
             search,
@@ -705,9 +922,15 @@ class CommandPalette(Component):
             tabindex="-1",
             data_vd_layer=True,
             data_vd_cmd_palette=True,
-            open=open,
+            **panel_attrs,
         )
         self.children = (panel,)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _CommandPanel(Component):
@@ -778,6 +1001,9 @@ class Command(Component):
         description: str | None = None,
         on_select: EventHandler | None = None,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         self._children_raw = children
@@ -786,6 +1012,9 @@ class Command(Component):
         self._description = description
         self._on_select = on_select
         self._disabled = disabled
+        self._read_only = read_only
+        self._loading = loading
+        self._error = error
         super().__init__(**kwargs)
 
     def render_command(self, index: int) -> Component:
@@ -797,10 +1026,21 @@ class Command(Component):
             "data_vd_cmd_item": True,
             "data_vd_cmd_index": str(index),
         }
-        if self._disabled:
+        unavailable = (
+            self._disabled or self._read_only or self._loading or bool(self._error)
+        )
+        if unavailable:
             attrs["disabled"] = True
             attrs["aria_disabled"] = "true"
-        if self._on_select is not None and not self._disabled:
+        if self._read_only:
+            attrs["aria_readonly"] = "true"
+        if self._loading:
+            attrs["aria_busy"] = "true"
+        if self._error:
+            attrs["aria_invalid"] = "true"
+            if isinstance(self._error, str):
+                attrs["data_vd_error"] = self._error
+        if self._on_select is not None and not unavailable:
             attrs["data_vd_event_click"] = bind_event(self._on_select)
 
         content: list[Any] = []
@@ -814,7 +1054,12 @@ class Command(Component):
             content.append(_CommandShortcut(self._shortcut))
 
         item = _CommandItem(*content, **attrs)
-        item.props = {"disabled": self._disabled}
+        item.props = {
+            "disabled": self._disabled,
+            "read_only": self._read_only,
+            "loading": self._loading,
+            "error": self._error,
+        }
         return item
 
 

@@ -5,6 +5,9 @@ implements handler invocation (dependency injection, sync/async dispatch,
 result rendering) for both decorator-registered and file-based pages.
 """
 
+from __future__ import annotations
+
+import asyncio
 import inspect
 from collections.abc import Callable
 from typing import Any
@@ -12,6 +15,8 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.routing import Route
+
+__all__ = ["PageRegistry", "call_page", "page", "page_registry", "render_page_result"]
 
 
 class PageRegistry:
@@ -67,6 +72,37 @@ def _page_endpoint(func: Callable[..., Any]) -> Callable:
 
 async def call_page(func: Callable[..., Any], request: Request) -> Response:
     """Invoke a page handler and render its result into an HTTP response."""
+    kwargs = _page_kwargs(func, request)
+
+    from voodoo.ui.events import (
+        UI_SESSION_COOKIE,
+        activate_ui_session,
+        start_event_binding_tracking,
+        stop_event_binding_tracking,
+        ws_manager,
+    )
+    from voodoo.ui.state import state_renderer
+
+    session, created = ws_manager.session_for_request(request)
+    with activate_ui_session(session.session_id):
+        start_event_binding_tracking()
+        try:
+            result, cells = await _render_tracked(func, kwargs)
+            render_kwargs = dict(kwargs)
+            state_renderer.bind("root", lambda: func(**render_kwargs), cells=cells)
+            response = render_page_result(result)
+            rendered_bindings = stop_event_binding_tracking()
+        except (Exception, asyncio.CancelledError):
+            stop_event_binding_tracking()
+            raise
+        ws_manager.retain_render_bindings(session.session_id, "root", rendered_bindings)
+
+    if created or request.cookies.get(UI_SESSION_COOKIE) != session.session_id:
+        _set_ui_session_cookie(response, request, session.session_id)
+    return response
+
+
+def _page_kwargs(func: Callable[..., Any], request: Request) -> dict[str, Any]:
     sig = inspect.signature(func)
     kwargs: dict[str, Any] = {}
 
@@ -90,14 +126,14 @@ async def call_page(func: Callable[..., Any], request: Request) -> Response:
                 except (ValueError, TypeError):
                     pass
             kwargs[param] = val
+    return kwargs
 
-    # Track state reads during the render so the StateRenderer can auto-bind
-    # the cells this page depends on — the "zero JS" reactive loop (spec §
-    # reactive): set() inside an @event handler then re-renders and patches
-    # the page subtree without any explicit bind() call in user code.
+
+async def _render_tracked(
+    func: Callable[..., Any], kwargs: dict[str, Any]
+) -> tuple[Any, list[Any]]:
     from voodoo.ui.state import (
         start_render_tracking,
-        state_renderer,
         stop_render_tracking,
     )
 
@@ -106,17 +142,31 @@ async def call_page(func: Callable[..., Any], request: Request) -> Response:
         result = func(**kwargs)
         if inspect.iscoroutine(result):
             result = await result
-        cells = stop_render_tracking()
-    except BaseException:
-        stop_render_tracking()  # reset tracking; keep prior bindings intact
+        return result, stop_render_tracking()
+    except (Exception, asyncio.CancelledError):
+        stop_render_tracking()
         raise
 
-    # Re-render with the same kwargs (path params, request, user) so pages
-    # like `/users/{id}` restore faithfully on state changes.
-    render_kwargs = dict(kwargs)
-    state_renderer.bind("root", lambda: func(**render_kwargs), cells=cells)
 
-    return render_page_result(result)
+def _set_ui_session_cookie(
+    response: Response, request: Request, session_id: str
+) -> None:
+    from voodoo.ui.events import UI_SESSION_COOKIE
+
+    configured = getattr(request.app.state, "voodoo_config", None)
+    if configured is None:
+        from voodoo.config import get_config
+
+        configured = get_config()
+    response.set_cookie(
+        UI_SESSION_COOKIE,
+        session_id,
+        max_age=86_400,
+        httponly=True,
+        secure=configured.auth.cookie_secure,
+        samesite=configured.auth.cookie_samesite,
+        path="/",
+    )
 
 
 def render_page_result(result: Any) -> Response:

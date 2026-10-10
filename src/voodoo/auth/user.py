@@ -160,7 +160,7 @@ class User(BaseModel):
     """
 
     __tablename__ = "voodoo_users"
-    id: UUID | int
+    id: UUID
     email: str
     username: str
     hashed_password: str

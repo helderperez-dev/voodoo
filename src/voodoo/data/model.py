@@ -19,7 +19,7 @@ changes.
 
 from __future__ import annotations
 
-from typing import Any, get_type_hints
+from typing import Any, cast, get_type_hints
 
 from voodoo.data.base import BaseModel, _get_table_name, get_db
 
@@ -89,9 +89,11 @@ class Model(BaseModel):
         return obj
 
     @classmethod
-    async def all(cls, user_context: dict | None = None) -> list[Model]:
+    async def all(
+        cls, user_context: dict[str, Any] | None = None
+    ) -> list[Model]:
         """Return every row as model instances (alias of ``find_all``)."""
-        return await cls.find_all(user_context=user_context)
+        return cast(list[Model], await cls.find_all(user_context=user_context))
 
     # ------------------------------------------------------------------
     # Fluent query API
@@ -275,9 +277,9 @@ class Query:
         query = f"DELETE FROM {table_name}{where}"
         cursor = await db.execute(query, params)
         await db.commit()
-        return cursor.rowcount
+        return int(cursor.rowcount)
 
-    def __await__(self):
+    def __await__(self) -> Any:
         """``await query`` → the matched rows as model instances."""
         return self._execute_select().__await__()
 

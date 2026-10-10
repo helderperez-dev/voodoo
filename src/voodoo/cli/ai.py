@@ -23,7 +23,7 @@ def init(
         "-i",
         help="Target AI IDE rules (trae, cursor, windsurf, vscode, all, none). Auto-detects if omitted.",
     ),
-):
+    ) -> None:
     """
     Generate AI development context (.voodoo/ai/) and optional IDE-specific integrations.
     """
@@ -33,6 +33,7 @@ def init(
     if selected_ide and selected_ide not in valid_ides:
         terminal.error(
             f"Invalid IDE '{selected_ide}'. Choose from: {', '.join(valid_ides)}",
+            hint="choose one of the listed IDE names or omit --ide for auto-detection",
         )
         raise typer.Exit(1)
 

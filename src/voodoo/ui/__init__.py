@@ -13,7 +13,14 @@ Voodoo::
 """
 
 from voodoo.ui.brand import Brand
-from voodoo.ui.component import Component, Html, escape, tone_to_color_var
+from voodoo.ui.component import (
+    Component,
+    Html,
+    SafeHtml,
+    UnsafeHtml,
+    escape,
+    tone_to_color_var,
+)
 from voodoo.ui.controls import (
     Calendar,
     CheckboxGroup,
@@ -257,6 +264,8 @@ __all__ = [
     # Component model
     "Component",
     "Html",
+    "SafeHtml",
+    "UnsafeHtml",
     "UIEvent",
     "escape",
     "tone_to_color_var",

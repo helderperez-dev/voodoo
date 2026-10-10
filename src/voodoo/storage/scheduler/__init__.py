@@ -38,7 +38,9 @@ def __getattr__(name: str) -> Any:
     return value
 
 
-def create_schedule_store(_legacy_path: str | Path | None = None):
+def create_schedule_store(
+    _legacy_path: str | Path | None = None,
+) -> VoodooStoreScheduleStore:
     """Resolve the canonical Store-backed scheduler.
 
     ``_legacy_path`` is accepted temporarily so the current App lifecycle can

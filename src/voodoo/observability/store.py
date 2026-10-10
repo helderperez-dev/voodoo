@@ -4,8 +4,7 @@ import inspect
 import json
 import logging
 import time
-import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -13,13 +12,89 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from voodoo.security.redaction import redact_string
+
 # Context variable for tracing
-trace_id_var = contextvars.ContextVar("trace_id", default=None)
+trace_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "trace_id", default=None
+)
+correlation_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "correlation_id", default=None
+)
 
 # Context variable for current span (enables parent-span tracking)
 _span_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "voodoo_span_id", default=None
 )
+
+
+def _report_observability_failure(operation: str, error: Exception) -> None:
+    """Make best-effort observability failures visible without leaking secrets."""
+    logging.getLogger("voodoo.observability").warning(
+        "observability operation failed operation=%s error=%s",
+        operation,
+        redact_string(str(error)),
+    )
+
+
+def _percentile(values: list[float], percentile: float) -> float:
+    """Return a deterministic nearest-rank percentile for bounded samples."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = max(1, min(len(ordered), int((percentile / 100) * len(ordered) + 0.999999)))
+    return float(ordered[rank - 1])
+
+
+@contextmanager
+def store_span(name: str, *, attributes: dict[str, Any] | None = None) -> Iterator[Any]:
+    """Create a best-effort span for a Store boundary operation.
+
+    Store durability must not depend on telemetry being configured correctly.
+    Span construction failures therefore degrade to an uninstrumented operation;
+    exceptions raised by the Store operation itself are never intercepted here.
+    """
+    try:
+        manager = telemetry_store.start_span(name, attributes=attributes)
+    except Exception as error:
+        _report_observability_failure("store_span", error)
+        yield None
+        return
+    with manager as span:
+        yield span
+
+
+@contextmanager
+def store_operation(
+    operation: str,
+    *,
+    provider: str,
+    attributes: dict[str, Any] | None = None,
+) -> Iterator[dict[str, int]]:
+    """Instrument one Store/object operation with bounded telemetry.
+
+    The yielded mapping lets adapters report a byte count after a successful
+    read/write. Keys, payloads, and exception text are never recorded.
+    """
+    details: dict[str, int] = {}
+    started = time.perf_counter()
+    failed = False
+    span_attributes = {"provider": provider, "operation": operation}
+    if attributes:
+        span_attributes.update(attributes)
+    try:
+        with store_span(f"store.{operation}", attributes=span_attributes):
+            yield details
+    except Exception:
+        failed = True
+        raise
+    finally:
+        telemetry_store.record_store_operation(
+            operation,
+            (time.perf_counter() - started) * 1000,
+            error=failed,
+            bytes_count=max(0, int(details.get("bytes", 0))),
+        )
 
 
 def new_trace_id() -> str:
@@ -61,16 +136,18 @@ class Span:
 class TelemetryStore:
     _SUMMARY_PATH = Path(".voodoo/telemetry_summary.json")
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.metrics: dict[str, Any] = {
             "requests_total": 0,
             "errors_total": 0,
             "latencies_ms": [],
+            "requests": [],
             "custom_traces": [],
             "db_queries": 0,
             "agent_tokens": 0,
             "agent_runs": [],
             "tool_calls": [],
+            "store_operations": [],
             "spans": [],
         }
         #: Context variable for tracing (aliased for module-level access).
@@ -78,18 +155,49 @@ class TelemetryStore:
         # Restore persisted rolling summary if available.
         self._load_summary()
 
-    def record_request(self, latency_ms: float, error: bool = False):
+    def record_request(
+        self,
+        latency_ms: float,
+        error: bool = False,
+        *,
+        trace_id: str | None = None,
+        correlation_id: str | None = None,
+        method: str | None = None,
+        path: str | None = None,
+        status_code: int | None = None,
+    ) -> None:
         self.metrics["requests_total"] += 1
         if error:
             self.metrics["errors_total"] += 1
         self.metrics["latencies_ms"].append(latency_ms)
         if len(self.metrics["latencies_ms"]) > 1000:
             self.metrics["latencies_ms"].pop(0)
+        requests = self.metrics.setdefault("requests", [])
+        requests.append(
+            {
+                "latency_ms": latency_ms,
+                "error": error,
+                "trace_id": trace_id if trace_id is not None else trace_id_var.get(),
+                "correlation_id": (
+                    correlation_id
+                    if correlation_id is not None
+                    else correlation_id_var.get()
+                ),
+                "method": method,
+                "path": path,
+                "status_code": status_code,
+                "timestamp": time.time(),
+            }
+        )
+        if len(requests) > 1000:
+            requests.pop(0)
         # Persist rolling summary every 50 requests.
         if self.metrics["requests_total"] % 50 == 0:
             self._persist_summary()
 
-    def record_trace(self, name: str, latency_ms: float, error: bool = False):
+    def record_trace(
+        self, name: str, latency_ms: float, error: bool = False
+    ) -> None:
         self.metrics["custom_traces"].append(
             {
                 "name": name,
@@ -102,10 +210,10 @@ class TelemetryStore:
         if len(self.metrics["custom_traces"]) > 1000:
             self.metrics["custom_traces"].pop(0)
 
-    def record_db_query(self):
+    def record_db_query(self) -> None:
         self.metrics["db_queries"] += 1
 
-    def record_agent_tokens(self, count: int):
+    def record_agent_tokens(self, count: int) -> None:
         self.metrics["agent_tokens"] += count
 
     def record_agent_run(self, run_record: Any) -> None:
@@ -157,6 +265,36 @@ class TelemetryStore:
         if len(self.metrics["tool_calls"]) > 1000:
             self.metrics["tool_calls"].pop(0)
 
+    def record_store_operation(
+        self,
+        operation: str,
+        latency_ms: float,
+        *,
+        error: bool = False,
+        bytes_count: int = 0,
+        queue_lag_ms: float | None = None,
+    ) -> None:
+        """Record a bounded, structured Store operation metric.
+
+        ``operation`` is semantic (for example ``commit``, ``recovery``,
+        ``object.read``, ``compaction``, or ``lock.wait``), so adapters can
+        report one contract without sharing implementation. Payloads and keys
+        are never recorded here.
+        """
+        self.metrics.setdefault("store_operations", []).append(
+            {
+                "operation": operation,
+                "latency_ms": latency_ms,
+                "error": error,
+                "bytes": max(0, bytes_count),
+                "queue_lag_ms": queue_lag_ms,
+                "trace_id": trace_id_var.get(),
+                "timestamp": time.time(),
+            }
+        )
+        if len(self.metrics["store_operations"]) > 1000:
+            self.metrics["store_operations"].pop(0)
+
     # -- span model (OTel-compatible) ----------------------------------
 
     def record_span(self, span: Span) -> None:
@@ -169,8 +307,8 @@ class TelemetryStore:
             from voodoo.integrations.otel import export_span
 
             export_span(span)
-        except Exception:
-            pass
+        except Exception as error:
+            _report_observability_failure("export_span", error)
 
     @contextmanager
     def start_span(
@@ -178,7 +316,7 @@ class TelemetryStore:
         name: str,
         *,
         attributes: dict[str, Any] | None = None,
-    ):
+    ) -> Iterator[Span]:
         """Context manager that creates a child span for the current trace.
 
         Sets ``_span_id_var`` so nested ``start_span`` calls pick up the
@@ -234,8 +372,8 @@ class TelemetryStore:
             for key in ("recent_traces", "recent_agent_runs"):
                 summary.pop(key, None)
             self._SUMMARY_PATH.write_text(json.dumps(summary, default=str))
-        except Exception:
-            pass
+        except (OSError, TypeError, ValueError) as error:
+            _report_observability_failure("persist_summary", error)
 
     def _load_summary(self) -> None:
         """Restore persisted counters so ``voodoo status`` works after restart."""
@@ -246,8 +384,8 @@ class TelemetryStore:
                 self.metrics["errors_total"] = data.get("errors_total", 0)
                 self.metrics["db_queries"] = data.get("db_queries", 0)
                 self.metrics["agent_tokens"] = data.get("agent_tokens", 0)
-        except Exception:
-            pass
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as error:
+            _report_observability_failure("load_summary", error)
 
     def get_summary(self) -> dict[str, Any]:
         latencies = self.metrics["latencies_ms"]
@@ -260,6 +398,14 @@ class TelemetryStore:
 
         tool_calls = self.metrics["tool_calls"]
         tool_errors = sum(1 for tc in tool_calls if tc.get("error"))
+        store_operations = self.metrics.get("store_operations", [])
+        store_errors = sum(1 for op in store_operations if op.get("error"))
+        store_latencies = [
+            float(op["latency_ms"])
+            for op in store_operations
+            if isinstance(op.get("latency_ms"), (int, float))
+            and not isinstance(op.get("latency_ms"), bool)
+        ]
 
         return {
             "requests_total": self.metrics["requests_total"],
@@ -273,9 +419,22 @@ class TelemetryStore:
             "agent_cost": round(total_cost, 6),
             "tool_calls_total": len(tool_calls),
             "tool_errors": tool_errors,
+            "store_operations_total": len(store_operations),
+            "store_operation_errors": store_errors,
+            "store_operation_latency_p50_ms": round(
+                _percentile(store_latencies, 50), 3
+            ),
+            "store_operation_latency_p95_ms": round(
+                _percentile(store_latencies, 95), 3
+            ),
+            "store_bytes_total": sum(op.get("bytes", 0) for op in store_operations),
+            "store_queue_lag_ms": round(
+                sum(op.get("queue_lag_ms") or 0.0 for op in store_operations), 2
+            ),
             "spans_total": len(self.metrics["spans"]),
             "recent_traces": self.metrics["custom_traces"][-10:],
             "recent_agent_runs": agent_runs[-10:],
+            "recent_store_operations": store_operations[-10:],
         }
 
 
@@ -293,7 +452,7 @@ if not logger.handlers:
 
 
 class TraceFilter(logging.Filter):
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         record.trace_id = trace_id_var.get() or "no-trace"
         return True
 
@@ -301,26 +460,29 @@ class TraceFilter(logging.Filter):
 logger.addFilter(TraceFilter())
 
 
-def trace(name: str = None):
+def trace(
+    name: str | None = None,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to trace a specific function block.
 
     Records both a lightweight trace record and a full OTel-compatible span.
     """
 
-    def decorator(func: Callable):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             t_name = name or func.__name__
             start = time.perf_counter()
             error = False
             with telemetry_store.start_span(t_name):
                 try:
                     return await func(*args, **kwargs)
-                except Exception as e:
+                except Exception as caught_error:
                     error = True
                     logger.error(
-                        f"Error in traced block '{t_name}': {e}\n"
-                        f"{traceback.format_exc()}"
+                        "Traced block failed: name=%s error_type=%s",
+                        t_name,
+                        type(caught_error).__name__,
                     )
                     raise
                 finally:
@@ -329,18 +491,19 @@ def trace(name: str = None):
                     logger.info(f"Trace '{t_name}' completed in {latency:.2f}ms")
 
         @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             t_name = name or func.__name__
             start = time.perf_counter()
             error = False
             with telemetry_store.start_span(t_name):
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:
+                except Exception as caught_error:
                     error = True
                     logger.error(
-                        f"Error in traced block '{t_name}': {e}\n"
-                        f"{traceback.format_exc()}"
+                        "Traced block failed: name=%s error_type=%s",
+                        t_name,
+                        type(caught_error).__name__,
                     )
                     raise
                 finally:

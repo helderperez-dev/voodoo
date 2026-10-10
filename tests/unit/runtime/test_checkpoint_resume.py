@@ -15,6 +15,7 @@ from voodoo.primitives.intent import Intent
 from voodoo.runtime import ExecutionEngine
 from voodoo.runtime.errors import ApprovalRequired
 from voodoo.runtime.execution import Execution, ExecutionStatus
+from voodoo.runtime.persistence import JSONFileExecutionStore
 from voodoo.storage.execution import SQLiteExecutionStore
 
 
@@ -50,6 +51,39 @@ class TestCheckpointBoundaries:
         engine._build_checkpoint(ex)
         assert ex.checkpoint is not None
         json.dumps(ex.checkpoint)  # should not raise
+
+    def test_json_file_store_fails_closed_on_future_schema(self, tmp_path):
+        path = tmp_path / "executions.jsonl"
+        store = JSONFileExecutionStore(path)
+        execution = Execution(id="legacy", trace_id="t", intent=Intent(name="legacy"), actor="test")
+        store.save(execution)
+        with path.open("a", encoding="utf-8") as handle:
+            future = execution.model_dump(mode="json")
+            future["id"] = "future"
+            future["_schema_version"] = 99
+            handle.write(json.dumps(future) + "\n")
+        with pytest.raises(ValueError, match="unsupported execution persistence schema"):
+            store.load_all()
+
+    def test_engine_recovery_propagates_future_schema_errors(self):
+        class CorruptStore:
+            def load_all(self):
+                raise ValueError("unsupported execution schema 99")
+
+        engine = ExecutionEngine()
+        engine.use_store(CorruptStore())
+        with pytest.raises(ValueError, match="unsupported execution schema"):
+            engine.recover()
+
+    def test_engine_recovery_propagates_store_failures(self):
+        class BrokenStore:
+            def load_all(self):
+                raise OSError("store unavailable")
+
+        engine = ExecutionEngine()
+        engine.use_store(BrokenStore())
+        with pytest.raises(OSError, match="store unavailable"):
+            engine.recover()
 
 
 class TestResumeSkipsCompletedEffects:

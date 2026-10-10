@@ -343,6 +343,32 @@ async def test_tool_call_error_captured():
 
 
 @pytest.mark.asyncio
+async def test_unexpected_tool_implementation_failure_propagates() -> None:
+    registry = ToolRegistry()
+
+    def broken() -> str:
+        raise RuntimeError("implementation invariant failed")
+
+    registry.register(build_spec(broken, name="broken"))
+    agent = Agent(model="mock:test", tools=["broken"], registry=registry)
+    with pytest.raises(RuntimeError, match="implementation invariant failed"):
+        await agent._execute_tool_call("broken", {})
+
+
+@pytest.mark.asyncio
+async def test_unexpected_provider_capability_failure_propagates() -> None:
+    agent = Agent(model="mock:test")
+
+    def broken_describe():
+        raise AssertionError("provider capability invariant failed")
+
+    agent.provider.describe = broken_describe  # type: ignore[method-assign]
+    with pytest.raises(AssertionError, match="capability invariant"):
+        async for _ in agent._stream_provider_events([]):
+            pass
+
+
+@pytest.mark.asyncio
 async def test_run_executes_native_tool_call():
     registry = ToolRegistry()
 

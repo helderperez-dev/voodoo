@@ -10,10 +10,13 @@ from starlette.testclient import TestClient
 
 import voodoo.ui as public_ui
 
+FRAMEWORK_ROOT = Path(__file__).parents[2]
+COMPONENT_LAB = FRAMEWORK_ROOT / "examples" / "web" / "component_lab" / "main.py"
+
 
 def test_component_lab_renders_all_primary_surfaces() -> None:
     namespace = runpy.run_path(
-        "examples/web/component_lab/main.py",
+        str(COMPONENT_LAB),
         run_name="component_lab_acceptance",
     )
 
@@ -120,6 +123,8 @@ def test_component_lab_renders_all_primary_surfaces() -> None:
 _NON_VISUAL_PUBLIC_TYPES = {
     "Component",
     "Html",
+    "SafeHtml",
+    "UnsafeHtml",
     "UIEvent",
     "StyleAdapter",
     "NoopAdapter",
@@ -131,7 +136,7 @@ _NON_VISUAL_PUBLIC_TYPES = {
 
 
 def test_component_lab_exercises_every_public_visual_component() -> None:
-    source = Path("examples/web/component_lab/main.py").read_text()
+    source = COMPONENT_LAB.read_text()
     missing = [
         name
         for name in public_ui.__all__

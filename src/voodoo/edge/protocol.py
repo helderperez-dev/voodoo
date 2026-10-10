@@ -18,7 +18,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from voodoo.edge.errors import InvalidMessageError, InvalidProtocolVersionError
 
@@ -196,7 +196,7 @@ class EdgeMessage(BaseModel):
         model = PAYLOAD_FOR_TYPE[self.type]
         try:
             return model.model_validate(self.payload)
-        except Exception as e:
+        except (TypeError, ValidationError) as e:
             raise InvalidMessageError(
                 f"Invalid payload for '{self.type.value}' message: {e}"
             ) from e
@@ -273,7 +273,7 @@ def decode_message(data: str | bytes | dict[str, Any]) -> EdgeMessage:
         raise InvalidMessageError("Message must be a JSON object")
     try:
         return EdgeMessage.model_validate(raw)
-    except Exception as e:
+    except (TypeError, ValidationError) as e:
         msg = str(e)
         if "Unsupported protocol version" in msg:
             raise InvalidProtocolVersionError(

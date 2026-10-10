@@ -2,7 +2,7 @@
 
 ## What it is
 
-The smallest official Voodoo project starts with `voodoo create`. The generated
+The smallest official Voodoo project starts with `voodoo new`. The generated
 app is Store-first: local durable infrastructure lives in
 `.voodoo/application.vstore` and requires no external database, queue, or
 object server.
@@ -10,7 +10,7 @@ object server.
 ## Create the app
 
 ```bash
-voodoo create hello
+voodoo new hello
 cd hello
 voodoo dev
 ```
@@ -39,7 +39,8 @@ reset the application record.
 If you only want a page, the application can still be tiny:
 
 ```python
-from voodoo import App, Heading, Text, page
+from voodoo import App, page
+from voodoo.ui import Heading, Text
 
 app = App()
 
@@ -83,7 +84,8 @@ With the default configuration this record is stored in
 ### With a layout
 
 ```python
-from voodoo import Container, Heading, Text, page
+from voodoo import page
+from voodoo.ui import Container, Heading, Text
 
 
 @page("/")
@@ -133,5 +135,6 @@ systems.
 - `App.run(host=None, port=None, *, reload=False)` — start the server.
 - `page(path)` — decorator registering an HTML route.
 - `Model` — Store-first persistent business-data facade.
-- `voodoo create <name>` — create the official Store-first project scaffold.
+- `voodoo new <name>` — create the official Store-first project scaffold.
+- `voodoo create <name>` — deprecated compatibility alias for `voodoo new`.
 - `voodoo dev` — run the development server with reload support.

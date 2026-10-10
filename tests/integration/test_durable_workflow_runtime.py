@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+import pytest
 
 from voodoo.runtime import (
     ComputeResult,
@@ -46,6 +49,17 @@ def test_voodoo_store_workflow_checkpoints_share_application_store(tmp_path: Pat
     store.save("wf-done", completed)
     assert store.provider == "voodoo"
     assert store.path == path
+    index_record = runtime_store.provider.native.get_record(
+        b"runtime.workflow_index", b"wf-running"
+    )
+    assert index_record is not None
+    index_payload = json.loads(bytes(index_record[1]).decode("utf-8"))
+    native_id = bytes.fromhex(index_payload["native_id"])
+    assert runtime_store.provider.native.get(store._native_index_key("wf-running")) is None
+    assert native_id is not None
+    native_instance = runtime_store.provider.native.get_workflow(bytes(native_id))
+    assert native_instance is not None
+    assert native_instance["status"] == "running"
     assert store.load("wf-running") == running
     assert store.load_unfinished() == [running]
     store.close()
@@ -58,6 +72,82 @@ def test_voodoo_store_workflow_checkpoints_share_application_store(tmp_path: Pat
     assert reopened.load("wf-running") == running
     assert reopened.load_unfinished() == [running]
     reopened_runtime.stop()
+
+
+def test_workflow_checkpoint_codec_migrates_legacy_and_rejects_future_schema(
+    tmp_path: Path,
+):
+    path = tmp_path / "versioned-workflows.vstore"
+    runtime_store = RuntimeStore(StoreConfig(path=path))
+    runtime_store.start()
+    store = VoodooStoreWorkflowStore(runtime_store)
+    legacy = {
+        "workflow_id": "legacy",
+        "status": "running",
+        "task_results": {},
+        "task_statuses": {},
+        "updated_at": "2026-09-14T00:00:00+00:00",
+    }
+    native = runtime_store.provider.native
+    native.put(store._key("legacy"), json.dumps(legacy).encode("utf-8"))
+    assert store.load("legacy") == legacy
+
+    future = dict(legacy)
+    future["_schema_version"] = 99
+    native.put(store._key("future"), json.dumps(future).encode("utf-8"))
+    with pytest.raises(ValueError, match="newer than supported"):
+        store.load("future")
+    mismatch = dict(legacy)
+    mismatch["workflow_id"] = "different"
+    native.put(store._key("mismatch"), json.dumps(mismatch).encode("utf-8"))
+    with pytest.raises(ValueError, match="identity"):
+        store.load("mismatch")
+    native_id = native.create_workflow(
+        b"voodoo.workflow", b"checkpoint", b'{"workflow_id":"native-future"}', 1
+    )
+    native.put(store._native_index_key("native-future"), native_id)
+    native.set_workflow_step(
+        native_id,
+        b"checkpoint",
+        json.dumps(
+            {"workflow_id": "native-future", "_schema_version": 99}
+        ).encode(),
+        2,
+    )
+    with pytest.raises(ValueError, match="newer than supported"):
+        store.load("native-future")
+    runtime_store.stop()
+
+
+def test_existing_native_workflow_index_migrates_to_collection(tmp_path: Path):
+    path = tmp_path / "migrate-workflow-index.vstore"
+    runtime_store = RuntimeStore(StoreConfig(path=path))
+    runtime_store.start()
+    store = VoodooStoreWorkflowStore(runtime_store)
+    native = runtime_store.provider.native
+    native_id = native.create_workflow(
+        b"voodoo.workflow",
+        b"checkpoint",
+        json.dumps({"workflow_id": "legacy-index", "status": "running"}).encode(),
+        1,
+    )
+    native.put(store._native_index_key("legacy-index"), native_id)
+
+    store.save(
+        "legacy-index",
+        {
+            "workflow_id": "legacy-index",
+            "status": "running",
+            "task_results": {},
+            "task_statuses": {},
+            "updated_at": "2026-09-14T00:00:00+00:00",
+        },
+    )
+
+    record = native.get_record(b"runtime.workflow_index", b"legacy-index")
+    assert record is not None
+    assert native.get(store._native_index_key("legacy-index")) is None
+    runtime_store.stop()
 
 
 async def test_sequential_workflow_resume_skips_checkpointed_steps(tmp_path: Path):

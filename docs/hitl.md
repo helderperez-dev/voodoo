@@ -98,7 +98,7 @@ What makes a resume possible after a restart: the approval persists a
 the engine:
 
 ```python
-from voodoo import Intent
+from voodoo.primitives import Intent
 from voodoo.runtime import engine
 
 

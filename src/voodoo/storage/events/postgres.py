@@ -28,6 +28,8 @@ from typing import TYPE_CHECKING, Any
 from voodoo.adapters.capabilities import EventBusCapabilities
 from voodoo.storage.database.interfaces import Migration
 from voodoo.storage.database.sqlite import register_framework_migration
+from voodoo.storage.events.codec import EVENT_SCHEMA_VERSION, validate_event
+from voodoo.storage.events.diagnostics import report_handler_failure
 from voodoo.storage.events.interfaces import VoodooEventBus
 
 EVENTS_MIGRATION_VERSION = 6
@@ -132,8 +134,9 @@ class PostgresEventStore:
             "correlation_id": envelope.get("correlation_id", trace_id_var.get()),
             "causation_id": envelope.get("causation_id"),
             "payload": payload,
-            "schema_version": envelope.get("schema_version", 1),
+            "schema_version": envelope.get("schema_version", EVENT_SCHEMA_VERSION),
         }
+        validate_event(ev)
         with self._lock, self._conn.cursor() as cur:
             cur.execute(
                 """
@@ -162,8 +165,8 @@ class PostgresEventStore:
                 result = handler(ev)
                 if result is not None and hasattr(result, "__await__"):
                     asyncio.create_task(result)
-            except Exception:
-                pass
+            except Exception as error:
+                report_handler_failure(self.provider, event_type, error)
         return ev
 
     def subscribe(self, event_type: str, handler: Callable) -> None:
@@ -179,22 +182,22 @@ class PostgresEventStore:
             rows = cur.fetchall()
         count = 0
         for row in rows:
-            ev = {
-                "event_id": row["event_id"],
-                "event_type": row["event_type"],
-                "timestamp": row["timestamp"],
-                "source": row["source"],
-                "subject": row["subject"],
-                "correlation_id": row["correlation_id"],
-                "causation_id": row["causation_id"],
-                "payload": json.loads(row["payload"]) if row["payload"] else None,
-                "schema_version": row["schema_version"],
-            }
             try:
+                ev = validate_event({
+                    "event_id": row["event_id"],
+                    "event_type": row["event_type"],
+                    "timestamp": row["timestamp"],
+                    "source": row["source"],
+                    "subject": row["subject"],
+                    "correlation_id": row["correlation_id"],
+                    "causation_id": row["causation_id"],
+                    "payload": json.loads(row["payload"]) if row["payload"] else None,
+                    "schema_version": row["schema_version"],
+                })
                 handler(ev)
                 count += 1
-            except Exception:
-                pass
+            except Exception as error:
+                report_handler_failure(self.provider, event_type, error)
         return count
 
     def close(self) -> None:

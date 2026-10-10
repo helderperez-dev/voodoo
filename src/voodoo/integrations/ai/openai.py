@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -16,8 +17,11 @@ from voodoo.ai.providers import (
     ToolCall,
 )
 from voodoo.core.errors import ConfigurationError
+from voodoo.security.redaction import redact_string
 
 __all__ = ["OpenAIProvider"]
+
+_logger = logging.getLogger(__name__)
 
 # Rough per-1k-token cost table (USD) for common models; unknown → 0.0.
 _RATES: dict[str, tuple[float, float]] = {
@@ -124,10 +128,14 @@ class OpenAIProvider(LLMProvider):
                 messages=messages,
                 **kwargs,
             )
-        except Exception:
+        except Exception as error:
             # If the request failed and tools were included, retry without
             # them — some OpenAI-compatible endpoints reject unsupported params.
             if kwargs.get("tools"):
+                _logger.debug(
+                    "OpenAI request rejected tool parameters; retrying without tools error=%s",
+                    redact_string(str(error)),
+                )
                 kwargs.pop("tools", None)
                 kwargs.pop("tool_choice", None)
                 resp = await self._client.chat.completions.create(

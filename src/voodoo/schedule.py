@@ -7,6 +7,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from voodoo.primitives.time import TimeSpec
 from voodoo.storage.database.interfaces import Migration
@@ -46,10 +47,32 @@ class Scheduler:
     def __init__(self, path: str | Path, queue: VoodooQueue) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
+        self._conn: Any = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA busy_timeout=5000")
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS schedules (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                kind TEXT NOT NULL,
+                spec TEXT NOT NULL,
+                next_run_at TEXT NOT NULL,
+                last_run_at TEXT,
+                task_type TEXT NOT NULL,
+                payload TEXT,
+                active INTEGER NOT NULL DEFAULT 1
+            )
+            """
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules (next_run_at)"
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_schedules_active ON schedules (active)"
+        )
+        self._conn.commit()
         self.queue = queue
         self._running = False
 
@@ -113,16 +136,22 @@ class Scheduler:
         return schedule_id
 
     def cron(
-        self, cron_expr: str, task_type: str, payload: Any, name: str | None = None
+        self,
+        cron_expr: str,
+        task_type: str,
+        payload: Any,
+        name: str | None = None,
+        *,
+        timezone: str = "UTC",
     ) -> str:
-        """Schedule a task using a cron expression (5-field subset)."""
+        """Schedule a task using a cron expression in an IANA timezone."""
         # Minimal 5-field cron support (minute hour day month day_of_week)
         import uuid
 
         schedule_id = str(uuid.uuid4())
-        spec = {"cron": cron_expr}
-        # For simplicity, run now + 1 minute for initial scheduling
-        next_run = datetime.now(UTC) + timedelta(minutes=1)
+        _zone(timezone)
+        spec = {"cron": cron_expr, "timezone": timezone}
+        next_run = _next_cron(cron_expr, datetime.now(UTC), timezone)
         self._conn.execute(
             """
             INSERT INTO schedules (id, name, kind, spec, next_run_at, task_type, payload, active)
@@ -197,8 +226,12 @@ class Scheduler:
                     (next_run.isoformat(), now, schedule_id),
                 )
             elif kind == "cron":
-                # Simple: reschedule 1 minute later (minimal cron support)
-                next_run = datetime.now(UTC) + timedelta(minutes=1)
+                spec = json.loads(row["spec"])
+                next_run = _next_cron(
+                    spec["cron"],
+                    datetime.now(UTC),
+                    spec.get("timezone", "UTC"),
+                )
                 self._conn.execute(
                     "UPDATE schedules SET next_run_at = ?, last_run_at = ? WHERE id = ?",
                     (next_run.isoformat(), now, schedule_id),
@@ -233,11 +266,23 @@ def schedule_from_spec(
     if spec.schedule is not None:
         # TimeSpec.schedule holds a cron expression or interval string
         if "*" in spec.schedule or any(c.isalpha() for c in spec.schedule):
-            return scheduler.cron(spec.schedule, task_type, payload, name=name)
+            return scheduler.cron(
+                spec.schedule,
+                task_type,
+                payload,
+                name=name,
+                timezone=spec.timezone,
+            )
         # Try to parse as interval
         if " " in spec.schedule and not any(c.isalpha() for c in spec.schedule):
             # Assume it's a cron expression
-            return scheduler.cron(spec.schedule, task_type, payload, name=name)
+            return scheduler.cron(
+                spec.schedule,
+                task_type,
+                payload,
+                name=name,
+                timezone=spec.timezone,
+            )
         # Otherwise treat as interval in seconds
         try:
             seconds = float(spec.schedule)
@@ -245,11 +290,79 @@ def schedule_from_spec(
                 timedelta(seconds=seconds), task_type, payload, name=name
             )
         except ValueError:
-            return scheduler.cron(spec.schedule, task_type, payload, name=name)
+            return scheduler.cron(
+                spec.schedule,
+                task_type,
+                payload,
+                name=name,
+                timezone=spec.timezone,
+            )
     if spec.interval is not None:
-        return scheduler.every(spec.interval, task_type, payload, name=name)
+        return scheduler.every(
+            timedelta(seconds=spec.interval), task_type, payload, name=name
+        )
     if spec.deadline is not None:
         return scheduler.at(spec.deadline, task_type, payload, name=name)
     raise ValueError(
         "TimeSpec has no schedule, interval, or deadline — nothing to schedule"
     )
+
+
+def _zone(name: str) -> ZoneInfo:
+    """Resolve an IANA timezone and provide an actionable configuration error."""
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError) as error:
+        raise ValueError(f"unknown IANA scheduler timezone: {name!r}") from error
+
+
+def _cron_part_matches(part: str, actual: int) -> bool:
+    """Match one cron list item with wildcards, ranges, and steps."""
+    base, _, step_text = part.partition("/")
+    try:
+        step = int(step_text) if step_text else 1
+    except ValueError:
+        return False
+    if step <= 0:
+        return False
+    if base == "*":
+        return actual % step == 0
+    if "-" in base:
+        start_text, end_text = base.split("-", 1)
+        try:
+            start, end = int(start_text), int(end_text)
+        except ValueError:
+            return False
+        return start <= actual <= end and (actual - start) % step == 0
+    try:
+        return actual == int(base)
+    except ValueError:
+        return False
+
+
+def _field_matches(value: str, actual: int) -> bool:
+    """Match one cron field with wildcards, lists, ranges, and steps."""
+    return any(_cron_part_matches(part, actual) for part in value.split(","))
+
+
+def _next_cron(expression: str, now: datetime, timezone: str) -> datetime:
+    """Return the next UTC instant matching a five-field local-time cron."""
+    fields = expression.split()
+    if len(fields) != 5:
+        raise ValueError("cron expression must contain five fields")
+    zone = _zone(timezone)
+    candidate = now.astimezone(UTC).replace(second=0, microsecond=0) + timedelta(
+        minutes=1
+    )
+    for _ in range(366 * 24 * 60):
+        local = candidate.astimezone(zone)
+        if (
+            _field_matches(fields[0], local.minute)
+            and _field_matches(fields[1], local.hour)
+            and _field_matches(fields[2], local.day)
+            and _field_matches(fields[3], local.month)
+            and _field_matches(fields[4], (local.weekday() + 1) % 7)
+        ):
+            return candidate
+        candidate += timedelta(minutes=1)
+    raise ValueError("cron expression has no occurrence within one year")

@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,9 @@ from voodoo.ui import (
     BottomNav,
     BottomNavItem,
     Button,
+    Calendar,
+    CheckboxGroup,
+    Combobox,
     Component,
     Drawer,
     DropdownMenu,
@@ -19,9 +23,15 @@ from voodoo.ui import (
     Modal,
     ModalClose,
     ModalTrigger,
+    MultiSelect,
+    NumberInput,
+    PasswordInput,
+    RadioGroup,
+    SearchInput,
     Sidebar,
     SidebarItem,
     SidebarToggle,
+    Slider,
     Snackbar,
     Tab,
     Tabs,
@@ -30,6 +40,7 @@ from voodoo.ui import (
     ToastRegion,
     set_style_adapter,
 )
+from voodoo.ui.controls import Choice
 from voodoo.ui.styles import current_adapter
 from voodoo.ui.styles.theme import Theme
 
@@ -93,6 +104,97 @@ def test_sidebar_toggle_can_report_mode_changes(adapter):
     sidebar = Sidebar(id="navigation")
     html = SidebarToggle(sidebar, on_change=lambda value: value).render()
     assert "data-vd-event-change" in html
+
+
+def test_sidebar_toggle_disabled_blocks_event_binding(adapter):
+    sidebar = Sidebar(id="navigation")
+    html = SidebarToggle(
+        sidebar, on_change=lambda value: value, disabled=True
+    ).render()
+    assert " disabled" in html
+    assert 'aria-disabled="true"' in html
+    assert "data-vd-event-change" not in html
+
+
+def test_sidebar_toggle_state_contract_suppresses_mode_changes(adapter):
+    sidebar = Sidebar(id="navigation")
+    html = SidebarToggle(
+        sidebar,
+        on_change=lambda value: value,
+        read_only=True,
+        loading=True,
+        error="Navigation unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Navigation unavailable"' in html
+    assert "data-vd-event-change" not in html
+
+
+def test_bottom_nav_item_disabled_is_not_activatable(adapter):
+    html = BottomNavItem(
+        "Settings", "/settings", on_click=lambda: None, disabled=True
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'tabindex="-1"' in html
+    assert 'href="/settings"' not in html
+    assert "data-vd-event-click" not in html
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, 'aria-disabled="true"'),
+        ({"read_only": True}, 'aria-disabled="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "navigation unavailable"}, 'data-vd-error="navigation unavailable"'),
+    ],
+)
+def test_sidebar_item_unavailable_states_suppress_activation(adapter, state, expected):
+    html = SidebarItem(
+        "Settings", href="/settings", on_click=lambda: None, **state
+    ).render()
+    assert expected in html
+    assert "href=\"/settings\"" not in html
+    assert "data-vd-event-click" not in html
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, 'aria-disabled="true"'),
+        ({"read_only": True}, 'aria-disabled="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "navigation unavailable"}, 'data-vd-error="navigation unavailable"'),
+    ],
+)
+def test_bottom_nav_item_unavailable_states_suppress_activation(
+    adapter, state, expected
+):
+    html = BottomNavItem(
+        "Settings", "/settings", on_click=lambda: None, **state
+    ).render()
+    assert expected in html
+    assert 'href="/settings"' not in html
+    assert "data-vd-event-click" not in html
+
+
+def test_bottom_nav_state_contract_blocks_all_destinations(adapter):
+    html = BottomNav(
+        BottomNavItem("Home", "/"),
+        BottomNavItem("Settings", "/settings", on_click=lambda: None),
+        read_only=True,
+        loading=True,
+        error="Navigation unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'data-vd-error="Navigation unavailable"' in html
+    assert 'href="/"' not in html
+    assert 'href="/settings"' not in html
+    assert "data-vd-event-click" not in html
 
 
 def test_app_shell_supports_sidebar_and_mobile_bottom_navigation(adapter):
@@ -212,11 +314,54 @@ def test_drawer_can_disable_light_dismissal(adapter):
     assert "data-vd-dismissible" not in html
 
 
+def test_drawer_state_contract_blocks_unavailable_opening(adapter):
+    html = Drawer(
+        Button("Open", on_click=lambda: None),
+        Text("Critical flow"),
+        title="Required action",
+        open=True,
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Unavailable"' in html
+    assert 'data-vd-dialog-open' not in html
+    assert 'open="open"' not in html
+
+
 def test_modal_trigger_and_close_target_existing_modal(adapter):
     modal = Modal(Text("Settings"), id="settings-dialog")
     trigger = ModalTrigger("Settings", target=modal)
     assert 'data-vd-dialog-open="settings-dialog"' in trigger.render()
     assert "data-vd-dialog-close" in ModalClose("Done").render()
+
+
+def test_modal_trigger_and_close_state_contract_blocks_activation(adapter):
+    modal = Modal(Text("Settings"), id="settings-dialog")
+    trigger_html = ModalTrigger(
+        "Settings",
+        target=modal,
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    close_html = ModalClose(
+        "Done",
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    for html in (trigger_html, close_html):
+        assert 'aria-disabled="true"' in html
+        assert 'aria-readonly="true"' in html
+        assert 'aria-busy="true"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'data-vd-error="Unavailable"' in html
+    assert "data-vd-dialog-open" not in trigger_html
+    assert "data-vd-dialog-close" not in close_html
 
 
 def test_dropdown_menu_exposes_menu_semantics(adapter):
@@ -246,6 +391,22 @@ def test_dropdown_menu_assigns_an_id_to_custom_triggers(adapter):
     assert "data-vd-anchor=" in html
 
 
+def test_dropdown_menu_state_contract_blocks_unavailable_menu(adapter):
+    html = DropdownMenu(
+        Button("Actions", on_click=lambda: None),
+        MenuItem("Rename", on_select=lambda: None),
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Unavailable"' in html
+    assert "popovertarget" not in html
+    assert "data-vd-event-click" not in html
+
+
 def test_overlays_reject_non_button_triggers():
     with pytest.raises(TypeError, match="Drawer trigger"):
         Drawer(Text("Open"), Text("Body"), title="Drawer")
@@ -264,6 +425,23 @@ def test_disabled_menu_link_cannot_navigate_or_dispatch(adapter):
     assert "disabled" in html
     assert 'aria-disabled="true"' in html
     assert "href=" not in html
+    assert "data-vd-event-click" not in html
+
+
+def test_menu_item_state_contract_blocks_unavailable_dispatch(adapter):
+    html = MenuItem(
+        "Delete",
+        href="/danger",
+        on_select=lambda: None,
+        read_only=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    assert html.startswith("<button")
+    assert 'aria-disabled="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Unavailable"' in html
     assert "data-vd-event-click" not in html
 
 
@@ -306,6 +484,41 @@ def test_tabs_validate_identity_selection_and_activation(adapter):
     assert 'id="account settings"' not in html
 
 
+def test_tabs_state_contract_suppresses_unavailable_changes(adapter):
+    html = Tabs(
+        Tab("account", "Account", Text("Account")),
+        Tab("security", "Security", Text("Security")),
+        on_change=lambda value: value,
+        read_only=True,
+        loading=True,
+        error="Tab unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert "data-vd-event-change" not in html
+    assert html.count('aria-disabled="true"') >= 3
+
+
+@pytest.mark.parametrize(
+    "state, expected",
+    [
+        ({"disabled": True}, 'aria-disabled="true"'),
+        ({"read_only": True}, 'aria-readonly="true"'),
+        ({"loading": True}, 'aria-busy="true"'),
+        ({"error": "tab unavailable"}, 'data-vd-error="tab unavailable"'),
+    ],
+)
+def test_tab_unavailable_states_disable_triggers(adapter, state, expected):
+    html = Tabs(
+        Tab("one", "One", Text("Content"), **state),
+        Tab("two", "Two", Text("Other")),
+        value="two",
+        on_change=lambda value: value,
+    ).render()
+    assert expected in html
+
+
 def test_toast_and_snackbar_support_mobile_feedback(adapter):
     html = ToastRegion(
         Toast("Profile updated", title="Saved", tone="success", duration=4000),
@@ -316,6 +529,125 @@ def test_toast_and_snackbar_support_mobile_feedback(adapter):
     assert html.count("data-vd-toast") >= 2
     assert 'data-vd-duration="4000"' in html
     assert "data-vd-dismiss" in html
+
+
+def test_toast_state_contract_suppresses_unavailable_actions(adapter):
+    html = Toast(
+        "Retry later",
+        action=Button("Retry"),
+        loading=True,
+        error="Notification unavailable",
+    ).render()
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Notification unavailable"' in html
+    assert ">Retry</" not in html
+    assert "Dismiss notification" not in html
+
+
+def test_number_input_uses_shared_control_state_contract(adapter):
+    html = NumberInput(
+        name="quantity",
+        value=2,
+        read_only=True,
+        loading=True,
+        error="Quantity is unavailable",
+    ).render()
+
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-state="error"' in html
+    # Both steppers and the field are unavailable while loading/read-only.
+    assert html.count("disabled") >= 3
+
+
+def test_composite_inputs_propagate_shared_control_state(adapter):
+    search = SearchInput(
+        loading=True,
+        read_only=True,
+        error=True,
+    ).render()
+    password = PasswordInput(
+        disabled=True,
+        error="Invalid password",
+    ).render()
+
+    for html in (search, password):
+        assert 'aria-invalid="true"' in html
+        assert html.count("disabled") >= 2
+    assert 'aria-busy="true"' in search
+    assert 'aria-readonly="true"' in search
+
+
+def test_selection_controls_propagate_shared_control_state(adapter):
+    options = [Choice("a", "Alpha"), Choice("b", "Beta")]
+    combo = Combobox(
+        options,
+        name="choice",
+        loading=True,
+        read_only=True,
+        error=True,
+    ).render()
+    multi = MultiSelect(
+        options,
+        name="choices",
+        disabled=True,
+        error="Choose at least one",
+    ).render()
+
+    assert 'aria-busy="true"' in combo
+    assert 'aria-readonly="true"' in combo
+    assert 'aria-invalid="true"' in combo
+    assert combo.count("disabled") >= 2
+    assert 'aria-disabled="true"' in multi
+    assert 'aria-invalid="true"' in multi
+    assert " disabled" in multi
+
+
+def test_group_and_slider_controls_propagate_shared_control_state(adapter):
+    options = [Choice("a", "Alpha"), Choice("b", "Beta")]
+    radio = RadioGroup(
+        options,
+        name="choice",
+        label="Choice",
+        loading=True,
+        error=True,
+    ).render()
+    checks = CheckboxGroup(
+        options,
+        name="choices",
+        label="Choices",
+        read_only=True,
+    ).render()
+    slider = Slider(
+        name="volume",
+        value=40,
+        read_only=True,
+        error="Volume is locked",
+    ).render()
+
+    assert 'aria-busy="true"' in radio
+    assert 'aria-invalid="true"' in radio
+    assert radio.count("disabled") >= 2
+    assert 'aria-readonly="true"' in checks
+    assert checks.count("disabled") >= 2
+    assert 'aria-readonly="true"' in slider
+    assert 'aria-invalid="true"' in slider
+
+
+def test_calendar_propagates_shared_control_state_to_day_buttons(adapter):
+    html = Calendar(
+        year=2026,
+        month=10,
+        value=date(2026, 10, 7),
+        loading=True,
+        error="Calendar unavailable",
+    ).render()
+
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert html.count("disabled") >= 28
 
 
 def test_interaction_runtime_contains_shared_behaviors():

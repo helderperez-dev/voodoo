@@ -1,4 +1,9 @@
+"""HTTP credential authentication and Runtime principal projection."""
+
+from __future__ import annotations
+
 from contextvars import Token
+from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -7,6 +12,8 @@ from starlette.responses import Response
 from voodoo.auth.jwt import AuthError, decode_access_token
 from voodoo.auth.user import AuthUser, User, current_user
 from voodoo.config import config
+
+__all__ = ["AuthMiddleware"]
 
 # =========================================================================
 # ASGI Auth Middleware
@@ -21,13 +28,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
     projection; it does not grant Capability by itself.
     """
 
+    def __init__(self, app: Any, *, config_override: Any = None) -> None:
+        super().__init__(app)
+        self._config = config_override or config
+
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         user = AuthUser(is_authenticated=False)
         auth_header = request.headers.get("Authorization", "").strip()
         api_key_header = request.headers.get("X-API-Key", "").strip()
-        cookie_val = request.cookies.get(config.auth.cookie_name)
+        cookie_val = request.cookies.get(self._config.auth.cookie_name)
 
         # 1. Check API Key Header
         if api_key_header:
@@ -49,7 +60,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if auth_header.startswith("Bearer "):
                 token_str = auth_header[7:].strip()
                 try:
-                    payload = decode_access_token(token_str)
+                    payload = decode_access_token(token_str, auth_config=self._config.auth)
                     user = AuthUser(
                         id=payload.get("sub") or payload.get("id"),
                         email=payload.get("email"),
@@ -71,7 +82,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # 3. Check Session Cookie
         elif cookie_val:
             try:
-                payload = decode_access_token(cookie_val)
+                payload = decode_access_token(cookie_val, auth_config=self._config.auth)
                 user = AuthUser(
                     id=payload.get("sub") or payload.get("id"),
                     email=payload.get("email"),

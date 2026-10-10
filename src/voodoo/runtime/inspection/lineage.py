@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+_SCHEMA_VERSION = 1
+_logger = logging.getLogger("voodoo.runtime.lineage")
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +21,7 @@ class LineageEvent:
     parent_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     recorded_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    schema_version: int = _SCHEMA_VERSION
 
 
 class RuntimeLineage:
@@ -33,6 +38,7 @@ class RuntimeLineage:
         if self._path is not None:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             payload = asdict(event)
+            payload["_schema_version"] = payload.pop("schema_version", _SCHEMA_VERSION)
             payload["recorded_at"] = event.recorded_at.isoformat()
             with self._path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(payload, default=str) + "\n")
@@ -45,11 +51,20 @@ class RuntimeLineage:
             for line in handle:
                 try:
                     payload = json.loads(line)
+                    version = payload.pop("_schema_version", 0)
+                    if isinstance(version, bool) or not isinstance(version, int):
+                        raise ValueError("lineage schema version must be an integer")
+                    if version > _SCHEMA_VERSION:
+                        raise ValueError(
+                            f"unsupported lineage schema version: {version}"
+                        )
                     payload["recorded_at"] = datetime.fromisoformat(
                         payload["recorded_at"]
                     )
+                    payload["schema_version"] = _SCHEMA_VERSION
                     self._events.append(LineageEvent(**payload))
                 except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    _logger.warning("lineage record skipped during recovery")
                     continue
 
     def events(self) -> tuple[LineageEvent, ...]:

@@ -40,6 +40,17 @@ class ObjectStoreContractTests:
         store.put("greeting.txt", b"hello world", "text/plain")
         assert store.get("greeting.txt") == b"hello world"
 
+    def test_iter_chunks_is_bounded_and_ordered(self, store):
+        store.put("chunked.bin", b"0123456789")
+        assert list(store.iter_chunks("chunked.bin", chunk_size=3)) == [
+            b"012",
+            b"345",
+            b"678",
+            b"9",
+        ]
+        with pytest.raises(ValueError, match="chunk_size"):
+            list(store.iter_chunks("chunked.bin", chunk_size=0))
+
     def test_put_replace_updates(self, store):
         store.put("key", b"v1")
         store.put("key", b"v2")

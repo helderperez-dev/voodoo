@@ -1,11 +1,70 @@
+import logging
+import sqlite3
+from collections.abc import Mapping
+from math import isfinite
 from typing import Any
 
+from starlette.responses import JSONResponse
+
 from voodoo.components import Card, Div, Heading
+from voodoo.core.errors import ConfigurationError
 from voodoo.data import get_db
 from voodoo.i18n import _
 from voodoo.routing.api import api
 from voodoo.runtime.scheduling.workers import _queue, _worker_tasks
+from voodoo.runtime.store import get_active_runtime_store
+from voodoo.security.redaction import redact_string
 from voodoo.storage import storage
+
+logger = logging.getLogger(__name__)
+
+_REMEDIATION: dict[str, str] = {
+    "database": "verify database connectivity and credentials, then retry the health check",
+    "queue": "start or reconnect workers and inspect queue backlog before accepting load",
+    "storage": "verify the Store path or object provider and available capacity",
+    "agent": "verify the configured agent provider and credentials",
+    "store": "inspect Store recovery, migration, and capacity details before restarting",
+}
+_STATUS_POLICY = {
+    "Operational": {"http_status": 200, "traffic": "serve"},
+    "Degraded": {"http_status": 200, "traffic": "serve_with_attention"},
+    "Down": {"http_status": 503, "traffic": "fail_closed"},
+}
+_MAX_STATUS_DEPTH = 6
+_MAX_STATUS_FIELDS = 128
+_SENSITIVE_STATUS_KEYS = {
+    "id",
+    "key",
+    "path",
+    "namespace",
+    "payload",
+    "store_id",
+}
+# Health probes intentionally translate expected provider/configuration failures
+# into a bounded Down result, but must not turn framework bugs into healthy-looking
+# diagnostics.  Keep this list explicit so new failure modes require review.
+_STATUS_CHECK_ERRORS = (
+    AttributeError,
+    ConnectionError,
+    ConfigurationError,
+    ImportError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    sqlite3.Error,
+    TypeError,
+    ValueError,
+)
+
+
+def _health_failure(check: str, error: Exception) -> dict[str, str]:
+    """Return a redacted health failure and retain structured diagnostics."""
+    message = redact_string(str(error))
+    logger.warning(
+        "health check failed",
+        extra={"health_check": check, "error": message},
+    )
+    return {"status": "Down", "error": message}
 
 
 async def check_database() -> dict[str, Any]:
@@ -13,8 +72,8 @@ async def check_database() -> dict[str, Any]:
         db = await get_db()
         await db.execute("SELECT 1")
         return {"status": "Operational", "latency": "ok"}
-    except Exception as e:
-        return {"status": "Down", "error": str(e)}
+    except _STATUS_CHECK_ERRORS as error:
+        return _health_failure("database", error)
 
 
 async def check_queue() -> dict[str, Any]:
@@ -26,8 +85,8 @@ async def check_queue() -> dict[str, Any]:
             "workers": total_workers,
             "queues": active_queues,
         }
-    except Exception as e:
-        return {"status": "Down", "error": str(e)}
+    except _STATUS_CHECK_ERRORS as error:
+        return _health_failure("queue", error)
 
 
 async def check_storage() -> dict[str, Any]:
@@ -40,42 +99,167 @@ async def check_storage() -> dict[str, Any]:
             if os.path.exists(storage.base_dir):
                 return {"status": "Operational", "type": "Local"}
             return {"status": "Degraded", "type": "Local", "error": "Dir missing"}
-    except Exception as e:
-        return {"status": "Down", "error": str(e)}
+    except _STATUS_CHECK_ERRORS as error:
+        return _health_failure("storage", error)
 
 
 async def check_agent() -> dict[str, Any]:
-    # Placeholder for Agent connectivity
-    return {"status": "Operational", "provider": "Simulated"}
+    """Validate the configured model route without making a provider call.
+
+    Health checks must be bounded and side-effect free.  Resolving the model
+    route catches malformed aliases/providers while avoiding a network request
+    (and therefore avoids turning a probe into an expensive or unavailable LLM
+    invocation).  ``verified`` makes that distinction explicit to operators.
+    """
+    try:
+        from voodoo.ai.providers import default_model, resolve_model
+
+        model_ref = default_model()
+        provider, model = resolve_model(model_ref)
+        return {
+            "status": "Operational",
+            "provider": provider,
+            "model": model,
+            "verified": False,
+            "probe": "configuration",
+        }
+    except (
+        AttributeError,
+        ConfigurationError,
+        ImportError,
+        TypeError,
+        ValueError,
+    ) as error:
+        return _health_failure("agent", error)
+
+
+def _status_scalar(value: Any) -> Any:
+    """Keep only JSON-safe scalar status values."""
+    if isinstance(value, str):
+        return redact_string(value)[:512]
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value if not isinstance(value, float) or isfinite(value) else None
+    # Provider-specific objects (bytes, paths, handles, exceptions) are not
+    # part of the public status contract and must never cross the JSON boundary.
+    return None
+
+
+def _redact_store_details(value: Any, *, depth: int = 0) -> Any:
+    """Return bounded JSON-safe details without exposing provider identifiers."""
+    if depth > _MAX_STATUS_DEPTH:
+        return None
+    if isinstance(value, Mapping):
+        result: dict[str, Any] = {}
+        for index, (key, item) in enumerate(value.items()):
+            if index >= _MAX_STATUS_FIELDS:
+                break
+            safe_key = str(key)
+            if safe_key.lower() in _SENSITIVE_STATUS_KEYS or safe_key.lower().endswith(
+                "_id"
+            ):
+                continue
+            bounded = _redact_store_details(item, depth=depth + 1)
+            if bounded is not None:
+                result[safe_key] = bounded
+        return result
+    if isinstance(value, (list, tuple)):
+        return [
+            bounded
+            for item in value[:_MAX_STATUS_FIELDS]
+            if (bounded := _redact_store_details(item, depth=depth + 1)) is not None
+        ]
+    return _status_scalar(value)
+
+
+async def check_store() -> dict[str, Any]:
+    """Project the active Runtime Store into the operational status contract."""
+    try:
+        runtime_store = get_active_runtime_store()
+        if runtime_store is None:
+            # Status can be queried before an application lifespan binds its
+            # Runtime Store; that is not itself a failure.
+            return {"status": "Operational", "bound": False}
+        health = runtime_store.health()
+        if health is None:
+            return {"status": "Degraded", "bound": True, "opened": False}
+        details = _redact_store_details(health.details)
+        if not isinstance(details, dict):
+            details = {}
+        if not health.opened:
+            status = "Degraded"
+        elif not health.verified:
+            status = "Down"
+        elif details.get("within_limit", True) is False:
+            status = "Degraded"
+        else:
+            status = "Operational"
+        return {
+            "status": status,
+            "provider": health.provider,
+            "opened": health.opened,
+            "verified": health.verified,
+            "details": details,
+        }
+    except _STATUS_CHECK_ERRORS as error:
+        return _health_failure("store", error)
 
 
 @api.get("/status")
-async def get_status():
+async def get_status() -> JSONResponse:
     db_health = await check_database()
     queue_health = await check_queue()
     storage_health = await check_storage()
     agent_health = await check_agent()
+    store_health = await check_store()
 
-    status_code = 200
-    if any(
-        s["status"] == "Down"
-        for s in [db_health, queue_health, storage_health, agent_health]
-    ):
-        status_code = 503
-
-    return {
-        "services": {
-            "database": db_health,
-            "queue": queue_health,
-            "storage": storage_health,
-            "agent": agent_health,
-        },
-        "overall": "Operational" if status_code == 200 else "Down",
+    services = [db_health, queue_health, storage_health, agent_health, store_health]
+    has_down = any(service["status"] == "Down" for service in services)
+    has_degraded = any(service["status"] == "Degraded" for service in services)
+    overall = "Down" if has_down else "Degraded" if has_degraded else "Operational"
+    degraded = [
+        name
+        for name, service in (
+            ("database", db_health),
+            ("queue", queue_health),
+            ("storage", storage_health),
+            ("agent", agent_health),
+            ("store", store_health),
+        )
+        if service["status"] == "Degraded"
+    ]
+    attention = {
+        name: _REMEDIATION[name]
+        for name, service in (
+            ("database", db_health),
+            ("queue", queue_health),
+            ("storage", storage_health),
+            ("agent", agent_health),
+            ("store", store_health),
+        )
+        if service["status"] in {"Degraded", "Down"}
     }
+    return JSONResponse(
+        {
+            "services": {
+                "database": db_health,
+                "queue": queue_health,
+                "storage": storage_health,
+                "agent": agent_health,
+                "store": store_health,
+            },
+            "overall": overall,
+            "degraded": degraded,
+            "attention": attention,
+            "policy": _STATUS_POLICY[overall],
+        },
+        status_code=503 if has_down else 200,
+    )
 
 
 @api.get("/status/locales")
-async def get_status_locales():
+async def get_status_locales() -> dict[str, str]:
     return {
         "database": _("status.database"),
         "queue": _("status.queue"),
@@ -88,7 +272,7 @@ async def get_status_locales():
 
 
 class ServiceStatus(Div):
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         # Provide default glass aesthetics for the card
         classes = kwargs.pop("className", "")
         card_classes = f"bg-[var(--color-surface)] border-[var(--color-border)] backdrop-blur-xl {classes}".strip()

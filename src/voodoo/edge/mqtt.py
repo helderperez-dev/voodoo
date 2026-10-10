@@ -23,12 +23,13 @@ import asyncio
 import importlib.util
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from voodoo.edge.errors import TransportError
 from voodoo.edge.gateway import DeviceGateway
 from voodoo.edge.models import AuthenticatedDeviceContext, TransportKind
 from voodoo.edge.protocol import EdgeMessageType, make_message
+from voodoo.security.redaction import redact_string
 
 if TYPE_CHECKING:
     pass
@@ -153,12 +154,14 @@ class EdgeMQTTTransport:
             client.tls_set()
         client.on_connect = self._on_connect
         client.on_message = self._on_message
-        client.on_disconnect = self._on_disconnect
+        client.on_disconnect = cast(Any, self._on_disconnect)
         self._client = client
         try:
             client.connect(self._broker_url, self._port, keepalive=self._keepalive)
-        except Exception as e:
-            raise TransportError(f"MQTT connect failed: {e}") from e
+        except (OSError, RuntimeError, TimeoutError, TypeError, ValueError) as error:
+            raise TransportError(
+                f"MQTT connect failed: {redact_string(str(error))}"
+            ) from error
         client.loop_start()  # background network thread
         await asyncio.wait_for(self._connected.wait(), timeout=10.0)
 
@@ -261,8 +264,12 @@ class EdgeMQTTTransport:
             response = await self._gateway.handle_message(
                 raw, transport=TransportKind.MQTT
             )
-        except Exception as e:
-            logger.warning("Gateway rejected message on %s: %s", topic, e)
+        except Exception as error:
+            logger.warning(
+                "Gateway rejected MQTT message: topic=%s error_type=%s",
+                topic,
+                type(error).__name__,
+            )
             return
 
         # AUTH success → store session context for subsequent messages.

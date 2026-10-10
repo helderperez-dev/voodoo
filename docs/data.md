@@ -172,7 +172,7 @@ claim global transactions across external systems or nodes.
 it does not redefine the default `Model` backend.
 
 ```python
-from voodoo import MemoryEntry, MemoryLayer, SQLiteMemoryStore
+from voodoo.memory import MemoryEntry, MemoryLayer, SQLiteMemoryStore
 
 memory = SQLiteMemoryStore("memory.db")
 entry = MemoryEntry(

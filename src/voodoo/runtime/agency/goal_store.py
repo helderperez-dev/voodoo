@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 if TYPE_CHECKING:
     from voodoo.runtime.store import RuntimeStore
@@ -18,7 +18,10 @@ if TYPE_CHECKING:
 __all__ = ["GoalStore", "SQLiteGoalStore", "VoodooStoreGoalStore"]
 
 _GOAL_PREFIX = b"runtime:goals:checkpoint:"
+_COLLECTION = b"runtime.goals"
 _TERMINAL = {"completed", "failed", "cancelled"}
+_SCHEMA_KEY = "_schema_version"
+_SCHEMA_VERSION = 1
 
 
 class GoalStore(Protocol):
@@ -72,25 +75,63 @@ class VoodooStoreGoalStore:
             )
         return native
 
+    @staticmethod
+    def _native_collections(store: Any) -> bool:
+        return all(
+            hasattr(store, method)
+            for method in ("create_collection", "upsert_record", "get_record", "scan_collection")
+        )
+
+    @classmethod
+    def _ensure_collection(cls, store: Any) -> None:
+        if cls._native_collections(store):
+            store.create_collection(_COLLECTION, schema_version=_SCHEMA_VERSION, codec=b"json")
+
     def save(self, goal_id: str, payload: dict[str, Any]) -> None:
+        body = dict(payload)
+        body[_SCHEMA_KEY] = _SCHEMA_VERSION
         encoded = json.dumps(
-            payload,
+            body,
             separators=(",", ":"),
             sort_keys=True,
             default=str,
         ).encode("utf-8")
-        self._store().put(self._key(goal_id), encoded)
+        store = self._store()
+        if self._native_collections(store):
+            self._ensure_collection(store)
+            store.upsert_record(_COLLECTION, goal_id.encode("utf-8"), encoded)
+            # A checkpoint write is the migration point for legacy KV data.
+            store.delete(self._key(goal_id))
+            return
+        store.put(self._key(goal_id), encoded)
 
     def load(self, goal_id: str) -> dict[str, Any] | None:
-        raw = self._store().get(self._key(goal_id))
+        store = self._store()
+        raw = None
+        if self._native_collections(store):
+            self._ensure_collection(store)
+            record = store.get_record(_COLLECTION, goal_id.encode("utf-8"))
+            if record is not None:
+                raw = record[1]
+        if raw is None:
+            raw = store.get(self._key(goal_id))
         if raw is None:
             return None
-        return json.loads(bytes(raw).decode("utf-8"))
+        return self._decode(goal_id, bytes(raw))
 
     def load_unfinished(self) -> list[dict[str, Any]]:
         checkpoints: list[dict[str, Any]] = []
-        for _key, raw in self._store().scan_prefix(_GOAL_PREFIX):
-            payload = json.loads(bytes(raw).decode("utf-8"))
+        store = self._store()
+        records: dict[str, dict[str, Any]] = {}
+        if self._native_collections(store):
+            self._ensure_collection(store)
+            for key, raw, _indexes in store.scan_collection(_COLLECTION):
+                goal_id = bytes(key).decode("utf-8")
+                records[goal_id] = self._decode(goal_id, bytes(raw))
+        for key, raw in store.scan_prefix(_GOAL_PREFIX):
+            goal_id = key[len(_GOAL_PREFIX) :].decode("utf-8")
+            records.setdefault(goal_id, self._decode(goal_id, bytes(raw)))
+        for payload in records.values():
             goal = payload.get("goal", {})
             if str(goal.get("status", "")) not in _TERMINAL:
                 checkpoints.append(payload)
@@ -104,6 +145,27 @@ class VoodooStoreGoalStore:
 
     def close(self) -> None:
         """No-op: RuntimeStore owns the native Store lifecycle."""
+
+    @staticmethod
+    def _decode(goal_id: str, raw: bytes) -> dict[str, Any]:
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("goal checkpoint is not valid UTF-8 JSON") from error
+        if not isinstance(payload, dict):
+            raise ValueError("goal checkpoint must be a JSON object")
+        version = payload.pop(_SCHEMA_KEY, 0)
+        if not isinstance(version, int) or isinstance(version, bool):
+            raise ValueError("goal checkpoint schema version must be an integer")
+        if version > _SCHEMA_VERSION:
+            raise ValueError(
+                f"goal checkpoint schema {version} is newer than supported schema "
+                f"{_SCHEMA_VERSION}"
+            )
+        goal = payload.get("goal")
+        if isinstance(goal, dict) and goal.get("id") not in (None, goal_id):
+            raise ValueError("goal checkpoint does not match its key")
+        return cast(dict[str, Any], payload)
 
 
 class SQLiteGoalStore:
@@ -163,7 +225,7 @@ class SQLiteGoalStore:
         ).fetchone()
         if row is None:
             return None
-        return json.loads(row["payload"])
+        return cast(dict[str, Any], json.loads(row["payload"]))
 
     def load_unfinished(self) -> list[dict[str, Any]]:
         rows = self._conn.execute(

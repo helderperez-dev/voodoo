@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import typer
 
 from voodoo.cli import terminal
@@ -14,7 +16,7 @@ tasks_app = typer.Typer(
 )
 
 
-def _get_queue():
+def _get_queue() -> Any:
     from voodoo.runtime.scheduling.workers import _get_queue
 
     return _get_queue()
@@ -25,13 +27,13 @@ def list_tasks(
     status: str = typer.Option(None, "--status", help="Filter by status"),
     task_type: str = typer.Option(None, "--type", help="Filter by task type"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """List recent tasks."""
     import asyncio
 
     from voodoo.storage.queue import TaskStatus
 
-    async def run():
+    async def run() -> None:
         q = await _get_queue()
         stat = TaskStatus(status) if status else None
         tasks = await q.list(status=stat, task_type=task_type)
@@ -84,11 +86,11 @@ def list_tasks(
 def retry_task(
     task_id: int = typer.Argument(..., help="Task ID to retry"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """Manually retry a failed task."""
     import asyncio
 
-    async def run():
+    async def run() -> None:
         q = await _get_queue()
         result = await q.retry(task_id)
         if result is None:

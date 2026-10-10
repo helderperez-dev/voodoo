@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import httpx
@@ -65,6 +65,10 @@ class SimulatorTransport(ABC):
     async def fetch_effects(self) -> list[dict[str, Any]]:
         """Fetch pending effects (HTTP polling path)."""
 
+    @abstractmethod
+    def set_credential(self, credential: str) -> None:
+        """Set the credential used by subsequent protocol messages."""
+
 
 class HTTPSimulatorTransport(SimulatorTransport):
     """Speaks the Edge HTTP API — trivially testable with TestClient.
@@ -105,7 +109,7 @@ class HTTPSimulatorTransport(SimulatorTransport):
                 },
             )
             resp.raise_for_status()
-            return resp.json()
+            return cast(dict[str, Any], resp.json())
 
     async def send(
         self, message_type: str, payload: dict[str, Any], *, session_id: str = ""
@@ -122,13 +126,14 @@ class HTTPSimulatorTransport(SimulatorTransport):
         async with self._client() as client:
             resp = await client.post(route, json=payload, headers=self._headers())
             resp.raise_for_status()
-            return resp.json()
+            return cast(dict[str, Any], resp.json())
 
     async def fetch_effects(self) -> list[dict[str, Any]]:
         async with self._client() as client:
             resp = await client.get("/v1/edge/effects", headers=self._headers())
             resp.raise_for_status()
-            return resp.json().get("effects", [])
+            payload = cast(dict[str, Any], resp.json())
+            return cast(list[dict[str, Any]], payload.get("effects", []))
 
 
 class MQTTSimulatorTransport(SimulatorTransport):
@@ -403,4 +408,4 @@ class DeviceSimulator:
                 },
             )
             resp.raise_for_status()
-            return resp.json()
+            return cast(dict[str, Any], resp.json())

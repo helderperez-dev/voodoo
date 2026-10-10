@@ -132,6 +132,40 @@ def test_default_model_and_config_driven_provider(monkeypatch):
     assert default_model() == "anthropic:claude-3"
 
 
+def test_model_resolution_does_not_hide_unexpected_config_failures(monkeypatch):
+    import importlib
+
+    import voodoo.ai.providers as providers_mod
+
+    config_mod = importlib.import_module("voodoo.config")
+
+    class BrokenConfig:
+        @property
+        def models(self):
+            raise RuntimeError("configuration implementation failed")
+
+    monkeypatch.setattr(config_mod, "config", BrokenConfig())
+    with pytest.raises(RuntimeError, match="implementation failed"):
+        providers_mod.resolve_model("custom-alias")
+
+
+def test_default_model_does_not_hide_unexpected_config_failures(monkeypatch):
+    import importlib
+
+    from voodoo.ai.providers import default_model
+
+    config_mod = importlib.import_module("voodoo.config")
+
+    class BrokenConfig:
+        @property
+        def ai(self):
+            raise RuntimeError("configuration implementation failed")
+
+    monkeypatch.setattr(config_mod, "config", BrokenConfig())
+    with pytest.raises(RuntimeError, match="implementation failed"):
+        default_model()
+
+
 def test_agent_defaults_to_configured_model(monkeypatch):
     import importlib
 

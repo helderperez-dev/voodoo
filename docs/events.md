@@ -2,51 +2,53 @@
 
 ## What it is
 
-Events connect browser interactions (clicks, input changes) to Python handlers. The `@event` decorator registers an async handler that the WebSocket transport dispatches to.
+Events connect browser interactions to Python callables. Callable bindings are
+opaque and owned by the browser session that rendered them.
 
 ## Minimal example
 
 ```python
-from voodoo import event, state
+from voodoo import state
+from voodoo.ui import Button
 
 count = state(0)
 
 
-@event
-async def increment(element_id, value):
-    count.set(count.get() + value)
+async def increment():
+    count.update(lambda value: value + 1)
+
+
+button = Button("Increment", on_click=increment)
 ```
 
-The browser triggers this with:
-
-```html
-<button onclick="vd.event('increment', 'counter-btn', 5)">+5</button>
-```
+Voodoo emits a semantic `data-vd-event-*` binding; no inline handler is needed.
 
 ## Common usage
 
 ### Form input event
 
 ```python
-@event
-async def update_name(element_id, value):
+async def update_name(value):
     name.set(value)
 ```
 
 ### Reset event
 
 ```python
-@event
-async def reset(element_id, value):
+async def reset():
     count.set(0)
 ```
 
 ## How it works
 
-1. The browser sends a WebSocket message: `{"type": "event", "event": "increment", "id": "btn-1", "value": 5}`.
-2. The WebSocket endpoint looks up the handler by name in the `event_handlers` registry.
-3. The handler runs: `await handler(element_id, value)`.
-4. If the handler mutates state, the `StateRenderer` re-renders and broadcasts a DOM patch.
+1. HTTP rendering creates or resumes an opaque HttpOnly UI session.
+2. Callable handlers receive opaque IDs stored only in that session registry.
+3. The WebSocket validates origin, session ownership, message size and rate.
+4. Dispatch resolves the binding only inside the caller's session.
+5. Reactive patches are sent only to connections belonging to that session.
+
+Changing user identity rotates the UI session. Disconnected sessions retain a
+short reconnect grace period, then release bindings, state and render tasks.
 
 ## Advanced
 
@@ -58,9 +60,13 @@ from voodoo.ui.events import register_event
 register_event("custom_event", my_handler)
 ```
 
+Named handlers are an application-level compatibility surface. Prefer passing
+callables directly to components because callable ownership is session-scoped.
+
 ### WebSocket manager
 
-The `WebSocketManager` handles connections and broadcasts:
+The `WebSocketManager` targets the current event/render session. The historical
+method names remain for compatibility but do not fan out globally:
 
 ```python
 from voodoo.ui.events import ws_manager
@@ -71,8 +77,8 @@ await ws_manager.broadcast_append("list-id", "<li>New item</li>")
 
 ## API reference
 
-- `event(func)` — decorator registering an async event handler by function name.
+- `event(func)` — compatibility decorator for an application-level named handler.
 - `register_event(name, handler)` — register a handler programmatically.
 - `ws_manager` — singleton `WebSocketManager` for connection management.
-- `ws_manager.broadcast_patch(element_id, html)` — send a DOM patch to all clients.
-- `ws_manager.broadcast_append(element_id, html)` — append HTML to all clients.
+- `ws_manager.broadcast_patch(element_id, html)` — patch the current UI session.
+- `ws_manager.broadcast_append(element_id, html)` — append in the current UI session.

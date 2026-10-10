@@ -17,6 +17,8 @@ compile into the runtime's existing primitives.
 
 from __future__ import annotations
 
+import json
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -31,8 +33,11 @@ from voodoo.runtime.errors import ExecutionError, ExecutionTimeout
 from voodoo.runtime.execution import Execution
 from voodoo.runtime.execution.engine import ComputeFn, ComputeResult, ExecutionEngine
 from voodoo.runtime.execution.engine import engine as default_engine
+from voodoo.security.redaction import redact_string
 
 __all__ = ["TaskStatus", "Task"]
+
+_logger = logging.getLogger("voodoo.runtime.task")
 
 
 class TaskStatus(StrEnum):
@@ -212,11 +217,16 @@ class Task:
                 value = run.output
                 if output_type is not None and hasattr(output_type, "model_validate"):
                     try:
-                        import json
-
                         value = output_type.model_validate(json.loads(run.output))
-                    except Exception:
-                        pass
+                    except (TypeError, ValueError) as error:
+                        # Preserve the provider's raw value for compatibility,
+                        # but surface a failed typed-output contract.
+                        _logger.warning(
+                            "task typed-output validation failed task=%s output_type=%s error=%s",
+                            self.name,
+                            output_type.__name__ if output_type is not None else "unknown",
+                            redact_string(str(error)),
+                        )
                 return ComputeResult(
                     value=value,
                     resources=Resource(

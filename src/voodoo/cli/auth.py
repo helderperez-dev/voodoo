@@ -1,8 +1,15 @@
+"""Authentication and secret-generation CLI commands."""
+
+from __future__ import annotations
+
 import asyncio
+from typing import Any
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
+
+__all__ = ["auth_app"]
 
 # =========================================================================
 # Auth CLI Subcommands
@@ -21,13 +28,21 @@ def cli_secret_key(
     length: int = typer.Option(
         32, "--length", "-l", help="Length of the secret key in bytes"
     ),
-):
+    raw: bool = typer.Option(
+        False,
+        "--raw",
+        help="Print only the generated value for scripts and command substitution.",
+    ),
+) -> None:
     """
     Generate a cryptographically secure secret key for VOODOO_SECRET_KEY.
     """
     from voodoo.auth import generate_secret_key
 
     key = generate_secret_key(length)
+    if raw:
+        typer.echo(key)
+        return
     console.print(
         Panel(
             f"[bold green]{key}[/bold green]\n\n[dim]Add this to your .env file:[/dim]\n[cyan]VOODOO_SECRET_KEY={key}[/cyan]",
@@ -40,7 +55,7 @@ def cli_secret_key(
 @auth_app.command("hash-password")
 def cli_hash_password(
     password: str = typer.Argument(..., help="Plaintext password to hash"),
-):
+) -> None:
     """
     Generate a PBKDF2-HMAC-SHA256 hash for a given password.
     """
@@ -61,7 +76,7 @@ def cli_generate_key(
     prefix: str = typer.Option(
         "vd_live", "--prefix", "-p", help="API key prefix (e.g. vd_live, vd_test)"
     ),
-):
+) -> None:
     """
     Generate a new API key and its SHA-256 hash.
     """
@@ -92,7 +107,7 @@ def cli_create_user(
     role: str = typer.Option(
         "user", "--role", "-r", help="User role (e.g. user, admin, editor)"
     ),
-):
+) -> None:
     """
     Create a new user directly in the database.
     """
@@ -104,7 +119,7 @@ def cli_create_user(
         console.print(f"[bold red]Error:[/bold red] {err}")
         raise typer.Exit(1)
 
-    async def _create():
+    async def _create() -> tuple[Any, str | None]:
         user, raw_key = await User.create_user(
             email=email, password=password, username=username, role=role
         )

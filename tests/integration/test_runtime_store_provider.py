@@ -39,6 +39,7 @@ class FakeNativeStore:
         *,
         durability: str,
         repair_torn_tail: bool,
+        max_bytes: int | None,
     ) -> FakeNativeStore:
         cls.open_calls += 1
         if cls.fail_open:
@@ -48,6 +49,7 @@ class FakeNativeStore:
         instance.path = path
         instance.durability = durability
         instance.repair_torn_tail = repair_torn_tail
+        instance.max_bytes = max_bytes
         return instance
 
     @classmethod
@@ -69,6 +71,20 @@ class FakeNativeStore:
         type(self).close_calls += 1
         if type(self).fail_close:
             raise RuntimeError("close failed")
+
+    def health_report(self) -> dict[str, object]:
+        return {
+            "store_id": b"secret-id-that-must-not-cross-boundary",
+            "compaction_backlog_bytes": 17,
+            "lock_contentions_total": 2,
+            "queue_ready": 3,
+            "queue_oldest_ready_at_ms": 1234,
+            "metrics": {
+                "commits": 4,
+                "commit_latency_max_us": 19,
+            },
+            "storage": {"file_bytes": 128, "live_bytes": 96},
+        }
 
 
 @pytest.fixture(autouse=True)
@@ -109,6 +125,37 @@ class TestStoreProviderContract:
         assert path.exists()
         assert FakeNativeStore.open_calls == 1
         assert provider.native.durability == "strict"
+
+    def test_provider_lifecycle_emits_store_spans(
+        self, tmp_path: Path, native_module: SimpleNamespace
+    ) -> None:
+        from voodoo.observability import telemetry_store
+
+        before = len(telemetry_store.metrics["spans"])
+        provider = VoodooStoreProvider(tmp_path / "traced.vstore")
+        provider.open()
+        provider.health()
+        provider.close()
+
+        names = [
+            span["name"]
+            for span in telemetry_store.metrics["spans"][before:]
+            if span["name"].startswith("store.")
+        ]
+        assert names[:3] == ["store.open", "store.metric.open", "store.health"]
+        assert "store.metric.recovery.verify" in names
+        assert names[-2:] == ["store.close", "store.metric.close"]
+
+    def test_open_rejects_store_over_configured_byte_limit(
+        self, tmp_path: Path, native_module: SimpleNamespace
+    ) -> None:
+        path = tmp_path / "limited.vstore"
+        path.write_bytes(b"0123456789")
+        provider = VoodooStoreProvider(path, max_bytes=4)
+
+        with pytest.raises(StoreProviderError, match="max_bytes"):
+            provider.open()
+        assert FakeNativeStore.open_calls == 0
 
     def test_close_is_idempotent(
         self, tmp_path: Path, native_module: SimpleNamespace
@@ -184,6 +231,10 @@ class TestStoreProviderHealth:
         assert health.details["committed_transactions"] == 2
         assert health.details["keys"] == 3
         assert health.details["has_torn_tail"] is False
+        assert health.details["native_health"]["compaction_backlog_bytes"] == 17
+        assert health.details["native_health"]["lock_contentions_total"] == 2
+        assert health.details["native_health"]["metrics"]["commits"] == 4
+        assert "store_id" not in health.details["native_health"]
         assert FakeNativeStore.verify_calls == 1
 
     def test_verification_failure_is_health_evidence_not_crash(

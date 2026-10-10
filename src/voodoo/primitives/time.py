@@ -42,6 +42,7 @@ class TimeSpec(BaseModel):
     retry_after: float | None = None
     max_retries: int | None = None
     interval: float | None = None
+    timezone: str = "UTC"
 
     # -- factories ---------------------------------------------------------
 
@@ -89,7 +90,9 @@ class TimeSpec(BaseModel):
         delta = (self.deadline - datetime.now(UTC)).total_seconds()
         return max(delta, 0.0)
 
-    def to_schedule_record(self, name: str, task_type: str) -> dict:
+    def to_schedule_record(
+        self, name: str, task_type: str
+    ) -> dict[str, Any] | None:
         """Convert this TimeSpec into a schedule record (Sprint 5).
 
         Returns a dict with kind/spec/next_run_at for the scheduler.
@@ -132,4 +135,5 @@ class TimeSpec(BaseModel):
             "has_retry": self.retry_after is not None,
             "max_retries": self.max_retries,
             "interval": self.interval,
+            "timezone": self.timezone,
         }

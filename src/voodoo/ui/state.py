@@ -13,11 +13,33 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import copy
 import inspect
 from collections.abc import Callable
 from typing import Any
 
 from voodoo.core.errors import StateError
+
+__all__ = [
+    "State",
+    "StateRenderer",
+    "start_dependency_tracking",
+    "start_render_tracking",
+    "state",
+    "state_renderer",
+    "stop_dependency_tracking",
+    "stop_render_tracking",
+]
+
+StateScope = str
+BindingKey = str | tuple[str, str]
+
+
+def _current_session_id() -> str | None:
+    from voodoo.ui.events import current_ui_session_id
+
+    return current_ui_session_id()
+
 
 _state_context: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
     "voodoo_state_context", default=None
@@ -73,41 +95,76 @@ class State:
 
     __slots__ = (
         "_value",
+        "_session_values",
         "_subscribers",
         "dependency_id",
         "_revision",
+        "_session_revisions",
         "_dependency_graphs",
+        "scope",
     )
 
-    def __init__(self, initial: Any = None) -> None:
+    def __init__(self, initial: Any = None, *, scope: StateScope = "session") -> None:
+        if scope not in {"session", "application"}:
+            raise StateError("State scope must be 'session' or 'application'")
         self._value = initial
+        self._session_values: dict[str, Any] = {}
+        self.scope = scope
         self.dependency_id = f"state:{id(self):x}"
         self._revision = 0
+        self._session_revisions: dict[str, int] = {}
         self._dependency_graphs: list[Any] = []
-        self._subscribers: list[Callable[[Any], None]] = []
+        self._subscribers: list[tuple[str | None, Callable[[Any], None]]] = []
+
+    def _session_value(self, session_id: str) -> Any:
+        from voodoo.ui.events import ws_manager
+
+        session = ws_manager.get_session(session_id)
+        if session is not None:
+            session.state_cells.add(self)
+        if session_id not in self._session_values:
+            try:
+                self._session_values[session_id] = copy.deepcopy(self._value)
+            except (TypeError, ValueError) as exc:
+                raise StateError(
+                    "Session state initial values must be copyable; use "
+                    "scope='application' only for deliberately shared state"
+                ) from exc
+        return self._session_values[session_id]
 
     def get(self) -> Any:
         _track_read(self)
+        session_id = _current_session_id()
+        if self.scope == "session" and session_id is not None:
+            return self._session_value(session_id)
         return self._value
 
     def set(self, value: Any) -> None:
-        if value is self._value and not isinstance(value, (int, float, str, bool)):
+        session_id = _current_session_id() if self.scope == "session" else None
+        current = self._session_value(session_id) if session_id else self._value
+        if value is current and not isinstance(value, (int, float, str, bool)):
             return
-        self._value = value
-        self._revision += 1
+        if session_id is not None:
+            self._session_values[session_id] = value
+            self._session_revisions[session_id] = (
+                self._session_revisions.get(session_id, 0) + 1
+            )
+        else:
+            self._value = value
+            self._revision += 1
         self._invalidate_dependencies()
-        self._notify(value)
+        self._notify(value, session_id=session_id)
 
     def update(self, fn: Callable[[Any], Any]) -> None:
         if not callable(fn):
             raise StateError("update() requires a callable")
-        self._value = fn(self._value)
-        self._revision += 1
-        self._invalidate_dependencies()
-        self._notify(self._value)
+        self.set(fn(self.get()))
 
     @property
     def revision(self) -> str:
+        session_id = _current_session_id()
+        if self.scope == "session" and session_id is not None:
+            return str(self._session_revisions.get(session_id, 0))
         return str(self._revision)
 
     def _attach_dependency_graph(self, graph: Any) -> None:
@@ -118,30 +175,53 @@ class State:
         for graph in self._dependency_graphs:
             graph.invalidate(self.dependency_id, revision=self.revision)
 
-    def subscribe(self, fn: Callable[[Any], None]) -> Callable[[], None]:
-        self._subscribers.append(fn)
-        return lambda: self._unsubscribe(fn)
+    def subscribe(
+        self,
+        fn: Callable[[Any], None],
+        *,
+        session_id: str | None = None,
+    ) -> Callable[[], None]:
+        subscription = (session_id, fn)
+        self._subscribers.append(subscription)
+        return lambda: self._unsubscribe(subscription)
 
-    def _unsubscribe(self, fn: Callable[[Any], None]) -> None:
+    def _unsubscribe(
+        self, subscription: tuple[str | None, Callable[[Any], None]]
+    ) -> None:
         try:
-            self._subscribers.remove(fn)
+            self._subscribers.remove(subscription)
         except ValueError:
             pass
 
-    def _notify(self, value: Any) -> None:
-        for subscriber in list(self._subscribers):
+    def _notify(self, value: Any, *, session_id: str | None) -> None:
+        for owner_session, subscriber in list(self._subscribers):
+            if self.scope == "session" and owner_session != session_id:
+                continue
             try:
                 subscriber(value)
-            except Exception:
-                # A UI subscriber must never make the state mutation itself fail.
-                pass
+            except (RuntimeError, StateError):
+                # A stale UI subscriber cannot roll back the state mutation.
+                continue
+
+    def clear_session(self, session_id: str) -> None:
+        """Release values and subscriptions owned by a closed UI session."""
+
+        self._session_values.pop(session_id, None)
+        self._session_revisions.pop(session_id, None)
+        self._subscribers = [
+            subscription
+            for subscription in self._subscribers
+            if subscription[0] != session_id
+        ]
 
     def __repr__(self) -> str:
         return f"State({self._value!r})"
 
 
-def state(initial: Any = None) -> State:
-    return State(initial)
+def state(initial: Any = None, *, scope: StateScope = "session") -> State:
+    """Create reactive state, isolated per UI session by default."""
+
+    return State(initial, scope=scope)
 
 
 class StateRenderer:
@@ -154,104 +234,178 @@ class StateRenderer:
     """
 
     def __init__(self) -> None:
-        self._bindings: dict[str, tuple[Callable[..., Any], list[State]]] = {}
-        self._subscriptions: dict[str, list[Callable[[], None]]] = {}
-        self._pending: dict[str, asyncio.Task[None]] = {}
-        self._dirty: set[str] = set()
+        self._bindings: dict[BindingKey, tuple[Callable[..., Any], list[State]]] = {}
+        self._subscriptions: dict[BindingKey, list[Callable[[], None]]] = {}
+        self._pending: dict[BindingKey, asyncio.Task[None]] = {}
+        self._dirty: set[BindingKey] = set()
+
+    @staticmethod
+    def _binding_key(element_id: str, session_id: str | None = None) -> BindingKey:
+        resolved_session = session_id or _current_session_id()
+        return (
+            (resolved_session, element_id)
+            if resolved_session is not None
+            else element_id
+        )
+
+    @staticmethod
+    def _binding_parts(key: BindingKey) -> tuple[str | None, str]:
+        return key if isinstance(key, tuple) else (None, key)
 
     def bind(
         self,
         element_id: str,
         page_func: Callable[..., Any],
         cells: list[State] | None = None,
+        *,
+        session_id: str | None = None,
     ) -> None:
         """Bind one rendered region to the State cells it currently depends on."""
 
-        self._replace_binding(element_id, page_func, list(cells or []))
+        key = self._binding_key(element_id, session_id)
+        self._replace_binding(key, page_func, list(cells or []))
 
     def _replace_binding(
         self,
-        element_id: str,
+        key: BindingKey,
         page_func: Callable[..., Any],
         cells: list[State],
     ) -> None:
-        self._unsubscribe_binding(element_id)
-        self._bindings[element_id] = (page_func, cells)
-        self._subscriptions[element_id] = [
-            self._subscribe_cell(element_id, cell) for cell in cells
-        ]
+        self._unsubscribe_binding(key)
+        self._bindings[key] = (page_func, cells)
+        self._subscriptions[key] = [self._subscribe_cell(key, cell) for cell in cells]
 
-    def _subscribe_cell(self, element_id: str, cell: State) -> Callable[[], None]:
+    def _subscribe_cell(self, key: BindingKey, cell: State) -> Callable[[], None]:
         def _on_change(_value: Any) -> None:
-            self.invalidate(element_id)
+            self._invalidate_key(key)
 
-        return cell.subscribe(_on_change)
+        session_id, _element_id = self._binding_parts(key)
+        return cell.subscribe(_on_change, session_id=session_id)
 
     def invalidate(self, element_id: str) -> None:
         """Mark a region dirty and schedule at most one render task for it."""
 
-        if element_id not in self._bindings:
+        key = self._binding_key(element_id)
+        self._invalidate_key(key)
+
+    def _invalidate_key(self, key: BindingKey) -> None:
+        if key not in self._bindings:
             return
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return
 
-        self._dirty.add(element_id)
-        task = self._pending.get(element_id)
+        self._dirty.add(key)
+        task = self._pending.get(key)
         if task is None or task.done():
-            task = loop.create_task(self._drain(element_id))
-            self._pending[element_id] = task
-            task.add_done_callback(
-                lambda _task, eid=element_id: self._pending.pop(eid, None)
-            )
+            task = loop.create_task(self._drain(key))
+            self._pending[key] = task
 
-    async def _drain(self, element_id: str) -> None:
-        while element_id in self._dirty and element_id in self._bindings:
-            self._dirty.discard(element_id)
-            await self.rerender(element_id)
+            def _remove_pending(
+                _task: asyncio.Task[None], binding_key: BindingKey = key
+            ) -> None:
+                self._pending.pop(binding_key, None)
+
+            task.add_done_callback(_remove_pending)
+
+    async def _drain(self, key: BindingKey) -> None:
+        while key in self._dirty and key in self._bindings:
+            self._dirty.discard(key)
+            await self._rerender_key(key)
 
     def unbind(self, element_id: str) -> None:
-        self._bindings.pop(element_id, None)
-        self._unsubscribe_binding(element_id)
-        self._dirty.discard(element_id)
-        task = self._pending.pop(element_id, None)
+        key = self._binding_key(element_id)
+        self._unbind_key(key)
+
+    def _unbind_key(self, key: BindingKey) -> None:
+        self._bindings.pop(key, None)
+        self._unsubscribe_binding(key)
+        self._dirty.discard(key)
+        task = self._pending.pop(key, None)
         if task is not None and not task.done():
             task.cancel()
 
-    def _unsubscribe_binding(self, element_id: str) -> None:
-        for unsubscribe in self._subscriptions.pop(element_id, []):
+    def unbind_session(self, session_id: str) -> None:
+        """Release every render binding and reactive value for one session."""
+
+        cells: set[State] = set()
+        for key in list(self._bindings):
+            if isinstance(key, tuple) and key[0] == session_id:
+                cells.update(self._bindings[key][1])
+                self._unbind_key(key)
+        for cell in cells:
+            cell.clear_session(session_id)
+
+    def reset(self) -> None:
+        """Release every binding and pending render task."""
+
+        for key in list(self._bindings):
+            self._unbind_key(key)
+
+    def _unsubscribe_binding(self, key: BindingKey) -> None:
+        for unsubscribe in self._subscriptions.pop(key, []):
             unsubscribe()
 
     async def rerender(self, element_id: str) -> str | None:
         """Render one invalidated region, refresh dependencies and patch the DOM."""
 
-        binding = self._bindings.get(element_id)
+        key = self._binding_key(element_id)
+        return await self._rerender_key(key)
+
+    async def _rerender_key(self, key: BindingKey) -> str | None:
+        binding = self._bindings.get(key)
         if binding is None:
             return None
 
+        session_id, element_id = self._binding_parts(key)
         page_func, _old_cells = binding
-        start_render_tracking()
-        try:
-            result = page_func()
-            if inspect.isawaitable(result):
-                result = await result
-            cells = stop_render_tracking()
-        except BaseException:
-            stop_render_tracking()
-            raise
+        from voodoo.ui.events import activate_ui_session
 
-        html = self._render_component(result)
+        with activate_ui_session(session_id):
+            if session_id is not None:
+                from voodoo.ui.events import start_event_binding_tracking
 
-        # Dependency replacement happens before broadcasting so any state
-        # mutation triggered immediately after this render observes the new graph.
-        self._replace_binding(element_id, page_func, cells)
+                start_event_binding_tracking()
+            start_render_tracking()
+            try:
+                result = page_func()
+                if inspect.isawaitable(result):
+                    result = await result
+                cells = stop_render_tracking()
+            except (Exception, asyncio.CancelledError):
+                stop_render_tracking()
+                if session_id is not None:
+                    from voodoo.ui.events import stop_event_binding_tracking
 
-        # Keep the legacy root wrapper in the transport. The modern client keeps
-        # the real #root node stable and patches only its contents.
-        wire_html = f'<div id="root">{html}</div>' if element_id == "root" else html
-        await self._broadcast_patch(element_id, wire_html)
-        return html
+                    stop_event_binding_tracking()
+                raise
+
+            if session_id is not None:
+                from voodoo.ui.events import (
+                    stop_event_binding_tracking,
+                    ws_manager,
+                )
+
+                try:
+                    html = self._render_component(result)
+                    rendered_bindings = stop_event_binding_tracking()
+                except (Exception, asyncio.CancelledError):
+                    stop_event_binding_tracking()
+                    raise
+                ws_manager.retain_render_bindings(
+                    session_id, element_id, rendered_bindings
+                )
+            else:
+                html = self._render_component(result)
+
+            # Dependency replacement happens before broadcasting so any state
+            # mutation after this render observes the new graph.
+            self._replace_binding(key, page_func, cells)
+
+            wire_html = f'<div id="root">{html}</div>' if element_id == "root" else html
+            await self._broadcast_patch(element_id, wire_html)
+            return html
 
     @staticmethod
     def _render_component(result: Any) -> str:

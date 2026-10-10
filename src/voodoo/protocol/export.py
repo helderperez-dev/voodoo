@@ -10,7 +10,7 @@ Usage::
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from .fabric import FABRIC_PROTOCOL_ENTITIES
 from .operational import OPERATIONAL_PROTOCOL_ENTITIES
@@ -35,7 +35,7 @@ def export_json_schemas() -> dict[str, Any]:
     """Export JSON Schema for all stable protocol entities."""
     schemas: dict[str, Any] = {}
     for name, model in _entities().items():
-        schema = model.model_json_schema()
+        schema = cast(dict[str, Any], model.model_json_schema())
         schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
         schema["$id"] = f"urn:voodoo:protocol:{name.lower()}:{SCHEMA_VERSION}"
         schema["x-voodoo-schema-version"] = SCHEMA_VERSION
@@ -51,7 +51,7 @@ def export_json_schemas_json(indent: int = 2) -> str:
 def schema_for(entity_name: str) -> dict[str, Any]:
     """Get JSON Schema for a single protocol entity by name."""
     model = _entities()[entity_name]
-    schema = model.model_json_schema()
+    schema = cast(dict[str, Any], model.model_json_schema())
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["$id"] = f"urn:voodoo:protocol:{entity_name.lower()}:{SCHEMA_VERSION}"
     schema["x-voodoo-schema-version"] = SCHEMA_VERSION

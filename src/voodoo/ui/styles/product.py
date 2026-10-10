@@ -200,9 +200,9 @@ def generate_product_css(theme: Theme) -> str:
     border-inline-start: 1px solid var(--vd-color-border-soft);
     background: var(--vd-color-background);
     color: var(--vd-color-text);
-    box-shadow: -1rem 0 3rem rgb(0 0 0 / 0.12);
+    box-shadow: var(--vd-shadow-inspector);
 }
-.vd-inspector-panel::backdrop { background: rgb(0 0 0 / 0.24); }
+.vd-inspector-panel::backdrop { background: var(--vd-overlay-scrim); }
 .vd-inspector-header {
     display: grid;
     gap: var(--vd-space-xs);

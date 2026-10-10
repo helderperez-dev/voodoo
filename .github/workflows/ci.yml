@@ -61,12 +61,112 @@ jobs:
       - name: 📦 Install dependencies
         run: uv sync --python 3.12 --all-extras --dev
 
-      - name: 🔎 Mypy — Sprint 27 boundary
+      - name: 🔎 Mypy — production-critical boundaries
         run: >-
           uv run --python 3.12 mypy --follow-imports=silent
           src/voodoo/runtime/planner.py
           src/voodoo/edge/world.py
           src/voodoo/protocol/operational.py
+          src/voodoo/config.py
+          src/voodoo/auth/middleware.py
+          src/voodoo/security
+          src/voodoo/ui/events.py
+          src/voodoo/ui/state.py
+          src/voodoo/routing/pages.py
+          src/voodoo/cli/new.py
+          src/voodoo/cli/create.py
+
+  typecheck-ratchet:
+    name: 🔎 Full-package Mypy Ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v7
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          version: "latest"
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+      - name: 📦 Install dependencies
+        run: uv sync --python 3.12 --all-extras --dev
+      - name: 🔎 Run full-package Mypy ratchet
+        run: uv run --python 3.12 python scripts/check_mypy_ratchet.py
+
+  documentation:
+    name: 📚 Documentation Import Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v7
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          version: "latest"
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+      - name: 📦 Install dependencies
+        run: uv sync --python 3.12 --all-extras --dev
+      - name: 📚 Validate documented imports
+        run: uv run --python 3.12 python scripts/check_docs_imports.py
+      - name: 🧭 Validate canonical onboarding command
+        run: uv run --python 3.12 python scripts/check_command_contract.py
+      - name: 🧩 Validate component maturity
+        run: uv run --python 3.12 python scripts/check_component_maturity.py
+      - name: 🎛️ Validate design token contract
+        run: uv run --python 3.12 python scripts/check_design_tokens.py
+      - name: 🎨 Validate component style-token contract
+        run: uv run --python 3.12 python scripts/check_component_style_tokens.py
+      - name: 🗃️ Validate durable encoding inventory
+        run: uv run --python 3.12 python scripts/check_encoding_inventory.py
+      - name: 🧬 Validate durable migration corpus
+        run: uv run --python 3.12 python scripts/check_migration_corpus.py
+      - name: 🧯 Validate exception contract
+        run: uv run --python 3.12 python scripts/check_exception_contract.py
+      - name: ♿ Validate accessibility contract
+        run: uv run --python 3.12 python scripts/check_accessibility_contract.py
+      - name: 🧱 Validate control state contract
+        run: uv run --python 3.12 python scripts/check_control_state_contract.py
+      - name: 🔁 Validate API compatibility registry
+        run: uv run --python 3.12 python scripts/check_api_compatibility.py
+      - name: 🎨 Validate visual regression contract
+        run: uv run --python 3.12 python scripts/check_visual_contract.py
+
+  dependency-audit:
+    name: 🔐 Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v7
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          version: "latest"
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+      - name: 📦 Export shipped base dependencies
+        run: uv export --python 3.12 --no-dev --no-hashes > /tmp/voodoo-requirements.txt
+      - name: 🔐 Audit shipped Python dependencies
+        run: |
+          python -m venv /tmp/voodoo-audit
+          /tmp/voodoo-audit/bin/python -m pip install --quiet "pip-audit==2.10.1"
+          /tmp/voodoo-audit/bin/pip-audit -r /tmp/voodoo-requirements.txt
+      - name: 📋 Generate shipped dependency SBOM
+        run: |
+          /tmp/voodoo-audit/bin/pip-audit -r /tmp/voodoo-requirements.txt \
+            --format cyclonedx-json --output voodoo-base-sbom.json
+      - name: ⬆️ Upload dependency SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: voodoo-base-sbom
+          path: voodoo-base-sbom.json
+          retention-days: 30
 
   clean-install:
     name: 🧪 Clean Store-first Install
@@ -127,9 +227,13 @@ jobs:
           PY
 
   browser:
-    name: 🌐 Browser Experience Gate
+    name: 🌐 Browser Experience Gate (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v7
@@ -146,12 +250,13 @@ jobs:
       - name: 📦 Install browser test dependencies
         run: uv sync --python 3.12 --all-extras --dev
 
-      - name: 🌐 Install Chromium
-        run: uv run --python 3.12 playwright install --with-deps chromium
+      - name: 🌐 Install Playwright browser
+        run: uv run --python 3.12 playwright install --with-deps ${{ matrix.browser }}
 
       - name: 🧪 Run Component Lab browser acceptance
         env:
           VOODOO_BROWSER_TESTS: "1"
+          VOODOO_BROWSER_NAME: ${{ matrix.browser }}
         run: >-
           uv run --python 3.12 pytest
           tests/browser/test_component_lab_browser.py --tb=short
@@ -161,10 +266,35 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: component-lab-visual-baselines
+          name: component-lab-visual-baselines-${{ matrix.browser }}
           path: .test-results/browser/
           if-no-files-found: warn
           retention-days: 14
+
+  optional-extras:
+    name: 🧩 Optional provider extra (${{ matrix.extra }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        extra: [ai, browser, edge, otel, postgres, redis, s3]
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v7
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          version: "latest"
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+      - name: 📦 Install only this provider family
+        run: uv sync --python 3.12 --extra ${{ matrix.extra }} --extra dev
+      - name: 🔌 Import provider family
+        env:
+          VOODOO_OPTIONAL_EXTRA: ${{ matrix.extra }}
+        run: uv run --python 3.12 python scripts/check_optional_extra.py
 
   test:
     name: 🧪 Test Suite (Python ${{ matrix.python-version }})
@@ -234,3 +364,27 @@ jobs:
             .test-results/
             .pytest_cache/
           retention-days: 7
+
+  platform-contract:
+    name: 🖥️ Platform Contract (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12", "3.13"]
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v7
+      - name: 🐍 Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          version: "latest"
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: 📦 Install framework and development dependencies
+        run: uv sync --python ${{ matrix.python-version }} --extra dev
+      - name: ✅ Run platform-safe package contract
+        run: uv run --python ${{ matrix.python-version }} python scripts/platform_contract.py

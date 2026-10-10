@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 import typer
 
 from voodoo.cli import terminal
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
 
 schedules_app = typer.Typer(
     name="schedules",
@@ -14,13 +20,16 @@ schedules_app = typer.Typer(
 )
 
 
-def _get_store():
+def _get_store() -> Any:
     """Return the canonical Store-backed scheduler."""
     from voodoo.cli.context import acquire_schedule_store
 
     try:
         return acquire_schedule_store()
-    except Exception:
+    except Exception as error:
+        logger.warning(
+            "schedule store acquisition failed error=%s", redact_string(str(error))
+        )
         from voodoo.config import get_config
 
         return None, str(get_config().store.path)
@@ -29,7 +38,7 @@ def _get_store():
 @schedules_app.command("list")
 def list_schedules(
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """List all schedules."""
     store, store_path = _get_store()
     if store is None:
@@ -81,7 +90,7 @@ def list_schedules(
 def pause_schedule(
     schedule_id: str = typer.Argument(..., help="Schedule ID"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """Pause a schedule."""
     store, store_path = _get_store()
     if store is None:
@@ -107,7 +116,7 @@ def pause_schedule(
 def resume_schedule(
     schedule_id: str = typer.Argument(..., help="Schedule ID"),
     json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
-):
+) -> None:
     """Resume a paused schedule."""
     store, store_path = _get_store()
     if store is None:

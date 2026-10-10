@@ -230,6 +230,23 @@ class TestEffect:
         effect.mark_rolled_back()
         assert effect.status == EffectStatus.ROLLED_BACK
 
+    def test_reversible_effect_declares_stable_compensation_contract(self):
+        effect = Effect(name="charge_card", reversible=True)
+        effect.configure_compensation(
+            "refund_card", payload={"reason": "workflow_failure"}, trigger="on_failure"
+        )
+        assert effect.has_compensation is True
+        assert effect.compensation_idempotency_key == f"compensate:{effect.id}"
+        described = effect.describe()
+        assert described["compensation_name"] == "refund_card"
+        assert described["compensation_payload"] == {"reason": "workflow_failure"}
+        assert described["compensation_trigger"] == "on_failure"
+
+    def test_compensation_requires_reversible_effect(self):
+        effect = Effect(name="send_email")
+        with pytest.raises(ValueError, match="not reversible"):
+            effect.configure_compensation("recall_email")
+
     def test_describe(self):
         effect = Effect(name="send_email", reversible=True, idempotent=True)
         d = effect.describe()

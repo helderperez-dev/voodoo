@@ -9,6 +9,7 @@ reference while durably mirroring each record into Voodoo Store.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from typing import Any
 
 from voodoo.edge.models import (
@@ -34,6 +35,19 @@ _SESSION = b"runtime:edge:session:"
 _EFFECT = b"runtime:edge:effect:"
 _SEEN = b"runtime:edge:seen:"
 _RESPONSE = b"runtime:edge:response:"
+_SEEN_COLLECTION = b"runtime.edge_seen"
+_RESPONSE_COLLECTION = b"runtime.edge_responses"
+_COLLECTIONS = {
+    _DEVICE: b"runtime.edge_devices",
+    _CREDENTIAL: b"runtime.edge_credentials",
+    _ENROLLMENT: b"runtime.edge_enrollments",
+    _SESSION: b"runtime.edge_sessions",
+    _EFFECT: b"runtime.edge_effects",
+    _SEEN: _SEEN_COLLECTION,
+    _RESPONSE: _RESPONSE_COLLECTION,
+}
+_SCHEMA_KEY = "_schema_version"
+_SCHEMA_VERSION = 1
 
 
 class VoodooStoreDeviceStore(InMemoryDeviceStore):
@@ -51,24 +65,82 @@ class VoodooStoreDeviceStore(InMemoryDeviceStore):
             )
         if provider.name != "voodoo":
             raise StoreProviderError("VoodooStoreDeviceStore requires Voodoo Store")
-        self._native = getattr(provider, "native", None)
+        self._native: Any = getattr(provider, "native", None)
         if self._native is None:
             raise StoreProviderError("Active Voodoo Store has no native handle")
+        self._ensure_collections()
         self._hydrate()
 
-    def _put_json(self, prefix: bytes, key: str, value: dict[str, Any]) -> None:
-        self._native.put(
-            prefix + key.encode("utf-8"),
-            json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+    @staticmethod
+    def _native_collections(store: Any) -> bool:
+        return all(
+            hasattr(store, method)
+            for method in (
+                "create_collection",
+                "upsert_record",
+                "get_record",
+                "scan_collection",
+                "delete_record",
+            )
         )
 
+    def _ensure_collections(self) -> None:
+        if not self._native_collections(self._native):
+            return
+        for collection in _COLLECTIONS.values():
+            self._native.create_collection(
+                collection, schema_version=1, codec=b"json"
+            )
+
+    def _put_json(self, prefix: bytes, key: str, value: dict[str, Any]) -> None:
+        record = {**value, _SCHEMA_KEY: _SCHEMA_VERSION}
+        encoded = json.dumps(
+            record, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        collection = _COLLECTIONS.get(prefix)
+        if collection is not None and self._native_collections(self._native):
+            self._native.upsert_record(collection, key.encode("utf-8"), encoded)
+            # Native collections are canonical. Keep the legacy prefixed key
+            # as a read-through fallback only until the canonical write has
+            # completed successfully, then remove it deterministically.
+            self._native.delete(prefix + key.encode("utf-8"))
+        else:
+            self._native.put(prefix + key.encode("utf-8"), encoded)
+
     def _delete(self, prefix: bytes, key: str) -> None:
+        collection = _COLLECTIONS.get(prefix)
+        if collection is not None and self._native_collections(self._native):
+            self._native.delete_record(collection, key.encode("utf-8"))
         self._native.delete(prefix + key.encode("utf-8"))
 
-    def _scan(self, prefix: bytes):
+    def _scan(self, prefix: bytes) -> Iterator[tuple[str, bytes]]:
+        collection = _COLLECTIONS.get(prefix)
+        seen: set[str] = set()
+        if collection is not None and self._native_collections(self._native):
+            for raw_key, raw_value, _indexes in self._native.scan_collection(collection):
+                key = bytes(raw_key).decode("utf-8")
+                seen.add(key)
+                yield key, bytes(raw_value)
         for raw_key, raw_value in self._native.scan_prefix(prefix):
             key = bytes(raw_key)[len(prefix) :].decode("utf-8")
-            yield key, bytes(raw_value)
+            if key not in seen:
+                yield key, bytes(raw_value)
+
+    @staticmethod
+    def _decode(
+        raw: bytes, *, key: str, identity_field: str | None = None
+    ) -> dict[str, Any]:
+        record = json.loads(raw)
+        if not isinstance(record, dict):
+            raise ValueError("edge record must be a JSON object")
+        version = record.pop(_SCHEMA_KEY, 0)
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise ValueError("edge schema version must be an integer")
+        if version > _SCHEMA_VERSION:
+            raise ValueError(f"unsupported edge schema version: {version}")
+        if identity_field is not None and str(record.get(identity_field)) != key:
+            raise ValueError("edge key does not match record identity")
+        return record
 
     @staticmethod
     def _delivery_from_dict(data: dict[str, Any]) -> EffectDelivery:
@@ -89,17 +161,40 @@ class VoodooStoreDeviceStore(InMemoryDeviceStore):
         delivery.retry_count = int(data.get("retry_count", 0))
         return delivery
 
+    def _hydrate_records(
+        self,
+        prefix: bytes,
+        target: dict[str, Any],
+        factory: Any,
+        identity_field: str,
+    ) -> None:
+        for key, raw in self._scan(prefix):
+            try:
+                target[key] = factory(
+                    self._decode(raw, key=key, identity_field=identity_field)
+                )
+            except ValueError as error:
+                # A future schema is not corrupt data: silently skipping it
+                # would make a partially upgraded process appear healthy while
+                # losing durable state. Surface the compatibility boundary so
+                # startup can fail closed and the operator can upgrade the
+                # reader before mutating the store.
+                if str(error).startswith("unsupported edge schema version"):
+                    raise
+                continue
+            except (TypeError, json.JSONDecodeError):
+                continue
+
     def _hydrate(self) -> None:
-        for key, raw in self._scan(_DEVICE):
-            self._devices[key] = Device.from_dict(json.loads(raw))
-        for key, raw in self._scan(_CREDENTIAL):
-            self._credentials[key] = DeviceCredential.from_dict(json.loads(raw))
-        for key, raw in self._scan(_ENROLLMENT):
-            self._enrollments[key] = DeviceEnrollment.from_dict(json.loads(raw))
-        for key, raw in self._scan(_SESSION):
-            self._sessions[key] = DeviceSession.from_dict(json.loads(raw))
-        for key, raw in self._scan(_EFFECT):
-            self._effects[key] = self._delivery_from_dict(json.loads(raw))
+        self._hydrate_records(_DEVICE, self._devices, Device.from_dict, "device_id")
+        self._hydrate_records(
+            _CREDENTIAL, self._credentials, DeviceCredential.from_dict, "credential_id"
+        )
+        self._hydrate_records(
+            _ENROLLMENT, self._enrollments, DeviceEnrollment.from_dict, "enrollment_id"
+        )
+        self._hydrate_records(_SESSION, self._sessions, DeviceSession.from_dict, "session_id")
+        self._hydrate_records(_EFFECT, self._effects, self._delivery_from_dict, "effect_id")
         for key, _raw in self._scan(_SEEN):
             self._seen_messages.add(key)
         for key, raw in self._scan(_RESPONSE):
@@ -261,13 +356,20 @@ class VoodooStoreDeviceStore(InMemoryDeviceStore):
 
     async def mark_message_seen(self, message_id: str) -> None:
         await super().mark_message_seen(message_id)
-        self._native.put(_SEEN + message_id.encode("utf-8"), b"1")
+        key = message_id.encode("utf-8")
+        if self._native_collections(self._native):
+            self._native.upsert_record(_SEEN_COLLECTION, key, b"1")
+        else:
+            self._native.put(_SEEN + key, b"1")
 
     async def store_response(self, message_id: str, response_json: str) -> None:
         await super().store_response(message_id, response_json)
-        self._native.put(
-            _RESPONSE + message_id.encode("utf-8"), response_json.encode("utf-8")
-        )
+        key = message_id.encode("utf-8")
+        value = response_json.encode("utf-8")
+        if self._native_collections(self._native):
+            self._native.upsert_record(_RESPONSE_COLLECTION, key, value)
+        else:
+            self._native.put(_RESPONSE + key, value)
 
     async def close(self) -> None:
         """RuntimeStore owns the underlying Store lifecycle."""

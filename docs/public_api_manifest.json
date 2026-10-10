@@ -1,0 +1,20 @@
+{
+  "package": "voodoo",
+  "version": "3.2.1",
+  "root_exports": [
+    "Agent",
+    "App",
+    "Model",
+    "page",
+    "state",
+    "task",
+    "tool"
+  ],
+  "owners": {
+    "ui": "voodoo.ui",
+    "runtime": "voodoo.runtime",
+    "world": "voodoo.world",
+    "edge": "voodoo.edge",
+    "protocol": "voodoo.protocol"
+  }
+}

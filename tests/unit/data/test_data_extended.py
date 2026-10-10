@@ -3,7 +3,7 @@
 import pytest
 
 from voodoo.adapters import TailwindAdapter, VoodooCSSAdapter
-from voodoo.ui import set_style_adapter
+from voodoo.ui import EmptyState, set_style_adapter
 from voodoo.ui.data_extended import (
     ColumnDef,
     DataList,
@@ -73,6 +73,27 @@ def test_description_section(adapter):
     assert "Name" in html
 
 
+def test_description_list_default_empty_state_is_semantic(adapter):
+    html = DescriptionList().render()
+    assert "No details available" in html
+    assert "data-vd-empty-state" in html
+    assert 'aria-live="polite"' in html
+
+
+def test_description_list_loading_and_error_states_are_explicit(adapter):
+    loading = DescriptionList(DescriptionItem("stale", "value"), loading=True).render()
+    assert "Loading…" in loading
+    assert "data-vd-loading-state" in loading
+    assert "stale" not in loading
+    assert 'aria-busy="true"' in loading
+
+    error = DescriptionList(DescriptionItem("stale", "value"), error="Unavailable").render()
+    assert "Unavailable" in error
+    assert "data-vd-error-state" in error
+    assert "stale" not in error
+    assert 'aria-invalid="true"' in error
+
+
 # ── Data List ───────────────────────────────────────────────────────────────
 
 
@@ -100,6 +121,27 @@ def test_data_list_striped(adapter):
         striped=True,
     ).render()
     assert "data-vd-striped" in html
+
+
+def test_data_list_default_empty_state_is_semantic(adapter):
+    html = DataList().render()
+    assert "No data available" in html
+    assert "data-vd-empty-state" in html
+    assert 'aria-live="polite"' in html
+
+
+def test_data_list_loading_and_error_states_are_explicit(adapter):
+    loading = DataList(DataRow("stale", "value"), loading=True).render()
+    assert "Loading…" in loading
+    assert "data-vd-loading-state" in loading
+    assert "stale" not in loading
+    assert 'aria-busy="true"' in loading
+
+    error = DataList(DataRow("stale", "value"), error="Unavailable").render()
+    assert "Unavailable" in error
+    assert "data-vd-error-state" in error
+    assert "stale" not in error
+    assert 'aria-invalid="true"' in error
 
 
 def test_data_row_highlight(adapter):
@@ -156,12 +198,56 @@ def test_list_option_with_description(adapter):
     assert "$9/month" in html
 
 
+def test_list_option_state_contract_blocks_unavailable_option(adapter):
+    html = ListBox(
+        ListOption(
+            "Pro",
+            value="pro",
+            read_only=True,
+            loading=True,
+            error="Option unavailable",
+        ),
+        on_select=lambda value: value,
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Option unavailable"' in html
+    assert "data-vd-event-click" not in html
+
+
 def test_list_box_with_event(adapter):
     html = ListBox(
         ListOption("A", value="a"),
         on_select=lambda v: v,
     ).render()
     assert "data-vd-event-click" in html
+
+
+def test_list_box_shared_control_states_disable_options(adapter):
+    html = ListBox(
+        ListOption("A", value="a"),
+        ListOption("B", value="b"),
+        loading=True,
+        error="Options unavailable",
+    ).render()
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert "Options unavailable" in html
+    assert 'data-vd-state="error"' in html
+    assert 'data-vd-event-click' not in html
+
+
+def test_list_box_state_rows_replace_stale_options(adapter):
+    loading = ListBox(ListOption("stale"), loading=True).render()
+    assert "Loading…" in loading
+    assert "stale" not in loading
+    assert 'data-vd-state="loading"' in loading
+
+    empty = ListBox(empty_text="Nothing here").render()
+    assert "Nothing here" in empty
+    assert 'aria-live="polite"' in empty
 
 
 # ── Stat Group ──────────────────────────────────────────────────────────────
@@ -270,7 +356,55 @@ def test_enhanced_data_table_row_click(adapter):
     assert "data-vd-event-click" in html
 
 
+def test_enhanced_data_table_state_contract_suppresses_activation(adapter):
+    columns = [ColumnDef("a", header="A", sortable=True)]
+    html = EnhancedDataTable(
+        columns=columns,
+        rows=[{"a": "1"}],
+        on_sort=lambda value: value,
+        on_row_click=lambda value: value,
+        read_only=True,
+        loading=True,
+        error="Table unavailable",
+    ).render()
+    assert 'aria-disabled="true"' in html
+    assert 'aria-readonly="true"' in html
+    assert 'aria-busy="true"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'data-vd-error="Table unavailable"' in html
+    assert "data-vd-event-click" not in html
+    assert "data-vd-event-change" not in html
+    assert "data-vd-error-state" in html
+    assert "Table unavailable" in html
+    assert 'aria-live="polite"' in html
+    assert '>1<' not in html
+
+
 def test_enhanced_data_table_empty(adapter):
     columns = [ColumnDef("a", header="A")]
     html = EnhancedDataTable(columns=columns, rows=[]).render()
     assert "A" in html
+    assert "No data available" in html
+    assert "data-vd-empty-state" in html
+    assert 'aria-live="polite"' in html
+
+
+def test_enhanced_data_table_renders_explicit_empty_state(adapter):
+    columns = [ColumnDef("a", header="A"), ColumnDef("b", header="B")]
+    html = EnhancedDataTable(
+        columns=columns,
+        rows=[],
+        empty=EmptyState("Nothing here", "Create the first record."),
+    ).render()
+    assert "Nothing here" in html
+    assert 'colspan="2"' in html
+    assert "data-vd-empty-state" in html
+
+
+def test_enhanced_data_table_loading_state_is_visible(adapter):
+    columns = [ColumnDef("a", header="A"), ColumnDef("b", header="B")]
+    html = EnhancedDataTable(columns=columns, loading=True).render()
+    assert "data-vd-loading-state" in html
+    assert "Loading…" in html
+    assert 'aria-live="polite"' in html
+    assert 'colspan="2"' in html

@@ -91,3 +91,18 @@ async def test_workflow_rejects_duplicate_task_names() -> None:
 
     with pytest.raises(WorkflowFailure, match="unique"):
         await workflow.run()
+
+
+@pytest.mark.asyncio
+async def test_workflow_event_invariant_failures_are_not_silenced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from voodoo.mesh import mesh
+
+    async def broken_broadcast(_event: str, _payload: dict[str, object]) -> None:
+        raise AssertionError("mesh invariant broken")
+
+    monkeypatch.setattr(mesh, "broadcast", broken_broadcast)
+    workflow = Workflow(tasks=[])
+    with pytest.raises(AssertionError, match="mesh invariant broken"):
+        await workflow._emit("workflow.test", {})

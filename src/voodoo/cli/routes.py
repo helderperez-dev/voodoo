@@ -13,7 +13,7 @@ def routes(
     app_str: str = typer.Argument(
         None, help="App instance to inspect (e.g. main:app). Auto-discovers if omitted."
     ),
-):
+) -> None:
     """
     List all registered HTTP, WebSocket, and API routes in the application.
     """
@@ -31,8 +31,11 @@ def routes(
     try:
         mod = importlib.import_module(module_name)
         application = getattr(mod, app_name)
-    except Exception as e:
-        terminal.error(f"Could not load application '{app_str}': {e}")
+    except (ImportError, AttributeError, TypeError, ValueError) as e:
+        terminal.error(
+            f"Could not load application '{app_str}': {e}",
+            hint="check the module path, exported app name, and installed dependencies",
+        )
         raise typer.Exit(1) from None
 
     terminal.wordmark()

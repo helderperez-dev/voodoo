@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import ast
+import logging
 import os
 from datetime import datetime
 from typing import Any
+
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
 
 
 def _route_is_excluded(filepath: str) -> bool:
@@ -23,7 +28,12 @@ def _route_is_excluded(filepath: str) -> bool:
                     and node.value.value is True
                 ):
                     return True
-    except Exception:
+    except (OSError, SyntaxError, UnicodeError, ValueError) as error:
+        logger.warning(
+            "sitemap route inspection failed path=%s error=%s",
+            redact_string(filepath),
+            redact_string(str(error)),
+        )
         return False
     return False
 
@@ -37,7 +47,12 @@ def _last_modified(filepath: str) -> str:
     try:
         timestamp = os.path.getmtime(filepath)
         return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d")
-    except Exception:
+    except (OSError, OverflowError, ValueError) as error:
+        logger.warning(
+            "sitemap mtime lookup failed path=%s error=%s",
+            redact_string(filepath),
+            redact_string(str(error)),
+        )
         return datetime.now().strftime("%Y-%m-%d")
 
 

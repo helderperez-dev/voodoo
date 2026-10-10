@@ -169,6 +169,25 @@ def test_input_uses_semantic_event_binding():
     assert "onchange=" not in html
 
 
+def test_legacy_choice_controls_suppress_unavailable_events():
+    from voodoo.ui.library import Checkbox, Radio
+
+    checkbox = Checkbox(
+        "Accept",
+        on_change="accept",
+        disabled=True,
+        loading=True,
+        error="Unavailable",
+    ).render()
+    radio = Radio("One", on_change="choose", read_only=True).render()
+    assert "onchange=" not in checkbox
+    assert "onchange=" not in radio
+    assert 'aria-disabled="true"' in checkbox
+    assert 'aria-busy="true"' in checkbox
+    assert 'aria-invalid="true"' in checkbox
+    assert 'aria-readonly="true"' in radio
+
+
 def test_card():
     card = Card("Card Content", id="card-1", className="extra-class")
     html = card.render()
@@ -222,6 +241,23 @@ def test_table():
         '<td class="px-6 py-4 whitespace-nowrap text-sm text-[var(--vd-color-text)]">Alice</td>'
         in html
     )
+
+
+def test_table_state_rows_are_semantic_and_exclusive():
+    loading = Table(headers=["Name"], rows=[["stale"]], loading=True).render()
+    assert 'data-vd-state="loading"' in loading
+    assert "Loading…" in loading
+    assert "stale" not in loading
+
+    error = Table(headers=["Name"], rows=[["stale"]], error="Unavailable").render()
+    assert 'data-vd-state="error"' in error
+    assert "Unavailable" in error
+    assert "stale" not in error
+
+    empty = Table(headers=["Name"], rows=[], empty_text="Nothing here").render()
+    assert 'data-vd-state="empty"' in empty
+    assert "Nothing here" in empty
+    assert 'aria-live="polite"' in empty
 
 
 def test_auth_components():

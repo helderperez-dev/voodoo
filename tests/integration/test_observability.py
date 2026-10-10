@@ -145,11 +145,38 @@ class TestSpanModel:
         assert len(spans) == 1
         assert spans[0]["status"] == "ok"
 
+    def test_trace_decorator_redacts_exception_text(self, caplog):
+        secret = "customer-email=alice@example.test"
+
+        @trace(name="redacted_failure")
+        def failing():
+            raise RuntimeError(secret)
+
+        with pytest.raises(RuntimeError, match="customer-email"):
+            failing()
+        assert secret not in caplog.text
+        assert "RuntimeError" in caplog.text
+
     def test_get_summary_includes_spans_total(self):
         _clear_spans()
         telemetry_store.record_span(Span(trace_id="t", name="x"))
         summary = telemetry_store.get_summary()
         assert summary["spans_total"] >= 1
+
+    def test_store_operation_metrics_are_structured_and_bounded(self):
+        telemetry_store.metrics.setdefault("store_operations", []).clear()
+        telemetry_store.record_store_operation(
+            "commit", 4.5, bytes_count=128, queue_lag_ms=2.0
+        )
+        telemetry_store.record_store_operation("recovery", 9.0, error=True)
+        summary = telemetry_store.get_summary()
+        assert summary["store_operations_total"] == 2
+        assert summary["store_operation_errors"] == 1
+        assert summary["store_bytes_total"] == 128
+        assert summary["store_queue_lag_ms"] == 2.0
+        assert summary["store_operation_latency_p50_ms"] == 4.5
+        assert summary["store_operation_latency_p95_ms"] == 9.0
+        assert telemetry_store.metrics["store_operations"][0]["operation"] == "commit"
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +352,39 @@ class TestTracePropagation:
         assert tasks
         assert tasks[0].trace_id == "queue-trace-42"
 
+    def test_local_object_operations_emit_redacted_store_spans(self, tmp_path: Path):
+        """Object adapters expose operation timing without keys or payloads."""
+        from voodoo.storage.objects import LocalObjectStore
+
+        _clear_spans()
+        telemetry_store.metrics["store_operations"].clear()
+        store = LocalObjectStore(tmp_path / "objects")
+        try:
+            assert store.put("private/key", b"payload")
+            assert store.get("private/key") == b"payload"
+            with pytest.raises(KeyError):
+                store.get("missing")
+        finally:
+            store.close()
+
+        names = {
+            span["name"]
+            for span in telemetry_store.metrics["spans"]
+            if span["name"].startswith("store.object.")
+        }
+        assert {"store.object.put", "store.object.get", "store.object.close"} <= names
+        operations = telemetry_store.metrics["store_operations"]
+        assert {entry["operation"] for entry in operations} >= {
+            "object.put",
+            "object.get",
+            "object.close",
+        }
+        assert any(entry["operation"] == "object.put" and entry["bytes"] == 7 for entry in operations)
+        assert any(entry["operation"] == "object.get" and entry["error"] for entry in operations)
+        serialized = repr(telemetry_store.metrics["spans"])
+        assert "private/key" not in serialized
+        assert "payload" not in serialized
+
     async def test_full_chain_correlation_with_spans(self):
         """Full chain: trace_id → agent → tool → telemetry with spans."""
         from voodoo.ai.agent import Agent
@@ -441,6 +501,36 @@ class TestOTLPExporter:
         finally:
             if old is not None:
                 os.environ["VOODOO_OTEL_EXPORTER"] = old
+
+    def test_exporter_setup_runtime_failure_degrades(self, monkeypatch):
+        import voodoo.integrations.otel as otel
+
+        monkeypatch.setattr(otel, "_checked", False)
+        monkeypatch.setattr(otel, "_exporter", None)
+        monkeypatch.setattr(otel, "is_available", lambda: True)
+
+        class BrokenExporter:
+            def __init__(self):
+                raise RuntimeError("collector unavailable")
+
+        monkeypatch.setattr(otel, "OTLPExporter", BrokenExporter)
+        assert otel._get_exporter() is None
+        assert otel._checked is True
+
+    def test_exporter_setup_unexpected_failure_propagates(self, monkeypatch):
+        import voodoo.integrations.otel as otel
+
+        monkeypatch.setattr(otel, "_checked", False)
+        monkeypatch.setattr(otel, "_exporter", None)
+        monkeypatch.setattr(otel, "is_available", lambda: True)
+
+        class BrokenExporter:
+            def __init__(self):
+                raise AssertionError("exporter invariant failed")
+
+        monkeypatch.setattr(otel, "OTLPExporter", BrokenExporter)
+        with pytest.raises(AssertionError, match="invariant failed"):
+            otel._get_exporter()
 
 
 # ---------------------------------------------------------------------------

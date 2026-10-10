@@ -16,6 +16,8 @@ from typing import Any
 
 from voodoo.core.errors import ConfigurationError
 from voodoo.runtime.store import acquire_runtime_store
+from voodoo.storage.events.codec import EVENT_SCHEMA_VERSION, validate_event
+from voodoo.storage.events.diagnostics import report_handler_failure
 from voodoo.storage.events.interfaces import EventBusCapabilities
 
 _TOPIC_PREFIX = b"runtime.events:"
@@ -74,8 +76,9 @@ class VoodooStoreEventBus:
             "correlation_id": envelope.get("correlation_id", trace_id_var.get()),
             "causation_id": envelope.get("causation_id"),
             "payload": payload,
-            "schema_version": envelope.get("schema_version", 1),
+            "schema_version": envelope.get("schema_version", EVENT_SCHEMA_VERSION),
         }
+        validate_event(ev)
         encoded = json.dumps(
             ev,
             default=str,
@@ -90,8 +93,8 @@ class VoodooStoreEventBus:
                 result = handler(ev)
                 if result is not None and hasattr(result, "__await__"):
                     asyncio.create_task(result)
-            except Exception:
-                pass
+            except Exception as error:
+                report_handler_failure(self.provider, event_type, error)
         return ev
 
     def subscribe(self, event_type: str, handler: Callable) -> None:
@@ -111,11 +114,11 @@ class VoodooStoreEventBus:
 
             for entry_offset, raw_value in entries:
                 try:
-                    ev = json.loads(bytes(raw_value).decode("utf-8"))
+                    ev = validate_event(json.loads(bytes(raw_value).decode("utf-8")))
                     handler(ev)
                     count += 1
-                except Exception:
-                    pass
+                except Exception as error:
+                    report_handler_failure(self.provider, event_type, error)
                 offset = int(entry_offset) + 1
 
             if len(entries) < _REPLAY_BATCH_SIZE:

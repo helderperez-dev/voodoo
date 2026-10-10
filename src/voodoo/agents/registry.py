@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from voodoo.agents.models import AgentEntity, AgentRunRecord
 
@@ -140,6 +140,10 @@ class InMemoryAgentRegistry:
 
 _AGENT_PREFIX = b"runtime:agent:entity:"
 _RUN_PREFIX = b"runtime:agent:run:"
+_AGENT_COLLECTION = b"runtime.agents"
+_RUN_COLLECTION = b"runtime.agent_runs"
+_SCHEMA_KEY = "_schema_version"
+_SCHEMA_VERSION = 1
 
 
 class VoodooStoreAgentRegistry:
@@ -178,19 +182,60 @@ class VoodooStoreAgentRegistry:
 
     @staticmethod
     def _encode(data: dict[str, Any]) -> bytes:
-        return json.dumps(data, separators=(",", ":"), default=str).encode("utf-8")
+        body = dict(data)
+        body[_SCHEMA_KEY] = _SCHEMA_VERSION
+        return json.dumps(body, separators=(",", ":"), default=str).encode("utf-8")
 
     @staticmethod
     def _decode(raw: bytes) -> dict[str, Any]:
-        return json.loads(bytes(raw).decode("utf-8"))
+        decoded = json.loads(bytes(raw).decode("utf-8"))
+        if not isinstance(decoded, dict):
+            raise ValueError("agent registry record must be a JSON object")
+        version = decoded.pop(_SCHEMA_KEY, 0)
+        if not isinstance(version, int) or isinstance(version, bool):
+            raise ValueError("agent registry schema version must be an integer")
+        if version > _SCHEMA_VERSION:
+            raise ValueError(
+                f"agent registry schema {version} is newer than supported schema {_SCHEMA_VERSION}"
+            )
+        return cast(dict[str, Any], decoded)
 
-    async def register(self, entity: AgentEntity) -> None:
-        self._store.put(
-            self._agent_key(entity.agent_id), self._encode(entity.to_dict())
+    @staticmethod
+    def _native_collections(store: Any) -> bool:
+        return all(
+            hasattr(store, method)
+            for method in ("create_collection", "upsert_record", "get_record", "scan_collection")
         )
 
+    @classmethod
+    def _ensure_collections(cls, store: Any) -> None:
+        if cls._native_collections(store):
+            store.create_collection(_AGENT_COLLECTION, schema_version=1, codec=b"json")
+            store.create_collection(_RUN_COLLECTION, schema_version=1, codec=b"json")
+
+    async def register(self, entity: AgentEntity) -> None:
+        store = self._store
+        encoded = self._encode(entity.to_dict())
+        if self._native_collections(store):
+            self._ensure_collections(store)
+            store.upsert_record(_AGENT_COLLECTION, entity.agent_id.encode("utf-8"), encoded)
+            # Native collections are canonical.  Remove the legacy KV record
+            # only after the collection write succeeds so a failed migration
+            # remains recoverable through the read-through path.
+            if store.get(self._agent_key(entity.agent_id)) is not None:
+                store.delete(self._agent_key(entity.agent_id))
+            return
+        store.put(self._agent_key(entity.agent_id), encoded)
+
     async def get(self, agent_id: str) -> AgentEntity | None:
-        raw = self._store.get(self._agent_key(agent_id))
+        raw = None
+        if self._native_collections(self._store):
+            self._ensure_collections(self._store)
+            record = self._store.get_record(_AGENT_COLLECTION, agent_id.encode("utf-8"))
+            if record is not None:
+                raw = record[1]
+        if raw is None:
+            raw = self._store.get(self._agent_key(agent_id))
         if raw is None:
             return None
         return AgentEntity.from_dict(self._decode(raw))
@@ -200,10 +245,21 @@ class VoodooStoreAgentRegistry:
         state: str | None = None,
         limit: int = 100,
     ) -> list[AgentEntity]:
-        agents = [
+        agents_by_id: dict[str, AgentEntity] = {}
+        if self._native_collections(self._store):
+            self._ensure_collections(self._store)
+            for key, raw, _indexes in self._store.scan_collection(_AGENT_COLLECTION):
+                agent = AgentEntity.from_dict(self._decode(raw))
+                agents_by_id[bytes(key).decode("utf-8")] = agent
+        agents_by_id.update({
+            agent.agent_id: agent
+            for agent in (
             AgentEntity.from_dict(self._decode(raw))
             for _key, raw in self._store.scan_prefix(_AGENT_PREFIX)
-        ]
+            )
+            if agent.agent_id not in agents_by_id
+        })
+        agents = list(agents_by_id.values())
         if state is not None:
             agents = [agent for agent in agents if agent.state == state]
         agents.sort(key=lambda agent: agent.updated_at, reverse=True)
@@ -217,25 +273,60 @@ class VoodooStoreAgentRegistry:
     async def delete(self, agent_id: str) -> bool:
         if await self.get(agent_id) is None:
             return False
-        tx = self._store.transaction()
-        tx.delete(self._agent_key(agent_id))
-        for key, _raw in tx.scan_prefix(self._run_prefix(agent_id)):
-            tx.delete(bytes(key))
-        tx.commit()
+        if self._native_collections(self._store):
+            self._ensure_collections(self._store)
+            self._store.delete_record(_AGENT_COLLECTION, agent_id.encode("utf-8"))
+            for key, raw, _indexes in self._store.scan_collection(_RUN_COLLECTION):
+                if self._decode(raw).get("agent_id") == agent_id:
+                    self._store.delete_record(_RUN_COLLECTION, bytes(key))
+        legacy = self._store.get(self._agent_key(agent_id))
+        if legacy is not None:
+            tx = self._store.transaction()
+            tx.delete(self._agent_key(agent_id))
+            for key, _raw in tx.scan_prefix(self._run_prefix(agent_id)):
+                tx.delete(bytes(key))
+            tx.commit()
         return True
 
     async def record_run(self, record: AgentRunRecord) -> None:
-        self._store.put(self._run_key(record), self._encode(record.to_dict()))
+        encoded = self._encode(record.to_dict())
+        if self._native_collections(self._store):
+            self._ensure_collections(self._store)
+            self._store.upsert_record(_RUN_COLLECTION, record.run_id.encode("utf-8"), encoded)
+            # Legacy run keys include the start timestamp, so remove matching
+            # records by decoding the bounded agent prefix after the canonical
+            # collection write.  This keeps migration idempotent and preserves
+            # legacy read-through if the native write fails.
+            legacy_keys: list[bytes] = []
+            for key, raw in self._store.scan_prefix(self._run_prefix(record.agent_id)):
+                if AgentRunRecord.from_dict(self._decode(raw)).run_id == record.run_id:
+                    legacy_keys.append(bytes(key))
+            for key in legacy_keys:
+                self._store.delete(key)
+            return
+        self._store.put(self._run_key(record), encoded)
 
     async def get_runs(
         self,
         agent_id: str,
         limit: int = 50,
     ) -> list[AgentRunRecord]:
-        runs = [
+        runs_by_id: dict[str, AgentRunRecord] = {}
+        if self._native_collections(self._store):
+            self._ensure_collections(self._store)
+            for _key, raw, _indexes in self._store.scan_collection(_RUN_COLLECTION):
+                run = AgentRunRecord.from_dict(self._decode(raw))
+                if run.agent_id == agent_id:
+                    runs_by_id[run.run_id] = run
+        runs_by_id.update({
+            run.run_id: run
+            for run in (
             AgentRunRecord.from_dict(self._decode(raw))
             for _key, raw in self._store.scan_prefix(self._run_prefix(agent_id))
-        ]
+            )
+            if run.run_id not in runs_by_id
+        })
+        runs = list(runs_by_id.values())
         runs.sort(key=lambda run: run.started_at, reverse=True)
         return runs[:limit]
 
@@ -243,9 +334,7 @@ class VoodooStoreAgentRegistry:
         return len(await self.list_agents(state=state, limit=1_000_000))
 
     async def count_runs(self, agent_id: str) -> int:
-        return sum(
-            1 for _key, _raw in self._store.scan_prefix(self._run_prefix(agent_id))
-        )
+        return len(await self.get_runs(agent_id, limit=1_000_000))
 
     def close(self) -> None:
         """No-op: RuntimeStore owns the shared Store lifecycle."""
@@ -420,7 +509,10 @@ class SQLiteAgentRegistry:
     ) -> list[AgentRunRecord]:
         cur = self._conn.execute(
             "SELECT * FROM agent_runs WHERE agent_id = ? "
-            "ORDER BY started_at DESC LIMIT ?",
+            # ``started_at`` is a float and adjacent runs can share the same
+            # timestamp. SQLite's rowid preserves insertion order as a stable
+            # tie-breaker, keeping the public newest-first contract deterministic.
+            "ORDER BY started_at DESC, rowid DESC LIMIT ?",
             (agent_id, limit),
         )
         return [_row_to_run(r, cur.description) for r in cur.fetchall()]
@@ -432,13 +524,13 @@ class SQLiteAgentRegistry:
             )
         else:
             cur = self._conn.execute("SELECT COUNT(*) FROM agents")
-        return cur.fetchone()[0]
+        return int(cur.fetchone()[0])
 
     async def count_runs(self, agent_id: str) -> int:
         cur = self._conn.execute(
             "SELECT COUNT(*) FROM agent_runs WHERE agent_id = ?", (agent_id,)
         )
-        return cur.fetchone()[0]
+        return int(cur.fetchone()[0])
 
 
 # ---------------------------------------------------------------------------

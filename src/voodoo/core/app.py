@@ -8,6 +8,7 @@ Starlette-compatible tooling.
 
 import asyncio
 import importlib.util
+import logging
 import os
 import socket
 import sys
@@ -19,13 +20,29 @@ from typing import Any
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 from starlette.routing import BaseRoute, Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 
 from voodoo.core.sitemap import _generate_robots_txt, _generate_sitemap_xml
 from voodoo.routing.pages import call_page, page_registry
+from voodoo.security.redaction import redact_string
 from voodoo.ui.events import websocket_endpoint
+
+logger = logging.getLogger(__name__)
+
+# Readiness is fail-closed for provider/connection failures, but an invariant
+# violation must remain visible to the caller and test runner.
+_READINESS_STORE_ERRORS = (
+    AttributeError,
+    ConnectionError,
+    ImportError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 
 
 def _local_ip() -> str | None:
@@ -34,7 +51,8 @@ def _local_ip() -> str | None:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("8.8.8.8", 80))
             return str(s.getsockname()[0])
-    except Exception:
+    except OSError as error:
+        logger.debug("LAN IP discovery unavailable error=%s", redact_string(str(error)))
         return None
 
 
@@ -275,6 +293,99 @@ def _load_app_module(app_dir: str, name: str) -> None:
         spec.loader.exec_module(module)
 
 
+def _build_probe_routes() -> list[BaseRoute]:
+    """Return deployment probes kept independent from application routing."""
+
+    async def healthz(request: Request) -> JSONResponse:
+        """Liveness probe: process routing is available."""
+        from voodoo import __version__
+
+        return JSONResponse({"status": "ok", "version": __version__})
+
+    async def readyz(request: Request) -> JSONResponse:
+        """Readiness probe backed by the Runtime-owned Store health contract."""
+        lifecycle_phase = getattr(request.app.state, "lifecycle_phase", "unknown")
+        if lifecycle_phase in {"starting", "stopping", "stopped"}:
+            return JSONResponse(
+                {
+                    "status": "not_ready",
+                    "mode": "shutting_down"
+                    if lifecycle_phase in {"stopping", "stopped"}
+                    else "starting",
+                    "lifecycle_phase": lifecycle_phase,
+                },
+                status_code=503,
+            )
+        runtime_store = getattr(request.app.state, "runtime_store", None)
+        try:
+            health = runtime_store.health() if runtime_store is not None else None
+        except _READINESS_STORE_ERRORS as error:
+            logger.warning(
+                "readiness Store health probe failed error=%s",
+                redact_string(str(error)),
+            )
+            return JSONResponse(
+                {
+                    "status": "not_ready",
+                    "mode": "store_unavailable",
+                    "store": {"opened": False, "verified": False},
+                },
+                status_code=503,
+            )
+        from voodoo.status import _redact_store_details
+
+        safe_store_details = _redact_store_details(
+            health.details if health is not None else {}
+        )
+        if not isinstance(safe_store_details, dict):
+            safe_store_details = {}
+        from voodoo.data.base import migration_health
+
+        migration = migration_health()
+        migration_required = migration["status"] == "migration_required"
+        capacity_pressure = bool(
+            health is not None and not safe_store_details.get("within_limit", True)
+        )
+        recovery_mode = bool(
+            health is not None
+            and (
+                safe_store_details.get("has_torn_tail") is True
+                or (safe_store_details.get("pending_transactions") or 0) > 0
+            )
+        )
+        ready = bool(
+            health is not None
+            and health.opened
+            and health.verified
+            and safe_store_details.get("within_limit", True)
+            and not migration_required
+        )
+        if migration_required:
+            mode = "migration_required"
+        elif capacity_pressure:
+            mode = "capacity_pressure"
+        elif recovery_mode:
+            mode = "recovery"
+        elif ready:
+            mode = "ready"
+        else:
+            mode = "not_ready"
+        payload = {
+            "status": "ready" if ready else "not_ready",
+            "mode": mode,
+            "migration": migration,
+            "capacity_pressure": capacity_pressure,
+            "recovery_mode": recovery_mode,
+            "store": safe_store_details if health is not None else {"opened": False},
+        }
+        return JSONResponse(payload, status_code=200 if ready else 503)
+
+    return [
+        Route("/healthz", healthz, methods=["GET"]),
+        Route("/readyz", readyz, methods=["GET"]),
+    ]
+
+
 def _build_routes(
     app_dir: str, cwd: str, config: Any
 ) -> tuple[list[BaseRoute], list[Any]]:
@@ -284,6 +395,8 @@ def _build_routes(
         WebSocketRoute("/_voodoo_ws", websocket_endpoint),
         WebSocketRoute("/voodoo/mesh/ws", mesh._handle_websocket),
     ]
+
+    routes.extend(_build_probe_routes())
     for url, directory in (
         ("/public", os.path.join(cwd, "public")),
         ("/storage", os.path.join(cwd, config.storage_dir)),
@@ -398,12 +511,61 @@ async def _start_mqtt(
     return transport
 
 
+async def _cleanup_lifecycle_resources(
+    *,
+    runtime: Any,
+    runtime_started: bool,
+    mqtt_transport: Any,
+    stop_workers: Callable[[], Any],
+    worker_task: asyncio.Task[Any] | None,
+    scheduler: Any,
+    schedule_store: Any,
+    execution_store: Any,
+    runtime_engine: Any,
+    store_bound: bool,
+    application_store: Any,
+) -> None:
+    """Release every lifespan resource in a deterministic, failure-safe order."""
+    if runtime is not None and runtime_started:
+        runtime.stop()
+    if mqtt_transport is not None:
+        await mqtt_transport.stop()
+    await stop_workers()
+    if worker_task:
+        worker_task.cancel()
+        # Drain the task so cancellation cannot leak a pending task or replace
+        # the original lifecycle failure with a warning.
+        await asyncio.gather(worker_task, return_exceptions=True)
+
+    from voodoo.data import close_db
+
+    await close_db()
+    if scheduler is not None:
+        await scheduler.stop()
+    if schedule_store is not None:
+        schedule_store.close()
+    close_store = getattr(execution_store, "close", None)
+    if close_store is not None:
+        close_store()
+    runtime_engine.use_store(None)
+    if store_bound:
+        from voodoo.data.store_backend import bind_runtime_store
+
+        bind_runtime_store(None)
+    if application_store is not None:
+        application_store.stop()
+    from voodoo.ui.events import ws_manager
+
+    ws_manager.reset()
+
+
 def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
     """Build a fully wired Starlette application."""
-    from voodoo.config import get_config
+    from voodoo.config import get_config, validate_production_config
     from voodoo.ui.styles.presets import activate_theme
 
     config = get_config()
+    validate_production_config(config)
     try:
         cwd = os.getcwd()
     except FileNotFoundError:
@@ -424,73 +586,80 @@ def create_app(app_dir: str = "app", *, runtime: Any = None) -> Starlette:
 
     @asynccontextmanager
     async def lifespan(starlette: Starlette) -> AsyncIterator[None]:
+        from voodoo.data.store_backend import bind_runtime_store
+        from voodoo.runtime.execution.engine import engine as global_runtime_engine
         from voodoo.runtime.store import StoreConfig, activate_runtime_store
 
-        application_store = activate_runtime_store(
-            StoreConfig.from_mapping(config.store.model_dump())
-        )
-        starlette.state.runtime_store = application_store
-        if runtime is not None:
-            runtime.use_store(application_store)
-        from voodoo.data.store_backend import bind_runtime_store
-
-        bind_runtime_store(application_store)
-        from voodoo.runtime.execution.engine import engine as global_runtime_engine
-
-        runtime_engine = (
-            runtime.engine if runtime is not None else global_runtime_engine
-        )
-        execution_store, schedule_path = _configure_execution_store(
-            config, runtime_engine
-        )
-        if edge_gateway:
-            from voodoo.edge import VoodooStoreDeviceStore
-
-            edge_gateway[0]._store = VoodooStoreDeviceStore(application_store)
-        from voodoo.runtime.scheduling import ScheduleService
-        from voodoo.storage.scheduler import create_schedule_store
-
-        schedule_store = create_schedule_store(schedule_path)
-        scheduler = ScheduleService(schedule_store)
-        await scheduler.start()
-        from voodoo.runtime.scheduling.workers import _workers
-
-        worker_task = asyncio.create_task(start_workers()) if _workers else None
-        mqtt_transport = await _start_mqtt(config, edge_gateway, application_store)
-        if runtime is not None:
-            runtime.start()
+        starlette.state.lifecycle_phase = "starting"
+        application_store = None
+        runtime_engine = runtime.engine if runtime is not None else global_runtime_engine
+        execution_store = None
+        schedule_store = None
+        scheduler = None
+        worker_task = None
+        mqtt_transport = None
+        runtime_started = False
+        store_bound = False
         try:
+            application_store = activate_runtime_store(
+                StoreConfig.from_mapping(config.store.model_dump())
+            )
+            starlette.state.runtime_store = application_store
+            if runtime is not None:
+                runtime.use_store(application_store)
+            bind_runtime_store(application_store)
+            store_bound = True
+            execution_store, schedule_path = _configure_execution_store(
+                config, runtime_engine
+            )
+            if edge_gateway:
+                from voodoo.edge import VoodooStoreDeviceStore
+
+                edge_gateway[0]._store = VoodooStoreDeviceStore(application_store)
+            from voodoo.runtime.scheduling import ScheduleService
+            from voodoo.storage.scheduler import create_schedule_store
+
+            schedule_store = create_schedule_store(schedule_path)
+            scheduler = ScheduleService(schedule_store)
+            await scheduler.start()
+            from voodoo.runtime.scheduling.workers import _workers
+
+            worker_task = asyncio.create_task(start_workers()) if _workers else None
+            mqtt_transport = await _start_mqtt(config, edge_gateway, application_store)
+            if runtime is not None:
+                runtime.start()
+                runtime_started = True
+            starlette.state.lifecycle_phase = "ready"
             yield
         finally:
-            if runtime is not None:
-                runtime.stop()
-            if mqtt_transport is not None:
-                await mqtt_transport.stop()
-            await stop_workers()
-            if worker_task:
-                worker_task.cancel()
-            from voodoo.data import close_db
-
-            await close_db()
-            await scheduler.stop()
-            schedule_store.close()
-            close_store = getattr(execution_store, "close", None)
-            if close_store is not None:
-                close_store()
-            runtime_engine.use_store(None)
-            bind_runtime_store(None)
-            application_store.stop()
+            starlette.state.lifecycle_phase = "stopping"
+            await _cleanup_lifecycle_resources(
+                runtime=runtime,
+                runtime_started=runtime_started,
+                mqtt_transport=mqtt_transport,
+                stop_workers=stop_workers,
+                worker_task=worker_task,
+                scheduler=scheduler,
+                schedule_store=schedule_store,
+                execution_store=execution_store,
+                runtime_engine=runtime_engine,
+                store_bound=store_bound,
+                application_store=application_store,
+            )
+            starlette.state.lifecycle_phase = "stopped"
 
     middleware = [
         Middleware(TelemetryMiddleware),
-        Middleware(SecurityHeadersMiddleware),
-        Middleware(CORSMiddleware),
-        Middleware(CSRFMiddleware),
-        Middleware(RateLimitMiddleware),
+        Middleware(SecurityHeadersMiddleware, config_override=config),
+        Middleware(CORSMiddleware, config_override=config),
         Middleware(I18nMiddleware),
-        Middleware(AuthMiddleware),
+        Middleware(AuthMiddleware, config_override=config),
+        Middleware(RateLimitMiddleware, config_override=config),
+        Middleware(CSRFMiddleware, config_override=config),
     ]
-    return Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
+    starlette = Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
+    starlette.state.voodoo_config = config
+    return starlette
 
 
 def _module_page_endpoint(page_func: Callable[..., Any]) -> Callable:

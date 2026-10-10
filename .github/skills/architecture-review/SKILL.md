@@ -26,7 +26,7 @@ Ensure changes respect Voodoo's architectural invariants, layering rules, and co
 - [ ] **No new required deps** — Base install stays minimal. New SDK? Add to `[extra]`.
 - [ ] **Capability-based adapters** — Protocol + boolean flags. No enums for capabilities.
 - [ ] **Contract tests immutable** — No changes to `tests/contracts/` mixin classes.
-- [ ] **Compatibility shims** — Old import paths preserved (`sys.modules` or PEP 562).
+- [ ] **Compatibility policy** — Preserve only explicitly supported 3.x aliases; do not require removed 2.x import shims unless a documented external consumer and deprecation window exist.
 - [ ] **Lazy imports** — Provider SDKs imported at function level.
 - [ ] **Correlation IDs** — `trace_id` propagates through the stack.
 - [ ] **Events namespaced** — Dotted names (`"agent.started"` not `"started"`).
@@ -111,7 +111,7 @@ Ensure changes respect Voodoo's architectural invariants, layering rules, and co
 - [PASS/FAIL] No new required deps
 - [PASS/FAIL] Capability-based adapters
 - [PASS/FAIL] Contract tests immutable
-- [PASS/FAIL] Compatibility shims
+- [PASS/FAIL] Compatibility policy and documented aliases
 - [PASS/FAIL] Lazy imports
 - [PASS/FAIL] Correlation IDs
 - [PASS/FAIL] Events namespaced

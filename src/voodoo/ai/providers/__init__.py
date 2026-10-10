@@ -8,12 +8,28 @@ dependency raises an actionable :class:`ConfigurationError`.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from voodoo.core.errors import ConfigurationError
+from voodoo.security.redaction import redact_string
+
+logger = logging.getLogger(__name__)
+
+# Configuration loading is intentionally best-effort for optional AI
+# integrations, but an unexpected implementation failure must not be hidden
+# behind the mock/default route.  Keep this set limited to failures that mean
+# the configuration source is unavailable or malformed.
+_CONFIGURATION_FALLBACK_ERRORS = (
+    AttributeError,
+    ImportError,
+    TypeError,
+    ValueError,
+    ConfigurationError,
+)
 
 __all__ = [
     "LLMProvider",
@@ -187,8 +203,6 @@ class LLMProvider(ABC):
     ) -> AsyncIterator[ProviderEvent]:
         """Yield normalized streaming events."""
         raise NotImplementedError
-        # pragma: no cover - abstract generator marker
-        yield  # type: ignore[unreachable]
 
     async def generate(
         self, messages: list[Message], **kwargs: Any
@@ -270,7 +284,11 @@ def _routing_aliases(aliases: dict[str, str] | None) -> dict[str, str]:
 
         merged.update(config.models.aliases or {})
         merged.update(config.ai.aliases or {})
-    except Exception:
+    except _CONFIGURATION_FALLBACK_ERRORS as error:
+        logger.debug(
+            "AI routing config unavailable; using built-in aliases error=%s",
+            redact_string(str(error)),
+        )
         pass
     if aliases:
         merged.update(aliases)
@@ -329,7 +347,11 @@ def default_model() -> str:
             provider = config.ai.provider or "openai"
             return f"{provider}:{config.ai.model}"
         return config.models.default
-    except Exception:
+    except _CONFIGURATION_FALLBACK_ERRORS as error:
+        logger.debug(
+            "AI default-model config unavailable; using mock model error=%s",
+            redact_string(str(error)),
+        )
         return "mock:default"
 
 
@@ -357,7 +379,11 @@ def get_provider(model: str, **kwargs: Any) -> LLMProvider:
                 kwargs.setdefault("base_url", config.ai.base_url)
             if config.ai.api_key:
                 kwargs.setdefault("api_key", config.ai.api_key)
-        except Exception:
+        except _CONFIGURATION_FALLBACK_ERRORS as error:
+            logger.debug(
+                "AI provider config unavailable; using explicit arguments error=%s",
+                redact_string(str(error)),
+            )
             pass
 
     return provider_cls(model=model_id, **kwargs)

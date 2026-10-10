@@ -44,7 +44,9 @@ class PostgresExecutionStore:
     def __init__(self, url: str) -> None:
         self.url = url
         self._lock = Lock()
-        self._conn: Any | None = None
+        # psycopg is an optional adapter dependency; keep the connection
+        # boundary typed as Any while lifecycle checks remain explicit.
+        self._conn: Any = None
         self._connect()
         self._migrate()
 
@@ -208,7 +210,7 @@ class PostgresExecutionStore:
                 "SELECT * FROM artifacts WHERE execution_id = %s "
                 "ORDER BY created_at DESC LIMIT %s"
             )
-            params = (execution_id, limit)
+            params: tuple[Any, ...] = (execution_id, limit)
         else:
             sql = _translate(
                 "SELECT * FROM artifacts ORDER BY created_at DESC LIMIT %s"

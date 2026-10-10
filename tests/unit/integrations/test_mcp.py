@@ -241,6 +241,31 @@ async def test_call_tool_with_error(fresh_mcp):
     assert "tool error" in result["error"]["message"]
 
 
+@pytest.mark.asyncio
+async def test_call_tool_error_redacts_secrets_and_is_bounded(fresh_mcp):
+    secret = "sk-" + "a" * 24
+
+    @fresh_mcp.tool()
+    def failing_tool() -> str:
+        raise RuntimeError(f"provider failed api_key={secret} " + "x" * 400)
+
+    queue = asyncio.Queue()
+    await fresh_mcp._handle_message(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "failing_tool", "arguments": {}},
+        },
+        queue,
+    )
+    result = await queue.get()
+    message = result["error"]["message"]
+    assert secret not in message
+    assert "[REDACTED]" in message
+    assert len(message) <= 256
+
+
 # ---------------------------------------------------------------------------
 # Initialize + tools/list full flow
 # ---------------------------------------------------------------------------

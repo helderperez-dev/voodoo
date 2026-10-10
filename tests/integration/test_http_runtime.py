@@ -7,15 +7,20 @@ Execution record (intent ``http:GET /path``) with actor, effects and cost.
 from __future__ import annotations
 
 import asyncio
+import importlib
 
 import pytest
 from starlette.testclient import TestClient
 
 import voodoo.data
 from voodoo.core import create_app
+from voodoo.observability import telemetry_store
 from voodoo.routing.api import api
 from voodoo.runtime.execution import ExecutionStatus
 from voodoo.runtime.execution.engine import engine as runtime_engine
+from voodoo.runtime.store import get_active_runtime_store
+
+app_module = importlib.import_module("voodoo.core.app")
 
 
 @pytest.fixture
@@ -47,6 +52,149 @@ def _execution_for(intent_name: str):
 
 
 class TestHTTPRuntimeIntegration:
+    def test_liveness_and_readiness_probes_are_explicit(self, make_client):
+        telemetry_store.metrics.setdefault("requests", []).clear()
+        with make_client() as client:
+            health = client.get(
+                "/healthz",
+                headers={
+                    "x-trace-id": "trace-from-gateway",
+                    "x-correlation-id": "request-42",
+                },
+            )
+            ready = client.get("/readyz")
+
+        assert health.status_code == 200
+        assert health.json()["status"] == "ok"
+        assert health.headers["x-trace-id"] == "trace-from-gateway"
+        assert health.headers["x-correlation-id"] == "request-42"
+        request_metric = telemetry_store.metrics["requests"][-2]
+        assert request_metric["trace_id"] == "trace-from-gateway"
+        assert request_metric["correlation_id"] == "request-42"
+        assert request_metric["status_code"] == 200
+        assert ready.status_code == 200
+        assert ready.json()["status"] == "ready"
+        assert ready.json()["mode"] == "ready"
+        assert ready.json()["capacity_pressure"] is False
+        assert ready.json()["recovery_mode"] is False
+        assert ready.json()["store"]["within_limit"] is True
+
+        assert client.app.state.lifecycle_phase == "stopped"
+
+    def test_lifecycle_marks_app_ready_only_during_active_lifespan(self, make_client):
+        with make_client() as client:
+            assert client.app.state.lifecycle_phase == "ready"
+            response = client.get("/readyz")
+            assert response.status_code == 200
+            assert response.json()["status"] == "ready"
+
+    @pytest.mark.parametrize("phase, mode", [("starting", "starting"), ("stopping", "shutting_down")])
+    def test_readiness_fails_closed_during_lifecycle_transitions(
+        self, make_client, phase, mode
+    ):
+        with make_client() as client:
+            client.app.state.lifecycle_phase = phase
+            response = client.get("/readyz")
+
+        assert response.status_code == 503
+        assert response.json() == {
+            "status": "not_ready",
+            "mode": mode,
+            "lifecycle_phase": phase,
+        }
+
+    def test_readiness_reports_migration_required_mode(self, make_client, monkeypatch):
+        monkeypatch.setattr(
+            "voodoo.data.base.migration_health",
+            lambda: {
+                "status": "migration_required",
+                "current_version": 4,
+                "error": "schema upgrade required",
+            },
+        )
+
+        with make_client() as client:
+            ready = client.get("/readyz")
+
+        assert ready.status_code == 503
+        assert ready.json()["status"] == "not_ready"
+        assert ready.json()["mode"] == "migration_required"
+        assert ready.json()["migration"]["current_version"] == 4
+
+    def test_readiness_fails_closed_when_store_health_probe_raises(
+        self, make_client, caplog
+    ):
+        class BrokenStore:
+            def health(self):
+                raise RuntimeError("token=readiness-secret store unavailable")
+
+        with make_client() as client:
+            client.app.state.runtime_store = BrokenStore()
+            with caplog.at_level("WARNING", logger=app_module.logger.name):
+                ready = client.get("/readyz")
+
+        assert ready.status_code == 503
+        assert ready.json() == {
+            "status": "not_ready",
+            "mode": "store_unavailable",
+            "store": {"opened": False, "verified": False},
+        }
+        assert "readiness-secret" not in caplog.text
+
+    def test_readiness_does_not_hide_store_invariant_failures(self, make_client):
+        class BrokenStore:
+            def health(self):
+                raise AssertionError("readiness invariant failed")
+
+        with make_client() as client:
+            client.app.state.runtime_store = BrokenStore()
+            with pytest.raises(AssertionError, match="invariant failed"):
+                client.get("/readyz")
+
+    def test_readiness_redacts_and_bounds_store_details(self, make_client):
+        class StoreWithSensitiveHealth:
+            def health(self):
+                return type(
+                    "Health",
+                    (),
+                    {
+                        "opened": True,
+                        "verified": True,
+                        "details": {
+                            "within_limit": True,
+                            "path": "/private/store.vstore",
+                            "payload": "secret-payload",
+                            "nested": {"count": 3, "opaque": object()},
+                        },
+                    },
+                )()
+
+        with make_client() as client:
+            client.app.state.runtime_store = StoreWithSensitiveHealth()
+            ready = client.get("/readyz")
+
+        assert ready.status_code == 200
+        assert ready.json()["store"] == {
+            "within_limit": True,
+            "nested": {"count": 3},
+        }
+
+    def test_startup_failure_unwinds_partial_runtime_store(
+        self, make_client, monkeypatch
+    ):
+        async def fail_mqtt(*_args, **_kwargs):
+            raise RuntimeError("synthetic startup failure")
+
+        monkeypatch.setattr(app_module, "_start_mqtt", fail_mqtt)
+        app = create_app()
+
+        with pytest.raises(RuntimeError, match="synthetic startup failure"):
+            with TestClient(app):
+                pass
+
+        assert get_active_runtime_store() is None
+        assert app.state.lifecycle_phase == "stopped"
+
     def test_route_executes_through_engine(self, make_client):
         @api.get("/runtime-ping")
         def ping():

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from voodoo.primitives.intent import Intent
@@ -66,6 +68,24 @@ class TestJSONFileStore:
         loaded = store.load_all()
         # the one valid line loads; corrupt lines are skipped
         assert [e.id for e in loaded] == ["good"]
+
+    def test_codec_accepts_legacy_and_rejects_future_schema(self, tmp_path):
+        path = tmp_path / "executions.jsonl"
+        legacy = _execution(id="legacy").model_dump(mode="json")
+        future = {**_execution(id="future").model_dump(mode="json"), "_schema_version": 99}
+        path.write_text(
+            json.dumps(legacy) + "\n" + json.dumps(future) + "\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="unsupported execution persistence schema"):
+            JSONFileExecutionStore(path).load_all()
+
+    def test_new_records_include_schema_marker(self, tmp_path):
+        path = tmp_path / "executions.jsonl"
+        JSONFileExecutionStore(path).save(_execution(id="versioned"))
+        record = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+        assert record["_schema_version"] == 1
 
     def test_missing_file_loads_empty(self, tmp_path):
         store = JSONFileExecutionStore(tmp_path / "nope.jsonl")

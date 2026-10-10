@@ -12,7 +12,8 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, Literal
 from uuid import uuid4
 
 from voodoo.runtime.store import (
@@ -32,6 +33,10 @@ __all__ = [
 
 _OUTBOX_PENDING_PREFIX = b"runtime:outbox:pending:"
 _OUTBOX_DELIVERED_PREFIX = b"runtime:outbox:delivered:"
+_OUTBOX_PENDING_COLLECTION = b"runtime.outbox_pending"
+_OUTBOX_DELIVERED_COLLECTION = b"runtime.outbox_delivered"
+_SCHEMA_KEY = "_schema_version"
+_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +51,7 @@ class OutboxMessage:
     def encode(self) -> bytes:
         return json.dumps(
             {
+                _SCHEMA_KEY: _SCHEMA_VERSION,
                 "id": self.id,
                 "topic": self.topic,
                 "payload": self.payload,
@@ -56,14 +62,24 @@ class OutboxMessage:
         ).encode()
 
     @classmethod
-    def decode(cls, raw: bytes) -> OutboxMessage:
+    def decode(cls, raw: bytes, *, expected_id: str | None = None) -> OutboxMessage:
         envelope = json.loads(raw.decode("utf-8"))
-        return cls(
+        if not isinstance(envelope, dict):
+            raise ValueError("outbox record must be a JSON object")
+        version = envelope.pop(_SCHEMA_KEY, 0)
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise ValueError("outbox schema version must be an integer")
+        if version > _SCHEMA_VERSION:
+            raise ValueError(f"unsupported outbox schema version: {version}")
+        message = cls(
             id=envelope["id"],
             topic=envelope["topic"],
             payload=envelope["payload"],
             metadata=envelope.get("metadata", {}),
         )
+        if expected_id is not None and message.id != expected_id:
+            raise ValueError("outbox key does not match record id")
+        return message
 
 
 class RuntimeTransaction:
@@ -93,6 +109,21 @@ class RuntimeTransaction:
                 "Active Voodoo Store does not expose transactional capability"
             )
         self._tx = native.transaction()
+        self._native_collections = all(
+            hasattr(native, method)
+            for method in ("create_collection", "upsert_record")
+        ) and hasattr(self._tx, "delete_record")
+        if self._native_collections:
+            native.create_collection(
+                _OUTBOX_PENDING_COLLECTION, schema_version=1, codec=b"json"
+            )
+            native.create_collection(
+                _OUTBOX_DELIVERED_COLLECTION, schema_version=1, codec=b"json"
+            )
+        self._native_outbox = all(
+            hasattr(native, method)
+            for method in ("emit_outbox_event", "outbox_events_after", "ack_outbox_event")
+        )
         self._finished = False
 
     def get(self, key: bytes) -> bytes | None:
@@ -126,6 +157,21 @@ class RuntimeTransaction:
 
     def stage_outbox(self, message: OutboxMessage) -> str:
         """Atomically stage a durable message beside state mutations."""
+        if self._native_outbox and hasattr(self._tx, "emit_event"):
+            self._tx.emit_event(
+                message.topic.encode("utf-8"),
+                message.encode(),
+                int(datetime.now(UTC).timestamp() * 1000),
+            )
+            return message.id
+        if self._native_collections:
+            self._tx.upsert_record(
+                _OUTBOX_PENDING_COLLECTION,
+                message.id.encode("utf-8"),
+                message.encode(),
+                indexes=[],
+            )
+            return message.id
         self.put(_OUTBOX_PENDING_PREFIX + message.id.encode(), message.encode())
         return message.id
 
@@ -144,7 +190,9 @@ class RuntimeTransaction:
     def __enter__(self) -> RuntimeTransaction:
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> bool:
+    def __exit__(
+        self, exc_type: Any, exc: Any, traceback: Any
+    ) -> Literal[False]:
         if self._finished:
             return False
         if exc_type is None:
@@ -175,16 +223,72 @@ class OutboxDispatcher:
             raise StoreProviderError(
                 "OutboxDispatcher currently requires the Voodoo Store provider"
             )
-        self._native = getattr(provider, "native", None)
+        self._native: Any = getattr(provider, "native", None)
         if self._native is None:
             raise StoreProviderError("Active Voodoo Store has no native handle")
+        self._native_outbox = all(
+            hasattr(self._native, method)
+            for method in ("outbox_events_after", "ack_outbox_event")
+        )
+        self._native_collections = all(
+            hasattr(self._native, method)
+            for method in ("create_collection", "scan_collection", "upsert_record")
+        )
+        if self._native_collections:
+            self._native.create_collection(
+                _OUTBOX_PENDING_COLLECTION, schema_version=1, codec=b"json"
+            )
+            self._native.create_collection(
+                _OUTBOX_DELIVERED_COLLECTION, schema_version=1, codec=b"json"
+            )
+        self._native_receipts: dict[str, tuple[int, bytes]] = {}
 
     def pending(self) -> list[OutboxMessage]:
         """Return durable pending messages in Store key order."""
-        return [
-            OutboxMessage.decode(bytes(raw_value))
-            for _key, raw_value in self._native.scan_prefix(_OUTBOX_PENDING_PREFIX)
-        ]
+        pending: list[OutboxMessage] = []
+        self._native_receipts.clear()
+        if self._native_outbox:
+            for event in self._native.outbox_events_after(None, 10_000):
+                try:
+                    message = OutboxMessage.decode(bytes(event["payload"]))
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    continue
+                self._native_receipts[message.id] = (
+                    int(event["tx_id"]),
+                    bytes(event["nonce"]),
+                )
+                pending.append(message)
+        pending.extend(self._collection_pending())
+        pending.extend(self._legacy_pending())
+        return pending
+
+    def _collection_pending(self) -> list[OutboxMessage]:
+        if not self._native_collections:
+            return []
+        pending: list[OutboxMessage] = []
+        for key, raw_value, _indexes in self._native.scan_collection(
+            _OUTBOX_PENDING_COLLECTION
+        ):
+            expected_id = bytes(key).decode("utf-8")
+            try:
+                message = OutboxMessage.decode(bytes(raw_value), expected_id=expected_id)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if message.id not in self._native_receipts:
+                pending.append(message)
+        return pending
+
+    def _legacy_pending(self) -> list[OutboxMessage]:
+        pending: list[OutboxMessage] = []
+        for key, raw_value in self._native.scan_prefix(_OUTBOX_PENDING_PREFIX):
+            expected_id = bytes(key)[len(_OUTBOX_PENDING_PREFIX) :].decode("utf-8")
+            try:
+                message = OutboxMessage.decode(bytes(raw_value), expected_id=expected_id)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if message.id not in self._native_receipts:
+                pending.append(message)
+        return pending
 
     def dispatch(
         self,
@@ -203,10 +307,30 @@ class OutboxDispatcher:
             if limit is not None and delivered >= limit:
                 break
             publish(message.topic, message.payload, message.metadata)
-            tx = self._native.transaction()
-            tx.delete(_OUTBOX_PENDING_PREFIX + message.id.encode())
-            tx.put(_OUTBOX_DELIVERED_PREFIX + message.id.encode(), message.encode())
-            tx.commit()
+            receipt = self._native_receipts.get(message.id)
+            if receipt is not None:
+                self._native.ack_outbox_event(*receipt)
+            elif self._native_collections:
+                tx = self._native.transaction()
+                if not hasattr(tx, "delete_record"):
+                    raise StoreProviderError(
+                        "Store transaction lacks native collection deletion"
+                    )
+                tx.delete_record(
+                    _OUTBOX_PENDING_COLLECTION, message.id.encode("utf-8")
+                )
+                tx.upsert_record(
+                    _OUTBOX_DELIVERED_COLLECTION,
+                    message.id.encode("utf-8"),
+                    message.encode(),
+                    indexes=[],
+                )
+                tx.commit()
+            else:
+                tx = self._native.transaction()
+                tx.delete(_OUTBOX_PENDING_PREFIX + message.id.encode())
+                tx.put(_OUTBOX_DELIVERED_PREFIX + message.id.encode(), message.encode())
+                tx.commit()
             delivered += 1
         return delivered
 

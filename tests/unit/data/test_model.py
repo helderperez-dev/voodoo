@@ -65,6 +65,22 @@ async def test_all_is_alias_of_find_all(model_store):
 
 
 @pytest.mark.asyncio
+async def test_store_model_propagates_unexpected_current_user_failure(
+    model_store, monkeypatch
+):
+    import voodoo.auth
+
+    class BrokenContext:
+        def get(self):
+            raise AssertionError("unexpected current-user implementation failure")
+
+    monkeypatch.setattr(voodoo.auth, "current_user", BrokenContext())
+
+    with pytest.raises(AssertionError, match="unexpected current-user"):
+        await Lead.find_all()
+
+
+@pytest.mark.asyncio
 async def test_save_inserts_when_no_id(model_store):
     lead = Lead()
     lead.name = "Ada"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from voodoo.runtime import AuthenticationEvidence, Identity, IdentityKind, Principal
@@ -48,6 +50,11 @@ def test_authenticated_node_join_is_durable(runtime_store) -> None:
     assert joined.status is MemberStatus.ACTIVE
     assert store.get("node-a") == joined
     assert store.list() == [joined]
+    raw = runtime_store.provider.native.get_record(
+        b"runtime.membership", b"node-a"
+    )
+    assert raw is not None
+    assert json.loads(bytes(raw[1]))["_schema_version"] == 1
 
 
 def test_advertised_capabilities_are_not_runtime_authority(runtime_store) -> None:
@@ -116,6 +123,35 @@ def test_membership_survives_store_restart(tmp_path) -> None:
     finally:
         bind_active_runtime_store(None)
         reopened.stop()
+
+
+def test_membership_rejects_future_schema(runtime_store) -> None:
+    native = runtime_store.provider.native
+    base = {
+        "node_id": "node-future",
+        "status": "active",
+        "advertisement": NodeAdvertisement().describe(),
+        "joined_at": "2026-09-14T00:00:00+00:00",
+        "last_seen_at": "2026-09-14T00:00:00+00:00",
+        "updated_at": "2026-09-14T00:00:00+00:00",
+        "_schema_version": 99,
+    }
+    native.put(b"runtime:membership:node:node-future", json.dumps(base).encode())
+    with pytest.raises(ValueError, match="unsupported"):
+        VoodooStoreMembershipStore().get("node-future")
+
+
+def test_membership_reads_legacy_unversioned_record(runtime_store) -> None:
+    store = VoodooStoreMembershipStore()
+    joined = store.join(_node("node-legacy"))
+    legacy = joined.describe()
+    runtime_store.provider.native.upsert_record(
+        b"runtime.membership",
+        b"node-legacy",
+        json.dumps(legacy, sort_keys=True).encode(),
+    )
+
+    assert store.get("node-legacy") == joined
 
 
 def test_non_node_or_unauthenticated_principal_cannot_join(runtime_store) -> None:

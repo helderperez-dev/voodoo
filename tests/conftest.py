@@ -13,6 +13,19 @@ os.environ.setdefault("VOODOO_QUEUE_PROVIDER", "memory")
 
 
 @pytest.fixture(autouse=True)
+def _reset_ui_sessions():
+    """Keep UI sessions, bindings and reactive render tasks test-local."""
+    from voodoo.ui.events import ws_manager
+    from voodoo.ui.state import state_renderer
+
+    ws_manager.reset()
+    state_renderer.reset()
+    yield
+    ws_manager.reset()
+    state_renderer.reset()
+
+
+@pytest.fixture(autouse=True)
 def _clean_page_registry():
     """Isolate the global @page registry between tests."""
     from voodoo.core.routing import page_registry

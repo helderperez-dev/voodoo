@@ -1,13 +1,101 @@
 import os
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+import typer
 from typer.testing import CliRunner
 
 from voodoo.cli import app
-from voodoo.cli.scaffolding import _detect_ide, _sync_ai_assets
+from voodoo.cli.generate import generate
+from voodoo.cli.routes import routes
+from voodoo.cli.scaffolding import (
+    _detect_ide,
+    _fetch_text,
+    _ide_from_processes,
+    _sync_ai_assets,
+)
+from voodoo.cli.theme import use_theme
 
 runner = CliRunner()
+
+
+def test_fetch_text_recovers_expected_remote_failures() -> None:
+    with patch("voodoo.cli.scaffolding.urllib.request.urlopen", side_effect=TimeoutError()):
+        assert _fetch_text("https://example.invalid") is None
+
+
+def test_fetch_text_propagates_unexpected_provider_failures() -> None:
+    with patch(
+        "voodoo.cli.scaffolding.urllib.request.urlopen",
+        side_effect=RuntimeError("unexpected decoder failure"),
+    ):
+        try:
+            _fetch_text("https://example.invalid")
+        except RuntimeError as error:
+            assert str(error) == "unexpected decoder failure"
+        else:
+            raise AssertionError("unexpected provider failures must propagate")
+
+
+def test_process_ide_detection_recovers_when_process_probe_is_unavailable() -> None:
+    with patch(
+        "voodoo.cli.scaffolding.subprocess.run",
+        side_effect=FileNotFoundError("ps unavailable"),
+    ):
+        assert _ide_from_processes() is None
+
+
+def test_process_ide_detection_propagates_unexpected_probe_failures() -> None:
+    with patch(
+        "voodoo.cli.scaffolding.subprocess.run",
+        side_effect=RuntimeError("unexpected process probe failure"),
+    ):
+        try:
+            _ide_from_processes()
+        except RuntimeError as error:
+            assert str(error) == "unexpected process probe failure"
+        else:
+            raise AssertionError("unexpected process probe failures must propagate")
+
+
+def test_theme_cli_propagates_unexpected_resolution_failures(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "voodoo.ui.styles.presets.resolve_theme",
+        lambda _preset: (_ for _ in ()).throw(RuntimeError("theme invariant")),
+    )
+    with pytest.raises(RuntimeError, match="theme invariant"):
+        use_theme("default")
+
+
+def test_routes_cli_propagates_unexpected_application_import_failures(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "importlib.import_module",
+        lambda _name: (_ for _ in ()).throw(RuntimeError("application invariant")),
+    )
+    with pytest.raises(RuntimeError, match="application invariant"):
+        routes("main:app")
+
+
+def test_generate_cli_redacts_provider_failure_messages(monkeypatch) -> None:
+    secret = "sk-" + "b" * 24
+
+    class Provider:
+        async def complete(self, *_args, **_kwargs):
+            raise RuntimeError(f"provider failed api_key={secret}")
+
+    messages: list[str] = []
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("voodoo.ai.providers.get_provider", lambda *_args, **_kwargs: Provider())
+    monkeypatch.setattr("voodoo.cli.generate.terminal.error", lambda message, **_kwargs: messages.append(message))
+
+    with pytest.raises(typer.Exit):
+        generate("tool", "describe a tool")
+
+    assert secret not in messages[0]
+    assert "[REDACTED]" in messages[0]
 
 
 def test_detect_ide_from_env():
@@ -135,6 +223,13 @@ def test_cli_auth_secret_key():
     assert "VOODOO_SECRET_KEY" in result.output
 
 
+def test_cli_auth_secret_key_raw():
+    result = runner.invoke(app, ["auth", "secret-key", "--raw"])
+    assert result.exit_code == 0
+    assert "VOODOO_SECRET_KEY" not in result.output
+    assert len(result.output.strip()) >= 32
+
+
 def test_cli_auth_hash_password():
     result = runner.invoke(app, ["auth", "hash-password", "MyPassword123!"])
     assert result.exit_code == 0
@@ -211,7 +306,7 @@ def test_cli_version_shows_version():
 
 
 def test_cli_new_minimal_scaffold(tmp_path: Path):
-    """voodoo new should create a minimal project with folder-based routes only."""
+    """voodoo new keeps routes minimal but includes production test scaffolding."""
     project_dir = tmp_path / "minimal_app"
     result = runner.invoke(app, ["new", str(project_dir), "--template", ""])
     assert result.exit_code == 0
@@ -230,7 +325,28 @@ def test_cli_new_minimal_scaffold(tmp_path: Path):
     assert not (project_dir / "app" / "workers").exists()
     assert not (project_dir / "app" / "models.py").exists()
     assert not (project_dir / "app" / "styles.css").exists()
-    assert not (project_dir / "tests").exists()
+    assert (project_dir / "tests" / "test_app.py").exists()
+    assert (project_dir / ".github" / "workflows" / "quality.yml").exists()
+
+
+def test_cli_new_generated_project_compiles_and_matches_runtime_contract(
+    tmp_path: Path,
+) -> None:
+    """The canonical scaffold must be executable without network access."""
+    project_dir = tmp_path / "generated_app"
+    result = runner.invoke(app, ["new", str(project_dir), "--template", ""])
+    assert result.exit_code == 0, result.output
+
+    compile_result = subprocess.run(
+        [sys.executable, "-m", "compileall", "-q", str(project_dir / "app")],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert compile_result.returncode == 0, compile_result.stderr
+    pyproject = (project_dir / "pyproject.toml").read_text()
+    assert '"voodoo-framework>=3.2,<3.3"' in pyproject
+    assert "Runtime creates application.vstore" in (project_dir / "voodoo.toml").read_text()
     assert not (project_dir / "main.py").exists()
     assert not (project_dir / ".env").exists()
     assert not (project_dir / ".data").exists()
@@ -250,7 +366,7 @@ def test_cli_new_page_content(tmp_path: Path):
     page_content = (project_dir / "app" / "page.py").read_text()
     assert "from voodoo.ui import" in page_content
     # File-based convention: a module-level `page` function drives routing.
-    assert "def page(request)" in page_content
+    assert "def page(request: object)" in page_content
     # No @page decorator in the scaffold (it conflicts with the file scanner
     # when app/page.py is imported via the folder convention).
     assert "@page" not in page_content
@@ -270,7 +386,7 @@ def test_cli_new_page_content(tmp_path: Path):
 
     # The dynamic route should use a bracket folder + typed segment.
     user_content = (project_dir / "app" / "users" / "[id]" / "page.py").read_text()
-    assert "def page(request, id: int)" in user_content
+    assert "def page(request: object, id: int)" in user_content
 
 
 def test_cli_routes_command(tmp_path: Path):
@@ -348,6 +464,7 @@ def test_cli_start_uses_safe_production_defaults(
     (tmp_path / "main.py").write_text("app = object()\n")
     for name in (
         "VOODOO_ENV",
+        "VOODOO_SECRET_KEY",
         "VOODOO_HOST",
         "VOODOO_PORT",
         "PORT",
@@ -356,6 +473,7 @@ def test_cli_start_uses_safe_production_defaults(
         "WEBSOCKETS_MAX_NUM_HEADERS",
     ):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("VOODOO_SECRET_KEY", "test-production-secret-" * 2)
 
     with patch("uvicorn.run") as run:
         result = runner.invoke(app, ["start"])
@@ -372,9 +490,9 @@ def test_cli_start_uses_safe_production_defaults(
         ws="websockets",
         h11_max_incomplete_event_size=5_242_880,
     )
-    assert os.environ["VOODOO_ENV"] == "production"
-    assert os.environ["WEBSOCKETS_MAX_LINE_LENGTH"] == "8388608"
-    assert os.environ["WEBSOCKETS_MAX_NUM_HEADERS"] == "256"
+    assert "VOODOO_ENV" not in os.environ
+    assert "WEBSOCKETS_MAX_LINE_LENGTH" not in os.environ
+    assert "WEBSOCKETS_MAX_NUM_HEADERS" not in os.environ
 
 
 def test_cli_start_respects_explicit_configuration(
@@ -411,12 +529,47 @@ def test_cli_start_respects_explicit_configuration(
     assert os.environ["VOODOO_ENV"] == "staging"
 
 
+def test_cli_start_rejects_wildcard_proxy_trust(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """Forwarded headers must never be trusted from every source."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("VOODOO_ENV", "staging")
+    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "*")
+
+    with patch("uvicorn.run") as run:
+        result = runner.invoke(app, ["start", "main:app"])
+
+    assert result.exit_code == 1
+    assert "FORWARDED_ALLOW_IPS" in result.output
+    run.assert_not_called()
+
+
+def test_cli_start_rejects_development_secret_in_production(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """The production command must fail before starting an unsafe server."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("VOODOO_ENV", raising=False)
+    monkeypatch.delenv("VOODOO_SECRET_KEY", raising=False)
+
+    with patch("uvicorn.run") as run:
+        result = runner.invoke(app, ["start", "main:app"])
+
+    assert result.exit_code == 1
+    assert "VOODOO_SECRET_KEY" in result.output
+    run.assert_not_called()
+
+
 def test_cli_start_falls_back_to_folder_routing_app(
     tmp_path: Path,
     monkeypatch,
 ):
     """Projects without main.py should use the folder-routing application."""
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("VOODOO_SECRET_KEY", "test-production-secret-" * 2)
 
     with patch("uvicorn.run") as run:
         result = runner.invoke(app, ["start"])

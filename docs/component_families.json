@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "families": [
+    {
+      "name": "tabular-data",
+      "preferred": "DataTable",
+      "alternatives": ["Table", "EnhancedDataTable"],
+      "guidance": "Use DataTable for sortable/filterable records; use Table only for a deliberately static, small table. Migrate EnhancedDataTable by moving its data/query behavior into the DataTable data contract."
+    },
+    {
+      "name": "list-data",
+      "preferred": "List",
+      "alternatives": ["ListBox", "DataList", "ListItem"],
+      "guidance": "Use List for read-only collections, ListBox for selectable options, and DataList for label/value metadata. Do not introduce a new list variant."
+    },
+    {
+      "name": "navigation-links",
+      "preferred": "Link",
+      "alternatives": ["A", "NavLink", "NavLinkItem"],
+      "guidance": "Use Link for application navigation and A for a raw semantic anchor. Use NavLink only inside navigation composition; migrate ad-hoc link wrappers to Link."
+    },
+    {
+      "name": "dialog-overlays",
+      "preferred": "Dialog",
+      "alternatives": ["Modal", "AlertDialog"],
+      "guidance": "Use Dialog for general interactive overlays and AlertDialog for destructive confirmation. Modal remains a compatibility spelling and should not receive new surface area."
+    }
+  ]
+}

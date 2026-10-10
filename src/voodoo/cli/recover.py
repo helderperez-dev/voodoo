@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 import typer
 
 from voodoo.cli import terminal
 
 
-def _resolve_store(store_path: str | None):
+def _resolve_store(store_path: str | None) -> Any:
     """Return canonical execution storage unless a legacy path is explicit."""
     from voodoo.cli.context import acquire_execution_store
     from voodoo.runtime.persistence import JSONFileExecutionStore
@@ -39,7 +40,7 @@ def recover(
     json_mode: bool = typer.Option(
         False, "--json", help="Output machine-readable JSON"
     ),
-):
+) -> None:
     """Reload unfinished executions from the store into the engine."""
     from voodoo.runtime.execution.engine import engine as runtime_engine
 

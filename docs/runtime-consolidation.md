@@ -2,7 +2,10 @@
 
 This document records product/architecture constraints that keep Voodoo coherent as the runtime grows.
 
-1. **`voodoo create` is the primary onboarding path.** It demonstrates the complete local runtime. `voodoo new` is an intentionally minimal UI/routing scaffold for developers who want to opt into capabilities later.
+1. **`voodoo new` is the primary onboarding path.** It creates the canonical
+   Store-first application shape; capabilities are added through the same
+   Runtime as the project grows. `voodoo create` is only a deprecation-window
+   compatibility alias.
 2. **The base package stays provider-SDK free.** AI provider SDKs are optional dependencies and are imported lazily. Installing `voodoo-framework` must not install OpenAI, Anthropic, Gemini or Ollama SDKs.
 3. **Execution has a semantic boundary.** Meaningful work is represented as an Execution when durability, authorization, traceability, effects, accounting, recovery, waiting, scheduling or operational observability matters. Internal implementation calls do not become Executions by default.
 4. **Similar primitives remain distinct.** Reactive state, domain Models, Memory and Execution state solve different problems. UI events, application events and telemetry solve different problems. Tool, Capability, Task, Agent and Execution solve different problems.

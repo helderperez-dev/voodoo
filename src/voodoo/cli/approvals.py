@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
+from typing import Any, cast
 
 import typer
 
@@ -33,7 +34,7 @@ approvals_app = typer.Typer(
 )
 
 
-def _resolve_store(store_path: str | None):
+def _resolve_store(store_path: str | None) -> tuple[Any, str]:
     """Return canonical execution storage unless a legacy path is explicit."""
     from voodoo.cli.context import acquire_execution_store
     from voodoo.runtime.persistence import JSONFileExecutionStore
@@ -61,11 +62,13 @@ def _load_app(app_str: str | None) -> None:
     getattr(mod, attr, None)
 
 
-def _list_approvals(store, pending_only: bool) -> list[dict]:
+def _list_approvals(store: Any, pending_only: bool) -> list[dict[str, Any]]:
     """Read approvals from a store, tolerating stores without the seam."""
     if not hasattr(store, "load_approvals"):
         return []
-    return store.load_approvals(pending_only=pending_only)
+    return cast(
+        list[dict[str, Any]], store.load_approvals(pending_only=pending_only)
+    )
 
 
 @approvals_app.command("list")
@@ -84,7 +87,7 @@ def list_approvals(
     json_mode: bool = typer.Option(
         False, "--json", help="Machine-readable JSON output"
     ),
-):
+) -> None:
     """List approvals — pending and decided."""
     store, resolved = _resolve_store(store_path)
     _load_app(app_str)
@@ -127,7 +130,7 @@ def show_approval(
     json_mode: bool = typer.Option(
         False, "--json", help="Machine-readable JSON output"
     ),
-):
+) -> None:
     """Show one approval in detail."""
     store, resolved = _resolve_store(store_path)
     approval = (
@@ -135,7 +138,8 @@ def show_approval(
     )
     if approval is None:
         terminal.error(
-            f"approval for execution '{execution_id}' not found in {resolved}"
+            f"approval for execution '{execution_id}' not found in {resolved}",
+            hint="check the execution id and Store path, then retry",
         )
         raise typer.Exit(1)
 
@@ -197,11 +201,14 @@ def _decide(
                 }
             )
         else:
-            terminal.error(f"approval for execution '{execution_id}' not found")
+            terminal.error(
+                f"approval for execution '{execution_id}' not found",
+                hint="check the execution id with 'voodoo inspect executions'",
+            )
         raise typer.Exit(1)
 
     decide_fn = runtime_engine.approve if decision == "approve" else runtime_engine.deny
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
     if decision == "approve":
         kwargs["note"] = message
     else:
@@ -247,7 +254,7 @@ def approve_cmd(
     json_mode: bool = typer.Option(
         False, "--json", help="Machine-readable JSON output"
     ),
-):
+) -> None:
     """Approve a waiting execution — it resumes on a worker."""
     _decide(
         execution_id,
@@ -276,7 +283,7 @@ def deny_cmd(
     json_mode: bool = typer.Option(
         False, "--json", help="Machine-readable JSON output"
     ),
-):
+) -> None:
     """Deny a waiting execution — it fails with the denial reason."""
     _decide(
         execution_id,

@@ -183,9 +183,25 @@ class ApprovalCard(Component):
         *,
         on_approve: EventHandler | None = None,
         on_deny: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)
+        unavailable = disabled or read_only or loading or bool(error)
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(**state_attrs, **kwargs)
         approval_id = _identifier(
             approval, str(_read(approval, "approval_id", "approval"))
         )
@@ -198,12 +214,22 @@ class ApprovalCard(Component):
         actions: list[Component] = []
         if on_deny is not None:
             actions.append(
-                Button("Deny", on_click=on_deny, variant="ghost", value=approval_id)
+                Button(
+                    "Deny",
+                    on_click=on_deny if not unavailable else None,
+                    variant="ghost",
+                    value=approval_id,
+                    disabled=unavailable,
+                )
             )
         if on_approve is not None:
             actions.append(
                 Button(
-                    "Approve", on_click=on_approve, variant="primary", value=approval_id
+                    "Approve",
+                    on_click=on_approve if not unavailable else None,
+                    variant="primary",
+                    value=approval_id,
+                    disabled=unavailable,
                 )
             )
         self.children = (
@@ -212,6 +238,12 @@ class ApprovalCard(Component):
             Text(str(capability), class_="vd-system-id") if capability else None,
             _ActionRow(*actions) if actions else None,
         )
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class WorldEntityInspector(Component):

@@ -1,11 +1,14 @@
 """Tests for Sprint 9 runtime configuration, env interpolation, precedence, and validation."""
 
+from __future__ import annotations
+
 import os
 import tempfile
 from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from voodoo.adapters.registry import ProviderRegistry
 from voodoo.config import (
@@ -18,8 +21,149 @@ from voodoo.config import (
     VoodooConfig,
     get_config,
     interpolate_env_vars,
+    validate_production_config,
 )
 from voodoo.core.errors import ConfigurationError
+
+
+class TestProductionConfiguration:
+    """Production mode rejects development security behavior."""
+
+    def test_production_defaults_are_browser_safe(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("VOODOO_ENV", "production")
+        monkeypatch.delenv("VOODOO_CORS_ORIGINS", raising=False)
+        monkeypatch.delenv("VOODOO_CORS_ALLOW_CREDENTIALS", raising=False)
+        monkeypatch.delenv("VOODOO_CSRF_ENABLED", raising=False)
+
+        resolved = get_config(overrides={"auth": {"secret_key": "x" * 48}})
+
+        assert resolved.debug is False
+        assert resolved.auth.cookie_secure is True
+        assert resolved.security.hsts_enabled is True
+        assert resolved.security.csrf_enabled is True
+        assert resolved.security.cors_origins == []
+        assert resolved.security.cors_allow_credentials is False
+        assert resolved.security.cors_allow_methods == [
+            "GET",
+            "HEAD",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS",
+        ]
+        assert "*" not in resolved.security.cors_allow_headers
+        assert "X-CSRF-Token" in resolved.security.cors_allow_headers
+        assert resolved.security.permissions_policy == (
+            "camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+        )
+        assert resolved.security.csp_directives["script-src"] == "'self'"
+        assert resolved.security.csp_directives["style-src"] == "'self'"
+        validate_production_config(resolved)
+
+    def test_default_signing_secret_is_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("VOODOO_ENV", "production")
+        monkeypatch.delenv("VOODOO_SECRET_KEY", raising=False)
+
+        with pytest.raises(ConfigurationError, match="VOODOO_SECRET_KEY"):
+            validate_production_config(get_config(overrides={}))
+
+    @pytest.mark.parametrize(
+        ("overrides", "message"),
+        [
+            ({"debug": True}, "debug mode"),
+            ({"auth": {"cookie_secure": False}}, "cookies must use Secure"),
+            ({"security": {"hsts_enabled": False}}, "HSTS"),
+            ({"security": {"csrf_enabled": False}}, "CSRF"),
+            (
+                {
+                    "security": {
+                        "cors_origins": ["*"],
+                        "cors_allow_credentials": True,
+                    }
+                },
+                "credentialed CORS",
+            ),
+            (
+                {"security": {"cors_allow_methods": ["*"]}},
+                "CORS methods",
+            ),
+            (
+                {"security": {"cors_allow_headers": ["*"]}},
+                "CORS headers",
+            ),
+            (
+                {"security": {"permissions_policy": "camera=*"}},
+                "Permissions-Policy",
+            ),
+            (
+                {"security": {"cors_origins": ["https://example.com/docs"]}},
+                "absolute HTTP",
+            ),
+            (
+                {"security": {"cors_origins": ["https://example.com:bad"]}},
+                "absolute HTTP",
+            ),
+            (
+                {"security": {"cors_origins": ["https://user:pass@example.com"]}},
+                "absolute HTTP",
+            ),
+            (
+                {"security": {"cors_origins": ["*"]}},
+                "wildcard",
+            ),
+            (
+                {
+                    "security": {
+                        "csp_directives": {
+                            "default-src": "'self'",
+                            "script-src": "'self' 'unsafe-inline'",
+                        }
+                    }
+                },
+                "unsafe-inline",
+            ),
+            (
+                {
+                    "security": {
+                        "csp_directives": {
+                            "default-src": "'self'",
+                            "script-src": "'self'",
+                            "style-src": "'self' 'unsafe-inline'",
+                        }
+                    }
+                },
+                "style-src",
+            ),
+        ],
+    )
+    def test_unsafe_production_overrides_are_rejected(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        overrides: dict[str, object],
+        message: str,
+    ) -> None:
+        monkeypatch.setenv("VOODOO_ENV", "production")
+        monkeypatch.setenv("VOODOO_SECRET_KEY", "unique-production-secret-" * 2)
+
+        with pytest.raises(ConfigurationError, match=message):
+            validate_production_config(get_config(overrides=overrides))
+
+    def test_security_limits_reject_non_positive_or_unbounded_values(self) -> None:
+        from voodoo.config import AuthConfig, SecurityConfig
+
+        with pytest.raises(ValidationError):
+            SecurityConfig(rate_limit_requests=0)
+        with pytest.raises(ValidationError):
+            SecurityConfig(rate_limit_window=86_401)
+        with pytest.raises(ValidationError):
+            AuthConfig(token_expiry_seconds=0)
+        with pytest.raises(ValidationError):
+            ObjectsConfig(max_upload_bytes=10 * 1024 * 1024 * 1024 + 1)
 
 
 def test_env_interpolation():

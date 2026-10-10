@@ -10,6 +10,7 @@ import pytest
 
 from voodoo.core.errors import ConfigurationError
 from voodoo.runtime.scheduling import ScheduleService
+from voodoo.runtime.store import RuntimeStore, StoreConfig, bind_active_runtime_store
 from voodoo.storage.scheduler import create_schedule_store
 from voodoo.storage.scheduler import store as scheduler_module
 from voodoo.storage.scheduler.store import VoodooStoreScheduleStore
@@ -169,6 +170,8 @@ def test_store_scheduler_preserves_management_surface(monkeypatch):
     assert record["task_type"] == "email.send"
     assert json.loads(record["payload"]) == {"x": 1}
     assert record["active"] == 1
+    metadata_raw = native.kv[next(key for key in native.kv if key.startswith(b"voodoo:scheduler:meta:"))]
+    assert json.loads(metadata_raw)["_schema_version"] == 1
 
     assert [item["id"] for item in store.list_all()] == ["s1"]
     assert store.pause("s1") is True
@@ -211,6 +214,61 @@ def test_provider_resolution_rejects_old_binding_instead_of_falling_back(
     _bind(monkeypatch, OldNative())
     with pytest.raises(ConfigurationError, match="too old"):
         create_schedule_store(tmp_path / "must-not-be-used.db")
+
+
+def test_native_scheduler_metadata_collection_survives_restart(tmp_path):
+    path = tmp_path / "scheduler.vstore"
+    runtime = RuntimeStore(StoreConfig(path=path))
+    runtime.start()
+    bind_active_runtime_store(runtime)
+    now = datetime.now(UTC) + timedelta(minutes=1)
+    try:
+        store = VoodooStoreScheduleStore()
+        store.create("native-persisted", "persisted", "at", now.isoformat(), now, "work")
+        assert runtime.provider.native.collection_definition(
+            b"runtime.scheduler_metadata"
+        ) == (1, b"json")
+        assert runtime.provider.native.get_record(
+            b"runtime.scheduler_metadata", b"native-persisted"
+        ) is not None
+    finally:
+        bind_active_runtime_store(None)
+        runtime.stop()
+
+    reopened_runtime = RuntimeStore(StoreConfig(path=path))
+    reopened_runtime.start()
+    bind_active_runtime_store(reopened_runtime)
+    try:
+        reopened = VoodooStoreScheduleStore()
+        assert reopened.get("native-persisted")["name"] == "persisted"
+        assert [item["id"] for item in reopened.list_all()] == ["native-persisted"]
+    finally:
+        bind_active_runtime_store(None)
+        reopened_runtime.stop()
+
+
+def test_native_scheduler_metadata_rejects_future_schema(tmp_path):
+    runtime = RuntimeStore(StoreConfig(path=tmp_path / "scheduler-future.vstore"))
+    runtime.start()
+    bind_active_runtime_store(runtime)
+    try:
+        native = runtime.provider.native
+        native.put(
+            scheduler_module._metadata_key("future-schedule"),
+            json.dumps(
+                {
+                    "_schema_version": 99,
+                    "id": "future-schedule",
+                    "native_kind": "schedule",
+                    "native_id": "00" * 16,
+                }
+            ).encode(),
+        )
+        with pytest.raises(ValueError, match="unsupported"):
+            VoodooStoreScheduleStore().get("future-schedule")
+    finally:
+        bind_active_runtime_store(None)
+        runtime.stop()
 
 
 @pytest.mark.asyncio

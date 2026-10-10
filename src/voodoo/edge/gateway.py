@@ -16,7 +16,7 @@ events. Credentials never appear in events, logs, or telemetry.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from voodoo.edge.auth import authenticate_device, consume_enrollment
 from voodoo.edge.errors import (
@@ -37,8 +37,13 @@ from voodoo.edge.models import (
     TransportKind,
 )
 from voodoo.edge.protocol import (
+    AuthPayload,
     EdgeMessage,
     EdgeMessageType,
+    EffectAckPayload,
+    EventPayload,
+    HelloPayload,
+    StateSyncPayload,
     decode_message,
     make_message,
 )
@@ -252,7 +257,7 @@ class DeviceGateway:
     async def handle_auth(
         self, message: EdgeMessage, *, transport: TransportKind
     ) -> EdgeMessage:
-        payload = message.typed_payload()  # AuthPayload
+        payload = cast(AuthPayload, message.typed_payload())
         ctx, session = await self.connect(
             payload.credential,
             claimed_device_id=payload.device_id or None,
@@ -275,7 +280,7 @@ class DeviceGateway:
     async def handle_hello(
         self, message: EdgeMessage, ctx: AuthenticatedDeviceContext
     ) -> EdgeMessage:
-        payload = message.typed_payload()  # HelloPayload
+        payload = cast(HelloPayload, message.typed_payload())
         device = await self._require_device(ctx.device_id)
 
         # Update canonical capability set from the announcement (EDGE §13).
@@ -314,7 +319,7 @@ class DeviceGateway:
         without creating Executions; semantic events become Intents
         executed by the engine.
         """
-        payload = message.typed_payload()  # EventPayload
+        payload = cast(EventPayload, message.typed_payload())
         if await self._store.seen_message(message.message_id):
             # Idempotent duplicate: replay the original response.
             stored = await self._store.get_stored_response(message.message_id)
@@ -380,7 +385,9 @@ class DeviceGateway:
                 return {"ingested": True, "event": event_name}
 
             execution = await self._engine.execute(
-                intent, telemetry_only, actor=f"device:{ctx.device_id}"
+                intent,
+                cast(Any, telemetry_only),
+                actor=f"device:{ctx.device_id}",
             )
             execution_id = execution.id
 
@@ -402,7 +409,7 @@ class DeviceGateway:
         self, message: EdgeMessage, ctx: AuthenticatedDeviceContext
     ) -> EdgeMessage:
         """Versioned state ingestion — stale writes rejected (EDGE §22–§24)."""
-        payload = message.typed_payload()  # StateSyncPayload
+        payload = cast(StateSyncPayload, message.typed_payload())
         device = await self._require_device(ctx.device_id)
 
         # Resource limit: state size (EDGE §76).
@@ -449,7 +456,7 @@ class DeviceGateway:
         self, message: EdgeMessage, ctx: AuthenticatedDeviceContext
     ) -> EdgeMessage:
         """Record a device's acknowledgement of a delivered effect."""
-        payload = message.typed_payload()  # EffectAckPayload
+        payload = cast(EffectAckPayload, message.typed_payload())
         delivery = await self._store.get_effect_delivery(payload.effect_id)
         if delivery is None:
             raise EffectNotFoundError(f"Effect '{payload.effect_id}' not found")
@@ -691,5 +698,11 @@ class DeviceGateway:
             if trace_id:
                 body["trace_id"] = trace_id
             await mesh.broadcast(event, redact(body))
-        except Exception:
-            pass
+        except Exception as error:
+            from voodoo.security.redaction import redact_string
+
+            logger.warning(
+                "edge event emission failed event=%s error=%s",
+                event,
+                redact_string(str(error)),
+            )

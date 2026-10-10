@@ -284,6 +284,51 @@ async def test_queue_completion_release_reaper_and_manual_retry(monkeypatch):
     assert retried.attempts == 0
 
 
+@pytest.mark.asyncio
+async def test_compensation_survives_runtime_store_queue_boundary(tmp_path, monkeypatch):
+    """A failed effect's compensation is durable and deduplicated natively."""
+    from voodoo.primitives.effect import Effect
+    from voodoo.runtime.scheduling import workers as worker_queue
+    from voodoo.runtime.store import (
+        RuntimeStore,
+        StoreConfig,
+        bind_active_runtime_store,
+    )
+
+    runtime = RuntimeStore(StoreConfig(path=tmp_path / "compensation.vstore"))
+    runtime.start()
+    bind_active_runtime_store(runtime)
+    queue = VoodooStoreQueue()
+    await queue.setup()
+    monkeypatch.setattr(worker_queue, "_queue", queue)
+
+    try:
+        effect = Effect(name="charge_card", reversible=True).configure_compensation(
+            "refund_card",
+            payload={"amount": 42, "currency": "USD"},
+            trigger="on_failure",
+        )
+
+        first = await worker_queue.enqueue_compensation(effect, reason="timeout")
+        duplicate = await worker_queue.enqueue_compensation(effect, reason="retry")
+
+        assert duplicate.id == first.id
+        assert first.type == "refund_card"
+        assert first.idempotency_key == f"compensate:{effect.id}"
+        assert first.payload == {
+            "version": 1,
+            "effect_id": effect.id,
+            "effect_name": "charge_card",
+            "effect_payload": {"amount": 42, "currency": "USD"},
+            "reason": "timeout",
+        }
+        records = await queue.list(task_type="refund_card")
+        assert [record.id for record in records] == [first.id]
+    finally:
+        bind_active_runtime_store(None)
+        runtime.stop()
+
+
 def test_store_job_ids_round_trip_through_public_integer_surface():
     values = [0, 1, 2**64, (1 << 128) - 1]
     for value in values:

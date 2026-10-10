@@ -8,10 +8,14 @@ Agent compatibility.
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+from typing import Any, cast
 
 from voodoo.ai.agent_legacy import Agent as LegacyAgent
 from voodoo.ai.agent_legacy import AgentRun
+from voodoo.security.redaction import redact_string
+
+_logger = logging.getLogger("voodoo.ai.runtime_truth")
 
 
 class RuntimeTruthAgent(LegacyAgent):
@@ -23,24 +27,27 @@ class RuntimeTruthAgent(LegacyAgent):
             from voodoo.runtime.context import current_context
 
             return current_context()
-        except Exception:
+        except ImportError as error:
+            _logger.warning(
+                "runtime context lookup failed error=%s", redact_string(str(error))
+            )
             return None
 
     def _canonical_execution_id(self, run_record: AgentRun) -> str | None:
         """Return the canonical execution id when the run is engine-backed."""
         if run_record.execution_id:
-            return run_record.execution_id
+            return str(run_record.execution_id)
         ctx = self._runtime_context()
         if ctx is not None and run_record.run_id == ctx.execution_id:
-            return ctx.execution_id
+            return cast(str, ctx.execution_id)
         return None
 
     def _canonical_trace_id(self, run_record: AgentRun) -> str | None:
         """Prefer the runtime trace over optional telemetry-local correlation."""
         ctx = self._runtime_context()
         if ctx is not None and run_record.run_id == ctx.execution_id:
-            return ctx.trace_id
-        return run_record.trace_id
+            return cast(str, ctx.trace_id)
+        return str(run_record.trace_id) if run_record.trace_id is not None else None
 
     def _apply_lineage(self, run_record: AgentRun) -> tuple[str | None, str | None]:
         execution_id = self._canonical_execution_id(run_record)
@@ -113,8 +120,12 @@ class RuntimeTruthAgent(LegacyAgent):
         )
         try:
             self.memory.write(entry)
-        except Exception:
-            pass
+        except Exception as error:
+            _logger.warning(
+                "runtime-truth memory write failed run_id=%s error=%s",
+                run_record.run_id,
+                redact_string(str(error)),
+            )
 
     async def _execute_tool_as_child_execution(
         self,
@@ -135,8 +146,11 @@ class RuntimeTruthAgent(LegacyAgent):
 
         intent = Intent(
             name=f"tool.{name}",
-            description=f"Tool call: {name}",
-            params={"tool": name, "arguments": arguments},
+            params={
+                "description": f"Tool call: {name}",
+                "tool": name,
+                "arguments": arguments,
+            },
             requires=list(spec.permissions if spec else []),
         )
 

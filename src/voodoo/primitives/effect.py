@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -56,6 +56,12 @@ class Effect(BaseModel):
     reversible: bool = False
     idempotent: bool = False
     idempotency_key: str | None = None
+    # Compensation is metadata, not an implicit second execution path. The
+    # Runtime/Queue may use it to enqueue an explicit compensating operation.
+    compensation_name: str | None = None
+    compensation_payload: Any | None = None
+    compensation_idempotency_key: str | None = None
+    compensation_trigger: Literal["manual", "on_failure"] = "manual"
     status: EffectStatus = EffectStatus.PENDING
     result: Any | None = None
     error: str | None = None
@@ -90,6 +96,40 @@ class Effect(BaseModel):
         if not self.reversible:
             raise ValueError(f"Effect '{self.name}' is not reversible")
         self.status = EffectStatus.ROLLED_BACK
+
+    def configure_compensation(
+        self,
+        name: str,
+        *,
+        payload: Any | None = None,
+        idempotency_key: str | None = None,
+        trigger: Literal["manual", "on_failure"] = "manual",
+    ) -> Effect:
+        """Declare the explicit operation used to compensate this effect.
+
+        The key is stable for the effect, making retries and crash recovery
+        safe for queue providers that deduplicate active idempotency keys.
+        Calling this on a non-reversible effect is rejected early.
+        """
+        if not self.reversible:
+            raise ValueError(f"Effect '{self.name}' is not reversible")
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValueError("compensation name must not be empty")
+        self.compensation_name = normalized_name
+        self.compensation_payload = payload
+        self.compensation_idempotency_key = idempotency_key or (
+            f"compensate:{self.id}"
+        )
+        if trigger not in ("manual", "on_failure"):
+            raise ValueError("compensation trigger must be 'manual' or 'on_failure'")
+        self.compensation_trigger = trigger
+        return self
+
+    @property
+    def has_compensation(self) -> bool:
+        """Whether an explicit compensation operation has been declared."""
+        return self.compensation_name is not None
 
     # -- queries -----------------------------------------------------------
 
@@ -126,6 +166,11 @@ class Effect(BaseModel):
             "reversible": self.reversible,
             "idempotent": self.idempotent,
             "idempotency_key": self.idempotency_key,
+            "compensation_name": self.compensation_name,
+            "compensation_payload": self.compensation_payload,
+            "compensation_idempotency_key": self.compensation_idempotency_key,
+            "compensation_trigger": self.compensation_trigger,
+            "has_compensation": self.has_compensation,
             "succeeded": self.succeeded,
             "has_result": self.result is not None,
         }

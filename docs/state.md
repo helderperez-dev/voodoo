@@ -2,7 +2,9 @@
 
 ## What it is
 
-`state(initial)` creates an observable value cell. Read with `get()`, update with `set()` / `update()`, and subscribe to changes with `subscribe()`. When a state cell changes inside an event handler, Voodoo re-renders the page and broadcasts a DOM patch over WebSocket — you write zero JS.
+`state(initial)` creates an observable value cell. Interactive state is isolated
+per browser session by default. Read with `get()`, update with `set()` /
+`update()`, and let Voodoo target the resulting DOM patch to that session.
 
 ## Minimal example
 
@@ -23,16 +25,20 @@ count.get()  # 6
 ### In a page
 
 ```python
-from voodoo import page, state, Div, Text, Button
+from voodoo import page, state
+from voodoo.ui import Button, Stack, Text
 
 counter = state(0)
 
 
 @page("/")
 def counter_page():
-    return Div(
+    async def increment():
+        counter.update(lambda value: value + 1)
+
+    return Stack(
         Text(f"Count: {counter.get()}"),
-        Button("Increment", onclick="vd.event('increment', 'counter')"),
+        Button("Increment", on_click=increment),
     )
 ```
 
@@ -76,13 +82,33 @@ count.set(count.get() + 1)  # → page re-rendered → patch broadcast over WS
 `cells`, you keep manual control: call `renderer.rerender(element_id)` to
 re-render and broadcast a DOM patch.
 
+### State scopes
+
+Session isolation is the safe default:
+
+```python
+draft = state("")  # each browser session sees its own value
+```
+
+Use application scope only when every session should deliberately observe the
+same value:
+
+```python
+service_status = state("healthy", scope="application")
+```
+
+Session values, subscriptions, render bindings and callable handlers are
+released after the final WebSocket disconnect and idle grace period.
+
 ### WebSocket patches
 
-When the browser sends an event (e.g. button click), the server-side event handler mutates state, and Voodoo broadcasts a `patch` message over WebSocket. The client swaps the element's `outerHTML`.
+When a browser event mutates state, Voodoo targets the `patch` message to the
+owning UI session. It is never implicitly broadcast to other users.
 
 ## API reference
 
-- `state(initial=None) -> State` — create a reactive cell.
+- `state(initial=None, *, scope="session") -> State` — create isolated state;
+  pass `scope="application"` for deliberate process-wide sharing.
 - `State.get()` — read the current value.
 - `State.set(value)` — set a new value and notify subscribers.
 - `State.update(fn)` — apply `fn` to the current value.

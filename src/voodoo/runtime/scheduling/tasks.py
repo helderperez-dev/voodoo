@@ -32,11 +32,18 @@ import inspect
 import logging
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger("voodoo.runtime.scheduling.tasks")
 
 __all__ = ["task", "TaskError"]
+
+
+def _safe_failure_reason(error: BaseException) -> str:
+    """Return a bounded reason safe for logs and task error messages."""
+    from voodoo.security.redaction import redact_string
+
+    return redact_string(f"{type(error).__name__}: {error}")[:512]
 
 
 class TaskError(Exception):
@@ -90,20 +97,23 @@ async def _run_task(
             latency = (time.perf_counter() - start) * 1000
             telemetry_store.record_trace(f"task:{task_name}", latency, error=True)
             logger.warning(
-                "task %s attempt %d/%d failed: %r",
+                "task %s attempt %d/%d failed: %s",
                 task_name,
                 attempt,
                 retries + 1,
-                exc,
+                _safe_failure_reason(exc),
             )
             if attempt > retries:
                 raise TaskError(
-                    f"task {task_name!r} failed after {attempt} attempt(s): {exc}",
+                    f"task {task_name!r} failed after {attempt} attempt(s): "
+                    f"{_safe_failure_reason(exc)}",
                     task_name=task_name,
                     attempts=attempt,
                     timeout=timeout,
                 ) from last_exc
-            delay = backoff_base * (2 ** (attempt - 1))
+            from voodoo.storage.queue.interfaces import retry_delay
+
+            delay = retry_delay(backoff_base, attempt)
             await asyncio.sleep(delay)
             continue
         else:
@@ -161,18 +171,19 @@ def task(
                 func, task_name, retries, timeout, backoff, args, kwargs
             )
 
-        wrapper.task_name = task_name
-        wrapper.retries = retries
-        wrapper.timeout = timeout
-        wrapper.is_task = True
+        decorated = cast(Any, wrapper)
+        decorated.task_name = task_name
+        decorated.retries = retries
+        decorated.timeout = timeout
+        decorated.is_task = True
 
         async def enqueue_method(payload: Any = None) -> None:
             await _enqueue_task(task_name, payload, retries + 1)
 
-        wrapper.enqueue = enqueue_method
+        decorated.enqueue = enqueue_method
 
         _register_task_worker(task_name, func, timeout, backoff)
-        return wrapper
+        return cast(Callable, decorated)
 
     if _func is not None and callable(_func):
         return decorator(_func)

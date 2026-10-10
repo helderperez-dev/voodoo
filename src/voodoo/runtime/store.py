@@ -8,7 +8,8 @@ on the binding directly.
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from importlib import import_module
 from pathlib import Path
@@ -69,6 +70,7 @@ class StoreConfig:
     enabled: bool = True
     durability: str = "data"
     repair_torn_tail: bool = True
+    max_bytes: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -81,6 +83,7 @@ class StoreConfig:
             "enabled",
             "durability",
             "repair_torn_tail",
+            "max_bytes",
         }
         provider = (
             data.get("provider") or os.getenv("VOODOO_STORE_PROVIDER") or "voodoo"
@@ -97,12 +100,17 @@ class StoreConfig:
             if "repair_torn_tail" in data
             else os.getenv("VOODOO_STORE_REPAIR_TORN_TAIL")
         )
+        max_bytes_value = data.get("max_bytes") or os.getenv("VOODOO_STORE_MAX_BYTES")
+        max_bytes = int(max_bytes_value) if max_bytes_value is not None else None
+        if max_bytes is not None and max_bytes < 1:
+            raise ValueError("Store max_bytes must be positive")
         return cls(
             provider=str(provider),
             path=Path(path),
             enabled=_parse_bool(enabled_value, default=True),
             durability=str(durability),
             repair_torn_tail=_parse_bool(repair_value, default=True),
+            max_bytes=max_bytes,
             extra={key: item for key, item in data.items() if key not in known},
         )
 
@@ -185,10 +193,12 @@ class VoodooStoreProvider:
         *,
         durability: str = "data",
         repair_torn_tail: bool = True,
+        max_bytes: int | None = None,
     ) -> None:
         self._path = Path(path)
         self._durability = durability
         self._repair_torn_tail = repair_torn_tail
+        self._max_bytes = max_bytes
         self._store: Any | None = None
         self._store_type: Any | None = None
 
@@ -217,30 +227,78 @@ class VoodooStoreProvider:
 
         store_type = self._load_store_type()
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        if self._max_bytes is not None and self._path.exists():
+            current_bytes = self._path.stat().st_size
+            if current_bytes > self._max_bytes:
+                raise StoreProviderError(
+                    f"Store at {self._path} exceeds configured max_bytes "
+                    f"({current_bytes} > {self._max_bytes})"
+                )
+        started = time.perf_counter()
         try:
-            self._store = store_type.open(
-                self._path,
-                durability=self._durability,
-                repair_torn_tail=self._repair_torn_tail,
-            )
+            try:
+                from voodoo.observability import store_span
+
+                with store_span(
+                    "store.open",
+                    attributes={"provider": self.name, "durability": self._durability},
+                ):
+                    self._store = store_type.open(
+                        self._path,
+                        durability=self._durability,
+                        repair_torn_tail=self._repair_torn_tail,
+                        max_bytes=self._max_bytes,
+                    )
+            except TypeError as exc:
+                # Older installed Store bindings predate native max_bytes.
+                # Keep the compatibility path explicit; startup size checks
+                # still apply, while new bindings enforce the limit per append.
+                if "max_bytes" not in str(exc):
+                    raise
+                from voodoo.observability import store_span
+
+                with store_span(
+                    "store.open",
+                    attributes={"provider": self.name, "durability": self._durability},
+                ):
+                    self._store = store_type.open(
+                        self._path,
+                        durability=self._durability,
+                        repair_torn_tail=self._repair_torn_tail,
+                    )
         except Exception as exc:
             raise StoreProviderError(
                 f"Unable to open Voodoo Store at {self._path}: {exc}"
             ) from exc
+        finally:
+            self._record_metric(
+                "open",
+                (time.perf_counter() - started) * 1000,
+                error=self._store is None,
+            )
 
     def close(self) -> None:
         """Close the Store; repeated calls are safe."""
         store = self._store
         if store is None:
             return
+        started = time.perf_counter()
+        failed = False
         try:
-            store.close()
+            from voodoo.observability import store_span
+
+            with store_span("store.close", attributes={"provider": self.name}):
+                store.close()
         except Exception as exc:
+            failed = True
             raise StoreProviderError(
                 f"Unable to close Voodoo Store at {self._path}: {exc}"
             ) from exc
         finally:
             self._store = None
+            self._record_metric(
+                "close", (time.perf_counter() - started) * 1000, error=failed
+            )
 
     def health(self) -> StoreHealth:
         """Return provider-neutral health using native verification evidence."""
@@ -254,27 +312,82 @@ class VoodooStoreProvider:
                 details={"exists": False},
             )
 
+        started = time.perf_counter()
         try:
-            report = store_type.verify(self._path)
+            from voodoo.observability import store_span
+
+            with store_span("store.health", attributes={"provider": self.name}):
+                report = store_type.verify(self._path)
         except Exception as exc:
+            # The native writer keeps an exclusive lock while this provider is
+            # open, so a second verification handle can report the expected
+            # "already open" contention.  The open handle itself is the
+            # stronger readiness signal; retain a bounded size check and mark
+            # integrity verification as deferred until shutdown/recovery.
+            if self.opened and "already open by another writer" in str(exc):
+                file_bytes = self._path.stat().st_size
+                within_limit = (
+                    self._max_bytes is None or file_bytes <= self._max_bytes
+                )
+                details = {
+                    "exists": True,
+                    "file_bytes": file_bytes,
+                    "max_bytes": self._max_bytes,
+                    "within_limit": within_limit,
+                    "verification_deferred": True,
+                }
+                self._attach_native_health(details)
+                return StoreHealth(
+                    provider=self.name,
+                    path=self._path,
+                    opened=True,
+                    verified=within_limit,
+                    details=details,
+                )
+            self._record_metric(
+                "recovery.verify",
+                (time.perf_counter() - started) * 1000,
+                error=True,
+            )
+            failure_details: dict[str, Any] = {"exists": True, "error": str(exc)}
+            self._attach_native_health(failure_details)
             return StoreHealth(
                 provider=self.name,
                 path=self._path,
                 opened=self.opened,
                 verified=False,
-                details={"exists": True, "error": str(exc)},
+                details=failure_details,
             )
 
+        self._record_metric(
+            "recovery.verify",
+            (time.perf_counter() - started) * 1000,
+            bytes_count=int(getattr(report, "file_bytes", 0) or 0),
+        )
+
+        file_bytes = int(getattr(report, "file_bytes", 0) or 0)
         details = {
             "exists": True,
-            "file_bytes": getattr(report, "file_bytes", None),
+            "file_bytes": file_bytes,
             "valid_bytes": getattr(report, "valid_bytes", None),
             "records": getattr(report, "records", None),
             "committed_transactions": getattr(report, "committed_transactions", None),
             "pending_transactions": getattr(report, "pending_transactions", None),
             "keys": getattr(report, "keys", None),
             "has_torn_tail": getattr(report, "has_torn_tail", None),
+            "max_bytes": self._max_bytes,
         }
+        self._attach_native_health(details)
+        if self._max_bytes is not None and file_bytes > self._max_bytes:
+            details["within_limit"] = False
+            return StoreHealth(
+                provider=self.name,
+                path=self._path,
+                opened=self.opened,
+                verified=False,
+                details=details,
+            )
+        details["within_limit"] = True
         return StoreHealth(
             provider=self.name,
             path=self._path,
@@ -282,6 +395,112 @@ class VoodooStoreProvider:
             verified=True,
             details=details,
         )
+
+    def _attach_native_health(self, details: dict[str, Any]) -> None:
+        """Attach bounded numeric native health without exposing payload data.
+
+        The Runtime provider is intentionally compatible with older bindings,
+        so a missing or failing ``health_report`` must not turn an otherwise
+        valid verification result into a failure. Only documented scalar
+        counters and bounded nested metric maps are copied; store IDs,
+        namespaces, keys, and object payloads never cross this boundary.
+        """
+        store = self._store
+        report_fn = getattr(store, "health_report", None) if store is not None else None
+        if not callable(report_fn):
+            return
+        try:
+            report = report_fn()
+        except Exception as exc:
+            self._record_metric("health_report", 0.0, error=True)
+            import logging
+
+            from voodoo.security.redaction import redact_string
+
+            logging.getLogger(__name__).debug(
+                "native Store health report unavailable error=%s",
+                redact_string(str(exc)),
+            )
+            return
+        if not isinstance(report, Mapping):
+            return
+
+        snapshot = self._bounded_health_snapshot(report)
+        if snapshot:
+            details["native_health"] = snapshot
+
+    @staticmethod
+    def _bounded_health_snapshot(report: Mapping[str, Any]) -> dict[str, Any]:
+        """Copy only documented scalar health values and bounded metric maps."""
+
+        scalar_keys = (
+            "format_major",
+            "format_minor",
+            "max_bytes",
+            "namespace_max_bytes",
+            "compaction_backlog_bytes",
+            "lock_contentions_total",
+            "object_reads_total",
+            "object_bytes_read_total",
+            "queue_ready",
+            "queue_leased",
+            "queue_dead",
+            "queue_total",
+            "queue_oldest_ready_at_ms",
+            "queue_ready_lag_ms",
+            "within_limit",
+        )
+        snapshot: dict[str, Any] = {}
+        for key in scalar_keys:
+            value = report.get(key)
+            if value is None or isinstance(value, (bool, int, float)):
+                snapshot[key] = value
+        for section in ("metrics", "storage"):
+            values = report.get(section)
+            if not isinstance(values, Mapping):
+                continue
+            bounded = {
+                str(key): value
+                for key, value in values.items()
+                if value is None or isinstance(value, (bool, int, float))
+            }
+            if bounded:
+                snapshot[section] = bounded
+        return snapshot
+
+    @staticmethod
+    def _record_metric(
+        operation: str,
+        latency_ms: float,
+        *,
+        error: bool = False,
+        bytes_count: int = 0,
+    ) -> None:
+        """Report metrics and a correlated metric span without requiring telemetry."""
+        try:
+            from voodoo.observability import store_span, telemetry_store
+
+            with store_span(
+                f"store.metric.{operation}",
+                attributes={"provider": "voodoo", "operation": operation},
+            ):
+                telemetry_store.record_store_operation(
+                    operation,
+                    latency_ms,
+                    error=error,
+                    bytes_count=bytes_count,
+                )
+        except Exception as error:
+            # Observability must not become a Store availability dependency.
+            import logging
+
+            from voodoo.security.redaction import redact_string
+
+            logging.getLogger(__name__).debug(
+                "Store operation telemetry unavailable error=%s",
+                redact_string(str(error)),
+            )
+            return
 
     def _load_store_type(self) -> Any:
         if self._store_type is not None:
@@ -303,6 +522,7 @@ def _create_voodoo_provider(config: StoreConfig) -> StoreProvider:
         config.path,
         durability=config.durability,
         repair_torn_tail=config.repair_torn_tail,
+        max_bytes=config.max_bytes,
     )
 
 

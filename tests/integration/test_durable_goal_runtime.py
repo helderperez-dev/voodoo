@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+import pytest
 
 from voodoo.primitives.capability import Capability
 from voodoo.primitives.intent import Intent
@@ -68,6 +71,13 @@ def test_voodoo_store_goal_checkpoints_share_application_store(tmp_path: Path):
 
     store.save("goal-1", running)
     store.save("goal-2", completed)
+    assert runtime_store.provider.native.collection_definition(b"runtime.goals") == (
+        1,
+        b"json",
+    )
+    assert runtime_store.provider.native.get_record(
+        b"runtime.goals", b"goal-1"
+    ) is not None
     assert store.provider == "voodoo"
     assert store.load("goal-1") == running
     assert store.load_unfinished() == [running]
@@ -81,6 +91,30 @@ def test_voodoo_store_goal_checkpoints_share_application_store(tmp_path: Path):
     assert reopened.load("goal-1") == running
     assert reopened.load_unfinished() == [running]
     reopened_runtime.stop()
+
+
+def test_voodoo_goal_codec_reads_legacy_and_rejects_future_schema(tmp_path: Path):
+    runtime_store = RuntimeStore(StoreConfig(path=tmp_path / "goal-codec.vstore"))
+    runtime_store.start()
+    try:
+        store = VoodooStoreGoalStore(runtime_store)
+        legacy = {
+            "goal": {"id": "legacy", "status": "running"},
+            "value": {"nested": [1]},
+        }
+        native = runtime_store.provider.native
+        native.put(store._key("legacy"), json.dumps(legacy).encode("utf-8"))
+        assert store.load("legacy") == legacy
+        store.save("legacy", legacy)
+        assert native.get_record(b"runtime.goals", b"legacy") is not None
+        assert native.get(store._key("legacy")) is None
+        future = dict(legacy)
+        future["_schema_version"] = 99
+        native.put(store._key("future"), json.dumps(future).encode("utf-8"))
+        with pytest.raises(ValueError, match="newer than supported"):
+            store.load("future")
+    finally:
+        runtime_store.stop()
 
 
 async def test_goal_runtime_checkpoints_completed_goal(tmp_path: Path):

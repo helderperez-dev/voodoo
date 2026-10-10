@@ -2,6 +2,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from importlib.resources import as_file, files
 from pathlib import Path
 
 import typer
@@ -9,170 +10,15 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from voodoo.cli import terminal
 
-# ---------------------------------------------------------------------------
-# Offline scaffold — used when no template repository is available.
-# Showcases Voodoo CSS (the default adapter), folder-based routing, and the
-# file-based `page(request)` convention. Keeps the surface minimal: routes
-# only, no main.py / .env / infrastructure directories.
-# ---------------------------------------------------------------------------
-
-_HOME_PAGE = '''"""Home route — app/page.py maps to / via folder-based routing.
-
-Voodoo CSS is the default style adapter: components emit semantic `vd-*`
-classes (e.g. `vd-button vd-button--primary`) resolved by theme tokens, so
-prefer semantic props (`variant`, `size`, `tone`) over utility classes.
-"""
-from voodoo.ui import A, Badge, Button, Card, Flex, Grid, Heading, Page, Stack, Text
-from voodoo.seo import SEO
-
-
-def page(request):
-    seo = SEO(
-        title="My Voodoo App",
-        description="Built with Voodoo: Python UI, semantic components, themeable tokens.",
-    )
-    ui = Page(
-        Stack(
-            Heading("Hello, Voodoo", level=1, size="xl"),
-            Text(
-                "Build your UI in Python. Voodoo CSS ships themed, semantic "
-                "components out of the box.",
-                tone="muted",
-            ),
-            Flex(
-                Button("Get Started", variant="primary"),
-                A("View about", href="/about"),
-                direction="row",
-                gap="sm",
-            ),
-            Grid(
-                Card(
-                    Stack(
-                        Badge("Routing", variant="secondary"),
-                        Heading("Folder-based routing", level=3),
-                        Text("app/page.py → /", tone="muted"),
-                        Text(
-                            "Add app/about/page.py to create /about — no wiring.",
-                            tone="muted",
-                        ),
-                        gap="sm",
-                    ),
-                ),
-                Card(
-                    Stack(
-                        Badge("Theming", variant="secondary"),
-                        Heading("Theme tokens", level=3),
-                        Text(
-                            "Components read --vd-* tokens; swap them to restyle everything.",
-                            tone="muted",
-                        ),
-                        gap="sm",
-                    ),
-                ),
-                Card(
-                    Stack(
-                        Badge("Layout", variant="secondary"),
-                        Heading("Semantic layout", level=3),
-                        Text(
-                            "Stack, Flex, Grid and Page express layout — no utility classes.",
-                            tone="muted",
-                        ),
-                        gap="sm",
-                    ),
-                ),
-                cols="3",
-                gap="md",
-            ),
-            gap="lg",
-        )
-    )
-    return seo, ui
-'''
-
-_ABOUT_PAGE = '''"""About route — app/about/page.py maps to /about."""
-from voodoo.ui import Container, Heading, Page, Stack, Text
-from voodoo.seo import SEO
-
-
-def page(request):
-    seo = SEO(title="About — My Voodoo App", description="About this project.")
-    ui = Page(
-        Container(
-            Stack(
-                Heading("About", level=1, size="xl"),
-                Text("This route is defined by app/about/page.py.", tone="muted"),
-                Text(
-                    "Folder structure drives routing: app/about/page.py → /about.",
-                    tone="muted",
-                ),
-                gap="md",
-            )
-        )
-    )
-    return seo, ui
-'''
-
-_USER_PAGE = '''"""User route — app/users/[id]/page.py maps to /users/{id}.
-
-Bracket folders create dynamic segments; the `id: int` annotation coerces
-the path segment to the declared type.
-"""
-from voodoo.ui import Card, Heading, Page, Stack, Text
-from voodoo.seo import SEO
-
-
-def page(request, id: int):
-    seo = SEO(title=f"User {id} — My Voodoo App")
-    ui = Page(
-        Card(
-            Stack(
-                Heading(f"User #{id}", level=2),
-                Text(
-                    "Dynamic segments use bracket folders: "
-                    "app/users/[id]/page.py → /users/{id}.",
-                    tone="muted",
-                ),
-                Text(
-                    "The int annotation coerces the segment: '42' → 42.",
-                    tone="muted",
-                ),
-                gap="md",
-            )
-        )
-    )
-    return seo, ui
-'''
-
 
 def _scaffold_offline(project_dir: Path, name: str) -> None:
-    """Write the minimal default Voodoo project (Voodoo CSS + folder routing)."""
-    (project_dir / "app").mkdir(parents=True, exist_ok=True)
-    (project_dir / "app" / "page.py").write_text(_HOME_PAGE)
-
-    about_dir = project_dir / "app" / "about"
-    about_dir.mkdir(parents=True, exist_ok=True)
-    (about_dir / "page.py").write_text(_ABOUT_PAGE)
-
-    user_dir = project_dir / "app" / "users" / "[id]"
-    user_dir.mkdir(parents=True, exist_ok=True)
-    (user_dir / "page.py").write_text(_USER_PAGE)
-
-    (project_dir / "voodoo.toml").write_text(
-        f'[app]\nname = "{name}"\n\n'
-        '[store]\nprovider = "voodoo"\npath = ".voodoo/application.vstore"\n\n'
-        "# Voodoo CSS is the default design system.\n"
-        "# The Runtime creates application.vstore automatically.\n"
-        "# External SQL/object/queue infrastructure is opt-in.\n"
-    )
-
-    (project_dir / "pyproject.toml").write_text(
-        f"[project]\n"
-        f'name = "{name}"\n'
-        f'version = "0.1.0"\n'
-        f"dependencies = [\n"
-        f'    "voodoo-framework"\n'
-        f"]\n"
-    )
+    """Write the package-owned default scaffold (Voodoo CSS + folder routing)."""
+    resource = files("voodoo").joinpath("scaffold", "default")
+    with as_file(resource) as scaffold_dir:
+        shutil.copytree(scaffold_dir, project_dir, dirs_exist_ok=True)
+    for path in project_dir.rglob("*"):
+        if path.is_file() and path.suffix in {".py", ".toml", ".md", ".txt"}:
+            path.write_text(path.read_text().replace("{{ project_name }}", name))
 
 
 def _template_url(template: str) -> str:
@@ -180,7 +26,10 @@ def _template_url(template: str) -> str:
         return template
     if len(template.split("/")) == 2:
         return f"https://github.com/{template}.git"
-    terminal.error("Template must be a valid Git URL, local path, or 'user/repo'")
+    terminal.error(
+        "Template must be a valid Git URL, local path, or 'user/repo'",
+        hint="pass --template with a Git URL, local path, or owner/repository",
+    )
     raise typer.Exit(1)
 
 
@@ -198,7 +47,8 @@ def _clone_template(project_dir: Path, template: str, variant: str) -> bool:
                     variant_path = Path(tmp_dir)
                 else:
                     terminal.error(
-                        f"Variant '${variant}' not found in template repository"
+                        f"Variant '${variant}' not found in template repository",
+                        hint="choose an existing variant or omit --variant for the default scaffold",
                     )
                     raise typer.Exit(1)
             shutil.copytree(variant_path, project_dir, dirs_exist_ok=True)
@@ -263,11 +113,14 @@ def new(
         "--install/--no-install",
         help="Create a local environment and install project dependencies.",
     ),
-):
+) -> None:
     """Scaffold a new Voodoo project or clone a community template."""
     project_dir = Path(project_name)
     if project_dir.exists():
-        terminal.error(f"Directory '{project_name}' already exists")
+        terminal.error(
+            f"Directory '{project_name}' already exists",
+            hint="choose a new project name or remove the existing directory",
+        )
         raise typer.Exit(1)
 
     terminal.wordmark()

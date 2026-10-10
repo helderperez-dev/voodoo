@@ -15,7 +15,7 @@ def dev(
         help="App instance to run (e.g., main:app). Defaults to main:app if main.py exists, otherwise voodoo.core:app",
     ),
     port: int = typer.Option(8000, help="Port to run the server on"),
-):
+) -> None:
     """
     Start the Voodoo development server.
     """
@@ -146,7 +146,7 @@ def _print_runtime_banner() -> None:
 
         providers = list(_PROVIDER_CLASSES.keys())
         terminal.status("agents", ", ".join(providers) if providers else "none")
-    except Exception:
+    except (ImportError, AttributeError):
         terminal.status("agents", "mock")
 
     # MCP endpoint
@@ -161,7 +161,7 @@ def _print_runtime_banner() -> None:
             terminal.label_value("workers", ", ".join(worker_names))
         else:
             terminal.label_value("workers", "none")
-    except Exception:
+    except (ImportError, AttributeError):
         terminal.label_value("workers", "none")
 
     # Schedules share the application Store by default.

@@ -20,6 +20,37 @@ def _control_id(prefix: str) -> str:
     return f"vd-{prefix}-{uuid4().hex[:8]}"
 
 
+def _apply_input_group_state(
+    control: Component,
+    *,
+    disabled: bool,
+    read_only: bool,
+    loading: bool,
+    error: bool | str,
+) -> bool:
+    unavailable = disabled or read_only or loading or bool(error)
+    if unavailable:
+        control.attrs["disabled"] = True
+        control.attrs["aria_disabled"] = "true"
+        for event_key in (
+            "data_vd_event_change",
+            "data-vd-event-change",
+            "data_vd_event_input",
+            "data-vd-event-input",
+        ):
+            control.attrs.pop(event_key, None)
+    if read_only:
+        control.attrs["readonly"] = True
+        control.attrs["aria_readonly"] = "true"
+    if loading:
+        control.attrs["aria_busy"] = "true"
+    if error:
+        control.attrs["aria_invalid"] = "true"
+        if isinstance(error, str):
+            control.attrs["data_vd_error"] = error
+    return unavailable
+
+
 class InputGroup(Component):
     """One input with optional leading and trailing content."""
 
@@ -31,17 +62,45 @@ class InputGroup(Component):
         *,
         leading: Any | None = None,
         trailing: Any | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if control.tag not in {"input", "select", "textarea"}:
             raise TypeError("InputGroup control must be an input, select, or textarea")
+        unavailable = _apply_input_group_state(
+            control,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+        )
         children: list[Any] = []
         if leading is not None:
             children.append(_InputAdornment(leading, position="leading"))
         children.append(control)
         if trailing is not None:
             children.append(_InputAdornment(trailing, position="trailing"))
-        super().__init__(*children, **kwargs)
+        state_attrs: dict[str, Any] = {}
+        if unavailable:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            if isinstance(error, str):
+                state_attrs["data_vd_error"] = error
+        super().__init__(*children, **state_attrs, **kwargs)
+        self.props = {
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
+        }
 
 
 class _InputAdornment(Component):
@@ -69,8 +128,13 @@ class SearchInput(Component):
         label: str = "Search",
         on_input: EventHandler | None = None,
         clearable: bool = True,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
+        action_disabled = disabled or read_only or loading
         field = Input(
             type="search",
             name=name,
@@ -80,6 +144,10 @@ class SearchInput(Component):
             autocomplete="off",
             on_input=on_input,
             data_vd_search_field=True,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
         )
         children: list[Any] = [
             _ControlGlyph("search"),
@@ -93,9 +161,22 @@ class SearchInput(Component):
                     variant="ghost",
                     aria_label=f"Clear {label.lower()}",
                     data_vd_clear_input=True,
+                    disabled=action_disabled,
                 )
             )
         super().__init__(*children, **kwargs)
+        if loading:
+            self.attrs["aria-busy"] = "true"
+            self.attrs["data-vd-loading"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            self.attrs["data-vd-state"] = "error"
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class PasswordInput(Component):
@@ -111,9 +192,14 @@ class PasswordInput(Component):
         placeholder: str = "",
         label: str = "Password",
         on_input: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         field_id = _control_id("password")
+        action_disabled = disabled or read_only or loading
         super().__init__(
             Input(
                 id=field_id,
@@ -124,6 +210,10 @@ class PasswordInput(Component):
                 aria_label=label,
                 on_input=on_input,
                 data_vd_password_field=True,
+                disabled=disabled,
+                read_only=read_only,
+                loading=loading,
+                error=error,
             ),
             Button(
                 "Show",
@@ -133,9 +223,22 @@ class PasswordInput(Component):
                 aria_controls=field_id,
                 aria_pressed="false",
                 data_vd_password_toggle=field_id,
+                disabled=action_disabled,
             ),
             **kwargs,
         )
+        if loading:
+            self.attrs["aria-busy"] = "true"
+            self.attrs["data-vd-loading"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            self.attrs["data-vd-state"] = "error"
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class NumberInput(Component):
@@ -153,11 +256,16 @@ class NumberInput(Component):
         step: int | float = 1,
         label: str | None = None,
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if step <= 0:
             raise ValueError("NumberInput step must be greater than zero")
         field_id = _control_id("number")
+        control_disabled = disabled or read_only or loading
         field_attrs: dict[str, Any] = {
             "id": field_id,
             "type": "number",
@@ -167,6 +275,10 @@ class NumberInput(Component):
             "aria_label": label or name.replace("_", " ").title(),
             "on_change": on_change,
             "data_vd_number_field": True,
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
         }
         if minimum is not None:
             field_attrs["min"] = minimum
@@ -180,6 +292,7 @@ class NumberInput(Component):
                 aria_label="Decrease value",
                 data_vd_number_step=field_id,
                 data_vd_step_direction="-1",
+                disabled=control_disabled,
             ),
             Input(**field_attrs),
             Button(
@@ -189,9 +302,26 @@ class NumberInput(Component):
                 aria_label="Increase value",
                 data_vd_number_step=field_id,
                 data_vd_step_direction="1",
+                disabled=control_disabled,
             ),
             **kwargs,
         )
+        if disabled or loading:
+            self.attrs["aria-disabled"] = "true"
+        if read_only:
+            self.attrs["aria-readonly"] = "true"
+        if loading:
+            self.attrs["aria-busy"] = "true"
+            self.attrs["data-vd-loading"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            self.attrs["data-vd-state"] = "error"
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,6 +349,10 @@ class Combobox(Component):
         label: str | None = None,
         empty_text: str = "No matching options",
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         choices = _choices(options)
@@ -233,8 +367,18 @@ class Combobox(Component):
             "data_vd_combobox": True,
             "data_vd_combobox_value": value or "",
         }
-        if on_change is not None:
+        if on_change is not None and not (disabled or read_only or loading):
             attrs["data_vd_event_change"] = bind_event(on_change)
+        if disabled or loading:
+            attrs["aria-disabled"] = "true"
+        if read_only:
+            attrs["aria-readonly"] = "true"
+        if loading:
+            attrs["aria-busy"] = "true"
+            attrs["data-vd-loading"] = "true"
+        if error:
+            attrs["aria-invalid"] = "true"
+            attrs["data-vd-state"] = "error"
         super().__init__(
             Input(
                 id=input_id,
@@ -249,6 +393,10 @@ class Combobox(Component):
                 aria_controls=listbox_id,
                 aria_expanded="false",
                 data_vd_combobox_input=True,
+                disabled=disabled,
+                read_only=read_only,
+                loading=loading,
+                error=error,
             ),
             Button(
                 "Open",
@@ -257,6 +405,7 @@ class Combobox(Component):
                 aria_label="Show options",
                 aria_controls=listbox_id,
                 data_vd_combobox_toggle=True,
+                disabled=disabled or read_only or loading,
             ),
             _ComboboxList(
                 *(
@@ -279,6 +428,12 @@ class Combobox(Component):
             ),
             **attrs,
         )
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _ComboboxList(Component):
@@ -314,6 +469,10 @@ class MultiSelect(Component):
         label: str | None = None,
         size: int = 5,
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         selected = set(values)
@@ -333,9 +492,26 @@ class MultiSelect(Component):
             "aria_label": label or name.replace("_", " ").title(),
             "data_vd_multi_select": True,
         }
-        if on_change is not None:
+        if disabled or read_only or loading:
+            attrs["disabled"] = True
+            attrs["aria_disabled"] = "true"
+        if read_only:
+            attrs["aria_readonly"] = "true"
+        if loading:
+            attrs["aria_busy"] = "true"
+            attrs["data_vd_loading"] = True
+        if error:
+            attrs["aria_invalid"] = "true"
+            attrs["data_vd_state"] = "error"
+        if on_change is not None and not (disabled or read_only or loading):
             attrs["data_vd_event_change"] = bind_event(on_change)
         super().__init__(*children, **attrs, **kwargs)
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _SelectOption(Component):
@@ -357,11 +533,19 @@ class RadioGroup(Component):
         label: str,
         orientation: str = "vertical",
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if orientation not in {"horizontal", "vertical"}:
             raise ValueError("RadioGroup orientation must be horizontal or vertical")
-        binding = bind_event(on_change) if on_change is not None else None
+        binding = (
+            bind_event(on_change)
+            if on_change is not None and not (disabled or read_only or loading)
+            else None
+        )
         children = tuple(
             _ChoiceLabel(
                 Input(
@@ -369,15 +553,35 @@ class RadioGroup(Component):
                     name=name,
                     value=choice.value,
                     checked=choice.value == value,
-                    disabled=choice.disabled,
+                    disabled=choice.disabled or disabled or read_only or loading,
+                    read_only=read_only,
+                    loading=loading,
+                    error=error,
                     data_vd_event_change=binding,
                 ),
                 _ChoiceCopy(choice.label, choice.description),
             )
             for choice in _choices(options)
         )
-        super().__init__(*children, role="radiogroup", aria_label=label, **kwargs)
-        self.props = {"orientation": orientation}
+        state_attrs: dict[str, Any] = {}
+        if disabled or read_only or loading:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            state_attrs["data_vd_state"] = "error"
+        super().__init__(*children, role="radiogroup", aria_label=label, **state_attrs, **kwargs)
+        self.props = {
+            "orientation": orientation,
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class CheckboxGroup(Component):
@@ -394,12 +598,20 @@ class CheckboxGroup(Component):
         label: str,
         orientation: str = "vertical",
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if orientation not in {"horizontal", "vertical"}:
             raise ValueError("CheckboxGroup orientation must be horizontal or vertical")
         selected = set(values)
-        binding = bind_event(on_change) if on_change is not None else None
+        binding = (
+            bind_event(on_change)
+            if on_change is not None and not (disabled or read_only or loading)
+            else None
+        )
         children = tuple(
             _ChoiceLabel(
                 Input(
@@ -407,15 +619,35 @@ class CheckboxGroup(Component):
                     name=name,
                     value=choice.value,
                     checked=choice.value in selected,
-                    disabled=choice.disabled,
+                    disabled=choice.disabled or disabled or read_only or loading,
+                    read_only=read_only,
+                    loading=loading,
+                    error=error,
                     data_vd_event_change=binding,
                 ),
                 _ChoiceCopy(choice.label, choice.description),
             )
             for choice in _choices(options)
         )
-        super().__init__(*children, role="group", aria_label=label, **kwargs)
-        self.props = {"orientation": orientation}
+        state_attrs: dict[str, Any] = {}
+        if disabled or read_only or loading:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            state_attrs["data_vd_state"] = "error"
+        super().__init__(*children, role="group", aria_label=label, **state_attrs, **kwargs)
+        self.props = {
+            "orientation": orientation,
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _ChoiceLabel(Component):
@@ -454,6 +686,10 @@ class Slider(Component):
         step: int | float = 1,
         label: str | None = None,
         on_input: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if maximum <= minimum:
@@ -474,10 +710,30 @@ class Slider(Component):
                 on_input=on_input,
                 data_vd_slider=True,
                 data_vd_slider_output=output_id,
+                disabled=disabled,
+                read_only=read_only,
+                loading=loading,
+                error=error,
             ),
             _SliderOutput(str(value), id=output_id, for_=field_id),
             **kwargs,
         )
+        if disabled or loading:
+            self.attrs["aria-disabled"] = "true"
+        if read_only:
+            self.attrs["aria-readonly"] = "true"
+        if loading:
+            self.attrs["aria-busy"] = "true"
+            self.attrs["data-vd-loading"] = "true"
+        if error:
+            self.attrs["aria-invalid"] = "true"
+            self.attrs["data-vd-state"] = "error"
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _SliderOutput(Component):
@@ -496,6 +752,10 @@ class DatePicker(Input):
         minimum: str | date | None = None,
         maximum: str | date | None = None,
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         attrs: dict[str, Any] = {"type": "date", "name": name}
@@ -505,7 +765,15 @@ class DatePicker(Input):
             attrs["min"] = minimum.isoformat() if isinstance(minimum, date) else minimum
         if maximum is not None:
             attrs["max"] = maximum.isoformat() if isinstance(maximum, date) else maximum
-        super().__init__(on_change=on_change, **attrs, **kwargs)
+        super().__init__(
+            on_change=on_change,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
+            **attrs,
+            **kwargs,
+        )
 
 
 class TimePicker(Input):
@@ -518,6 +786,10 @@ class TimePicker(Input):
         value: str | None = None,
         step: int = 60,
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if step <= 0:
@@ -528,6 +800,10 @@ class TimePicker(Input):
             value=value,
             step=step,
             on_change=on_change,
+            disabled=disabled,
+            read_only=read_only,
+            loading=loading,
+            error=error,
             **kwargs,
         )
 
@@ -545,11 +821,19 @@ class Calendar(Component):
         value: date | None = None,
         label: str | None = None,
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not 1 <= month <= 12:
             raise ValueError("Calendar month must be between 1 and 12")
-        binding = bind_event(on_change) if on_change is not None else None
+        binding = (
+            bind_event(on_change)
+            if on_change is not None and not (disabled or read_only or loading)
+            else None
+        )
         weeks = calendar_module.Calendar(firstweekday=0).monthdatescalendar(year, month)
         heading = label or f"{calendar_module.month_name[month]} {year}"
         header = _CalendarRow(
@@ -570,6 +854,9 @@ class Calendar(Component):
                         aria_label=day.strftime("%B %d, %Y"),
                         aria_pressed="true" if value == day else "false",
                         data_outside_month=day.month != month,
+                        disabled=disabled or read_only or loading,
+                        aria_readonly="true" if read_only else None,
+                        aria_invalid="true" if error else None,
                     )
                     for day in week
                 ),
@@ -577,12 +864,30 @@ class Calendar(Component):
             )
             for week in weeks
         )
+        state_attrs: dict[str, Any] = {}
+        if disabled or read_only or loading:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            state_attrs["data_vd_state"] = "error"
         super().__init__(
             _CalendarCaption(heading),
             _CalendarGrid(header, *rows, role="grid", aria_label=heading),
             data_vd_calendar=True,
+            **state_attrs,
             **kwargs,
         )
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _CalendarCaption(Component):
@@ -627,6 +932,10 @@ class FileUpload(Component):
         accept: str | None = None,
         multiple: bool = False,
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         attrs: dict[str, Any] = {
@@ -636,14 +945,36 @@ class FileUpload(Component):
             "aria_label": label,
             "on_change": on_change,
             "data_vd_file_input": True,
+            "disabled": disabled or read_only or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
         }
         if accept:
             attrs["accept"] = accept
+        state_attrs: dict[str, Any] = {}
+        if disabled or read_only or loading:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            state_attrs["data_vd_state"] = "error"
         super().__init__(
             Input(**attrs),
             _FileUploadCopy(label, data_vd_file_label=True),
+            **state_attrs,
             **kwargs,
         )
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class DropZone(Component):
@@ -661,6 +992,10 @@ class DropZone(Component):
         accept: str | None = None,
         multiple: bool = False,
         on_change: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         attrs: dict[str, Any] = {
@@ -670,18 +1005,40 @@ class DropZone(Component):
             "aria_label": label,
             "on_change": on_change,
             "data_vd_drop_input": True,
+            "disabled": disabled or read_only or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": error,
         }
         if accept:
             attrs["accept"] = accept
         copy: list[Any] = [_FileUploadCopy(label)]
         if description:
             copy.append(_FileUploadDescription(description))
+        state_attrs: dict[str, Any] = {}
+        if disabled or read_only or loading:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            state_attrs["data_vd_state"] = "error"
         super().__init__(
             Input(**attrs),
             *copy,
             data_vd_drop_zone=True,
+            **state_attrs,
             **kwargs,
         )
+        self.props = {
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _FileUploadCopy(Component):

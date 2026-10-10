@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "package": "voodoo",
+  "current_major": 3,
+  "entries": [
+    {
+      "surface": "voodoo.ui.Html",
+      "status": "deprecated",
+      "replacement": "voodoo.ui.UnsafeHtml",
+      "introduced": "3.2.0",
+      "remove_after": "4.0.0",
+      "migration": "Use UnsafeHtml only for reviewed trusted fragments; use SafeHtml for escaped content."
+    },
+    {
+      "surface": "voodoo.cli.create",
+      "status": "deprecated",
+      "replacement": "voodoo.cli.new",
+      "introduced": "3.0.0",
+      "remove_after": "4.0.0",
+      "migration": "Use `voodoo new`; create remains a warning-emitting alias during the 3.x window."
+    },
+    {
+      "surface": "voodoo.yaml configuration",
+      "status": "compatibility",
+      "replacement": "voodoo.toml",
+      "introduced": "3.0.0",
+      "review_after": "2027-01-06",
+      "migration": "Prefer voodoo.toml for new projects; YAML remains an explicit parser compatibility path."
+    },
+    {
+      "surface": "voodoo.ai.agent_legacy",
+      "status": "compatibility",
+      "replacement": "voodoo.ai.agent",
+      "introduced": "3.0.0",
+      "review_after": "2027-01-06",
+      "migration": "Use the runtime-truth Agent facade; the legacy module remains an explicit compatibility implementation for existing imports."
+    }
+  ]
+}

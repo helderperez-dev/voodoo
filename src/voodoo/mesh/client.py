@@ -1,27 +1,47 @@
 import asyncio
 import json
+import logging
 import uuid
 from typing import Any
 
+from voodoo.security.redaction import redact_string
+
+_logger = logging.getLogger("voodoo.mesh.client")
+
 
 class MeshClient:
-    def __init__(self, endpoint_url: str, *, credential: str | None = None):
+    def __init__(self, endpoint_url: str, *, credential: str | None = None) -> None:
         self.endpoint_url = endpoint_url
         self.credential = credential
-        self.ws = None
-        self._pending_requests: dict[str, asyncio.Future] = {}
+        self.ws: Any = None
+        self._pending_requests: dict[str, asyncio.Future[Any]] = {}
         self._structured_requests: set[str] = set()
-        self._receive_task = None
+        self._receive_task: asyncio.Task[Any] | None = None
 
-    async def _ensure_connected(self):
+    def _fail_pending(self, error: BaseException) -> None:
+        """Resolve every in-flight request when the transport dies.
+
+        A receive-loop failure is a transport failure, not a successful
+        response.  Leaving futures pending here leaks callers indefinitely and
+        can strand Runtime operations waiting on a remote result.
+        """
+        pending = tuple(self._pending_requests.items())
+        self._pending_requests.clear()
+        self._structured_requests.clear()
+        for _message_id, future in pending:
+            if not future.done():
+                future.set_exception(error)
+
+    async def _ensure_connected(self) -> None:
         if self.ws is None or getattr(self.ws, "closed", True):
             import websockets
 
             self.ws = await websockets.connect(self.endpoint_url, max_size=8388608)
             self._receive_task = asyncio.create_task(self._receive_loop())
 
-    async def _receive_loop(self):
+    async def _receive_loop(self) -> None:
         import websockets
+        from websockets.exceptions import ConnectionClosed
 
         try:
             async for message in self.ws:
@@ -54,17 +74,28 @@ class MeshClient:
                     future.set_exception(Exception(data["error"]))
                 else:
                     future.set_result(data.get("result"))
-        except websockets.exceptions.ConnectionClosed:
-            pass
+        except ConnectionClosed as error:
+            self._fail_pending(
+                ConnectionError(
+                    f"mesh connection closed while awaiting response: {error}"
+                )
+            )
         except Exception as e:
-            print(f"MeshClient receive loop error: {e}")
+            self._fail_pending(
+                ConnectionError("mesh receive loop failed")
+            )
+            _logger.warning(
+                "mesh client receive loop failed endpoint=%s error=%s",
+                self.endpoint_url,
+                redact_string(str(e)),
+            )
 
     def _credential_params(self) -> dict[str, str]:
         if self.credential is None:
             return {}
         return {"credential": self.credential}
 
-    async def call(self, name: str, **kwargs) -> Any:
+    async def call(self, name: str, **kwargs: Any) -> Any:
         """Invoke a remote function using the legacy raw-result contract."""
         await self._ensure_connected()
         msg_id = str(uuid.uuid4())
@@ -100,7 +131,7 @@ class MeshClient:
         parent_execution_id: str | None = None,
         target_entity_id: str | None = None,
         metadata: dict[str, Any] | None = None,
-    ):
+    ) -> Any:
         """Execute remotely and return the canonical structured Voodoo outcome.
 
         ``actor`` remains for compatibility with unauthenticated Mesh nodes.

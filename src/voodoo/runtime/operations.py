@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 __all__ = ["OperationalRuntime"]
 
@@ -61,7 +61,7 @@ class OperationalRuntime:
             "policy": self.engine.capabilities.policy.describe(),
             "capabilities": self.engine.capabilities.describe(),
         }
-        return json.loads(json.dumps(payload, default=str))
+        return cast(dict[str, Any], json.loads(json.dumps(payload, default=str)))
 
     def _entities(self) -> list[dict[str, Any]]:
         if self.world is None:

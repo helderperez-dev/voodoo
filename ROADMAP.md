@@ -74,7 +74,7 @@ and why. World history says what evidence reports actually happened.
 
 The post-Sprint-28 repository now includes:
 
-- reactive/server-driven Python UI and **Design System 3** with premium light/dark
+- reactive/server-driven Python UI and **Design System 4** with premium light/dark
   zero-custom-CSS defaults and Theme-authoritative branding;
 - routing/APIs, data, auth/security and explicit infrastructure adapters;
 - Voodoo Store as the zero-config durable application substrate;
@@ -93,11 +93,12 @@ The post-Sprint-28 repository now includes:
 - clean-install release gates proving the default Runtime lifecycle does not require
   optional SQL infrastructure.
 
-The latest published release is **v3.1.0** (2026-09-25), and the current
-`main` architecture baseline is the same 3.1 release commit. The 3.1 release
+The latest published release is **v3.2.1** (2026-10-06), and the current
+`main` architecture baseline is the 3.2 release line. The 3.2 release
 converges Runtime adapters on the published Voodoo Store 0.3 native surface
-(Topics messaging, content-addressed Objects, native index exact/range queries)
-and publishes the modern Model contract with UUIDv7 identity. The 3.0 clean break
+(Topics messaging, content-addressed Objects, native index exact/range queries),
+publishes the modern Model contract with UUIDv7 identity, and ships the Design
+System 4 component surface. The 3.0 clean break
 removed compatibility-only 2.x facades, contracted the package-root API, and completed
 repository semantic-ownership convergence. `SPRINT_PLAN.md` remains the implementation
 source of truth; this document defines direction rather than claiming future work already
@@ -169,7 +170,7 @@ Completion records:
 
 ## Developer-experience law
 
-Voodoo must preserve progressive complexity. `voodoo create` should produce a
+Voodoo must preserve progressive complexity. `voodoo new` should produce a
 useful local application without requiring World, Planner, AI or distributed
 infrastructure. Those capabilities compose in only when the problem needs them.
 
@@ -188,7 +189,7 @@ reintroduced as duplicate owners.
 ## UI and Design System
 
 Voodoo UI is part of the Runtime developer experience, not a separate frontend
-framework. The native visual layer is Design System 3:
+framework. The native visual layer is Design System 4:
 
 - intentional Voodoo purple identity by default;
 - premium light/dark surfaces;

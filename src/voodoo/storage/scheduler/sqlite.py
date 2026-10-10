@@ -19,6 +19,8 @@ from voodoo.storage.database.sqlite import register_framework_migration
 __all__ = ["SQLiteScheduleStore", "SCHEDULES_MIGRATION"]
 
 SCHEDULES_MIGRATION_VERSION = 4
+_PAYLOAD_SCHEMA_KEY = "_schema_version"
+_PAYLOAD_SCHEMA_VERSION = 1
 
 SCHEDULES_MIGRATION = Migration(
     version=SCHEDULES_MIGRATION_VERSION,
@@ -53,7 +55,7 @@ class SQLiteScheduleStore:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
+        self._conn: Any = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA busy_timeout=5000")
@@ -104,7 +106,7 @@ class SQLiteScheduleStore:
                 spec,
                 next_run_at.isoformat(),
                 task_type,
-                json.dumps(payload) if payload is not None else None,
+                _encode_payload(payload),
                 datetime.now(UTC).isoformat(),
             ),
         )
@@ -132,7 +134,7 @@ class SQLiteScheduleStore:
 
             claimed: list[dict[str, Any]] = []
             for row in due:
-                schedule = dict(row)
+                schedule = _normalize_schedule(dict(row))
                 if schedule["kind"] in ("at", "after"):
                     # One-shot: mark inactive after claim
                     self._conn.execute(
@@ -163,7 +165,9 @@ class SQLiteScheduleStore:
                 claimed.append(schedule)
             self._conn.execute("COMMIT")
             return claimed
-        except BaseException:
+        # Roll back ordinary failures and process termination explicitly; the
+        # synchronous scheduler has no asyncio cancellation boundary.
+        except (Exception, KeyboardInterrupt, SystemExit):
             self._conn.execute("ROLLBACK")
             raise
 
@@ -172,14 +176,14 @@ class SQLiteScheduleStore:
         rows = self._conn.execute(
             "SELECT * FROM schedules ORDER BY created_at"
         ).fetchall()
-        return [dict(row) for row in rows]
+        return [_normalize_schedule(dict(row)) for row in rows]
 
     def get(self, schedule_id: str) -> dict[str, Any] | None:
         """Return one schedule or None."""
         row = self._conn.execute(
             "SELECT * FROM schedules WHERE id = ?", (schedule_id,)
         ).fetchone()
-        return dict(row) if row else None
+        return _normalize_schedule(dict(row)) if row else None
 
     def pause(self, schedule_id: str) -> bool:
         """Pause a schedule (set active=0). Returns True if found."""
@@ -188,7 +192,7 @@ class SQLiteScheduleStore:
             (schedule_id,),
         )
         self._conn.commit()
-        return cursor.rowcount > 0
+        return bool(cursor.rowcount > 0)
 
     def resume(self, schedule_id: str, next_run_at: datetime | None = None) -> bool:
         """Resume a schedule (set active=1). Returns True if found."""
@@ -203,7 +207,7 @@ class SQLiteScheduleStore:
                 (schedule_id,),
             )
         self._conn.commit()
-        return cursor.rowcount > 0
+        return bool(cursor.rowcount > 0)
 
     def schedule_from_timespec(
         self,
@@ -236,6 +240,39 @@ class SQLiteScheduleStore:
         if self._conn is not None:
             self._conn.close()
             self._conn = None
+
+
+def _encode_payload(payload: Any) -> str | None:
+    if payload is None:
+        return None
+    return json.dumps(
+        {_PAYLOAD_SCHEMA_KEY: _PAYLOAD_SCHEMA_VERSION, "value": payload},
+        separators=(",", ":"),
+    )
+
+
+def _decode_payload(raw: str | None) -> Any:
+    if not raw:
+        return None
+    value = json.loads(raw)
+    if isinstance(value, dict) and _PAYLOAD_SCHEMA_KEY in value:
+        version = value[_PAYLOAD_SCHEMA_KEY]
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise ValueError("schedule payload schema version must be an integer")
+        if version > _PAYLOAD_SCHEMA_VERSION:
+            raise ValueError(f"unsupported schedule payload schema version: {version}")
+        return value.get("value")
+    return value
+
+
+def _normalize_schedule(schedule: dict[str, Any]) -> dict[str, Any]:
+    raw = schedule.get("payload")
+    schedule["payload"] = (
+        json.dumps(_decode_payload(raw), separators=(",", ":"))
+        if raw is not None
+        else None
+    )
+    return schedule
 
 
 def _cron_next(spec: str, now: datetime) -> datetime | None:

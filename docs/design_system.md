@@ -5,7 +5,7 @@ engine, a default semantic CSS adapter, and a library of polished components.
 New apps look professional with **zero configuration** — no CSS files, no
 utility classes, no build step.
 
-The current native layer is **Voodoo Design System 3**. It adds the Voodoo
+The current native layer is **Voodoo Design System 4**. It adds the Voodoo
 purple brand language, premium light/dark surfaces, tighter typography and
 production-quality defaults while preserving `Theme` as the public source of
 truth for application customization.
@@ -60,7 +60,7 @@ Voodoo includes focused, perceptually uniform OKLCH scales for `zinc`,
 Tailwind steps `50, 100, 200, ... 900, 950`:
 
 ```python
-from voodoo import Card, Text, color
+from voodoo.ui import Card, Text, color
 
 panel = Card(
     Text("Token-driven color", color="violet-200"),
@@ -100,7 +100,7 @@ Derived accent tokens (`--vd-color-secondary-soft`, `-line`, `-glow`,
 `--vd-color-border-soft`) are computed with `color-mix` at use time, so they
 track light/dark automatically without re-defining them per mode.
 
-Design System 3 also resolves a visual token layer (`--vd-brand`, `--vd-canvas`,
+Design System 4 also resolves a visual token layer (`--vd-brand`, `--vd-canvas`,
 `--vd-panel`, `--vd-line`, `--vd-ink`, and related derived tokens). These are
 implementation-facing tokens: the framework derives them from `Theme` and the
 approved DS3 defaults. Applications should customize the semantic `Theme`
@@ -111,7 +111,8 @@ colors rather than writing these visual tokens directly.
 Use `create_theme` for simple overrides, or build a full `Theme` model:
 
 ```python
-from voodoo import App, create_theme
+from voodoo import App
+from voodoo.ui.styles import create_theme
 
 app = App(
     theme=create_theme(
@@ -124,7 +125,7 @@ app = App(
 )
 ```
 
-The stock Design System 3 look is minimalist and modern, with a distinct Voodoo
+The stock Design System 4 look is minimalist and modern, with a distinct Voodoo
 purple (`#7c3aed`) brand accent, generous whitespace, clean typography, subtle
 borders, compact premium controls, discreet shadows and a first-class dark
 mode.
@@ -148,7 +149,8 @@ applications fully themeable.
 | `NoopAdapter` | Bare element names | Minimal output, custom CSS only. |
 
 ```python
-from voodoo import set_style_adapter, TailwindAdapter
+from voodoo.ui.styles import set_style_adapter
+from voodoo.adapters import TailwindAdapter
 
 set_style_adapter(TailwindAdapter())
 ```
@@ -170,7 +172,7 @@ Layout is first-class. Components express structure without utility classes:
 | `Stack` | `gap` | Vertical flex (`vd-flex--col`) with semantic gap |
 
 ```python
-from voodoo import Page, Stack, Grid, Card, Badge, Heading
+from voodoo.ui import Page, Stack, Grid, Card, Badge, Heading
 
 ui = Page(
     Stack(
@@ -298,7 +300,7 @@ built-ins stay zero-network by referencing faces by name with system fallbacks.
 
 ### Built-in presets
 
-- **`default`** — the stock Voodoo Design System 3 look with the purple brand
+- **`default`** — the stock Voodoo Design System 4 look with the purple brand
   language and premium light/dark surfaces.
 - **`ember-paper`** — warm paper surfaces, an ember accent (`#E8A33D` dark /
   `#B45309` light), and editorial type (Fraunces display, Schibsted Grotesk
@@ -307,7 +309,8 @@ built-ins stay zero-network by referencing faces by name with system fallbacks.
 ## Inline custom CSS
 
 Use `css={}` for one-off inline overrides on individual components (the token
-system is the preferred path; this is the escape hatch):
+system is the preferred path; this is the escape hatch). Production CSP
+defaults reject `style-src 'unsafe-inline'`, so review this usage explicitly:
 
 ```python
 Div(Text("Centered"), css={"text_align": "center", "margin_top": "20px"})

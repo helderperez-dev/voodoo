@@ -16,6 +16,23 @@ from voodoo.ui.events import bind_event
 EventHandler = Callable[..., Any] | str
 
 
+def _data_state_attrs(
+    *, unavailable: bool, read_only: bool, loading: bool, error: bool | str
+) -> dict[str, Any]:
+    attrs: dict[str, Any] = {}
+    if unavailable:
+        attrs["aria_disabled"] = "true"
+    if read_only:
+        attrs["aria_readonly"] = "true"
+    if loading:
+        attrs["aria_busy"] = "true"
+    if error:
+        attrs["aria_invalid"] = "true"
+        if isinstance(error, str):
+            attrs["data_vd_error"] = error
+    return attrs
+
+
 def _data_id(prefix: str) -> str:
     return f"vd-{prefix}-{uuid4().hex[:8]}"
 
@@ -50,6 +67,9 @@ class DescriptionList(Component):
         *children: Component,
         orientation: str = "vertical",
         label: str | None = None,
+        empty_text: str = "No details available",
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if orientation not in {"vertical", "horizontal"}:
@@ -63,18 +83,53 @@ class DescriptionList(Component):
         }
         if label:
             attrs["aria_label"] = label
+        if loading:
+            attrs["aria_busy"] = "true"
+        if error:
+            attrs["aria_invalid"] = "true"
 
         # Flatten DescriptionItem children into (dt, dd) component pairs
         flattened: list[Any] = []
-        for child in children:
-            if isinstance(child, DescriptionItem):
-                dt, dd = child.render()
-                flattened.extend([dt, dd])
-            else:
-                flattened.append(child)
+        if error:
+            flattened.extend(
+                (
+                    _DescTerm("Status", data_vd_error_state=True),
+                    _DescValue(
+                        error if isinstance(error, str) else "Unable to load details",
+                        data_vd_error_state=True,
+                        aria_live="polite",
+                    ),
+                )
+            )
+        elif loading:
+            flattened.extend(
+                (
+                    _DescTerm("Status", data_vd_loading_state=True),
+                    _DescValue("Loading…", data_vd_loading_state=True, aria_live="polite"),
+                )
+            )
+        else:
+            for child in children:
+                if isinstance(child, DescriptionItem):
+                    dt, dd = child.render()
+                    flattened.extend([dt, dd])
+                else:
+                    flattened.append(child)
+        if not flattened:
+            flattened.extend(
+                (
+                    _DescTerm("Status", data_vd_empty_state=True),
+                    _DescValue(empty_text, data_vd_empty_state=True, aria_live="polite"),
+                )
+            )
 
         super().__init__(*flattened, **attrs, **kwargs)
-        self.props = {"orientation": orientation}
+        self.props = {
+            "orientation": orientation,
+            "empty": not bool(children) and not loading and not error,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class DescriptionItem:
@@ -196,11 +251,40 @@ class DataList(Component):
         label: str | None = None,
         compact: bool = False,
         striped: bool = False,
+        empty_text: str = "No data available",
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         rendered: list[Any] = []
-        for row in rows:
-            rendered.extend(row.render())
+        if error:
+            rendered.extend(
+                (
+                    _DataTerm("Status", data_vd_error_state=True),
+                    _DataValue(
+                        error if isinstance(error, str) else "Unable to load data",
+                        data_vd_error_state=True,
+                        aria_live="polite",
+                    ),
+                )
+            )
+        elif loading:
+            rendered.extend(
+                (
+                    _DataTerm("Status", data_vd_loading_state=True),
+                    _DataValue("Loading…", data_vd_loading_state=True, aria_live="polite"),
+                )
+            )
+        else:
+            for row in rows:
+                rendered.extend(row.render())
+        if not rendered:
+            rendered.extend(
+                (
+                    _DataTerm("Status", data_vd_empty_state=True),
+                    _DataValue(empty_text, data_vd_empty_state=True, aria_live="polite"),
+                )
+            )
 
         attrs: dict[str, Any] = {
             "data_vd_data_list": True,
@@ -209,11 +293,21 @@ class DataList(Component):
             attrs["data_vd_compact"] = True
         if striped:
             attrs["data_vd_striped"] = True
+        if loading:
+            attrs["aria_busy"] = "true"
+        if error:
+            attrs["aria_invalid"] = "true"
         if label:
             attrs["aria_label"] = label
 
         super().__init__(*rendered, **attrs, **kwargs)
-        self.props = {"compact": compact, "striped": striped}
+        self.props = {
+            "compact": compact,
+            "striped": striped,
+            "empty": not bool(rows) and not loading and not error,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class DataRow:
@@ -308,32 +402,61 @@ class ListBox(Component):
         label: str = "Options",
         multi: bool = False,
         on_select: EventHandler | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
+        empty_text: str = "No options available",
         **kwargs: Any,
     ) -> None:
-        if not options:
-            raise ValueError("ListBox requires at least one ListOption")
-
-        binding = bind_event(on_select) if on_select else None
-        enabled_indexes = [
-            index for index, option in enumerate(options) if not option.disabled
-        ]
-        if not enabled_indexes:
-            raise ValueError("ListBox requires at least one enabled ListOption")
-        selected_indexes = [
-            index
-            for index, option in enumerate(options)
-            if option.selected and not option.disabled
-        ]
-        focus_index = selected_indexes[0] if selected_indexes else enabled_indexes[0]
-        rendered = tuple(
-            option.render_option(
-                binding,
-                multi,
-                focusable=index == focus_index,
+        unavailable = disabled or read_only or loading or bool(error)
+        binding = bind_event(on_select) if on_select and not unavailable else None
+        if error or loading or not options:
+            if error:
+                message = error if isinstance(error, str) else "Unable to load options"
+                state = "error"
+            elif loading:
+                message = "Loading…"
+                state = "loading"
+            else:
+                message = empty_text
+                state = "empty"
+            rendered = (
+                _ListBoxState(message, role="option", aria_live="polite", data_vd_state=state),
             )
-            for index, option in enumerate(options)
-        )
+        else:
+            enabled_indexes = [
+                index for index, option in enumerate(options) if not option.disabled
+            ]
+            if not enabled_indexes:
+                raise ValueError("ListBox requires at least one enabled ListOption")
+            selected_indexes = [
+                index
+                for index, option in enumerate(options)
+                if option.selected and not option.disabled
+            ]
+            focus_index = selected_indexes[0] if selected_indexes else enabled_indexes[0]
+            rendered = tuple(
+                option.render_option(
+                    binding,
+                    multi,
+                    focusable=index == focus_index,
+                    group_disabled=disabled or read_only or loading,
+                )
+                for index, option in enumerate(options)
+            )
 
+        state_attrs: dict[str, Any] = {}
+        if disabled or read_only or loading:
+            state_attrs["aria_disabled"] = "true"
+        if read_only:
+            state_attrs["aria_readonly"] = "true"
+        if loading:
+            state_attrs["aria_busy"] = "true"
+            state_attrs["data_vd_loading"] = True
+        if error:
+            state_attrs["aria_invalid"] = "true"
+            state_attrs["data_vd_state"] = "error"
         super().__init__(
             _ListBoxGroup(
                 *rendered,
@@ -343,13 +466,26 @@ class ListBox(Component):
             ),
             data_vd_list_box=True,
             data_vd_multi=multi,
+            **state_attrs,
             **kwargs,
         )
-        self.props = {"multi": multi}
+        self.props = {
+            "multi": multi,
+            "disabled": disabled or loading,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
+        }
 
 
 class _ListBoxGroup(Component):
     style = "list-box.group"
+    auto_id = False
+
+
+class _ListBoxState(Component):
+    """Semantic status content for a listbox without usable options."""
+
     auto_id = False
 
 
@@ -365,6 +501,9 @@ class ListOption:
         icon: Component | None = None,
         selected: bool = False,
         disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
     ) -> None:
         self.label = label
         self.value = value or label
@@ -372,6 +511,9 @@ class ListOption:
         self.icon = icon
         self.selected = selected
         self.disabled = disabled
+        self.read_only = read_only
+        self.loading = loading
+        self.error = error
 
     def render_option(
         self,
@@ -379,7 +521,15 @@ class ListOption:
         multi: bool,
         *,
         focusable: bool = False,
+        group_disabled: bool = False,
     ) -> Component:
+        unavailable = (
+            self.disabled
+            or self.read_only
+            or self.loading
+            or bool(self.error)
+            or group_disabled
+        )
         content: list[Any] = []
         if self.icon:
             content.append(_ListOptionIcon(self.icon))
@@ -393,11 +543,15 @@ class ListOption:
             "role": "option",
             "aria_label": self.label,
             "aria_selected": "true" if self.selected else "false",
-            "aria_disabled": "true" if self.disabled else None,
-            "tabindex": "0" if focusable and not self.disabled else "-1",
+            "aria_disabled": "true" if unavailable else None,
+            "aria_readonly": "true" if self.read_only else None,
+            "aria_busy": "true" if self.loading else None,
+            "aria_invalid": "true" if self.error else None,
+            "data_vd_error": self.error if isinstance(self.error, str) else None,
+            "tabindex": "0" if focusable and not unavailable else "-1",
             "data_vd_value": self.value,
         }
-        if binding and not self.disabled:
+        if binding and not unavailable:
             attrs["data_vd_event_click"] = binding
 
         return _ListOptionButton(*content, **attrs)
@@ -735,6 +889,11 @@ class EnhancedDataTable(Component):
         density: str = "default",
         on_sort: EventHandler | None = None,
         on_row_click: EventHandler | None = None,
+        empty: Component | None = None,
+        disabled: bool = False,
+        read_only: bool = False,
+        loading: bool = False,
+        error: bool | str = False,
         **kwargs: Any,
     ) -> None:
         if not columns:
@@ -744,16 +903,19 @@ class EnhancedDataTable(Component):
                 "EnhancedDataTable density must be compact, default, or comfortable"
             )
 
-        sort_binding = bind_event(on_sort) if on_sort else None
-        row_binding = bind_event(on_row_click) if on_row_click else None
+        unavailable = disabled or read_only or loading or bool(error)
+        sort_binding = bind_event(on_sort) if on_sort and not unavailable else None
+        row_binding = (
+            bind_event(on_row_click) if on_row_click and not unavailable else None
+        )
 
         # Build headers
         headers = tuple(col.render_header(sort_binding) for col in columns)
         thead = _EnhancedTableHead(_EnhancedTableRow(*headers, role="row"))
 
         # Build body
-        body_rows: list[Component] = []
-        for i, row_data in enumerate(rows):
+        body_rows: list[Component] = self._state_rows(error, loading, len(columns))
+        for i, row_data in enumerate(rows) if not error and not loading else ():
             cells: list[Component] = []
             for col in columns:
                 value = row_data.get(col.key, "")
@@ -775,9 +937,19 @@ class EnhancedDataTable(Component):
                 "role": "row",
                 "data_vd_row_index": str(i),
             }
+            row_attrs.update(
+                _data_state_attrs(
+                    unavailable=unavailable,
+                    read_only=read_only,
+                    loading=loading,
+                    error=error,
+                )
+            )
             if row_binding:
                 row_attrs["data_vd_event_click"] = row_binding
             body_rows.append(_EnhancedTableRow(*cells, **row_attrs))
+
+        body_rows.extend(self._empty_rows(rows, empty, len(columns)))
 
         tbody = _EnhancedTableBody(*body_rows)
 
@@ -792,13 +964,86 @@ class EnhancedDataTable(Component):
             ),
             data_vd_enhanced_table=True,
             data_vd_density=density,
+            **_data_state_attrs(
+                unavailable=unavailable,
+                read_only=read_only,
+                loading=loading,
+                error=error,
+            ),
             **kwargs,
         )
         self.props = {
             "density": density,
             "column_count": len(columns),
             "row_count": len(rows),
+            "disabled": disabled,
+            "read_only": read_only,
+            "loading": loading,
+            "error": bool(error),
         }
+
+    @staticmethod
+    def _state_rows(
+        error: bool | str, loading: bool, column_count: int
+    ) -> list[Component]:
+        return EnhancedDataTable._error_rows(error, column_count) or EnhancedDataTable._loading_rows(
+            loading, column_count
+        )
+
+    @staticmethod
+    def _error_rows(error: bool | str, column_count: int) -> list[Component]:
+        if not error:
+            return []
+        message = error if isinstance(error, str) else "Unable to load data"
+        return [
+            _EnhancedTableRow(
+                _EnhancedTableCell(
+                    message,
+                    colspan=column_count,
+                    role="cell",
+                    aria_live="polite",
+                    data_vd_error_state=True,
+                ),
+                role="row",
+            )
+        ]
+
+    @staticmethod
+    def _loading_rows(loading: bool, column_count: int) -> list[Component]:
+        if not loading:
+            return []
+        return [
+            _EnhancedTableRow(
+                _EnhancedTableCell(
+                    "Loading…",
+                    colspan=column_count,
+                    role="cell",
+                    aria_live="polite",
+                    data_vd_loading_state=True,
+                ),
+                role="row",
+            )
+        ]
+
+    @staticmethod
+    def _empty_rows(
+        rows: Sequence[dict[str, Any]], empty: Component | None, column_count: int
+    ) -> list[Component]:
+        if rows:
+            return []
+        content: Component | str = empty if empty is not None else "No data available"
+        return [
+            _EnhancedTableRow(
+                _EnhancedTableCell(
+                    content,
+                    colspan=column_count,
+                    role="cell",
+                    aria_live="polite",
+                    data_vd_empty_state=True,
+                ),
+                role="row",
+            )
+        ]
 
 
 class _EnhancedTableContainer(Component):

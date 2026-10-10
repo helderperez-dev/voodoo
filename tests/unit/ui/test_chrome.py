@@ -110,6 +110,28 @@ def test_cta_backlink_featurecard_linkarrow(voodoo_css_adapter):
     assert "vd-link-arrow" in LinkArrow("More", href="/docs").render()
 
 
+def test_chrome_activation_surfaces_share_unavailable_state_contract():
+    html = "".join(
+        component.render()
+        for component in (
+            NavLink(
+                "Docs",
+                href="/docs",
+                read_only=True,
+                loading=True,
+                error="Unavailable",
+            ),
+            BackLink("Back", href="/", disabled=True),
+            LinkArrow("More", href="/more", disabled=True),
+        )
+    )
+    assert html.count('aria-disabled="true"') == 3
+    assert 'data-vd-error="Unavailable"' in html
+    assert 'href="/docs"' not in html
+    assert 'href="/"' not in html
+    assert 'href="/more"' not in html
+
+
 def test_chrome_css_generated():
     css = generate_component_css(Theme())
     for expected in (

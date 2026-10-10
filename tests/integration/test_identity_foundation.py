@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+import pytest
 
 from voodoo.auth.user import AuthUser
 from voodoo.primitives.capability import Capability
@@ -42,6 +45,14 @@ def test_identity_store_persists_all_runtime_identity_kinds(tmp_path: Path) -> N
     for identity in identities:
         store.save(identity)
 
+    assert runtime.provider.native.collection_definition(b"runtime.identity") == (
+        1,
+        b"json",
+    )
+    assert runtime.provider.native.get_record(
+        b"runtime.identity", b"user:1"
+    ) is not None
+
     assert [item.id for item in store.list()] == [
         "agent:planner",
         "device:robot-7",
@@ -65,6 +76,28 @@ def test_identity_store_persists_all_runtime_identity_kinds(tmp_path: Path) -> N
         assert reopened.get("service:billing") is None
     finally:
         reopened_runtime.stop()
+
+
+def test_identity_codec_reads_legacy_and_rejects_future_schema(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path / "identity-codec.vstore")
+    try:
+        store = VoodooStoreIdentityStore(runtime)
+        identity = Identity(id="user:legacy", kind=IdentityKind.USER)
+        legacy = identity.describe()
+        native = runtime.provider.native
+        native.put(store._key(identity.id), json.dumps(legacy).encode("utf-8"))
+        assert store.get(identity.id).id == identity.id
+        store.save(identity)
+        assert native.get_record(b"runtime.identity", identity.id.encode("utf-8")) is not None
+        assert native.get(store._key(identity.id)) is None
+
+        future = dict(legacy)
+        future["_schema_version"] = 99
+        native.put(store._key("future"), json.dumps(future).encode("utf-8"))
+        with pytest.raises(ValueError, match="newer than supported"):
+            store.get("future")
+    finally:
+        runtime.stop()
 
 
 def test_principal_is_identity_plus_authentication_not_authority() -> None:
