@@ -108,11 +108,10 @@ class RuntimeTransaction:
             raise StoreProviderError(
                 "Active Voodoo Store does not expose transactional capability"
             )
-        self._tx = native.transaction()
         self._native_collections = all(
             hasattr(native, method)
             for method in ("create_collection", "upsert_record")
-        ) and hasattr(self._tx, "delete_record")
+        )
         if self._native_collections:
             native.create_collection(
                 _OUTBOX_PENDING_COLLECTION, schema_version=1, codec=b"json"
@@ -120,6 +119,12 @@ class RuntimeTransaction:
             native.create_collection(
                 _OUTBOX_DELIVERED_COLLECTION, schema_version=1, codec=b"json"
             )
+        # Store collection provisioning borrows the native handle exclusively;
+        # perform it before opening the transaction that owns the borrow.
+        self._tx = native.transaction()
+        self._native_collections = self._native_collections and hasattr(
+            self._tx, "delete_record"
+        )
         self._native_outbox = all(
             hasattr(native, method)
             for method in ("emit_outbox_event", "outbox_events_after", "ack_outbox_event")
