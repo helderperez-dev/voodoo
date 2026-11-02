@@ -82,6 +82,13 @@ defects.
 - ~150 KB of CSS is inlined into every HTML response; nothing is cacheable.
 - Design System 4 hard-codes Voodoo purple tokens even though the Constitution
   (§19) says identity must not depend on forcing every application to be purple.
+- The shareable preset system already exists (`theme.json`, URL, user directory,
+  `voodoo-theme-<name>` PyPI packages), but the visual layer bypasses it:
+  `ui/styles/system.py` contains 67 literal colors, and
+  `ui/styles/theme_contract.py` decides whether a Theme value is
+  "explicitly customized" by comparing it to the old default. A theme that
+  happens to reuse a default value is silently ignored, and no preset can
+  re-skin the whole interface through tokens alone.
 - The Tailwind adapter injects `cdn.tailwindcss.com`, a development-only build
   (`ui/rendering.py`), which conflicts with the production CSP posture of
   Sprint 30.
@@ -124,13 +131,17 @@ defects.
    scroll, open layers and running transitions.
 4. **Fewer, finished components.** A component ships only when the full
    Constitution §11 anatomy is satisfied. Breadth follows quality.
-5. **Identity through behavior, not color.** The default brand is configurable;
-   Voodoo is recognizable by proportion, motion, inspection and state language.
-6. **Dogfood first.** Voodoo's own operational surfaces are built with the
+5. **No default brand color.** The default theme is neutral and monochrome.
+   Voodoo is recognizable by proportion, motion, inspection and state
+   language — never by a hue. Every color is a theme decision.
+6. **Themes are complete, small and shareable.** A theme is a data file that
+   can restyle every component without CSS. Components contain zero literal
+   colors.
+7. **Dogfood first.** Voodoo's own operational surfaces are built with the
    public UI API and are acceptance applications.
-7. **Evidence must be able to fail.** Visual and behavioral gates detect
+8. **Evidence must be able to fail.** Visual and behavioral gates detect
    unstyled, overlapping and overflowing elements before humans approve images.
-8. **Zero application JavaScript and zero custom CSS remain the happy path.**
+9. **Zero application JavaScript and zero custom CSS remain the happy path.**
 
 ## Workstreams
 
@@ -144,8 +155,8 @@ defects.
 - [ ] Three-tier token model generated from the public `Theme`:
   reference tokens → semantic tokens → component tokens. `Theme` stays the only
   public customization contract.
-- [ ] Neutral-first default theme with configurable accent; Voodoo purple
-  becomes a preset, not an assumption.
+- [ ] Component CSS consumes only semantic and component tokens; literal
+  colors outside the token layer fail CI.
 - [ ] First-class `density` (`comfortable`, `compact`) and `radius` scales
   applied at page/system context, as `COMPONENT_API.md` already promises.
 - [ ] Decide the Tailwind adapter's future (see Open decisions). Under no
@@ -153,7 +164,52 @@ defects.
 - [ ] Typography scale, spacing scale and icon set audited against the
   Constitution §7–§9 and documented once.
 
-### 31.2 Rendering engine — reconcile, don't replace
+### 31.2 Theme platform — neutral, complete, shareable
+
+Decision (2026-11-02): **Voodoo has no default brand color.** The default
+theme is a minimal monochrome neutral; color is entirely a theme concern, and
+themes must be easy to create, swap and share with the community.
+
+- [ ] **Neutral default theme**: grayscale surfaces, near-black/near-white
+  primary actions, restrained borders. It must be beautiful on its own and pass
+  every visual gate. Semantic status colors (success, warning, danger, info)
+  remain themable, never hard-coded.
+- [ ] **Seed-driven themes**: a theme can be declared from a few seeds —
+  neutral scale, optional accent, radius, density, font families, and
+  light/dark — and every other token is derived deterministically (OKLCH
+  ramps). Any derived semantic or component token can still be overridden.
+- [ ] **Customization ladder**, each step optional and documented:
+  1. seeds;
+  2. semantic tokens (`surface`, `text-muted`, `border`, `accent`, `danger`…);
+  3. component tokens (`button.radius`, `input.height`, `table.row-hover`…);
+  4. preset `custom.css` as a reviewed escape hatch, loaded in its own cascade
+     layer so it cannot break component structure.
+- [ ] Remove the DS4 bridge heuristic in `theme_contract.py`: Theme values are
+  authoritative, with explicit `None` meaning "derive".
+- [ ] **Versioned, language-neutral theme format**: `theme.json` gains
+  `schema_version`, `name`, `version`, `author`, `license`, `description`,
+  seeds, tokens and light/dark variants. Its JSON Schema is published through
+  `voodoo.protocol` so Store Studio, the Builder and future non-Python clients
+  read the same themes.
+- [ ] **Theme tooling** on the existing `voodoo theme` CLI:
+  - `voodoo theme new <name> [--accent …] [--from <preset>]` scaffolds a theme;
+  - `voodoo theme validate` checks schema, token completeness and WCAG
+    contrast for every foreground/background pairing in light and dark;
+  - `voodoo theme preview` opens the Component Lab with the theme applied;
+  - `voodoo theme package` produces a publishable `voodoo-theme-<name>` package.
+- [ ] **Community distribution** keeps the existing local-first channels
+  (file, user directory, PyPI package) and adds an optional static index that
+  `voodoo theme list --remote` can read. Remote themes are always snapshotted
+  into `.voodoo/theme/` by `voodoo theme use`; nothing is fetched at request
+  time.
+- [ ] Runtime switching without reload (light/dark/system and theme swap) and
+  subtree scoping via `data-theme` for embedded surfaces.
+- [ ] Built-in presets prove completeness: `neutral` (default) plus at least
+  two contrasting presets (for example a Voodoo-purple preset and
+  `ember-paper`). Every built-in preset runs the full visual, contrast and
+  layout gates.
+
+### 31.3 Rendering engine — reconcile, don't replace
 
 - [ ] Keyed DOM reconciliation (morphing) in the framework client runtime,
   implemented in-repo without a new required dependency. Stable identity comes
@@ -167,7 +223,7 @@ defects.
 - [ ] Performance budgets enforced in CI: initial HTML weight, CSS/JS weight,
   patch latency, and list update cost for 1,000 keyed rows.
 
-### 31.3 Primitives — fewer, finished
+### 31.4 Primitives — fewer, finished
 
 - [ ] Machine-readable **component contract** per component (purpose, anatomy
   slots, variants, sizes, states, keyboard map, ARIA, responsive behavior,
@@ -185,7 +241,7 @@ defects.
   `ui/primitives/`, `ui/patterns/`, `ui/system/` (subject to an architecture
   decision per `docs/architecture/repository.md`).
 
-### 31.4 Product patterns — operational excellence
+### 31.5 Product patterns — operational excellence
 
 - [ ] `DataTable` as an excellent primary surface (Constitution §14): sorting,
   column sizing, sticky header, selection, row actions, empty/loading/error,
@@ -201,7 +257,7 @@ defects.
   contextual inspector. `AppShell` with adaptive sidebar and proper mobile
   navigation.
 
-### 31.5 Runtime-aware system components — the Voodoo signature
+### 31.6 Runtime-aware system components — the Voodoo signature
 
 - [ ] A **live binding** seam: a system component can be given a Runtime
   identity and a read model, subscribes to the corresponding namespaced Runtime
@@ -227,7 +283,7 @@ defects.
   `voodoo.world`); the UI never reaches into Store encodings and never becomes
   a second authority model.
 
-### 31.6 Voodoo Console — dogfood acceptance product
+### 31.7 Voodoo Console — dogfood acceptance product
 
 - [ ] `voodoo console`: a local, loopback-only operational surface built
   **only** with public `voodoo.ui` APIs and the live binding seam. It replaces
@@ -243,19 +299,19 @@ defects.
   framework capability is mature enough") and the future Builder, sharing one
   Design System and one execution/trace vocabulary.
 
-### 31.7 Evidence that can fail
+### 31.8 Evidence that can fail
 
 - [ ] Automated layout lint in the browser suite: unstyled-component detection
   (computed style vs. contract), element overlap, horizontal overflow, clipped
   text, touch-target size and contrast — run on every Component Lab route and
   every Console surface, light/dark, desktop/mobile, LTR/RTL.
-- [ ] Discard the current visual baselines; regenerate only after 31.1–31.4
+- [ ] Discard the current visual baselines; regenerate only after 31.1–31.5
   land and after **human approval** of a published review gallery.
 - [ ] Hosted axe + keyboard matrix on Chromium, Firefox and WebKit
   (closes the remaining Sprint 30.5 hosted item).
-- [ ] Performance budgets from 31.2 as release gates.
+- [ ] Performance budgets from 31.3 as release gates.
 
-### 31.8 Documentation and developer experience
+### 31.9 Documentation and developer experience
 
 - [ ] Component documentation generated from the component contracts, with
   correct and incorrect usage examples (Constitution §11).
@@ -270,11 +326,11 @@ defects.
 
 | Phase | Scope | Exit evidence |
 |---|---|---|
-| A — Foundations | 31.1 + 31.2 + layout lint from 31.7 | One stylesheet, static hashed assets, keyed reconciliation preserving focus/scroll/open state, layout lint running and failing on today's defects. |
-| B — Primitives | 31.3 | Every Layer 1 primitive has a contract and passes lint, keyboard and a11y in light/dark/mobile. |
-| C — Patterns | 31.4 | DataTable, LogViewer, Timeline, Inspector, CommandPalette and AppShell pass contracts and perf budgets. |
-| D — Runtime-aware | 31.5 | Live system components render real Runtime state with freshness and Effect/Observation distinction. |
-| E — Console | 31.6 + 31.7 + 31.8 | `voodoo console` operates a real app end to end; new baselines approved; docs generated. |
+| A — Foundations | 31.1 + 31.2 + 31.3 + layout lint from 31.8 | One stylesheet, zero literal colors in component CSS, neutral default plus two presets, versioned theme schema, static hashed assets, keyed reconciliation preserving focus/scroll/open state, layout lint running and failing on today's defects. |
+| B — Primitives | 31.4 | Every Layer 1 primitive has a contract and passes lint, keyboard and a11y in light/dark/mobile. |
+| C — Patterns | 31.5 | DataTable, LogViewer, Timeline, Inspector, CommandPalette and AppShell pass contracts and perf budgets. |
+| D — Runtime-aware | 31.6 | Live system components render real Runtime state with freshness and Effect/Observation distinction. |
+| E — Console | 31.7 + 31.8 + 31.9 | `voodoo console` operates a real app end to end; new baselines approved; docs generated. |
 
 Each phase is independently releasable as a minor version if it does not break
 the public API; breaking changes are collected for the next major per the
@@ -293,17 +349,23 @@ voodoo console
 
 and observe, with zero custom CSS and zero application JavaScript:
 
-1. the generated app and the Console share one calm, branded design language
+1. the generated app and the Console share one calm, neutral design language
    in light and dark, desktop and mobile;
-2. an Execution started from the app appears in the Console, moves through
+2. `voodoo theme new acme --accent "#0ea5e9"` followed by
+   `voodoo theme use acme` re-skins the app and the Console completely —
+   including status colors, radius, density and typography — with no code or
+   CSS changes, and `voodoo theme validate` passes;
+3. a community theme installed with `voodoo theme install <name>` behaves
+   identically;
+4. an Execution started from the app appears in the Console, moves through
    `requested → accepted → executing → waiting`, requests approval, is
    approved from the Console through Capability + Policy and completes — with
    live, animated, context-preserving updates;
-3. a simulated Edge device Effect is shown separately from the Observation
+5. a simulated Edge device Effect is shown separately from the Observation
    that confirms it;
-4. every surface passes layout lint, keyboard, axe and performance gates on
+6. every surface passes layout lint, keyboard, axe and performance gates on
    Chromium, Firefox and WebKit;
-5. the visual baselines were approved by a human from a published gallery.
+7. the visual baselines were approved by a human from a published gallery.
 
 ## Non-goals
 
@@ -315,6 +377,11 @@ and observe, with zero custom CSS and zero application JavaScript:
 - Remote/multi-tenant Console hosting (loopback only; remote access is a
   later Capability-gated product decision).
 
+## Decided
+
+- **No default brand color** (2026-11-02): neutral monochrome default; color
+  lives in shareable themes. See 31.2.
+
 ## Open decisions for the selection gate
 
 1. **Activation timing.** Start after Sprint 30 closes, or absorb Sprint 30's
@@ -324,9 +391,7 @@ and observe, with zero custom CSS and zero application JavaScript:
 2. **Tailwind adapter.** (a) remove in the next major; (b) keep as an opt-in
    adapter that requires an application-owned build and never loads the CDN;
    (c) keep only as a class-name mapping without bundled runtime.
-3. **Default brand.** Neutral default with purple as a preset, or keep purple
-   as the default accent with neutral as a preset.
-4. **Catalog contraction.** Which non-stable families are deprecated in 3.x and
+3. **Catalog contraction.** Which non-stable families are deprecated in 3.x and
    removed in 4.0.
-5. **Source layout.** Approve `ui/primitives/`, `ui/patterns/`, `ui/system/`
+4. **Source layout.** Approve `ui/primitives/`, `ui/patterns/`, `ui/system/`
    as the new physical ownership.

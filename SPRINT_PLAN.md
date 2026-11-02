@@ -343,7 +343,8 @@ Deferred directions already supported by the architecture:
 
 Proposed candidate (2026-11-02): **Sprint 31 — Runtime Interface**
 ([`docs/sprints/SPRINT_31_RUNTIME_INTERFACE.md`](docs/sprints/SPRINT_31_RUNTIME_INTERFACE.md)).
-It combines directions 4 and 6: one style owner, keyed DOM reconciliation,
+It combines directions 4 and 6: one style owner, a neutral default with
+shareable community themes, keyed DOM reconciliation,
 contract-backed primitives, Runtime-aware system components and a dogfooded
 `voodoo console`. It is not active until this tracker declares it so.
 
