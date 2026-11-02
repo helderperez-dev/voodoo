@@ -4,6 +4,9 @@
 
 ### Added
 
+- Added the proposed Sprint 31 Runtime Interface plan with the 2026-11-02
+  Component Lab audit (style ownership, DOM reconciliation, Runtime-aware
+  system components and the `voodoo console` acceptance target).
 - Added a package-owned default scaffold shared by `voodoo new` and the
   deprecated `voodoo create` compatibility alias, with placeholder-safe
   project metadata and folder-based routes.

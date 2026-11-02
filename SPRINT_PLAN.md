@@ -49,6 +49,7 @@ Core laws:
 | Store 0.3 native convergence + modern Model contract | **DONE and released (v3.2.1)** |
 | Sprint 29 — Experience Convergence | **DONE · closed 2026-09-30** |
 | Sprint 30 — Production Readiness | **IN PROGRESS · started 2026-10-06** |
+| Sprint 31 — Runtime Interface | **PROPOSED · awaiting selection gate** |
 | Next release target | **Determined by verified Sprint 30 compatibility impact** |
 | Release checkpoint | **No Sprint 30 release claim until every mandatory gate passes** |
 
@@ -339,6 +340,12 @@ Deferred directions already supported by the architecture:
 4. Studio / operational product surface;
 5. managed Runtime/cloud control plane;
 6. a product/reference application that pressure-tests the 3.0 Runtime end to end.
+
+Proposed candidate (2026-11-02): **Sprint 31 — Runtime Interface**
+([`docs/sprints/SPRINT_31_RUNTIME_INTERFACE.md`](docs/sprints/SPRINT_31_RUNTIME_INTERFACE.md)).
+It combines directions 4 and 6: one style owner, keyed DOM reconciliation,
+contract-backed primitives, Runtime-aware system components and a dogfooded
+`voodoo console`. It is not active until this tracker declares it so.
 
 Selection criteria:
 
