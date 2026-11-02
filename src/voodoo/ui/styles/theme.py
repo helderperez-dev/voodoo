@@ -25,7 +25,14 @@ class ThemeColors(BaseModel):
 
     primary: str = "#FAFAFA"  # Dark-mode action fill (near-white; Linear/Vercel)
     primary_hover: str = "#E4E4E7"  # Dark-mode hover (Zinc-200)
-    secondary: str = "#6366F1"  # Indigo accent (links, focus, emphasis)
+    secondary: str = "#71717A"  # Neutral secondary (Zinc-500); no brand hue
+
+    # Optional brand accent. ``None`` keeps the interface monochrome: the brand
+    # then follows ``primary``. Setting it recolors every branded surface.
+    accent: str | None = None
+    light_accent: str | None = None  # defaults to ``accent`` in light mode
+    on_accent: str | None = None  # computed from contrast when omitted
+    light_on_accent: str | None = None
 
     # Status
     success: str = "#22C55E"
@@ -53,9 +60,8 @@ class ThemeColors(BaseModel):
     light_primary: str = "#18181B"  # Zinc-900
     light_primary_hover: str = "#27272A"  # Zinc-800
 
-    # Accent fill — light mode. Defaults to the same indigo as dark mode so the
-    # stock theme is unchanged; themes may darken it for contrast on white.
-    light_secondary: str = "#6366F1"
+    # Secondary fill — light mode; themes may darken it for contrast on white.
+    light_secondary: str = "#52525B"
 
     # On-color contrast — text/icons placed on top of a solid fill.
     # Kept explicit (not derived) so themes can force legible contrast.
@@ -76,6 +82,10 @@ class ThemeColors(BaseModel):
         named = self.model_dump(
             exclude={
                 "extra",
+                "accent",
+                "light_accent",
+                "on_accent",
+                "light_on_accent",
                 "light_background",
                 "light_surface",
                 "light_surface_raised",
@@ -90,10 +100,21 @@ class ThemeColors(BaseModel):
             }
         )
         hyphenated = {k.replace("_", "-"): v for k, v in named.items()}
+        if self.accent:
+            hyphenated["accent"] = self.accent
+        if self.on_accent:
+            hyphenated["on-accent"] = self.on_accent
         return {**hyphenated, **self.extra}
 
     def light_overrides(self) -> dict[str, str]:
+        accent = self.light_accent or self.accent
+        on_accent = self.light_on_accent or self.on_accent
+        optional = {
+            **({"accent": accent} if accent else {}),
+            **({"on-accent": on_accent} if on_accent else {}),
+        }
         return {
+            **optional,
             "background": self.light_background,
             "surface": self.light_surface,
             "surface-raised": self.light_surface_raised,
@@ -428,6 +449,7 @@ def create_theme(
     *,
     primary: str | None = None,
     secondary: str | None = None,
+    accent: str | None = None,
     background: str | None = None,
     surface: str | None = None,
     text: str | None = None,
@@ -441,25 +463,31 @@ def create_theme(
 ) -> Theme:
     """Create a theme with sensible defaults and simple overrides.
 
+    ``primary`` is the action fill, ``accent`` is an optional brand color, and
+    shared surface values (``background``, ``surface``, ``text``, ``border``)
+    apply to both light and dark mode. Without ``accent`` the theme stays
+    monochrome.
+
     Example::
 
-        theme = create_theme(primary="#635BFF", font="Inter", radius="md")
+        theme = create_theme(accent="#635BFF", font="Inter", radius="md")
         app = App(theme=theme)
     """
     colors = ThemeColors()
-    if primary:
-        colors.primary = primary
-        colors.light_primary = primary
-    if secondary:
-        colors.secondary = secondary
-    if background:
-        colors.background = background
-    if surface:
-        colors.surface = surface
-    if text:
-        colors.text = text
-    if border:
-        colors.border = border
+    # Each seed fans out to every color field it controls in both modes.
+    seeds: list[tuple[str | None, tuple[str, ...]]] = [
+        (primary, ("primary", "light_primary")),
+        (secondary, ("secondary", "light_secondary")),
+        (accent, ("accent",)),
+        (background, ("background", "light_background")),
+        (surface, ("surface", "light_surface")),
+        (text, ("text", "light_text")),
+        (border, ("border", "light_border")),
+    ]
+    for value, fields in seeds:
+        if value:
+            for field in fields:
+                setattr(colors, field, value)
     if extra_colors:
         colors.extra = {**colors.extra, **extra_colors}
 

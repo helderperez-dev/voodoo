@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added `voodoo theme new` (seed-based theme scaffolding with automatic
+  light-mode accent contrast) and `voodoo theme validate` (WCAG contrast for
+  light and dark, `--json`, non-hex colors reported as unverified), backed by
+  `voodoo.ui.styles.theme_validation`.
+- Added optional `accent`, `light_accent`, `on_accent` and `light_on_accent`
+  theme colors, `create_theme(accent=...)`, and the `voodoo-purple` preset.
 - Added the proposed Sprint 31 Runtime Interface plan with the 2026-11-02
   Component Lab audit (style ownership, DOM reconciliation, Runtime-aware
   system components and the `voodoo console` acceptance target).
@@ -21,6 +27,19 @@
   supply-chain boundaries.
 
 ### Changed
+
+- **Breaking visual change:** Voodoo no longer ships a brand color. The default
+  theme is a neutral monochrome scale, and the former purple look is the opt-in
+  `voodoo-purple` preset. `Theme` is now authoritative for every color token:
+  the Design System no longer guesses customization by comparing values with
+  former defaults. The brand follows the new optional `accent` (falling back to
+  `primary`); `secondary` no longer implies a brand color, and its default is
+  neutral. Shared `create_theme(background/surface/text/border)` values apply to
+  both light and dark mode. Primary buttons are flat instead of gradient.
+- Moved every color token (brand, surfaces, status soft/line/strong/focus and
+  `on-*` contrast colors) into `ui/styles/theme_contract.py`; component CSS and
+  the base adapter contain no color literals, enforced by
+  `scripts/check_component_style_tokens.py`.
 
 - Removed the second inline `voodoo create` scaffold implementation; new
   projects now converge on the same resource-backed starter files used by the

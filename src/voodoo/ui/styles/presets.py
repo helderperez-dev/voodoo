@@ -295,7 +295,9 @@ def get_active_custom_css() -> str:
 register_builtin(
     "default",
     lambda: ThemePreset(
-        name="default", description="Voodoo default theme", theme=Theme()
+        name="default",
+        description="Neutral monochrome theme with no brand color",
+        theme=Theme(),
     ),
 )
 
@@ -311,6 +313,10 @@ def _ember_paper_theme() -> Theme:
 
     colors = ThemeColors(
         # Ember accent (amber in dark mode, burnt ember in light mode).
+        accent="#E8A33D",
+        light_accent="#B45309",
+        on_accent="#0F0D0B",
+        light_on_accent="#FFFFFF",
         secondary="#E8A33D",
         light_secondary="#B45309",
         on_secondary="#0F0D0B",
@@ -372,6 +378,41 @@ register_builtin(
             "display type."
         ),
         theme=_ember_paper_theme(),
+    ),
+)
+
+
+def _voodoo_purple_theme() -> Theme:
+    """Build the former Design System 4 look as an opt-in preset."""
+    from voodoo.ui.styles.theme import ThemeColors
+
+    colors = ThemeColors(
+        accent="#7C3AED",
+        on_accent="#FFFFFF",
+        secondary="#7C3AED",
+        light_secondary="#7C3AED",
+        background="#09090F",
+        surface="#101017",
+        surface_raised="#171720",
+        text="#F7F7FB",
+        text_muted="#AAAAB7",
+        border="#252532",
+        light_background="#FFFFFF",
+        light_surface="#FFFFFF",
+        light_surface_raised="#F6F6F8",
+        light_text="#111118",
+        light_text_muted="#6F6F7B",
+        light_border="#E8E8ED",
+    )
+    return Theme(mode="dark", colors=colors)
+
+
+register_builtin(
+    "voodoo-purple",
+    lambda: ThemePreset(
+        name="voodoo-purple",
+        description="Violet accent over cool, slightly tinted neutral surfaces.",
+        theme=_voodoo_purple_theme(),
     ),
 )
 

@@ -308,7 +308,7 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     background: var(--vd-color-surface); color: var(--vd-color-text);
 }}
 .vd-button--danger {{
-    background: var(--vd-color-danger); color: #fff;
+    background: var(--vd-color-danger); color: var(--vd-on-danger);
 }}
 .vd-button--danger:hover {{ opacity: 0.9; }}
 .vd-button--sm {{ height: 2rem; padding: 0 0.75rem; font-size: {t}xs); }}
@@ -422,9 +422,9 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     border: 1px solid var(--vd-color-border);
 }}
 .vd-badge--outline {{ color: var(--vd-color-text); border: 1px solid var(--vd-color-border); }}
-.vd-badge--success {{ background: var(--vd-color-success); color: #fff; }}
-.vd-badge--warning {{ background: var(--vd-color-warning); color: #000; }}
-.vd-badge--danger {{ background: var(--vd-color-danger); color: #fff; }}
+.vd-badge--success {{ background: var(--vd-color-success); color: var(--vd-on-success); }}
+.vd-badge--warning {{ background: var(--vd-color-warning); color: var(--vd-on-warning); }}
+.vd-badge--danger {{ background: var(--vd-color-danger); color: var(--vd-on-danger); }}
 
 /* Avatar */
 .vd-avatar {{
@@ -458,7 +458,7 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
 .vd-alert--solid {{
     background: var(--vd-alert-color); border-color: var(--vd-alert-color); color: white;
 }}
-.vd-alert--solid.vd-alert--warning {{ color: #171717; }}
+.vd-alert--solid.vd-alert--warning {{ color: var(--vd-on-warning); }}
 .vd-alert-title {{ font-size: {t}sm); font-weight: var(--vd-weight-semibold); }}
 .vd-alert-content {{ font-size: {t}sm); line-height: 1.55; color: inherit; opacity: 0.88; }}
 
@@ -654,7 +654,7 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
 }}
 .vd-chat-message--user {{
     align-self: flex-end;
-    background: var(--vd-color-primary); color: var(--vd-color-primary-contrast, #fff);
+    background: var(--vd-color-primary); color: var(--vd-color-primary-contrast, var(--vd-color-on-primary));
     border-bottom-right-radius: {r}sm);
 }}
 .vd-chat-message--assistant {{
@@ -707,7 +707,7 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
     display: inline-flex; align-items: center; justify-content: center;
     width: 2.25rem; height: 2.25rem; border: none; cursor: pointer;
     border-radius: {r}md); background: var(--vd-color-primary);
-    color: var(--vd-color-primary-contrast, #fff);
+    color: var(--vd-color-primary-contrast, var(--vd-color-on-primary));
     transition: opacity {m}normal);
 }}
 .vd-composer-send:hover {{ opacity: 0.9; }}
@@ -1186,7 +1186,7 @@ button, input, select, textarea {{ font: inherit; color: inherit; }}
 .vd-user-badge-avatar {{
     display: flex; height: 1.75rem; width: 1.75rem; align-items: center;
     justify-content: center; border-radius: {r}full);
-    background: var(--vd-color-secondary); color: #fff;
+    background: var(--vd-color-secondary); color: var(--vd-color-on-secondary);
     font-size: {t}xs); font-weight: var(--vd-weight-semibold);
     text-transform: uppercase;
 }}

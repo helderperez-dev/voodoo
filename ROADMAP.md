@@ -191,14 +191,14 @@ reintroduced as duplicate owners.
 Voodoo UI is part of the Runtime developer experience, not a separate frontend
 framework. The native visual layer is Design System 4:
 
-- intentional Voodoo purple identity by default;
+- no default brand color: a neutral monochrome default and shareable themes;
 - premium light/dark surfaces;
 - responsive page geometry and component defaults;
 - accessible focus and reduced-motion behavior;
 - Theme-authoritative customization for branded applications;
 - no custom CSS required for the normal application path.
 
-Themes remain semantic. DS3 visual tokens derive from the public `Theme` contract rather
+Themes remain semantic. Design System tokens derive from the public `Theme` contract rather
 than becoming a second, hard-coded theming system. Tailwind remains an opt-in adapter,
 not a framework dependency.
 

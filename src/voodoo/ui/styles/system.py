@@ -1,8 +1,8 @@
 """Voodoo native design-system convergence layer.
 
 The native component stylesheet provides the structural baseline. This module
-owns the opinionated visual language that makes a zero-custom-CSS Voodoo app
-look intentional in both light and dark themes.
+owns the structural visual language (hierarchy, spacing, motion, shadows). It
+contains no color literals: every color comes from the Theme contract.
 """
 
 from voodoo.ui.styles.theme import Theme
@@ -20,42 +20,22 @@ def generate_design_system_css(theme: Theme) -> str:
 /* ── Voodoo Design System 4 — Experience Convergence ─────────────── */
 
 :root {
-    --vd-brand: #7c3aed;
-    --vd-brand-hover: #6d28d9;
-    --vd-brand-strong: #5b21b6;
-    --vd-brand-soft: color-mix(in srgb, var(--vd-brand) 10%, transparent);
-    --vd-brand-softer: color-mix(in srgb, var(--vd-brand) 5%, transparent);
-    --vd-brand-line: color-mix(in srgb, var(--vd-brand) 22%, transparent);
-    --vd-brand-glow: color-mix(in srgb, var(--vd-brand) 20%, transparent);
-    --vd-brand-highlight: #8b5cf6;
-    --vd-brand-highlight-hover: #8250ee;
-    --vd-on-brand: #ffffff;
-    --vd-danger-strong: #dc2626;
-    --vd-danger-badge-strong: #dc2626;
-    --vd-danger-focus: rgb(239 68 68 / 0.18);
-    --vd-success-soft: rgb(16 185 129 / 0.1);
-    --vd-success-line: rgb(16 185 129 / 0.2);
-    --vd-success-strong: #059669;
-    --vd-warning-soft: rgb(245 158 11 / 0.11);
-    --vd-warning-line: rgb(245 158 11 / 0.22);
-    --vd-warning-strong: #b45309;
-    --vd-danger-soft: rgb(239 68 68 / 0.1);
-    --vd-danger-line: rgb(239 68 68 / 0.2);
-    --vd-shadow-button: 0 1px 1px rgb(15 15 25 / 0.025);
-    --vd-shadow-input: 0 1px 1px rgb(15 15 25 / 0.02);
-    --vd-shadow-control: 0 1px 2px rgb(0 0 0 / 0.16);
-    --vd-shadow-panel: 0 1px 2px rgb(15 15 25 / 0.025);
-    --vd-shadow-panel-strong: 0 1px 2px rgb(15 15 25 / 0.04);
-    --vd-shadow-inspector: -1rem 0 3rem rgb(0 0 0 / 0.12);
-    --vd-overlay-scrim: rgb(0 0 0 / 0.24);
-    --vd-shadow-extended-lg: 0 10px 40px rgba(0,0,0,.25);
-    --vd-shadow-extended-lg-strong: 0 10px 40px rgba(0,0,0,.35);
-    --vd-shadow-extended-sm: 0 1px 3px rgba(0,0,0,.12);
-    --vd-shadow-extended-sm-strong: 0 1px 3px rgba(0,0,0,.2);
-    --vd-shadow-extended-md: 0 4px 16px rgba(0,0,0,.15);
-    --vd-color-danger-default: #ef4444;
-    --vd-color-success-default: #22c55e;
-    --vd-color-primary-fg: #ffffff;
+    /* Colors are owned by the Theme contract (theme_contract.py). This block
+       holds only structural tokens and shadow recipes built from theme tokens. */
+    --vd-shadow-button: 0 1px 1px color-mix(in srgb, var(--vd-shadow-color) 2.5%, transparent);
+    --vd-shadow-input: 0 1px 1px color-mix(in srgb, var(--vd-shadow-color) 2%, transparent);
+    --vd-shadow-control: 0 1px 2px color-mix(in srgb, var(--vd-shadow-color) 16%, transparent);
+    --vd-shadow-panel: 0 1px 2px color-mix(in srgb, var(--vd-shadow-color) 2.5%, transparent);
+    --vd-shadow-panel-strong: 0 1px 2px color-mix(in srgb, var(--vd-shadow-color) 4%, transparent);
+    --vd-shadow-inspector: -1rem 0 3rem color-mix(in srgb, var(--vd-shadow-color) 12%, transparent);
+    --vd-shadow-extended-lg: 0 10px 40px color-mix(in srgb, var(--vd-shadow-color) 25%, transparent);
+    --vd-shadow-extended-lg-strong: 0 10px 40px color-mix(in srgb, var(--vd-shadow-color) 35%, transparent);
+    --vd-shadow-extended-sm: 0 1px 3px color-mix(in srgb, var(--vd-shadow-color) 12%, transparent);
+    --vd-shadow-extended-sm-strong: 0 1px 3px color-mix(in srgb, var(--vd-shadow-color) 20%, transparent);
+    --vd-shadow-extended-md: 0 4px 16px color-mix(in srgb, var(--vd-shadow-color) 15%, transparent);
+    --vd-shadow-card: 0 1px 2px color-mix(in srgb, var(--vd-shadow-color) 3%, transparent), 0 8px 30px color-mix(in srgb, var(--vd-shadow-color) 3.5%, transparent);
+    --vd-shadow-float: 0 18px 50px color-mix(in srgb, var(--vd-shadow-color) 13%, transparent), 0 2px 8px color-mix(in srgb, var(--vd-shadow-color) 5%, transparent);
+    --vd-shadow-brand: 0 8px 24px color-mix(in srgb, var(--vd-brand) 20%, transparent);
 
     --vd-control-height-sm: 2rem;
     --vd-control-height-md: 2.5rem;
@@ -65,24 +45,6 @@ def generate_design_system_css(theme: Theme) -> str:
     --vd-density-comfortable: var(--vd-control-height-md);
     --vd-density-spacious: var(--vd-control-height-lg);
     --vd-control-pad-x: 0.95rem;
-    --vd-focus-ring: color-mix(in srgb, var(--vd-brand) 28%, transparent);
-
-    --vd-canvas: #ffffff;
-    --vd-panel: #ffffff;
-    --vd-panel-subtle: #fafafa;
-    --vd-panel-muted: #f6f6f8;
-    --vd-line: #e8e8ed;
-    --vd-line-strong: #d9d9e2;
-    --vd-ink: #111118;
-    --vd-ink-muted: #6f6f7b;
-    --vd-ink-faint: #9797a3;
-    --vd-surface-hover: #f7f7f9;
-    --vd-surface-pressed: #f1f1f5;
-    --vd-overlay: rgb(255 255 255 / 0.82);
-
-    --vd-shadow-card: 0 1px 2px rgb(15 15 25 / 0.03), 0 8px 30px rgb(15 15 25 / 0.035);
-    --vd-shadow-float: 0 18px 50px rgb(15 15 25 / 0.13), 0 2px 8px rgb(15 15 25 / 0.05);
-    --vd-shadow-brand: 0 8px 24px color-mix(in srgb, var(--vd-brand) 20%, transparent);
 
     --vd-content-sm: 42rem;
     --vd-content-md: 56rem;
@@ -91,24 +53,8 @@ def generate_design_system_css(theme: Theme) -> str:
 }
 
 .dark {
-    --vd-canvas: #09090f;
-    --vd-panel: #101017;
-    --vd-panel-subtle: #0d0d13;
-    --vd-panel-muted: #171720;
-    --vd-line: #252532;
-    --vd-line-strong: #343444;
-    --vd-ink: #f7f7fb;
-    --vd-ink-muted: #aaaab7;
-    --vd-ink-faint: #777784;
-    --vd-surface-hover: #171720;
-    --vd-surface-pressed: #20202a;
-    --vd-overlay: rgb(9 9 15 / 0.82);
-
-    --vd-shadow-card: 0 1px 1px rgb(0 0 0 / 0.35), 0 14px 44px rgb(0 0 0 / 0.18);
-    --vd-shadow-float: 0 22px 64px rgb(0 0 0 / 0.5), 0 2px 12px rgb(0 0 0 / 0.25);
-    --vd-success-strong: #6ee7b7;
-    --vd-warning-strong: #fbbf24;
-    --vd-danger-badge-strong: #fca5a5;
+    --vd-shadow-card: 0 1px 1px color-mix(in srgb, var(--vd-shadow-color) 35%, transparent), 0 14px 44px color-mix(in srgb, var(--vd-shadow-color) 18%, transparent);
+    --vd-shadow-float: 0 22px 64px color-mix(in srgb, var(--vd-shadow-color) 50%, transparent), 0 2px 12px color-mix(in srgb, var(--vd-shadow-color) 25%, transparent);
 }
 
 html {
@@ -226,19 +172,19 @@ a:not([class]):hover { color: var(--vd-brand-hover); text-decoration: underline;
 .vd-button--primary,
 .vd-button--secondary {
     border-color: var(--vd-brand);
-    background: linear-gradient(180deg, var(--vd-brand-highlight) 0%, var(--vd-brand) 100%);
+    background: var(--vd-brand);
     color: var(--vd-on-brand);
-    box-shadow: var(--vd-shadow-brand), inset 0 1px 0 color-mix(in srgb, var(--vd-on-brand) 18%, transparent);
+    box-shadow: var(--vd-shadow-button);
 }
 .vd-button--primary:hover:not(:disabled),
 .vd-button--secondary:hover:not(:disabled) {
-    background: linear-gradient(180deg, var(--vd-brand-highlight-hover) 0%, var(--vd-brand-hover) 100%);
+    background: var(--vd-brand-hover);
     border-color: var(--vd-brand-hover);
 }
 .vd-button--outline { background: transparent; border-color: var(--vd-line-strong); }
 .vd-button--ghost { background: transparent; border-color: transparent; color: var(--vd-ink-muted); }
 .vd-button--ghost:hover:not(:disabled) { color: var(--vd-ink); background: var(--vd-brand-softer); }
-.vd-button--danger { border-color: var(--vd-color-danger); background: var(--vd-color-danger); color: var(--vd-on-brand); }
+.vd-button--danger { border-color: var(--vd-color-danger); background: var(--vd-color-danger); color: var(--vd-on-danger); }
 .vd-button--sm { min-height: var(--vd-control-height-sm); height: var(--vd-control-height-sm); padding-inline: 0.75rem; }
 .vd-button--lg { min-height: var(--vd-control-height-lg); height: var(--vd-control-height-lg); padding-inline: 1.2rem; }
 .vd-button[data-vd-loading="true"] { cursor: progress; }

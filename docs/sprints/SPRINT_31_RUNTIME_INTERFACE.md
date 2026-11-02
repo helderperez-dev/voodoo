@@ -1,16 +1,15 @@
 # Sprint 31 — Runtime Interface
 
-**Status:** PROPOSED · awaiting the post-Sprint-30 selection gate
+**Status:** IN PROGRESS · Phase A started 2026-11-02
 **Proposed:** 2026-11-02
 **Source architecture:** [`ROADMAP.md`](../../ROADMAP.md),
 [`DESIGN_CONSTITUTION.md`](../design/DESIGN_CONSTITUTION.md),
 [`COMPONENT_API.md`](../design/COMPONENT_API.md)
 
-> This document is a candidate plan. Per `AGENTS.md` sprint discipline it must
-> not be implemented until `SPRINT_PLAN.md` declares it active. It is written so
-> that the selection gate can evaluate it against the ROADMAP criteria: it
-> validates existing primitives, has recurring product value, creates a strong
-> end-to-end acceptance target and makes later work simpler.
+> Activated on 2026-11-02 by product-owner decision and declared active in
+> `SPRINT_PLAN.md`. It validates existing primitives, has recurring product
+> value, creates a strong end-to-end acceptance target and makes later work
+> simpler. Decisions taken at activation are listed under **Decided**.
 
 ## Thesis
 
@@ -155,8 +154,10 @@ defects.
 - [ ] Three-tier token model generated from the public `Theme`:
   reference tokens → semantic tokens → component tokens. `Theme` stays the only
   public customization contract.
-- [ ] Component CSS consumes only semantic and component tokens; literal
-  colors outside the token layer fail CI.
+- [x] Component CSS consumes only semantic and component tokens; literal
+  colors outside the token layer fail CI. (Done: `check_component_style_tokens.py`
+  now covers `system.py` and `voodoo_css.py`; only neutral black/white scrims
+  remain legal.)
 - [ ] First-class `density` (`comfortable`, `compact`) and `radius` scales
   applied at page/system context, as `COMPONENT_API.md` already promises.
 - [ ] Decide the Tailwind adapter's future (see Open decisions). Under no
@@ -170,7 +171,7 @@ Decision (2026-11-02): **Voodoo has no default brand color.** The default
 theme is a minimal monochrome neutral; color is entirely a theme concern, and
 themes must be easy to create, swap and share with the community.
 
-- [ ] **Neutral default theme**: grayscale surfaces, near-black/near-white
+- [x] **Neutral default theme**: grayscale surfaces, near-black/near-white
   primary actions, restrained borders. It must be beautiful on its own and pass
   every visual gate. Semantic status colors (success, warning, danger, info)
   remain themable, never hard-coded.
@@ -184,14 +185,16 @@ themes must be easy to create, swap and share with the community.
   3. component tokens (`button.radius`, `input.height`, `table.row-hover`…);
   4. preset `custom.css` as a reviewed escape hatch, loaded in its own cascade
      layer so it cannot break component structure.
-- [ ] Remove the DS4 bridge heuristic in `theme_contract.py`: Theme values are
+- [x] Remove the DS4 bridge heuristic in `theme_contract.py`: Theme values are
   authoritative, with explicit `None` meaning "derive".
 - [ ] **Versioned, language-neutral theme format**: `theme.json` gains
   `schema_version`, `name`, `version`, `author`, `license`, `description`,
   seeds, tokens and light/dark variants. Its JSON Schema is published through
   `voodoo.protocol` so Store Studio, the Builder and future non-Python clients
   read the same themes.
-- [ ] **Theme tooling** on the existing `voodoo theme` CLI:
+- [ ] **Theme tooling** on the existing `voodoo theme` CLI (`new` and `validate`
+  are done, with automatic light-mode accent contrast fixing; `preview` and
+  `package` remain):
   - `voodoo theme new <name> [--accent …] [--from <preset>]` scaffolds a theme;
   - `voodoo theme validate` checks schema, token completeness and WCAG
     contrast for every foreground/background pairing in light and dark;
@@ -204,7 +207,9 @@ themes must be easy to create, swap and share with the community.
   time.
 - [ ] Runtime switching without reload (light/dark/system and theme swap) and
   subtree scoping via `data-theme` for embedded surfaces.
-- [ ] Built-in presets prove completeness: `neutral` (default) plus at least
+- [x] Built-in presets prove completeness (`default`, `voodoo-purple` and
+  `ember-paper` all pass the contrast gate; the visual/layout gates remain with
+  31.8): `neutral` (default) plus at least
   two contrasting presets (for example a Voodoo-purple preset and
   `ember-paper`). Every built-in preset runs the full visual, contrast and
   layout gates.
@@ -378,6 +383,10 @@ and observe, with zero custom CSS and zero application JavaScript:
   later Capability-gated product decision).
 
 ## Decided
+
+- **Sprint 30 absorption** (2026-11-02): Sprint 31 Phases A–B absorb Sprint
+  30's open catalog-wide component standardization so components are not
+  standardized twice.
 
 - **No default brand color** (2026-11-02): neutral monochrome default; color
   lives in shareable themes. See 31.2.

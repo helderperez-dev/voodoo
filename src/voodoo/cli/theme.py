@@ -147,6 +147,139 @@ def init_theme(
     terminal.success("theme initialized")
 
 
+@theme_app.command("new")
+def new_theme(
+    name: str = typer.Argument(..., help="Theme name, e.g. 'acme'"),
+    accent: str | None = typer.Option(
+        None, "--accent", help="Brand accent color (omit for monochrome)"
+    ),
+    base: str = typer.Option(
+        "default", "--from", help="Preset to start from (name, path, or URL)"
+    ),
+    font: str | None = typer.Option(None, "--font", help="Body font family"),
+    output: str | None = typer.Option(
+        None, "--output", "-o", help="Directory to write (default: .voodoo/theme)"
+    ),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing theme"),
+) -> None:
+    """Create a theme from a preset and a few seeds (activates it by default)."""
+    from voodoo.ui.styles.presets import resolve_theme
+
+    try:
+        source = resolve_theme(base)
+    except ConfigurationError as exc:
+        terminal.error(str(exc), hint="try 'voodoo theme list'")
+        raise typer.Exit(1) from exc
+
+    directory = Path(output) if output else _project_theme_dir()
+    if (directory / "theme.json").exists() and not force:
+        terminal.error(
+            f"{directory / 'theme.json'} already exists",
+            hint="pass --force to overwrite it",
+        )
+        raise typer.Exit(1)
+
+    theme = source.theme.model_copy(deep=True)
+    if accent:
+        from voodoo.ui.styles.theme_validation import ensure_contrast
+
+        theme.colors.accent = ensure_contrast(
+            accent, (theme.colors.background, theme.colors.surface)
+        )
+        theme.colors.light_accent = ensure_contrast(
+            accent, (theme.colors.light_background, theme.colors.light_surface)
+        )
+        theme.colors.on_accent = None
+        theme.colors.light_on_accent = None
+    if font:
+        theme.typography.font_family = font
+    _write_preset(directory, name=name, theme=theme, custom_css=source.custom_css)
+
+    issues = _theme_issues(theme)
+    terminal.wordmark()
+    terminal.blank()
+    terminal.status_block(
+        [
+            ("theme", name),
+            ("based on", source.origin),
+            ("accent", accent or "none (monochrome)"),
+            ("written", str(directory)),
+        ]
+    )
+    for issue in issues:
+        terminal.warning(str(issue))
+    terminal.next_steps(
+        [
+            f"edit {directory / 'theme.json'} to tune tokens",
+            "run 'voodoo theme validate' to check contrast",
+        ]
+    )
+    terminal.success("theme created")
+
+
+def _theme_issues(theme: Theme) -> list[object]:
+    from voodoo.ui.styles.theme_validation import validate_theme
+
+    return list(validate_theme(theme))
+
+
+@theme_app.command("validate")
+def validate_theme_command(
+    preset: str | None = typer.Argument(
+        None, help="Preset name, path, or URL (default: the project theme)"
+    ),
+    json_mode: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
+    allow_unverified: bool = typer.Option(
+        False,
+        "--allow-unverified",
+        help="Do not fail on non-hex colors that cannot be checked",
+    ),
+) -> None:
+    """Check WCAG contrast for every pairing, in light and dark mode."""
+    from voodoo.ui.styles.presets import resolve_theme
+    from voodoo.ui.styles.theme_validation import ContrastIssue, validate_theme
+
+    try:
+        source = resolve_theme(preset)
+    except ConfigurationError as exc:
+        terminal.error(str(exc), hint="try 'voodoo theme list'")
+        raise typer.Exit(1) from exc
+
+    issues: list[ContrastIssue] = validate_theme(source.theme)
+    failing = [i for i in issues if not (allow_unverified and i.unverified)]
+    if json_mode:
+        typer.echo(
+            json.dumps(
+                {
+                    "origin": source.origin,
+                    "valid": not failing,
+                    "issues": [
+                        {
+                            "mode": i.mode,
+                            "foreground": i.foreground,
+                            "background": i.background,
+                            "purpose": i.purpose,
+                            "ratio": i.ratio,
+                            "required": i.required,
+                            "unverified": i.unverified,
+                        }
+                        for i in issues
+                    ],
+                },
+                indent=2,
+            )
+        )
+    else:
+        for issue in issues:
+            terminal.warning(str(issue))
+        if not failing:
+            terminal.success(f"theme valid ({source.origin})")
+    if failing:
+        if not json_mode:
+            terminal.error(f"{len(failing)} contrast issue(s) in {source.origin}")
+        raise typer.Exit(1)
+
+
 @theme_app.command("install")
 def install_theme(
     name: str = typer.Argument(
@@ -191,7 +324,9 @@ def install_theme(
     try:
         source = _load_from_pypi(name)
     except ConfigurationError as exc:
-        terminal.error(str(exc), hint="try 'voodoo theme list' or verify the theme name")
+        terminal.error(
+            str(exc), hint="try 'voodoo theme list' or verify the theme name"
+        )
         raise typer.Exit(1) from exc
     terminal.status_block([("theme", name), ("status", "installed")])
     terminal.console.print(f"  [dim]{source.origin}[/]")

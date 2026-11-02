@@ -17,29 +17,36 @@ from voodoo.ui import (
 from voodoo.ui.rendering import render_page
 from voodoo.ui.styles.system import generate_design_system_css
 from voodoo.ui.styles.theme import default_theme
+from voodoo.ui.styles.theme_contract import generate_design_system_theme_css
 
 
-def test_design_system_exposes_voodoo_brand_and_light_dark_surfaces() -> None:
+def test_design_system_has_no_literal_brand_color() -> None:
     css = generate_design_system_css(default_theme)
+    full = render_page(Page(Button("Action", variant="primary")))
 
-    assert "--vd-brand: #7c3aed" in css
-    assert "--vd-canvas: #ffffff" in css
-    assert ".dark {" in css
-    assert "--vd-canvas: #09090f" in css
+    for literal in ("#7c3aed", "#8b5cf6", "#6d28d9", "#5b21b6", "#6366f1"):
+        assert literal not in css.lower()
+        assert literal not in full.lower()
     assert "--vd-shadow-card:" in css
-    assert "--vd-focus-ring:" in css
+    assert ".dark {" in css
 
 
-def test_primary_actions_use_voodoo_brand_not_monochrome_fill() -> None:
+def test_default_theme_is_neutral_monochrome_in_both_modes() -> None:
+    css = generate_design_system_theme_css(default_theme)
+    light, dark = css.split("\n\n.dark", maxsplit=1)
+
+    assert "--vd-brand: #18181B;" in light
+    assert "--vd-brand: #FAFAFA;" in dark
+    assert "--vd-canvas: #FFFFFF;" in light
+    assert "--vd-canvas: #09090B;" in dark
+
+
+def test_primary_actions_are_flat_theme_driven_fills() -> None:
     css = generate_design_system_css(default_theme)
 
     assert ".vd-button--primary" in css
-    assert "--vd-brand-highlight: #8b5cf6" in css
-    assert (
-        "background: linear-gradient(180deg, var(--vd-brand-highlight) 0%, "
-        "var(--vd-brand) 100%)" in css
-    )
-    assert "box-shadow: var(--vd-shadow-brand)" in css
+    assert "background: var(--vd-brand);" in css
+    assert "linear-gradient(180deg, var(--vd-brand-highlight)" not in css
 
 
 def test_default_components_render_semantic_design_system_classes() -> None:
@@ -98,7 +105,8 @@ def test_full_page_includes_design_system_layer() -> None:
     )
 
     assert "Voodoo Design System 4" in html
-    assert "--vd-brand: #7c3aed" in html
+    assert "--vd-brand:" in html
+    assert "#7c3aed" not in html.lower()
     assert "vd-button--primary" in html
     assert "vd-card" in html
 

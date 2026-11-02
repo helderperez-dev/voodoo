@@ -49,7 +49,7 @@ Core laws:
 | Store 0.3 native convergence + modern Model contract | **DONE and released (v3.2.1)** |
 | Sprint 29 — Experience Convergence | **DONE · closed 2026-09-30** |
 | Sprint 30 — Production Readiness | **IN PROGRESS · started 2026-10-06** |
-| Sprint 31 — Runtime Interface | **PROPOSED · awaiting selection gate** |
+| Sprint 31 — Runtime Interface | **IN PROGRESS · started 2026-11-02 (Phase A)** |
 | Next release target | **Determined by verified Sprint 30 compatibility impact** |
 | Release checkpoint | **No Sprint 30 release claim until every mandatory gate passes** |
 
@@ -343,7 +343,8 @@ Deferred directions already supported by the architecture:
 
 Proposed candidate (2026-11-02): **Sprint 31 — Runtime Interface**
 ([`docs/sprints/SPRINT_31_RUNTIME_INTERFACE.md`](docs/sprints/SPRINT_31_RUNTIME_INTERFACE.md)).
-It combines directions 4 and 6: one style owner, a neutral default with
+It was activated on 2026-11-02 by product-owner decision and absorbs Sprint
+30's open catalog-wide component standardization item. It combines directions 4 and 6: one style owner, a neutral default with
 shareable community themes, keyed DOM reconciliation,
 contract-backed primitives, Runtime-aware system components and a dogfooded
 `voodoo console`. It is not active until this tracker declares it so.

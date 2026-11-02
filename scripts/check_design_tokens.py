@@ -6,6 +6,7 @@ import re
 
 from voodoo.ui.styles.system import generate_design_system_css
 from voodoo.ui.styles.theme import default_theme
+from voodoo.ui.styles.theme_contract import generate_design_system_theme_css
 
 REQUIRED_FAMILIES = (
     "color-",
@@ -24,7 +25,13 @@ REQUIRED_FAMILIES = (
 
 
 def main() -> int:
-    css = generate_design_system_css(default_theme) + default_theme.to_css_variables()
+    # The Theme contract owns every color token; the design-system layer owns
+    # structural tokens. Both must be declared for references to resolve.
+    css = (
+        generate_design_system_css(default_theme)
+        + generate_design_system_theme_css(default_theme)
+        + default_theme.to_css_variables()
+    )
     references = set(re.findall(r"var\((--vd-[a-z0-9-]+)", css))
     declarations = set(re.findall(r"(--vd-[a-z0-9-]+)\s*:", css))
     undefined = sorted(references - declarations)

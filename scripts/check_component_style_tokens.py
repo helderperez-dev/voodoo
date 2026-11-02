@@ -21,11 +21,19 @@ COMPONENT_SOURCES = tuple(
 # token-definition layers (theme, palette, presets, and the design-system
 # declaration block) explicit so literal values remain legal only at the
 # source-of-truth boundary.
-STYLESHEET_RULE_SOURCES = tuple(
-    ROOT / "src/voodoo/ui/styles" / name
-    for name in ("product.py", "extended.py", "voodoo_system.py")
+# Sprint 31: the structural design-system layer and the base CSS adapter also
+# contain no literal colors; every color comes from the Theme contract.
+STYLESHEET_RULE_SOURCES = (
+    *(
+        ROOT / "src/voodoo/ui/styles" / name
+        for name in ("product.py", "extended.py", "voodoo_system.py", "system.py")
+    ),
+    ROOT / "src/voodoo/adapters/voodoo_css.py",
 )
-RAW_COLOR = re.compile(r"(?:#[0-9a-fA-F]{3,8}|rgba?\s*\()")
+# Pure black/white alpha scrims and shadows are neutral by definition and are
+# the only literal color functions permitted in rule layers.
+NEUTRAL_SCRIM = re.compile(r"rgba?\(\s*(?:0\s+0\s+0|255\s+255\s+255)\s*/")
+RAW_COLOR = re.compile(r"(?:#[0-9a-fA-F]{3,8}\b|rgba?\s*\()")
 
 
 def _scan_raw_colors(path: Path, *, label: str = "") -> list[str]:
@@ -33,7 +41,7 @@ def _scan_raw_colors(path: Path, *, label: str = "") -> list[str]:
     return [
         f"{prefix}{path.relative_to(ROOT)}:{line_number}"
         for line_number, line in enumerate(path.read_text().splitlines(), start=1)
-        if RAW_COLOR.search(line)
+        if RAW_COLOR.search(NEUTRAL_SCRIM.sub("", line))
     ]
 
 
@@ -61,7 +69,7 @@ def main() -> int:
             violations.append(f"{name}: source unavailable ({type(error).__name__})")
             continue
         for line_number, line in enumerate(source.splitlines(), start=1):
-            if RAW_COLOR.search(line):
+            if RAW_COLOR.search(NEUTRAL_SCRIM.sub("", line)):
                 violations.append(f"stable component {name}:{line_number}")
     if violations:
         raise SystemExit(

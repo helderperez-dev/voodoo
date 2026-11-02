@@ -5,10 +5,10 @@ engine, a default semantic CSS adapter, and a library of polished components.
 New apps look professional with **zero configuration** — no CSS files, no
 utility classes, no build step.
 
-The current native layer is **Voodoo Design System 4**. It adds the Voodoo
-purple brand language, premium light/dark surfaces, tighter typography and
-production-quality defaults while preserving `Theme` as the public source of
-truth for application customization.
+The current native layer is **Voodoo Design System 4**. It ships **no brand
+color**: the default theme is a neutral monochrome scale with premium light/dark
+surfaces, tighter typography and production-quality defaults. Color is entirely
+a theme decision, and `Theme` is the single public source of truth for it.
 
 ## Architecture
 
@@ -102,8 +102,8 @@ track light/dark automatically without re-defining them per mode.
 
 Design System 4 also resolves a visual token layer (`--vd-brand`, `--vd-canvas`,
 `--vd-panel`, `--vd-line`, `--vd-ink`, and related derived tokens). These are
-implementation-facing tokens: the framework derives them from `Theme` and the
-approved DS3 defaults. Applications should customize the semantic `Theme`
+implementation-facing tokens: the framework derives every one of them from
+`Theme` (see `ui/styles/theme_contract.py`). Applications should customize the semantic `Theme`
 colors rather than writing these visual tokens directly.
 
 ### Theming your app
@@ -116,8 +116,7 @@ from voodoo.ui.styles import create_theme
 
 app = App(
     theme=create_theme(
-        primary="#635BFF",
-        secondary="#00D4AA",
+        accent="#635BFF",
         font="Inter",
         radius="lg",
         mode="dark",  # dark | light | system
@@ -126,19 +125,16 @@ app = App(
 ```
 
 The stock Design System 4 look is minimalist and modern, with a distinct Voodoo
-purple (`#7c3aed`) brand accent, generous whitespace, clean typography, subtle
+neutral monochrome palette, generous whitespace, clean typography, subtle
 borders, compact premium controls, discreet shadows and a first-class dark
 mode.
 
-`Theme` remains authoritative. An explicit `primary` override becomes the DS3
-brand/action color. If `primary` remains at its stock value and `secondary` is
-explicitly customized, DS3 uses that custom secondary as the brand accent. A
-shared `background`, `surface`, `text`, or `border` override also applies to the
-premium light/dark surface layer unless the full `Theme` supplies a dedicated
-light-mode override.
-
-This preserves the zero-config Voodoo identity while keeping branded
-applications fully themeable.
+`Theme` is authoritative and nothing is inferred. `primary` is the action fill;
+the optional `accent` is the brand color. Without an accent the brand follows
+`primary`, so the default stays monochrome. A shared `background`, `surface`,
+`text`, or `border` passed to `create_theme` applies to both light and dark mode
+unless the full `Theme` supplies a dedicated light-mode value. See
+[Creating and sharing themes](#creating-and-sharing-themes).
 
 ## Style adapters
 
@@ -300,11 +296,49 @@ built-ins stay zero-network by referencing faces by name with system fallbacks.
 
 ### Built-in presets
 
-- **`default`** — the stock Voodoo Design System 4 look with the purple brand
-  language and premium light/dark surfaces.
+- **`default`** — neutral monochrome surfaces with no brand color. The primary
+  action is near-black in light mode and near-white in dark mode.
+- **`voodoo-purple`** — the former Design System 4 look: a violet accent over
+  cool, slightly tinted neutral surfaces.
 - **`ember-paper`** — warm paper surfaces, an ember accent (`#E8A33D` dark /
   `#B45309` light), and editorial type (Fraunces display, Schibsted Grotesk
   body, IBM Plex Mono) with a soft `--vd-glow` halo token.
+
+## Creating and sharing themes
+
+A theme is a data file. Start from a few seeds and let Voodoo derive the rest:
+
+```bash
+voodoo theme new acme --accent "#0ea5e9" --font "Inter"
+voodoo theme validate            # WCAG contrast, light and dark
+```
+
+`theme new` writes `.voodoo/theme/theme.json` (use `--output` to scaffold a
+folder you intend to publish). When an accent would be hard to see on the light
+surfaces it is darkened automatically for light mode only; hue is preserved.
+
+Customization ladder — every step is optional:
+
+1. **Seeds**: `accent`, `primary`, surface/text/border, font, radius.
+2. **Semantic colors** in `Theme.colors`: every value is authoritative, including
+   one that happens to equal a former default.
+3. **Component tokens and `extra_tokens`** for finer control.
+4. **`custom.css`** as a reviewed escape hatch.
+
+Rules the framework guarantees:
+
+- `accent` is optional. Without it the brand follows `primary`, so a theme with
+  no accent stays monochrome. `light_accent`, `on_accent` and `light_on_accent`
+  override per mode; `on_*` colors are computed from contrast when omitted.
+- Shared `create_theme(background=…, surface=…, text=…, border=…)` values apply
+  to both light and dark mode.
+- Status colors (`success`, `warning`, `danger`, `info`) and their soft, line,
+  strong and focus variants are all derived from the theme.
+- Component CSS contains no color literals (only neutral black/white scrims);
+  `scripts/check_component_style_tokens.py` fails CI otherwise.
+- `voodoo theme validate` checks text (4.5:1) and UI/focus (3:1) contrast and
+  reports non-hex colors as *unverified* instead of passing them silently. Every
+  built-in preset passes this gate in the test suite.
 
 ## Inline custom CSS
 
