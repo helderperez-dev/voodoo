@@ -1,5 +1,6 @@
 """Acceptance gates for Voodoo's default visual language."""
 
+from tests.support import page_with_assets
 from voodoo.ui import (
     Badge,
     Button,
@@ -22,7 +23,7 @@ from voodoo.ui.styles.theme_contract import generate_design_system_theme_css
 
 def test_design_system_has_no_literal_brand_color() -> None:
     css = generate_design_system_css(default_theme)
-    full = render_page(Page(Button("Action", variant="primary")))
+    full = page_with_assets(render_page(Page(Button("Action", variant="primary"))))
 
     for literal in ("#7c3aed", "#8b5cf6", "#6d28d9", "#5b21b6", "#6366f1"):
         assert literal not in css.lower()
@@ -92,13 +93,15 @@ def test_navigation_and_theme_controls_use_premium_chrome() -> None:
 
 
 def test_full_page_includes_design_system_layer() -> None:
-    html = render_page(
-        Page(
-            Container(
-                Card(
-                    Heading("Hello, Voodoo", level=1),
-                    Text("One Runtime. One local Store.", tone="muted"),
-                    Button("Get Started", variant="primary"),
+    html = page_with_assets(
+        render_page(
+            Page(
+                Container(
+                    Card(
+                        Heading("Hello, Voodoo", level=1),
+                        Text("One Runtime. One local Store.", tone="muted"),
+                        Button("Get Started", variant="primary"),
+                    )
                 )
             )
         )
@@ -112,7 +115,7 @@ def test_full_page_includes_design_system_layer() -> None:
 
 
 def test_design_system_is_the_final_framework_visual_layer() -> None:
-    html = render_page(Page(Button("Action", variant="primary")))
+    html = page_with_assets(render_page(Page(Button("Action", variant="primary"))))
 
     product = html.index("/* Reusable product patterns */")
     extended = html.index("/* Extended UI components */")

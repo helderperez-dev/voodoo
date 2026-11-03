@@ -681,6 +681,10 @@ def generate_extended_css(theme: Theme) -> str:
 }
 
 /* Scroll Area */
+.vd-scroll-area { overscroll-behavior: contain; }
+.vd-scroll-area[data-vd-scroll-axis="vertical"] { overflow: auto hidden; }
+.vd-scroll-area[data-vd-scroll-axis="horizontal"] { overflow: hidden auto; }
+.vd-scroll-area[data-vd-scroll-axis="both"] { overflow: auto; }
 .vd-scroll-area {
     scrollbar-width: thin;
     scrollbar-color: var(--vd-color-border) transparent;

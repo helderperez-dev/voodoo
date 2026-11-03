@@ -139,7 +139,7 @@ def test_breadcrumb_item_state_contract_blocks_unavailable_navigation(adapter):
     assert 'aria-busy="true"' in html
     assert 'aria-invalid="true"' in html
     assert 'data-vd-error="Unavailable"' in html
-    assert "href=\"/settings\"" not in html
+    assert 'href="/settings"' not in html
 
 
 def test_button_group_has_group_semantics_and_layout(adapter):
@@ -213,8 +213,16 @@ def test_accordion_item_state_contract_blocks_unavailable_disclosure():
 def test_kbd_and_aspect_ratio_render_content_helpers(adapter):
     assert "<kbd" in Kbd("Cmd+K").render()
     media = AspectRatio(Img(src="/cover.jpg", alt="Cover"), ratio="4:3").render()
-    assert "aspect-ratio: 4 / 3" in media
+    assert 'data-vd-ratio="4/3"' in media
+    assert "style=" not in media
     assert 'alt="Cover"' in media
+
+
+def test_aspect_ratio_custom_value_falls_back_to_inline_css(adapter):
+    media = AspectRatio(Img(src="/c.jpg", alt="C"), ratio="5:2").render()
+
+    assert "aspect-ratio: 5 / 2" in media
+    assert "data-vd-ratio" not in media
 
 
 def test_aspect_ratio_rejects_unsafe_or_invalid_values():

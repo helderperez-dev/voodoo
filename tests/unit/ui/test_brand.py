@@ -2,6 +2,7 @@
 
 import pytest
 
+from tests.support import page_with_assets
 from voodoo.ui import Brand
 from voodoo.ui.brand import BRAND_CSS
 from voodoo.ui.rendering import render_page
@@ -54,7 +55,9 @@ def test_brand_css_switches_assets_and_removes_radius():
 
 
 def test_render_page_includes_brand_css():
-    html = render_page(Brand(light="/logo-black.png", dark="/logo-white.png"))
+    html = page_with_assets(
+        render_page(Brand(light="/logo-black.png", dark="/logo-white.png"))
+    )
 
     assert "/* Brand asset switching */" in html
     assert ".vd-brand-logo--light" in html

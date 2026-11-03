@@ -27,6 +27,7 @@ from starlette.staticfiles import StaticFiles
 from voodoo.core.sitemap import _generate_robots_txt, _generate_sitemap_xml
 from voodoo.routing.pages import call_page, page_registry
 from voodoo.security.redaction import redact_string
+from voodoo.ui.assets import ASSET_PREFIX, asset_route_handler
 from voodoo.ui.events import websocket_endpoint
 
 logger = logging.getLogger(__name__)
@@ -397,6 +398,9 @@ def _build_routes(
     ]
 
     routes.extend(_build_probe_routes())
+    routes.append(
+        Route(f"{ASSET_PREFIX}{{name}}", asset_route_handler, methods=["GET"])
+    )
     for url, directory in (
         ("/public", os.path.join(cwd, "public")),
         ("/storage", os.path.join(cwd, config.storage_dir)),

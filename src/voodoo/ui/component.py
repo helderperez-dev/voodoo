@@ -19,7 +19,8 @@ Guarantees provided by the base:
 - **``css={}`` prop** — escape hatch for inline styles; keys use underscores
   (``margin_top``) which are converted to hyphens (``margin-top``).
 - **``tone`` prop** — semantic color mapping (``"muted"``, ``"primary"``,
-  ``"danger"``, …) resolved via the active theme.
+  ``"danger"``, …) emitted as ``data-vd-text-tone`` and resolved by the stylesheet via
+  the active theme, so it needs no inline ``style`` under a strict CSP.
 - **``render_key`` prop** — optional deterministic render-tree identity for
   hydration, patching, and tests; explicit ``id`` remains authoritative.
 """
@@ -94,6 +95,27 @@ def tone_to_color_var(tone: str) -> str:
     return mapping.get(tone, "")
 
 
+def tone_css() -> str:
+    """Return the stylesheet rules for every ``data-vd-text-tone`` value.
+
+    Generated from :func:`tone_to_color_var` so the tone table has one owner.
+    The ``html`` prefix lets a tone win over single-class component colors
+    without ``!important``.
+    """
+    rules = []
+    for tone in sorted(_VALID_TONES - {"default"}):
+        rules.append(
+            f'html [data-vd-text-tone="{tone}"] {{ color: {tone_to_color_var(tone)}; }}'
+        )
+    return "\n".join(rules)
+
+
+def apply_tone(component: Component, tone: str | None) -> None:
+    """Mark ``component`` with a semantic tone (``data-vd-text-tone``)."""
+    if tone and tone != "default" and tone_to_color_var(tone):
+        component.attrs["data-vd-text-tone"] = tone
+
+
 class Component:
     """Base class for all rendered UI elements."""
 
@@ -139,7 +161,10 @@ class Component:
         for property_name, token in visual_tokens.items():
             if token:
                 self._append_inline_css(f"{property_name}: {color_reference(token)}")
-        if raw_style:
+        if isinstance(raw_style, Mapping):
+            # ``style={"width": "320px"}`` behaves like ``css={...}``.
+            self._append_inline_css(_css_to_inline(raw_style))
+        elif raw_style:
             self._append_inline_css(str(raw_style).strip().rstrip(";"))
         self.attrs.update(kwargs)
 

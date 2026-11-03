@@ -9,6 +9,7 @@ from pathlib import Path
 from starlette.testclient import TestClient
 
 import voodoo.ui as public_ui
+from tests.support import linked_asset_names
 
 FRAMEWORK_ROOT = Path(__file__).parents[2]
 COMPONENT_LAB = FRAMEWORK_ROOT / "examples" / "web" / "component_lab" / "main.py"
@@ -88,7 +89,12 @@ def test_component_lab_renders_all_primary_surfaces() -> None:
         assert "vd-accordion" in navigation
         assert "vd-pagination" in navigation
 
-        advanced = client.get("/advanced").text
+        advanced_page = client.get("/advanced").text
+        # Component CSS ships as a content-addressed stylesheet, not inline.
+        advanced = advanced_page + "".join(
+            client.get(f"/_voodoo/assets/{name}").text
+            for name in linked_asset_names(advanced_page)
+        )
         assert "vd-toggle-group" in advanced
         assert "vd-segmented-control" in advanced
         assert "vd-command-panel" in advanced

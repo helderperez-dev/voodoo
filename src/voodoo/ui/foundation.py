@@ -457,6 +457,8 @@ class AspectRatio(Component):
     """Keeps media or arbitrary content at a stable width-to-height ratio."""
 
     style = "aspect-ratio"
+    #: Ratios rendered through ``data-vd-ratio`` instead of inline CSS.
+    PRESETS = ("1/1", "4/3", "3/2", "16/9", "21/9", "3/4", "2/3", "9/16")
     _RATIO = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*[/\:]\s*(\d+(?:\.\d+)?)\s*$")
 
     def __init__(
@@ -472,7 +474,14 @@ class AspectRatio(Component):
                 "AspectRatio ratio must look like '16/9' with positive values"
             )
         super().__init__(child, **kwargs)
-        self._append_inline_css(f"aspect-ratio: {match.group(1)} / {match.group(2)}")
+        normalized = f"{match.group(1)}/{match.group(2)}"
+        if normalized in self.PRESETS:
+            # Common ratios are stylesheet-driven (strict-CSP safe).
+            self.attrs["data-vd-ratio"] = normalized
+        else:
+            self._append_inline_css(
+                f"aspect-ratio: {match.group(1)} / {match.group(2)}"
+            )
 
 
 __all__ = [

@@ -1,3 +1,4 @@
+from tests.support import page_with_assets
 from voodoo.adapters.voodoo_css import VoodooCSSAdapter
 from voodoo.ui import (
     Button,
@@ -204,7 +205,7 @@ def test_page_exposes_density_as_semantic_api():
 def test_native_render_includes_design_system_layer():
     original = _with_native_adapter()
     try:
-        html = render_page(Button("Deploy", loading=True))
+        html = page_with_assets(render_page(Button("Deploy", loading=True)))
         assert "Voodoo Design System 4" in html
         assert "Voodoo Design System 4 — Theme contract" in html
         assert "--vd-control-height-md" in html

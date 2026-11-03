@@ -817,9 +817,7 @@ class ColumnDef:
         if self.width:
             attrs["style"] = f"width:{self.width}"
         if self.align != "left":
-            attrs["style"] = (
-                attrs.get("style", "") + f";text-align:{self.align}"
-            ).lstrip(";")
+            attrs["data_vd_text_align"] = self.align
         if self.truncate:
             attrs["data_vd_truncate"] = True
         if self.monospace:

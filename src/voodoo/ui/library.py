@@ -11,7 +11,7 @@ import sys
 from collections.abc import Callable
 from typing import Any, TypedDict
 
-from voodoo.ui.component import Component, escape, tone_to_color_var
+from voodoo.ui.component import Component, apply_tone, escape
 from voodoo.ui.events import bind_event
 
 EventHandler = Callable[..., Any] | str
@@ -137,6 +137,9 @@ class Stack(Flex):
 class Box(Component):
     """Generic styled container with optional padding.
 
+    Scale names (``xs`` … ``xxl``) are emitted as ``data-vd-padding`` and styled
+    by the stylesheet; any other value is applied as inline CSS.
+
     ::
 
         Box(Text("Hello"), padding="lg")
@@ -159,11 +162,11 @@ class Box(Component):
     ) -> None:
         super().__init__(*children, **kwargs)
         if padding and padding != "none":
-            value = self._PADDING_MAP.get(padding, padding)
-            css_str = f"padding: {value}"
-            self._inline_css = (
-                f"{self._inline_css}; {css_str}" if self._inline_css else css_str
-            )
+            if padding in self._PADDING_MAP:
+                # Scale names are stylesheet-driven (strict-CSP safe).
+                self.attrs["data-vd-padding"] = padding
+            else:
+                self._append_inline_css(f"padding: {padding}")
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +319,9 @@ class Card(Component):
 class Text(Component):
     """Inline text with optional semantic tone.
 
+    The tone is emitted as ``data-vd-text-tone`` and styled by the stylesheet, so it
+    works under a strict production CSP (no inline ``style`` attribute).
+
     ::
 
         Text("Subtitle", tone="muted")
@@ -326,17 +332,11 @@ class Text(Component):
 
     def __init__(self, *children: Any, tone: str | None = None, **kwargs: Any) -> None:
         super().__init__(*children, **kwargs)
-        if tone and tone != "default":
-            color = tone_to_color_var(tone)
-            if color:
-                css_str = f"color: {color}"
-                self._inline_css = (
-                    f"{self._inline_css}; {css_str}" if self._inline_css else css_str
-                )
+        apply_tone(self, tone)
 
 
-# Heading size → font-size token mapping
-_HEADING_SIZES = {
+# Heading size → font-size token mapping (rendered as ``data-vd-heading-size`` rules).
+HEADING_SIZES = {
     "sm": "var(--vd-text-lg)",
     "md": "var(--vd-text-xl)",
     "lg": "var(--vd-text-xxl)",
@@ -367,18 +367,9 @@ class Heading(Component):
         super().__init__(*children, **kwargs)
         self.tag = f"h{level}"
         self.props = {"level": level, "size": size}
-        extra_css: list[str] = []
-        if size and size in _HEADING_SIZES:
-            extra_css.append(f"font-size: {_HEADING_SIZES[size]}")
-        if tone and tone != "default":
-            color = tone_to_color_var(tone)
-            if color:
-                extra_css.append(f"color: {color}")
-        if extra_css:
-            css_str = "; ".join(extra_css)
-            self._inline_css = (
-                f"{self._inline_css}; {css_str}" if self._inline_css else css_str
-            )
+        if size and size in HEADING_SIZES:
+            self.attrs["data-vd-heading-size"] = size
+        apply_tone(self, tone)
 
 
 class Badge(Component):

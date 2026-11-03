@@ -1,3 +1,4 @@
+from tests.support import page_with_assets
 from voodoo.adapters.voodoo_css import VoodooCSSAdapter
 from voodoo.ui import (
     Button,
@@ -260,7 +261,7 @@ def test_command_bar_state_contract_suppresses_submit():
 def test_product_css_is_included_in_native_rendering():
     original = _native()
     try:
-        html = render_page(Metric("Executions", 12))
+        html = page_with_assets(render_page(Metric("Executions", 12)))
         assert "Voodoo Product Components" in html
         assert ".vd-data-table" in html
         assert ".vd-inspector-panel" in html

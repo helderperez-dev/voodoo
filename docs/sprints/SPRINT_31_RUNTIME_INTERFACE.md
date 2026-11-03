@@ -149,8 +149,20 @@ defects.
 - [ ] ADR: single stylesheet architecture. One source of CSS organized with
   cascade layers: `@layer reset, tokens, base, components, patterns, system,
   utilities`. Delete the accreted convergence layers instead of overriding them.
-- [ ] Ship CSS and client runtime as **static, content-hashed, cacheable
+- [x] Ship CSS and client runtime as **static, content-hashed, cacheable
   assets** served by the framework (no per-response inlining; CSP `'self'`).
+  Done: `voodoo.ui.assets` publishes `/_voodoo/assets/<sha256>.css|js` with
+  immutable caching and conditional GET. A page dropped from ~224 KB to ~27 KB,
+  and all 12 Component Lab routes now render in Chromium under the production
+  CSP (`style-src 'self'`, no inline runtime) with zero violations, enforced by
+  a permanent browser test. Pixel comparison of 24 light/dark captures showed no
+  change apart from one fixed defect.
+- [x] Framework components no longer emit inline `style` attributes for static
+  presentation: `tone`, heading `size`, `Box` padding scale, common
+  `AspectRatio` ratios, `ScrollArea` axis, column alignment and named
+  `MasterDetail` widths are semantic `data-vd-*` attributes styled by the
+  stylesheet. Only caller-supplied raw values (`css={}`, a custom ratio or
+  width) remain inline, as the documented reviewed escape hatch.
 - [ ] Three-tier token model generated from the public `Theme`:
   reference tokens → semantic tokens → component tokens. `Theme` stays the only
   public customization contract.

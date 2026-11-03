@@ -209,21 +209,13 @@ class ScrollArea(Component):
         if max_width:
             css["max-width"] = max_width
 
-        overflow = {
-            "vertical": "auto hidden",
-            "horizontal": "hidden auto",
-            "both": "auto",
-        }
-
+        # Overflow is axis-driven and lives in the stylesheet; only caller-supplied
+        # dimensions remain inline.
         super().__init__(
             *children,
             data_vd_scroll_area=True,
             data_vd_scroll_axis=orientation,
-            css={
-                **css,
-                "overflow": overflow[orientation],
-                "overscroll-behavior": "contain",
-            },
+            css=css or None,
             **kwargs,
         )
         self.props = {"orientation": orientation}
@@ -1009,6 +1001,10 @@ class _DockBadge(Component):
 # ── MasterDetail ─────────────────────────────────────────────────────────────
 
 
+#: Named master-pane widths; any other ``master_width`` is applied inline.
+MASTER_WIDTHS = {"sm": "240px", "md": "320px", "lg": "400px"}
+
+
 class MasterDetail(Component):
     """Master-detail layout that collapses to a list on mobile.
 
@@ -1039,11 +1035,17 @@ class MasterDetail(Component):
         detail: DetailPane,
         *,
         label: str = "Master-detail",
-        master_width: str = "320px",
+        master_width: str = "md",
         **kwargs: Any,
     ) -> None:
+        pane = _MasterPane(master)
+        if master_width in MASTER_WIDTHS:
+            # Named widths are stylesheet-driven (strict-CSP safe).
+            pane.attrs["data-vd-master-width"] = master_width
+        else:
+            pane._append_inline_css(f"width: {master_width}")
         super().__init__(
-            _MasterPane(master, style={"width": master_width}),
+            pane,
             _DetailSeparator(role="separator", aria_orientation="vertical"),
             detail,
             aria_label=label,

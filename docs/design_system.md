@@ -340,6 +340,27 @@ Rules the framework guarantees:
   reports non-hex colors as *unverified* instead of passing them silently. Every
   built-in preset passes this gate in the test suite.
 
+## How styles are delivered
+
+The framework stylesheet and client runtime are not inlined into pages. Each is
+published once as a content-addressed asset and linked from the document:
+
+```html
+<link rel="stylesheet" href="/_voodoo/assets/<sha256>.css">
+<script src="/_voodoo/assets/<sha256>.js" defer></script>
+```
+
+The URL changes whenever the content changes (a theme switch, a framework
+upgrade), so responses are served `immutable` for a year and a browser never
+shows a stale stylesheet. Pages stay small, and they work under the production
+CSP (`style-src 'self'`) with no `unsafe-inline`.
+
+To keep that guarantee, components express static presentation through semantic
+`data-vd-*` attributes (tone, heading size, padding scale, common aspect ratios,
+alignment, named master-detail widths) that the stylesheet resolves. Only raw
+values you supply yourself (`css={}`, a custom ratio or width) become inline
+styles; treat those as the reviewed escape hatch described below.
+
 ## Inline custom CSS
 
 Use `css={}` for one-off inline overrides on individual components (the token

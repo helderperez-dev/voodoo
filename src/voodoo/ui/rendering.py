@@ -8,6 +8,8 @@ rendering). This module owns the HTML document shell, the client runtime
 import os
 from typing import Any
 
+from voodoo.ui.assets import publish_asset
+
 _client_js_cache: str | None = None
 
 
@@ -34,6 +36,86 @@ def _get_project_styles() -> str:
     from voodoo.ui.styles.presets import get_active_custom_css
 
     return get_active_custom_css()
+
+
+_BASE_CSS = """
+body {
+    background-color: var(--vd-color-background);
+    color: var(--vd-color-text);
+    font-family: var(--vd-font-sans);
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: var(--vd-color-surface);
+    border-radius: 4px;
+    border: 1px solid var(--vd-color-border);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--vd-color-text-muted); }
+"""
+
+
+def _semantic_attribute_css() -> str:
+    """Rules for semantic attributes (adapter-agnostic, CSP-safe)."""
+    from voodoo.ui.component import tone_css
+    from voodoo.ui.library import HEADING_SIZES, Box
+
+    sizes = "\n".join(
+        f'.vd-heading[data-vd-heading-size="{name}"] {{ font-size: {value}; }}'
+        for name, value in HEADING_SIZES.items()
+    )
+    align = "\n".join(
+        f'[data-vd-text-align="{name}"] {{ text-align: {name}; }}'
+        for name in ("center", "right")
+    )
+    from voodoo.ui.foundation import AspectRatio
+    from voodoo.ui.workspace import MASTER_WIDTHS
+
+    padding = "\n".join(
+        f'[data-vd-padding="{name}"] {{ padding: {value}; }}'
+        for name, value in Box._PADDING_MAP.items()
+        if name != "none"
+    )
+    ratios = "\n".join(
+        f'[data-vd-ratio="{ratio}"] {{ aspect-ratio: {ratio.replace("/", " / ")}; }}'
+        for ratio in AspectRatio.PRESETS
+    )
+    master = "\n".join(
+        f'[data-vd-master-width="{name}"] {{ width: {value}; }}'
+        for name, value in MASTER_WIDTHS.items()
+    )
+    return "\n".join((tone_css(), sizes, align, padding, ratios, master)) + "\n"
+
+
+def _compose_stylesheet(
+    *,
+    css_vars: str,
+    component_css: str,
+    brand_css: str,
+    product_css: str,
+    extended_css: str,
+    voodoo_system_css: str,
+    design_system_css: str,
+    design_system_theme_css: str,
+    project_styles: str,
+) -> str:
+    """Join the framework CSS layers in cascade order into one stylesheet."""
+    sections = (
+        css_vars,
+        _BASE_CSS,
+        "/* Semantic attributes: tone, heading size and alignment */\n"
+        + _semantic_attribute_css(),
+        "/* Stable primitive component layer */\n" + component_css,
+        "/* Brand asset switching */\n" + brand_css,
+        "/* Reusable product patterns */\n" + product_css,
+        "/* Extended UI components */\n" + extended_css,
+        "/* Canonical Voodoo runtime/system concepts */\n" + voodoo_system_css,
+        "/* Voodoo Design System 4 — final convergence layer */\n" + design_system_css,
+        "/* Theme-authoritative Design System visual tokens */\n"
+        + design_system_theme_css,
+        "/* Project theme customization — always wins */\n" + project_styles,
+    )
+    return "\n".join(sections)
 
 
 def render_page(component: Any, seo: Any = None) -> str:
@@ -139,6 +221,22 @@ def render_page(component: Any, seo: Any = None) -> str:
         else ""
     )
 
+    stylesheet = publish_asset(
+        _compose_stylesheet(
+            css_vars=css_vars,
+            component_css=component_css,
+            brand_css=BRAND_CSS,
+            product_css=product_css,
+            extended_css=extended_css,
+            voodoo_system_css=voodoo_system_css,
+            design_system_css=design_system_css,
+            design_system_theme_css=design_system_theme_css,
+            project_styles=project_styles,
+        ),
+        "css",
+    )
+    runtime = publish_asset(client_js, "js")
+
     return f"""
     <!DOCTYPE html>
     <html lang="{page_lang}" class="{html_class}">
@@ -151,50 +249,13 @@ def render_page(component: Any, seo: Any = None) -> str:
         {structured_data}
         {head_scripts}
         {theme_init_script}
-        <style>
-            {css_vars}
-            body {{
-                background-color: var(--vd-color-background);
-                color: var(--vd-color-text);
-                font-family: var(--vd-font-sans);
-            }}
-            ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
-            ::-webkit-scrollbar-track {{ background: transparent; }}
-            ::-webkit-scrollbar-thumb {{ background: var(--vd-color-surface); border-radius: 4px; border: 1px solid var(--vd-color-border); }}
-            ::-webkit-scrollbar-thumb:hover {{ background: var(--vd-color-text-muted); }}
-
-            /* Stable primitive component layer */
-            {component_css}
-
-            /* Brand asset switching */
-            {BRAND_CSS}
-
-            /* Reusable product patterns */
-            {product_css}
-
-            /* Extended UI components */
-            {extended_css}
-
-            /* Canonical Voodoo runtime/system concepts */
-            {voodoo_system_css}
-
-            /* Voodoo Design System 4 — final convergence layer */
-            {design_system_css}
-
-            /* Theme-authoritative Design System visual tokens */
-            {design_system_theme_css}
-
-            /* Project theme customization — always wins */
-            {project_styles}
-        </style>
+        <link rel="stylesheet" href="{stylesheet.url}">
     </head>
     <body class="{body_classes}">
         <div id="root">
             {html_content}
         </div>
-        <script>
-            {client_js}
-        </script>
+        <script src="{runtime.url}" defer></script>
     </body>
     </html>
     """

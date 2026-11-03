@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added `voodoo.ui.assets` (content-addressed asset publishing and the
+  `/_voodoo/assets/{name}` route) and a browser test that renders every
+  Component Lab route under a production-like CSP.
+
 - Added `voodoo theme new` (seed-based theme scaffolding with automatic
   light-mode accent contrast) and `voodoo theme validate` (WCAG contrast for
   light and dark, `--json`, non-hex colors reported as unverified), backed by
@@ -27,6 +31,19 @@
   supply-chain boundaries.
 
 ### Changed
+
+- The framework stylesheet and client runtime are now content-addressed static
+  assets (`/_voodoo/assets/<sha256>.css|js`, immutable cache, conditional GET)
+  instead of being inlined into every page, cutting a typical page from ~224 KB
+  to ~27 KB and making pages work under the production CSP (`style-src 'self'`).
+  Code that asserted on CSS inside `render_page()` output must read the linked
+  stylesheet.
+- Components emit semantic attributes instead of inline `style` for static
+  presentation: `data-vd-text-tone`, `data-vd-heading-size`,
+  `data-vd-padding`, `data-vd-ratio`, `data-vd-text-align`,
+  `data-vd-master-width` and axis-driven `ScrollArea` overflow. Custom values
+  still fall back to inline CSS. `MasterDetail(master_width=)` now defaults to
+  the named width `"md"` (320px).
 
 - **Breaking visual change:** Voodoo no longer ships a brand color. The default
   theme is a neutral monochrome scale, and the former purple look is the opt-in
@@ -60,6 +77,12 @@
 - `LocalSecretStore` no longer silently reads or writes plaintext. Encrypted
   writes use atomic replacement and owner-only file permissions.
 - UI event bindings and reactive patches can no longer cross browser sessions.
+
+### Fixed
+
+- `Component(style={...})` now renders the mapping as CSS; it previously
+  serialized the Python dict into the attribute, so `MasterDetail` ignored its
+  `master_width`.
 
 ## [3.2.1] — 2026-09-30
 

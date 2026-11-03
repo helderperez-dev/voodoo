@@ -7,8 +7,11 @@ to select the engine; Chromium is the local default.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -257,7 +260,9 @@ def test_inputs_focus_and_theme_toggle_are_real_browser_behaviors(browser_page) 
 
 
 @pytest.mark.parametrize("path", ["/forms", "/navigation", "/feedback"])
-def test_production_surfaces_have_basic_accessible_names(browser_page, path: str) -> None:
+def test_production_surfaces_have_basic_accessible_names(
+    browser_page, path: str
+) -> None:
     """Catch missing names before visual/browser changes ship."""
     page, base = browser_page
     page.goto(f"{base}{path}")
@@ -383,9 +388,7 @@ def test_touch_targets_and_high_contrast_tokens(browser_page) -> None:
             button.inner_text(),
             box,
         )
-    assert page.locator("body").evaluate(
-        "(el) => getComputedStyle(el).color"
-    )
+    assert page.locator("body").evaluate("(el) => getComputedStyle(el).color")
 
 
 def test_visual_contract_captures_every_reviewed_case(browser_page) -> None:
@@ -397,9 +400,7 @@ def test_visual_contract_captures_every_reviewed_case(browser_page) -> None:
     """
     page, base = browser_page
     root = Path(__file__).resolve().parents[2]
-    contract = json.loads(
-        (root / "tests/browser/visual_contract.json").read_text()
-    )
+    contract = json.loads((root / "tests/browser/visual_contract.json").read_text())
     viewports = contract["viewports"]
     output = Path(".test-results/browser/visual")
     output.mkdir(parents=True, exist_ok=True)
@@ -453,3 +454,75 @@ def test_visual_contract_captures_every_reviewed_case(browser_page) -> None:
             }
         )
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+
+
+LAB_ROUTES = (
+    "/",
+    "/foundations",
+    "/shell",
+    "/chat",
+    "/auth",
+    "/forms",
+    "/navigation",
+    "/advanced",
+    "/data",
+    "/workspace",
+    "/system",
+    "/feedback",
+)
+_PRODUCTION_CSP = (
+    "default-src 'self'; script-src 'self' {hashes}; style-src 'self'; "
+    "font-src 'self' data:; img-src 'self' data: https: blob:; "
+    "connect-src 'self' ws: wss:"
+)
+_INLINE_SCRIPT = re.compile(
+    r"<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE
+)
+_VIOLATION_LISTENER = """
+document.addEventListener('securitypolicyviolation', event => {
+    window.__cspViolations = window.__cspViolations || [];
+    window.__cspViolations.push(
+        event.violatedDirective + ' ' + (event.blockedURI || 'inline')
+    );
+});
+"""
+
+
+def _apply_production_csp(route) -> None:
+    """Serve every HTML page under the production CSP (no inline styles)."""
+    response = route.fetch()
+    headers = dict(response.headers)
+    if "text/html" not in headers.get("content-type", ""):
+        route.fulfill(response=response)
+        return
+    body = response.text()
+    digests = (
+        base64.b64encode(hashlib.sha256(match.encode()).digest()).decode()
+        for match in _INLINE_SCRIPT.findall(body)
+    )
+    hashes = " ".join(f"'sha256-{digest}'" for digest in digests)
+    headers["content-security-policy"] = _PRODUCTION_CSP.format(hashes=hashes)
+    route.fulfill(response=response, body=body, headers=headers)
+
+
+@pytest.mark.parametrize("path", LAB_ROUTES)
+def test_pages_render_under_production_csp_without_violations(
+    browser_page, path: str
+) -> None:
+    """Framework pages must not depend on inline styles or inline runtime code."""
+    page, base = browser_page
+    page.add_init_script(_VIOLATION_LISTENER)
+    page.route("**/*", _apply_production_csp)
+    try:
+        page.goto(f"{base}{path}", wait_until="networkidle")
+        violations = page.evaluate("window.__cspViolations || []")
+        styled = page.evaluate(
+            "getComputedStyle(document.body).backgroundColor !== 'rgba(0, 0, 0, 0)'"
+        )
+        runtime = page.evaluate("typeof window.voodoo !== 'undefined'")
+    finally:
+        page.unroute("**/*", _apply_production_csp)
+
+    assert styled, "stylesheet was blocked or missing under production CSP"
+    assert runtime, "client runtime was blocked under production CSP"
+    assert violations == []

@@ -503,40 +503,57 @@ def test_tailwind_card_variant_and_padding(tailwind_adapter):
     assert "p-8" in rendered
 
 
-def test_text_tone_muted():
-    text = Text("Subtitle", tone="muted", id="t1")
-    rendered = text.render()
-    assert "color: var(--vd-color-text-muted)" in rendered
+def test_text_tone_is_a_semantic_attribute_not_inline_style():
+    for tone in ("muted", "danger", "primary", "success", "warning", "info"):
+        rendered = Text("x", tone=tone, id="t1").render()
+        assert f'data-vd-text-tone="{tone}"' in rendered
+        assert "style=" not in rendered
 
 
-def test_text_tone_danger():
-    text = Text("Error!", tone="danger", id="t1")
-    rendered = text.render()
-    assert "color: var(--vd-color-danger)" in rendered
+def test_text_tone_default_has_no_tone_or_style():
+    rendered = Text("Plain", tone="default", id="t1").render()
+    assert "style=" not in rendered
+    assert "data-vd-text-tone" not in rendered
 
 
-def test_text_tone_primary():
-    text = Text("Important", tone="primary", id="t1")
-    rendered = text.render()
-    assert "color: var(--vd-color-primary)" in rendered
+def test_unknown_tone_is_ignored():
+    rendered = Text("x", tone="nonsense", id="t1").render()
+    assert "data-vd-text-tone" not in rendered
 
 
-def test_text_tone_default_no_style():
-    text = Text("Plain", tone="default", id="t1")
-    rendered = text.render()
+def test_heading_tone_and_size_are_semantic_attributes():
+    rendered = Heading("Big", size="display", tone="warning", id="h1").render()
+    assert 'data-vd-text-tone="warning"' in rendered
+    assert 'data-vd-heading-size="display"' in rendered
     assert "style=" not in rendered
 
 
-def test_heading_tone():
-    h = Heading("Warning", tone="warning", id="h1")
-    rendered = h.render()
-    assert "color: var(--vd-color-warning)" in rendered
+def test_heading_unknown_size_is_ignored():
+    assert "data-vd-heading-size" not in Heading("x", size="huge", id="h1").render()
 
 
-def test_heading_size():
-    h = Heading("Big", size="display", id="h1")
-    rendered = h.render()
-    assert "font-size: var(--vd-text-display)" in rendered
+def test_tone_and_size_rules_live_in_the_stylesheet():
+    from tests.support import page_css
+    from voodoo.ui.rendering import render_page
+
+    css = page_css(render_page(Text("x", tone="muted")))
+
+    assert (
+        'html [data-vd-text-tone="muted"] { color: var(--vd-color-text-muted); }' in css
+    )
+    assert 'html [data-vd-text-tone="danger"] { color: var(--vd-color-danger); }' in css
+    assert (
+        '.vd-heading[data-vd-heading-size="display"] { font-size: var(--vd-text-display); }'
+        in css
+    )
+    assert 'data-vd-text-tone="default"' not in css
+
+
+def test_style_mapping_renders_as_css_not_a_python_dict():
+    rendered = Div(style={"width": "320px", "margin_top": "4px"}, id="d1").render()
+
+    assert 'style="width: 320px; margin-top: 4px"' in rendered
+    assert "{" not in rendered
 
 
 def test_tone_to_color_var():
@@ -557,8 +574,26 @@ def test_stack_renders_as_flex_col(tailwind_adapter):
 def test_box_with_padding():
     box = Box(Text("Hello"), padding="lg", id="b1")
     rendered = box.render()
-    assert "padding: var(--vd-space-lg)" in rendered
+    assert 'data-vd-padding="lg"' in rendered
+    assert "style=" not in rendered
     assert "Hello" in rendered
+
+
+def test_box_custom_padding_falls_back_to_inline_css():
+    rendered = Box(Text("Hello"), padding="13px", id="b1").render()
+
+    assert "padding: 13px" in rendered
+    assert "data-vd-padding" not in rendered
+
+
+def test_master_detail_named_width_is_stylesheet_driven():
+    from voodoo.ui import DetailPane, MasterDetail, MasterList
+
+    named = MasterDetail(MasterList(), DetailPane(), master_width="lg").render()
+    custom = MasterDetail(MasterList(), DetailPane(), master_width="19rem").render()
+
+    assert 'data-vd-master-width="lg"' in named and "style=" not in named
+    assert "width: 19rem" in custom and "data-vd-master-width" not in custom
 
 
 def test_box_no_padding():
@@ -657,7 +692,7 @@ def test_login_form_state_contract_propagates():
     assert 'aria-busy="true"' in rendered
     assert 'aria-invalid="true"' in rendered
     assert 'data-vd-error="Authentication unavailable"' in rendered
-    assert 'data-vd-event-submit' not in rendered
+    assert "data-vd-event-submit" not in rendered
 
 
 def test_register_form_composed():
@@ -775,3 +810,23 @@ def test_render_key_provides_deterministic_identity_without_overriding_explicit_
     assert Button("Save", id="save-button", render_key="settings/save").id == (
         "save-button"
     )
+
+
+def test_scroll_area_overflow_is_stylesheet_driven():
+    from voodoo.ui import ScrollArea
+
+    rendered = ScrollArea("x", orientation="both", height="200px", id="s1").render()
+
+    assert 'data-vd-scroll-axis="both"' in rendered
+    assert "height: 200px" in rendered
+    assert "overflow" not in rendered
+
+
+def test_data_column_alignment_is_an_attribute_not_inline_style():
+    from voodoo.ui.data_extended import ColumnDef
+
+    header = ColumnDef("amount", "Amount", align="right").render_header(None)
+    rendered = header.render()
+
+    assert 'data-vd-text-align="right"' in rendered
+    assert "style=" not in rendered

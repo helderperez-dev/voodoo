@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from tests.support import page_with_assets
 from voodoo.adapters.voodoo_css import VoodooCSSAdapter
 from voodoo.ui import (
     AgentStatus,
@@ -217,7 +218,7 @@ def test_observation_capability_policy_and_telemetry_components():
 def test_native_page_includes_voodoo_system_styles():
     original = _native()
     try:
-        html = render_page(RuntimeStatus({"summary": {}}))
+        html = page_with_assets(render_page(RuntimeStatus({"summary": {}})))
         assert "Voodoo System Components" in html
         assert ".vd-runtime-status" in html
         assert ".vd-approval-card" in html
